@@ -488,6 +488,12 @@ Tester and Contributor were called Early Tester and Early Contributor until 27/1
 team keeps giving them. Only the names players read changed; the ids stay
 `early_tester` and `early_contributor`, as the hub stores and sends them.
 
+Since 31/10/2026 (Sol's decision) the hub gives Tester by itself, by date, to every
+player it sees on SJK who does not hold it yet: rank IV until Sunday 01/11/2026
+included, then a week each of rank III (to 08/11), II (to 15/11) and I (to 22/11/2026).
+From 23/11/2026 it is only given by hand again, and rank V is no longer earned. The
+client needs no change: the medal arrives in the player's profile like any award.
+
 ### Medal ranks
 
 Since 27/10/2026 (Sol's decision) every medal a player holds has a rank from I to V,
