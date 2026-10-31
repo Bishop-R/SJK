@@ -8072,10 +8072,11 @@ note: Finishes and card tags need the hub's tag-cards branch deployed; before, n
 [toy-master]
 area: Gameplay
 title: Toy Master: hidden toys on maps
-change: The creator places Toy Master props (toymaster_place, toymaster_remove, toymaster_list).
-change: Everyone's Use presses on a server add up; at the hub's hidden count every SJK player sees the show.
-change: Collection > Toys has a "?" hint; found toys show in a Toy Master group on the Achievements wall.
-test: toymaster_place on a local server, then Use the prop until the show plays; a second SJK client sees and hears it.
+change: The creator places Toy Master props: toymaster_place, _remove, _list.
+change: Use presses on a server add up; at a hidden count every SJK player sees a show.
+change: Collection > Toys has a ? hint; found toys get a Toy Master group on Achievements.
+test: toymaster_place on a local server, Use it until the show plays.
+test: a second SJK client on the server sees and hears the show.
 test: Settings > Sound > Toys mutes the show's sound.
-test: Achievements wall: the toy's secret achievement shows in the Toy Master group once earned.
-note: Needs the hub's toy-master branch deployed (01/11/2026).
+test: once earned, the secret achievement shows in the Toy Master group.
+note: Needs the hub's toy-master branch, deployed 01/11/2026.
