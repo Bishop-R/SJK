@@ -2098,6 +2098,7 @@ mod tests {
             reward: None,
         };
         sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),

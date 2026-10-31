@@ -326,6 +326,14 @@ rarity). Since the same day no card shows its number in the game, whatever its k
 close-up, its hover card or an opening, which name its kind and collection instead ("Meme,
 SJK Alpha"). The number still makes the card's id and orders the cards in the binder.
 
+**Credits cards as tags (31/10/2026, Sol's decision):** a revealed copy of a credits card
+lets the player stick the card on walls with the Tag toy ([client.md](client.md#tag)): its
+picture as a sticker, in the finish of a copy held (Normal from any copy, Holo or Solar
+from a copy in it). The hub names the card kinds it lets be tags in every profile
+(`tag_cards`, its `tags::CARD_KINDS`: `credits`) and checks the copy when a look places
+the card; Collection > Tags lists them under the tags. The card is kept, as crafting for
+less keeps it: sticking spends nothing.
+
 A card's kind says what it is about and reads on its strip: `community` (Community),
 `place` (Place), `personality` (Personality), `game` (Jedi Academy), since
 19/10/2026 `credits` (Credits: the people the project owes) and `meme` (Meme), and since

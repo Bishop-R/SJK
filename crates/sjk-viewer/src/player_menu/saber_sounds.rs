@@ -98,6 +98,8 @@ mod tests {
 
     fn unlock(id: &str) -> sjk_identity::Unlock {
         sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.to_owned(),
             granted: 1_791_336_225,
             note: String::new(),

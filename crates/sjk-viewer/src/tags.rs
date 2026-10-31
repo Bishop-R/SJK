@@ -17,9 +17,16 @@
 //!   another, clears it, changes map or server, or leaves. [`SHOW_CVAR`] 0 hides other
 //!   players' tags on this PC; a muted or blocked player's never show.
 //!
-//! The pictures are art in the hub's `sjk_tags` pack (`gfx/tags/<id>.png`, with their
-//! decal shaders in `shaders/sjk_tags.shader`); the client draws a tag as a lasting decal
-//! of its own (`decal_store.rs`, [`crate::decal_store::DecalStore::set_tag`]).
+//! - **Finishes and cards** (31/10/2026, Sol's decisions): a tag a holocron drops comes
+//!   Holo now and then and Solar rarely, and a tag is stuck in a finish the player holds a
+//!   copy in ([`FINISH_CVAR`], [`Held`]); the credits cards they hold stick as tags too,
+//!   their picture as a sticker ([`is_card_id`]). Both need a hub that lists `tag_cards`
+//!   in profiles ([`Held::of`]); an older hub refuses them, so they are not offered there.
+//!
+//! The pictures are art in the hub's `sjk_tags` pack (`gfx/tags/<id>.png`) and, for a
+//! card, its picture in the card packs; the client projects a tag onto the world as a
+//! lasting decal of its own (`decal_store.rs`, [`crate::decal_store::DecalStore::set_tag`])
+//! and draws it at the picture's full size with its finish (`tag_render.rs`).
 
 use crate::unlockables::Rarity;
 use glam::Vec3;
@@ -27,8 +34,11 @@ use std::time::{Duration, Instant};
 
 /// The toy's console command: stick the chosen tag, or `toy_tag clear` take it off.
 pub(crate) const COMMAND: &str = "toy_tag";
-/// Archived: the chosen tag's id.
+/// Archived: the chosen tag's id, or a card's.
 pub(crate) const CVAR: &str = "cg_tag";
+/// Archived: the finish the chosen tag is stuck in, `normal`, `holo` or `solar`
+/// (31/10/2026): one the player holds no copy in sticks Normal.
+pub(crate) const FINISH_CVAR: &str = "cg_tagFinish";
 /// The tag chosen before the player chose one.
 pub(crate) const DEFAULT: &str = "tag_sjk";
 /// Archived: other players' tags are drawn (0 hides them on this PC; the own still
@@ -55,9 +65,9 @@ pub(crate) struct Tag {
 }
 
 impl Tag {
-    /// Its picture and decal shader (`gfx/tags/<id>`).
-    pub(crate) fn shader(&self) -> String {
-        format!("gfx/tags/{}", self.id)
+    /// Its picture in the hub's `sjk_tags` pack (`gfx/tags/<id>.png`).
+    pub(crate) fn picture(&self) -> String {
+        format!("gfx/tags/{}.png", self.id)
     }
 
     /// How a player gets it, in a line.
@@ -117,10 +127,140 @@ pub(crate) fn get(id: &str) -> Option<&'static Tag> {
     CATALOGUE.iter().find(|tag| tag.id == id)
 }
 
-/// Whether the player may stick tag `id`: a free one, or one `owned` says the hub
-/// profile lists.
-pub(crate) fn may_stick(id: &str, owned: impl Fn(&str) -> bool) -> bool {
-    get(id).is_some_and(|tag| tag.free || owned(tag.id))
+/// Whether `id` names a card rather than a tag (the hub's rule, `PROTOCOL.md`, "Looks"):
+/// lowercase letters, digits and `_`, ending in `_` and three digits (`sjk_alpha_003`),
+/// and no tag of the catalogue.
+pub(crate) fn is_card_id(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    (5..=48).contains(&bytes.len())
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'_')
+        && bytes[bytes.len() - 4] == b'_'
+        && bytes[bytes.len() - 3..].iter().all(u8::is_ascii_digit)
+        && get(id).is_none()
+}
+
+/// The finish a placed tag shows: its own, Normal when it has none or one this client
+/// does not know.
+pub(crate) fn finish_of(tag: &sjk_identity::PlacedTag) -> &'static crate::cards::Finish {
+    tag.finish
+        .as_deref()
+        .and_then(crate::cards::Finish::from_id)
+        .unwrap_or(&crate::cards::FINISHES[0])
+}
+
+/// The copies of a tag (or a card) the player holds, by finish: any copy sticks it Normal,
+/// a Holo or Solar one in its finish too.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Held {
+    pub(crate) copies: u32,
+    pub(crate) holo: u32,
+    pub(crate) solar: u32,
+}
+
+impl Held {
+    /// Every finish, in a local game, which has no hub.
+    pub(crate) const LOCAL: Self = Self {
+        copies: 1,
+        holo: 1,
+        solar: 1,
+    };
+
+    /// What the own hub profile `me` (`None`: not known) holds of tag or card `id`: a free
+    /// tag one Normal copy; a dropped tag the profile's copies, counted by finish; a card
+    /// its revealed copies, while the hub lets cards of its kind be tags (the profile's
+    /// `tag_cards`, [`card_kind_allowed`]). Nothing for an id this client does not know.
+    pub(crate) fn of(id: &str, me: Option<&sjk_identity::Profile>) -> Self {
+        Self::of_parts(id, me.map(|me| me.unlocks.as_slice()), me)
+    }
+
+    /// [`Self::of`] with the profile's unlocks given apart (`unlocks`, as the Collection's
+    /// holdings list them).
+    pub(crate) fn of_parts(
+        id: &str,
+        unlocks: Option<&[sjk_identity::Unlock]>,
+        me: Option<&sjk_identity::Profile>,
+    ) -> Self {
+        if let Some(tag) = get(id) {
+            if tag.free {
+                return Self {
+                    copies: 1,
+                    ..Self::default()
+                };
+            }
+            return unlocks
+                .and_then(|unlocks| unlocks.iter().find(|unlock| unlock.id == id))
+                .map_or_else(Self::default, |unlock| Self {
+                    copies: unlock.count.max(1),
+                    holo: unlock.holo,
+                    solar: unlock.solar,
+                });
+        }
+        let Some(me) = me.filter(|me| card_kind_allowed(id, me)) else {
+            return Self::default();
+        };
+        let mut held = Self::default();
+        for stack in me
+            .cards
+            .iter()
+            .filter(|stack| stack.card.as_deref() == Some(id))
+        {
+            held.copies += stack.count;
+            match stack.finish.as_str() {
+                "holo" => held.holo += stack.count,
+                "solar" => held.solar += stack.count,
+                _ => {}
+            }
+        }
+        held
+    }
+
+    /// Whether it sticks in `finish`.
+    pub(crate) fn has(&self, finish: &crate::cards::Finish) -> bool {
+        match finish.id {
+            "holo" => self.holo > 0,
+            "solar" => self.solar > 0,
+            _ => self.copies > 0,
+        }
+    }
+
+    /// The finish to stick it in: `wanted` when held, else Normal.
+    pub(crate) fn finish(&self, wanted: &str) -> &'static crate::cards::Finish {
+        crate::cards::Finish::from_id(wanted)
+            .filter(|finish| self.has(finish))
+            .unwrap_or(&crate::cards::FINISHES[0])
+    }
+}
+
+/// Whether the hub of profile `me` lets card `id` be a tag: its face's kind is one the
+/// profile's `tag_cards` lists (the credits cards, 31/10/2026). False for a card this
+/// client has no face of, and on a hub before card tags.
+pub(crate) fn card_kind_allowed(id: &str, me: &sjk_identity::Profile) -> bool {
+    !me.tag_cards.is_empty()
+        && crate::cards::faces::current()
+            .find(id)
+            .is_some_and(|(_, face)| me.tag_cards.iter().any(|kind| kind == face.kind.id()))
+}
+
+/// The cards the hub of profile `me` lets be tags, in the faces' order (their sets and
+/// numbers): every face of a kind its `tag_cards` lists, held or not. Empty on a hub
+/// before card tags.
+pub(crate) fn tag_cards(me: Option<&sjk_identity::Profile>) -> Vec<String> {
+    let Some(me) = me.filter(|me| !me.tag_cards.is_empty()) else {
+        return Vec::new();
+    };
+    crate::cards::faces::current()
+        .list
+        .iter()
+        .filter(|face| me.tag_cards.iter().any(|kind| kind == face.kind.id()))
+        .map(|face| face.id.clone())
+        .collect()
+}
+
+/// Whether the player may stick tag or card `id` in `finish`, holding `held` of it.
+pub(crate) fn may_stick(held: Held, finish: &crate::cards::Finish) -> bool {
+    held.has(finish)
 }
 
 /// The turn about `normal`, in degrees from 0 up to 360, that stands a tag's top along
@@ -199,15 +339,18 @@ impl Tags {
     }
 
     /// The own tag while it stands on `server` and `map` and the player still may stick
-    /// it (`owned`): any other, it goes (a tag taken back, another server or map).
+    /// it in its finish (`held`): any other, it goes (a tag taken back, another server or
+    /// map).
     pub(crate) fn own(
         &mut self,
         server: Option<std::net::SocketAddr>,
         map: Option<&str>,
-        owned: impl Fn(&str) -> bool,
+        held: impl Fn(&str) -> Held,
     ) -> Option<&sjk_identity::PlacedTag> {
         let stands = self.own.as_ref().is_some_and(|(on, tag)| {
-            Some(*on) == server && Some(tag.map.as_str()) == map && may_stick(&tag.id, &owned)
+            Some(*on) == server
+                && Some(tag.map.as_str()) == map
+                && may_stick(held(&tag.id), finish_of(tag))
         });
         if !stands {
             self.own = None;
@@ -216,36 +359,28 @@ impl Tags {
     }
 }
 
-/// The tags' decal shaders, one to each tag of [`CATALOGUE`] (made by
-/// `scripts/tag_assets.py`, which reads the catalogue): the pack's picture blended over
-/// the wall. Bundled, so a pack of pictures alone makes a tag.
-const SHADERS: &[u8] = include_bytes!("../assets/tags/tags.shader");
-
-/// Mount the toy's icon and the tags' decal shaders.
+/// Mount the toy's icon.
 pub(crate) fn mount(vfs: &mut sjk_vfs::VirtualFileSystem) -> Result<(), sjk_vfs::VfsError> {
     vfs.mount_memory(
         "SJK Tag",
-        [
-            (
-                ICON,
-                include_bytes!("../assets/tags/toy_tag.png").as_slice(),
-            ),
-            ("shaders/sjk_tags.shader", SHADERS),
-        ],
+        [(
+            ICON,
+            include_bytes!("../assets/tags/toy_tag.png").as_slice(),
+        )],
     )?;
     Ok(())
 }
 
-/// The decal a placed tag draws, when this client knows the tag.
+/// Where a placed tag lies on the world, when this client knows the tag or it names a
+/// card (`tag_render.rs` draws the picture; a card whose face is missing draws nothing).
 pub(crate) fn decal(tag: &sjk_identity::PlacedTag) -> Option<crate::decal_marks::DecalRequest> {
-    let known = get(&tag.id)?;
-    Some(crate::decal_marks::DecalRequest {
+    (get(&tag.id).is_some() || is_card_id(&tag.id)).then(|| crate::decal_marks::DecalRequest {
         origin: Vec3::from_array(tag.at),
         direction: Vec3::from_array(tag.normal),
         orientation: tag.spin,
         color: [1.0; 4],
         radius: RADIUS,
-        shader: known.shader().into(),
+        shader: std::sync::Arc::from(""),
     })
 }
 
@@ -274,24 +409,142 @@ mod tests {
         assert!(get(DEFAULT).is_some_and(|tag| tag.free));
     }
 
-    /// `scripts/tag_assets.py` was run since the catalogue last changed.
-    #[test]
-    fn every_tag_has_its_bundled_decal_shader() {
-        let shaders = std::str::from_utf8(SHADERS).unwrap();
-        let named: Vec<&str> = shaders
-            .lines()
-            .filter(|line| line.starts_with("gfx/tags/"))
+    /// A profile holding `unlocks` and `cards` (card, finish, count), on a hub that
+    /// lists `tag_cards`.
+    fn profile(
+        unlocks: &[(&str, u32, u32, u32)],
+        cards: &[(&str, &str, u32)],
+        tag_cards: &[&str],
+    ) -> sjk_identity::Profile {
+        let mut me: sjk_identity::Profile = serde_json::from_value(serde_json::json!({
+            "key_id": "0123456789abcdef", "key": "", "name": "Sol", "bio": "",
+            "verified": false, "created": 0, "names": [], "medals": [], "unlocks": []
+        }))
+        .unwrap();
+        me.unlocks = unlocks
+            .iter()
+            .map(|(id, count, holo, solar)| {
+                serde_json::from_value(serde_json::json!({"id": id, "count": count,
+                    "holo": holo, "solar": solar}))
+                .unwrap()
+            })
             .collect();
-        let wanted: Vec<String> = CATALOGUE.iter().map(Tag::shader).collect();
-        assert_eq!(named, wanted);
+        me.cards = cards
+            .iter()
+            .map(|(card, finish, count)| {
+                serde_json::from_value(serde_json::json!({"card": card, "rarity": "mythical",
+                    "finish": finish, "count": count}))
+                .unwrap()
+            })
+            .collect();
+        me.tag_cards = tag_cards.iter().map(|kind| (*kind).to_owned()).collect();
+        me
     }
 
     #[test]
     fn a_free_tag_needs_no_grant_and_another_does() {
-        assert!(may_stick("tag_gg", |_| false));
-        assert!(!may_stick("tag_ez", |_| false));
-        assert!(may_stick("tag_ez", |id| id == "tag_ez"));
-        assert!(!may_stick("tag_nope", |_| true));
+        let [normal, holo, solar] = &crate::cards::FINISHES;
+        let none = Held::default();
+        assert!(may_stick(Held::of("tag_gg", None), normal));
+        assert!(
+            !may_stick(Held::of("tag_gg", None), holo),
+            "free tags are Normal"
+        );
+        assert!(!may_stick(Held::of("tag_ez", None), normal));
+        assert_eq!(Held::of("tag_nope", None), none);
+        let me = profile(&[("tag_ez", 3, 1, 0)], &[], &["credits"]);
+        let ez = Held::of("tag_ez", Some(&me));
+        assert_eq!(
+            ez,
+            Held {
+                copies: 3,
+                holo: 1,
+                solar: 0
+            }
+        );
+        assert!(may_stick(ez, normal) && may_stick(ez, holo) && !may_stick(ez, solar));
+        assert_eq!(ez.finish("solar").id, "normal", "not held: Normal");
+        assert_eq!(ez.finish("holo").id, "holo");
+        assert_eq!(ez.finish("glitter").id, "normal");
+        assert!(may_stick(Held::LOCAL, solar));
+    }
+
+    /// A card sticks while the hub lets its kind be a tag and the profile holds a revealed
+    /// copy, in the finishes held; never on a hub before card tags.
+    #[test]
+    fn a_credits_card_sticks_in_the_finishes_held() {
+        let faces = |id: &str, kind: &str| {
+            crate::cards::faces::parse(
+                id,
+                &serde_json::json!({"name": id, "set": "sjk_alpha", "set_name": "SJK Alpha",
+                    "number": 1, "kind": kind, "rarity": "mythical", "lore": "",
+                    "art": format!("cards/{id}.jpg")})
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let _faces = crate::cards::faces::install_for_test(vec![
+            faces("sjk_alpha_001", "credits"),
+            faces("sjk_alpha_010", "meme"),
+        ]);
+        let cards = [
+            ("sjk_alpha_001", "holo", 1),
+            ("sjk_alpha_001", "normal", 2),
+            ("sjk_alpha_010", "solar", 1),
+        ];
+        let me = profile(&[], &cards, &["credits"]);
+        assert_eq!(
+            Held::of("sjk_alpha_001", Some(&me)),
+            Held {
+                copies: 3,
+                holo: 1,
+                solar: 0
+            }
+        );
+        assert_eq!(
+            Held::of("sjk_alpha_010", Some(&me)),
+            Held::default(),
+            "a meme"
+        );
+        assert_eq!(
+            Held::of("sjk_alpha_099", Some(&me)),
+            Held::default(),
+            "no face"
+        );
+        let before = profile(&[], &cards, &[]);
+        assert_eq!(Held::of("sjk_alpha_001", Some(&before)), Held::default());
+        assert_eq!(tag_cards(Some(&me)), ["sjk_alpha_001"]);
+        assert!(tag_cards(Some(&before)).is_empty());
+        assert!(tag_cards(None).is_empty());
+    }
+
+    #[test]
+    fn a_card_id_ends_in_its_number_and_is_no_tag() {
+        for id in ["sjk_alpha_000", "jof_123", "a_001"] {
+            assert!(is_card_id(id), "{id}");
+        }
+        for id in [
+            "tag_gg",
+            "sjk_alpha_03",
+            "sjk_alpha_0031",
+            "SJK_001",
+            "sjk-a_001",
+            "",
+        ] {
+            assert!(!is_card_id(id), "{id}");
+        }
+        let placed = |finish: Option<&str>| sjk_identity::PlacedTag {
+            id: "sjk_alpha_001".to_owned(),
+            map: "mp/ffa3".to_owned(),
+            at: [0.0; 3],
+            normal: [0.0, 0.0, 1.0],
+            spin: 0.0,
+            finish: finish.map(str::to_owned),
+        };
+        assert!(decal(&placed(None)).is_some(), "a card lies on the world");
+        assert_eq!(finish_of(&placed(None)).id, "normal");
+        assert_eq!(finish_of(&placed(Some("solar"))).id, "solar");
+        assert_eq!(finish_of(&placed(Some("chrome"))).id, "normal");
     }
 
     /// The tag's top, laid out from the normal and the turn alone, points where it
@@ -327,6 +580,7 @@ mod tests {
         let server: std::net::SocketAddr = "1.2.3.4:29070".parse().unwrap();
         let other: std::net::SocketAddr = "1.2.3.4:29071".parse().unwrap();
         let placed = |id: &str| sjk_identity::PlacedTag {
+            finish: None,
             id: id.to_owned(),
             map: "mp/ffa3".to_owned(),
             at: [0.0; 3],
@@ -339,17 +593,31 @@ mod tests {
         tags.stick(server, placed("tag_gg"), now);
         assert!(tags.may_stick(now + GAP / 2).is_err());
         assert!(tags.may_stick(now + GAP).is_ok());
-        assert!(tags.own(Some(server), Some("mp/ffa3"), |_| false).is_some());
-        assert!(
-            tags.own(Some(server), Some("mp/duel6"), |_| false)
-                .is_none()
-        );
+        let lacks = |id: &str| Held::of(id, None);
+        let holds = |_: &str| Held::LOCAL;
+        assert!(tags.own(Some(server), Some("mp/ffa3"), lacks).is_some());
+        assert!(tags.own(Some(server), Some("mp/duel6"), lacks).is_none());
         tags.stick(server, placed("tag_ez"), now);
-        assert!(tags.own(Some(other), Some("mp/ffa3"), |_| true).is_none());
+        assert!(tags.own(Some(other), Some("mp/ffa3"), holds).is_none());
         tags.stick(server, placed("tag_ez"), now);
         assert!(
-            tags.own(Some(server), Some("mp/ffa3"), |_| false).is_none(),
+            tags.own(Some(server), Some("mp/ffa3"), lacks).is_none(),
             "taken back"
+        );
+        // A Holo tag goes with the last Holo copy.
+        let holo = sjk_identity::PlacedTag {
+            finish: Some("holo".to_owned()),
+            ..placed("tag_ez")
+        };
+        tags.stick(server, holo, now);
+        let normal_only = |_: &str| Held {
+            copies: 2,
+            ..Held::default()
+        };
+        assert!(tags.own(Some(server), Some("mp/ffa3"), holds).is_some());
+        assert!(
+            tags.own(Some(server), Some("mp/ffa3"), normal_only)
+                .is_none()
         );
         tags.stick(server, placed("tag_ez"), now);
         assert!(tags.clear());

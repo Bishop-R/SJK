@@ -16,6 +16,8 @@ use crate::profile_hub::{Screen, Tab};
 /// The made-up grant.
 fn sun() -> sjk_identity::Unlock {
     sjk_identity::Unlock {
+        holo: 0,
+        solar: 0,
         id: "saber_sun".to_owned(),
         granted: 1_791_336_225,
         note: "Thanks for testing the blades with us".to_owned(),
@@ -884,9 +886,12 @@ fn duel6_blade_pictures_cost() {
     });
 }
 
-/// The Tags tab (27/10/2026) on the made-up profile with two copies of a Rare tag and
-/// `cg_tag` on it: the free ones held, the rest locked. The pictures come from the
-/// packs `SJK_TEST_PACKS` names (the hub's `assets/dist`, with `sjk_tags.pk3`).
+/// The Tags tab (27/10/2026) on the made-up profile with two copies of a Rare tag, one
+/// of them Holo, and a Solar Gonk tag, and (31/10/2026) a hub that lets credits cards be
+/// tags: a Holo and a Normal copy of SJK Alpha 001; `cg_tag` on the Rare tag in Holo.
+/// The free ones held, the rest locked; the wall scrolled to show the cards too. The
+/// pictures come from the packs `SJK_TEST_PACKS` names (the hub's `assets/dist`, with
+/// `sjk_tags.pk3` and `sjk_cards.pk3`).
 #[test]
 #[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
 fn duel6_sjk_collection_tags() {
@@ -896,6 +901,7 @@ fn duel6_sjk_collection_tags() {
             ("ui_menuStyle", "sjk"),
             (crate::settings::quick::HIDE_CVAR, "1"),
             (crate::tags::CVAR, "tag_ez"),
+            (crate::tags::FINISH_CVAR, "holo"),
             (crate::discord_presence::CVAR, "0"),
         ];
         let Some((mut gpu, _profile)) = open(
@@ -910,15 +916,46 @@ fn duel6_sjk_collection_tags() {
         let ez = sjk_identity::Unlock {
             id: "tag_ez".to_owned(),
             count: 2,
+            holo: 1,
             ..sun()
         };
+        let gonk = sjk_identity::Unlock {
+            id: "tag_gonk".to_owned(),
+            count: 1,
+            solar: 1,
+            ..sun()
+        };
+        let mut profile = preview();
+        if let Some(me) = profile.snapshot.me.as_mut() {
+            me.tag_cards = vec!["credits".to_owned()];
+            me.cards = [("holo", 1), ("normal", 2)]
+                .map(|(finish, count)| sjk_identity::CardStack {
+                    card: Some("sjk_alpha_001".to_owned()),
+                    rarity: "mythical".to_owned(),
+                    finish: finish.to_owned(),
+                    edition: "alpha".to_owned(),
+                    count,
+                    first: 1_791_336_225,
+                    last: 1_791_336_225,
+                })
+                .to_vec();
+        }
         if let Some(console) = gpu.console.as_mut() {
-            console.preview_profile(preview());
-            console.preview_collection(Some(vec![sun(), ez]), 0.8);
+            console.preview_profile(profile);
+            console.preview_collection(Some(vec![sun(), ez, gonk]), 0.8);
             console.open_profile_hub_page(Tab::Tags, ReturnTarget::MainMenu);
         }
         assert_eq!(gpu.profile_hub_tab(), Some(Tab::Tags));
         println!("{}", shoot(&mut gpu, 20, "duel6-collection-tags").display());
+        assert!(!overflowed(&gpu));
+        // The card tag chosen, its Holo shown, the wall scrolled down to it.
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_tag_for_shot("sjk_alpha_001", 1);
+        }
+        println!(
+            "{}",
+            shoot(&mut gpu, 20, "duel6-collection-tags-card").display()
+        );
         assert!(!overflowed(&gpu));
     });
 }

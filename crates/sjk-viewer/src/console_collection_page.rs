@@ -196,8 +196,9 @@ impl ViewerConsole {
                 self.pending_banana = Some(on);
                 self.banana_on = on;
             }
-            PanelAction::ChooseTag(id) => {
-                self.set_cvar(crate::tags::CVAR, id);
+            PanelAction::ChooseTag(id, finish) => {
+                self.set_cvar(crate::tags::CVAR, &id);
+                self.set_cvar(crate::tags::FINISH_CVAR, finish);
             }
             PanelAction::Hub(tab) => {
                 // A tab of another page: the Holocrons page.
@@ -386,6 +387,10 @@ impl ViewerConsole {
             .text_cvar(crate::tags::CVAR)
             .unwrap_or_default()
             .to_owned();
+        let tag_finish = self
+            .text_cvar(crate::tags::FINISH_CVAR)
+            .unwrap_or_default()
+            .to_owned();
         let illuminate = self.illuminate_lit();
         let cardboard_box = self.cardboard_box_on;
         let order66 = self.order66_on;
@@ -472,6 +477,7 @@ impl ViewerConsole {
                 toy_keys: &toy_keys,
                 toys_unseen,
                 tag: &tag,
+                tag_finish: &tag_finish,
             };
             self.collection_panel.append_sjk(&inputs, target, viewport);
             self.collection_panel.preview = Some(unlocks);
@@ -505,6 +511,7 @@ impl ViewerConsole {
             toy_keys: &toy_keys,
             toys_unseen,
             tag: &tag,
+            tag_finish: &tag_finish,
         };
         self.collection_panel.append_sjk(&inputs, target, viewport);
     }
@@ -682,6 +689,13 @@ impl ViewerConsole {
         shards: u64,
     ) {
         self.collection_panel.preview_cards = Some((cards, credits, shards));
+    }
+
+    /// Choose the Tags tab's tag or card `id` with finish `finish` shown (a place in
+    /// `cards::FINISHES`), the wall brought to it, for a world shot.
+    #[cfg(test)]
+    pub(crate) fn collection_tag_for_shot(&mut self, id: &str, finish: usize) {
+        self.collection_panel.choose_tag_for_shot(id, finish);
     }
 
     /// Choose the Cards tab's tile `index` (in the list its filter shows), for a world

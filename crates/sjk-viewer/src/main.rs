@@ -223,6 +223,7 @@ mod siege_sabers;
 mod sith_cloud;
 mod surface_tables;
 mod tag_icons;
+mod tag_render;
 mod tags;
 mod tags_frame;
 mod team_sabers;
@@ -521,6 +522,8 @@ struct GpuState {
     particle_pipelines: particle_draw::Pipelines,
     particle_atlas: ParticleAtlas,
     effect_geometry: effect_geometry_gpu::Runtime,
+    /// Players' tags on the world, drawn at their pictures' full size (`tag_render.rs`).
+    tag_render: tag_render::TagRender,
     hud_pipeline: wgpu::RenderPipeline,
     ui_shapes: ShapeRenderer,
     text_pipeline: wgpu::RenderPipeline,
@@ -1316,6 +1319,12 @@ impl GpuState {
             &particle_layout,
             frame_target::aa::effects::FORMAT,
         );
+        let tag_render = tag_render::TagRender::new(
+            device,
+            &camera_layout,
+            frame_target::aa::effects::FORMAT,
+            context.anisotropy_limit,
+        );
         load_profile.mark("effect-atlas")?;
         let (entity_pipeline, particle_pipelines) = particle_draw::create(
             device,
@@ -1531,6 +1540,7 @@ impl GpuState {
             particle_pipelines,
             particle_atlas,
             effect_geometry,
+            tag_render,
             hud_pipeline,
             ui_shapes,
             text_pipeline,
@@ -3072,6 +3082,13 @@ impl GpuState {
                         .map_or(ParticleBlend::Add, |layer| layer.blend),
                 )
             },
+        );
+        self.tag_render.prepare(
+            &self.device,
+            &self.queue,
+            &self.effect_aux.decals,
+            particle_now,
+            global_particle_seconds,
         );
         timing.mark(Phase::Encode);
         let particle_ranges = effect_submission::prepare(

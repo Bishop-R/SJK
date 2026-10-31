@@ -55,7 +55,7 @@ pub(crate) fn service(renderer: &ShapeRenderer, queue: &crate::frame_queue::Fram
         .iter()
         .enumerate()
         .map(|(place, tag)| {
-            let path = format!("{}.png", tag.shader());
+            let path = tag.picture();
             let Ok(Some(asset)) = vfs.read(&path) else {
                 return false;
             };

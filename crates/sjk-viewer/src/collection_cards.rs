@@ -1107,6 +1107,7 @@ mod tests {
             finish: "solar".to_owned(),
             edition: "alpha".to_owned(),
             unlock: unlock.map(|(id, name)| sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: name.to_owned(),
                 count: 1,

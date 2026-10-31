@@ -271,6 +271,9 @@ includes:
 - the News panel (`news`, 31/10/2026): release recaps and the SJK team's announcements in
   one panel, with links into the UI only the SJK team writes, pictures and switches, and
   announcing open to every staff member;
+- tags drawn sharp in a pass of their own (31/10/2026), each picture at its full size with
+  its finish shaded per pixel: Holo and Solar tags dropped now and then by holocrons, and
+  the credits cards a player holds stuck as tags, their picture as a sticker;
 - Mythical shader parts: the Sun's prominences, rising sparks, glints circling its
   blade below the tip and heat haze, the Void's orbiting black holes, warped space,
   gravity pulse and afterimages, the Spectral's wisps, souls, smoky edge, cold rim and swaying echo, each a part

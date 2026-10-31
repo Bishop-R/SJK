@@ -1,3 +1,28 @@
+## Sharp tags, Holo and Solar tags, credits cards as tags
+
+31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`
+branch (Sol's requests: tags less blurry in the game; the credits cards held usable as
+tags, in the finish chosen, Holo and Solar tags as rare drops; the Tags page scrollable;
+Sol's choices: a card shows as its picture sticker, a finish needs a copy in it, 4 % Holo
+and 0.5 % Solar flat). The blur: tags were impact-mark decals whose pictures the effects'
+atlas squeezes into 128-pixel tiles. They now have a pass of their own (`tag_render.rs`,
+[rendering.md](rendering.md#tags)): each picture at its full size (a tag enlarged to 512,
+a card's sticker 1024), mipmapped, anisotropic, with Holo's foil and Solar's corona shaded
+per pixel. The hub rolls a dropped tag's finish, counts Holo and Solar copies, takes a
+finish and a credits card in a look's tag and lists `tag_cards` in profiles; the client
+offers both only on such a hub ([client.md](client.md#tag)). Collection > Tags scrolls,
+lists the credits cards and offers the finishes; the opening and the chat name a finished
+tag. Verified on Windows 11: fmt, build, Clippy and the workspace's tests, with new tests
+(the held copies by finish, card ids, the outline's distances, picture sizes and edges, the
+sticker, the wall's lines, scrolling and Up/Down, the finish odds, the find's words; the
+hub's: finish odds, drops, looks with finishes and cards, merges, the take-down); GPU world
+shots with the game data and the hub's packs: `duel6_tags_on_walls_and_floor` (a Normal
+and a Holo tag, a Holo and a Solar credits card, a Solar tag on the floor) and
+`duel6_sjk_collection_tags` (the wall with badges and chips, scrolled to the cards). Not
+verified: in a game against a hub running `tag-cards` (finishes and cards end to end, a
+second client seeing them), frame time with many finished tags, and the art at 512 (the
+pack's pictures are 256).
+
 ## Map editor made easier
 
 28/10/2026, `personal/map-editor-ux`, based on `main` `db63b4f5` (Sol's request: the

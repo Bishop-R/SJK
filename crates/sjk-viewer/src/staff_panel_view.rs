@@ -2412,6 +2412,8 @@ mod tests {
             unlocks: crate::unlockables::ALL
                 .iter()
                 .map(|unlockable| sjk_identity::Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: unlockable.id.into(),
                     granted: 1_791_336_225,
                     note: "n".repeat(200),

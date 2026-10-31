@@ -211,7 +211,12 @@ A card comes with a few shards beside its credits (the card pack, `card_shards`,
 Since 27/10/2026 (the hub's `tag-toy` branch) an opening may bring a tag instead of the card
 (`tag` in the tables, 150 per mille in every tier, taken from the cards' share; the tag's
 tier rolled as a shader's; [client.md](client.md#tag)); this client's own copy of the
-tables keeps no tags, so the figures below are without them.
+tables keeps no tags, so the figures below are without them. Since 31/10/2026 (the hub's
+`tag-cards` branch, Sol's decision: stingy and flat) a dropped tag comes Holo 4 % of the
+time and Solar 0.5 %, in every tier (`tag_finish` in the tables, per mille, Holo then
+Solar; none from hubs before), said in the opening ("Holo Gonk tag") and kept apart in the
+profile; a Solar tag is a grand find, its chat line saying so ("Sol opened a Rare Holocron:
+Solar Gonk tag!").
 The figures below are with the piles.
 
 Per holocron:

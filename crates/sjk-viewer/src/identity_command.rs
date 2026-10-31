@@ -182,6 +182,7 @@ mod tests {
             status: Status::Online,
             key_id: "0123456789abcdef".to_owned(),
             me: Some(Profile {
+                tag_cards: Vec::new(),
                 credits: 0,
                 cards: Vec::new(),
                 keys: Vec::new(),
@@ -311,6 +312,7 @@ mod tests {
         shown.profiles.insert(
             "fedcba9876543210".to_owned(),
             Profile {
+                tag_cards: Vec::new(),
                 credits: 0,
                 cards: Vec::new(),
                 keys: Vec::new(),

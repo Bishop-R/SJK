@@ -84,6 +84,19 @@ impl Kind {
         }
     }
 
+    /// The id a card file names it by ("credits"), as the hub's `tag_cards` lists it.
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Community => "community",
+            Self::Place => "place",
+            Self::Personality => "personality",
+            Self::Game => "game",
+            Self::Credits => "credits",
+            Self::Meme => "meme",
+            Self::Blade => "blade",
+        }
+    }
+
     /// What players read ("Community").
     pub(crate) fn name(self) -> &'static str {
         match self {
@@ -253,7 +266,7 @@ struct File {
 }
 
 /// The card file `text` of card `id`, read.
-fn parse(id: &str, text: &str) -> Result<Face, String> {
+pub(crate) fn parse(id: &str, text: &str) -> Result<Face, String> {
     let file: File = serde_json::from_str(text).map_err(|error| error.to_string())?;
     let within = |what: &str, value: &str, max: usize| {
         if value.trim().is_empty() || value.chars().count() > max {
@@ -416,6 +429,12 @@ impl Faces {
     /// drawn ([`super::scene`]).
     pub(crate) fn retry(&self, index: usize) {
         self.lock_art().failed.retain(|failed| *failed != index);
+    }
+
+    /// Face `index`'s picture file as its pack holds it, `None` when it is missing: what
+    /// a card stuck as a tag is drawn from (`tag_render.rs`).
+    pub(crate) fn picture(&self, index: usize) -> Option<Arc<[u8]>> {
+        self.pictures.get(index).cloned().flatten()
     }
 
     /// The decoded picture of face `index`, taken for upload: `None` until a [`request`]
@@ -590,6 +609,29 @@ pub(crate) fn install_for_shot(list: Vec<Face>, pictures: impl Fn(usize) -> usiz
         .map(|index| before.pictures.get(pictures(index)).cloned().flatten())
         .collect();
     *lock() = Some(Arc::new(Faces::new(list, files, before.generation + 1)));
+}
+
+/// Make `list` the current faces for a unit test, without pictures, until the returned
+/// guard goes; tests that install faces wait for one another.
+#[cfg(test)]
+pub(crate) fn install_for_test(list: Vec<Face>) -> impl Drop {
+    static TURN: Mutex<()> = Mutex::new(());
+    struct Restore {
+        before: Option<Arc<Faces>>,
+        _turn: MutexGuard<'static, ()>,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            *lock() = self.before.take();
+        }
+    }
+    let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let before = lock().clone();
+    *lock() = Some(Arc::new(Faces::of_list(list)));
+    Restore {
+        before,
+        _turn: turn,
+    }
 }
 
 /// The name of card `id` as players read it: its face's name, or its id when the packs
