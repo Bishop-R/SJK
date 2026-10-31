@@ -220,6 +220,16 @@ const TOYS: [Toy; TOY_COUNT] = [
     },
 ];
 
+/// The Toy Master's achievements the player holds: the toys they found.
+pub(super) fn toy_master_found(
+    standings: &[crate::achievements::Standing],
+) -> impl Iterator<Item = &crate::achievements::Standing> {
+    standings.iter().filter(|standing| {
+        standing.kind.category == crate::achievements::Category::ToyMaster
+            && standing.unlocked.is_some()
+    })
+}
+
 /// The command toy `toy`'s key `slot` runs (0 its switch's, 1 Order 66's order).
 pub(super) fn command(toy: usize, slot: usize) -> Option<&'static str> {
     TOYS.get(toy)
@@ -324,6 +334,51 @@ impl Panel {
             self.toy_row(frame, index, toy, y, on[index], key, index == chosen);
         }
         self.toy_card(frame, inputs, chosen, on[chosen]);
+        self.toy_master_badge(frame, inputs);
+    }
+
+    /// The Toy Master's "?" at the right of the column heads (Sol, 30/10/2026): the
+    /// toys SJK's creator hides on maps are secrets, so it shows nothing of them but a
+    /// question mark, gold once the player found one; its hover card says the rest.
+    fn toy_master_badge(&mut self, frame: &Frame, inputs: &Inputs<'_>) {
+        let s = frame.s;
+        let found = toy_master_found(inputs.standings).count();
+        let side = 40.0;
+        let x = ROWS_X + ROWS_WIDTH - side;
+        let y = HEADS_Y - side - 14.0;
+        let area = frame.rect(x, y, side, side);
+        let hovered = self.ui.token_hovered(TOY_MASTER_TOKEN);
+        let tint = if found > 0 {
+            color::GOLD_BRIGHT
+        } else {
+            color::alpha(color::HOLO, 0.85)
+        };
+        let _ = self.ui.draw_list_mut().push(DrawCommand::RoundedRect {
+            rect: area,
+            radius: 10.0 * s,
+            color: color::alpha(color::SPACE, if hovered { 0.85 } else { 0.6 }),
+        });
+        let _ = self.ui.draw_list_mut().push(DrawCommand::Border {
+            rect: area,
+            radius: 10.0 * s,
+            width: if hovered { 1.6 } else { 1.0 } * s,
+            color: if hovered {
+                tint
+            } else {
+                color::alpha(tint, 0.6)
+            },
+        });
+        text(
+            &mut self.ui,
+            TextFamily::Display,
+            format_args!("?"),
+            frame.rect(x, y + 5.0, side, 30.0),
+            26.0 * s,
+            tint,
+            FontWeight::Semibold,
+            TextAlign::Center,
+        );
+        self.ui.hit_region(TOY_MASTER_TOKEN, area);
     }
 
     /// The rows' column heads: the toy, its key and its switch.

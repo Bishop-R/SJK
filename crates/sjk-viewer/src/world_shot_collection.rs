@@ -43,6 +43,9 @@ fn preview() -> crate::console::profile_panel::Preview {
             goal: kind.goal,
             unlocked: if index % 2 == 0 { 1_791_336_225 } else { 0 },
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         })
         .collect();
     preview.standings = crate::achievements::standings(&held);
@@ -742,6 +745,9 @@ fn duel6_sjk_more_achievements() {
                     goal: standing.kind.goal,
                     unlocked: standing.unlocked.unwrap_or(0),
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect();
             for achievement in &mut held {
@@ -1077,5 +1083,90 @@ fn duel6_sjk_collection_history() {
             shoot(&mut gpu, 20, "duel6-collection-history").display()
         );
         assert!(!overflowed(&gpu));
+    });
+}
+
+/// The Toy Master's "?" on the Toys tab (30/10/2026): plain, then with a toy found, its
+/// hover card naming it, and the found toy's medallion on the Achievements wall, in a
+/// category of its own after the catalogue's.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn duel6_sjk_toy_master() {
+    on_big_stack(|| {
+        let cvars = [
+            ("ui_menuStyle", "sjk"),
+            (crate::settings::quick::HIDE_CVAR, "1"),
+            ("name", "^1Sol^7Vulpes"),
+            (crate::discord_presence::CVAR, "0"),
+        ];
+        let Some((mut gpu, _profile)) = open(
+            "maps/mp/duel6.bsp",
+            [1920, 1080],
+            Some(menu::ClientMenu::new(true, String::new())),
+            &cvars,
+        ) else {
+            return;
+        };
+        let _ = frame(&mut gpu, 10);
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_profile(preview());
+            console.preview_collection(Some(vec![sun()]), 0.8);
+            console.open_profile_hub_page(Tab::Toys, ReturnTarget::MainMenu);
+        }
+        let mut images = Vec::new();
+        gpu.profile_hub_show_for_shot(Tab::Toys);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_hover_for_shot(Some(10));
+        }
+        let path = shoot(&mut gpu, 60, "duel6-toy-master-none");
+        println!("{}", path.display());
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        let mut found = preview();
+        let held = sjk_identity::Achievement {
+            id: "secret_shot".to_owned(),
+            progress: 1,
+            goal: 1,
+            unlocked: 1_791_641_100,
+            reward: Some("kyber_rare".to_owned()),
+            name: Some("Found in a shot".to_owned()),
+            description: Some("You found the Toy Master's toy of the shots.".to_owned()),
+            group: Some(sjk_identity::wire::TOY_MASTER.to_owned()),
+        };
+        let mut all: Vec<sjk_identity::Achievement> = found
+            .standings
+            .iter()
+            .map(|standing| sjk_identity::Achievement {
+                id: standing.kind.id.to_owned(),
+                progress: standing.progress,
+                goal: standing.kind.goal,
+                unlocked: standing.unlocked.unwrap_or(0),
+                reward: None,
+                name: None,
+                description: None,
+                group: None,
+            })
+            .collect();
+        all.push(held);
+        found.standings = crate::achievements::standings(&all);
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_profile(found);
+            console.preview_collection(Some(vec![sun()]), 0.8);
+            console.collection_hover_for_shot(Some(10));
+        }
+        let path = shoot(&mut gpu, 30, "duel6-toy-master-found");
+        println!("{}", path.display());
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        gpu.profile_hub_show_for_shot(Tab::Achievements);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_hover_for_shot(Some(crate::achievements::ALL.len()));
+        }
+        let path = shoot(&mut gpu, 30, "duel6-toy-master-wall");
+        println!("{}", path.display());
+        assert!(!overflowed(&gpu), "the wall");
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        println!(
+            "{}",
+            sheet(&images, 1, 960, "duel6-toy-master-sheet").display()
+        );
     });
 }

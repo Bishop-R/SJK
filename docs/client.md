@@ -5478,7 +5478,8 @@ toy's sounds, and a switch per toy silences that toy's sounds alone, the player'
 and everyone else's (`s_toyBoxSound`, `s_toyOrder66Sound`, `s_toyHaxSound`,
 `s_toyRagdollSound`, `s_toyDroneSound`, `s_toyBoomboxSound`, `s_toyMonitorSound`,
 `s_toyMysteryBoxSound` (the [mystery boxes](mystery-boxes.md)), `s_toyBananaSound` (the
-[Banana peel](#banana-peel), 29/10/2026), all
+[Banana peel](#banana-peel), 29/10/2026), `s_toyMasterSound` (the toys [the Toy
+Master](toy-master.md) hides, 30/10/2026), all
 on by default,
 archived). The toy still
 runs and is still seen; nothing is sent to anyone. The Illuminate holocron makes no

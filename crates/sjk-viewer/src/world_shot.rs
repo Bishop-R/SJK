@@ -311,6 +311,8 @@ mod order66_shots;
 mod petals;
 #[path = "world_shot_ragdoll.rs"]
 mod ragdoll_shots;
+#[path = "world_shot_toy_master.rs"]
+mod toy_master_shots;
 
 #[path = "world_shot_blade_cards.rs"]
 mod blade_cards;
@@ -1316,6 +1318,9 @@ Found the fog bug, ask me about it!"
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -1499,6 +1504,9 @@ like this one.",
                     goal: kind.goal,
                     unlocked: 1_791_336_225,
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect(),
             names: vec![

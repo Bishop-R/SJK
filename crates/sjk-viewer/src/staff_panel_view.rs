@@ -2407,6 +2407,9 @@ mod tests {
                     goal: kind.goal,
                     unlocked: 0,
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect(),
             unlocks: crate::unlockables::ALL

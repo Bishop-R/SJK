@@ -1066,6 +1066,12 @@ Totals ("12 of 39 unlocked", the player card's "Achievements 12 / 39", the profi
 card) count every obtainable achievement and the retired ones the player holds, so a
 holder of Surveyor reads "of 40".
 
+The Toy Master's achievements (since 30/10/2026, [toy-master.md](toy-master.md)) are not
+in the client's catalogue: the hub sends one only once it is unlocked, with its `name`,
+`description` and `group` (`toy_master`), fields no other achievement carries. The board
+shows them in a "Toy Master" category, and totals count them like retired ones held:
+in both numbers, only for whoever holds them.
+
 What the client counts comes from its live matches on servers, never a demo, a game
 it hosts or a server on the player's own machine (a loopback address: Create game and
 `devmap` run `sjk-server` there, on a new port each time, #165)

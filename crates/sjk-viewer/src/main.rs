@@ -227,6 +227,7 @@ mod tag_render;
 mod tags;
 mod tags_frame;
 mod team_sabers;
+mod toy_master;
 mod toy_saved;
 mod toy_sight;
 mod toy_sounds;
@@ -675,6 +676,8 @@ struct GpuState {
     mystery_boxes: mystery_box::MysteryBoxes,
     /// What the player's Use key does at what they face, by the crosshair (`use_prompt`).
     use_prompt: use_prompt::UsePrompt,
+    /// The Toy Master's toys hidden on the loaded map (`toy_master`).
+    toy_master: toy_master::ToyMaster,
     player_shadows: player_shadows::State,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -1645,6 +1648,7 @@ impl GpuState {
             map_edits: Default::default(),
             mystery_boxes: Default::default(),
             use_prompt: Default::default(),
+            toy_master: Default::default(),
             player_shadows: player_shadows::State::default(),
             camera_buffer,
             camera_bind_group,
@@ -2908,6 +2912,7 @@ impl GpuState {
         self.static_models.append_instances(&mut self.object_groups);
         self.append_map_edit_instances();
         self.append_mystery_box_instances();
+        self.append_toy_master_instances();
         pickups::simple::append_frame(self, visual_now);
         // The charge glow on the view gun's muzzle (`cg_weapons.c` charge bits), after
         // this frame's sprites were cleared.
