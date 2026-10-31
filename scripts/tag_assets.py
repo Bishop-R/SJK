@@ -3,16 +3,15 @@
 The Tag toy sticks a premade picture on a wall, as sprays do. Its pictures are art in
 the hub's `sjk_tags` pack; the client bundles only the toy's icon, drawn here from
 shapes: `toy_tag.png`, 128x128 like `gfx/mp/f_icon_*`, a spray can tilted to the right,
-a puff of paint leaving its nozzle, on transparency. It also writes `tags.shader`, the
-decal shader of every tag of the client's catalogue (`crates/sjk-viewer/src/tags.rs`):
-the pack's picture alpha-blended over the wall, pushed off it as marks are.
+a puff of paint leaving its nozzle, on transparency. (Until 31/10/2026 it also wrote
+`tags.shader`, a decal shader per tag; tags now have a pass of their own,
+`crates/sjk-viewer/src/tag_render.rs`, which draws the pack's pictures at full size.)
 
 Usage: python scripts/tag_assets.py [output folder]
 (default `crates/sjk-viewer/assets/tags`).
 """
 
 import random
-import re
 import sys
 from pathlib import Path
 
@@ -86,38 +85,11 @@ def icon():
     return puff.resize((SIZE, SIZE), Image.LANCZOS)
 
 
-def shaders():
-    """Every tag's decal shader, in the catalogue's order."""
-    source = Path("crates/sjk-viewer/src/tags.rs").read_text(encoding="utf-8")
-    # `\s*`: rustfmt puts a long entry's id on the next line.
-    ids = re.findall(r'^    tag\(\s*"(tag_[a-z0-9_]+)"', source, re.MULTILINE)
-    lines = [
-        "// The Tag toy's decals (SJK; made by scripts/tag_assets.py): each tag's picture",
-        "// from the hub's sjk_tags pack, blended over the wall it is stuck on.",
-    ]
-    for tag in ids:
-        lines += [
-            f"gfx/tags/{tag}",
-            "{",
-            "	polygonOffset",
-            "	nopicmip",
-            "	{",
-            f"		clampmap gfx/tags/{tag}.png",
-            "		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA",
-            "		rgbGen vertex",
-            "		alphaGen vertex",
-            "	}",
-            "}",
-        ]
-    return "\n".join(lines) + "\n"
-
-
 def main():
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "crates/sjk-viewer/assets/tags")
     out.mkdir(parents=True, exist_ok=True)
     icon().save(out / "toy_tag.png", optimize=True)
-    (out / "tags.shader").write_text(shaders(), encoding="utf-8", newline="\n")
-    print(f"wrote {out / 'toy_tag.png'} and {out / 'tags.shader'}")
+    print(f"wrote {out / 'toy_tag.png'}")
 
 
 if __name__ == "__main__":

@@ -2490,6 +2490,7 @@ mod tests {
         // A stuck tag goes whole, only while there is one.
         let tagged = Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: "tag_gg".to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [120.5, -64.0, 24.0],

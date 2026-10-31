@@ -5420,31 +5420,55 @@ sees it there.
   Players propose them in the Discord's `#tag-proposals` channel (28/10/2026; a pinned
   post says how: one idea per post, voted with reactions, a bold square PNG, nothing
   taken from another game), which the tag card in Collection > Tags points to.
-- **Choosing:** Collection > Tags shows every tag, the ones the player lacks dimmed;
-  Choose (or Enter) sets `cg_tag`, the tag `toy_tag` sticks (default `tag_sjk`).
+- **Finishes and credits cards** (31/10/2026, Sol's decisions): a tag a holocron drops
+  comes Holo (4 %) or Solar (0.5 %) now and then, whatever the holocron's tier
+  ([holocrons.md](holocrons.md)); the hub counts those copies apart. The credits cards the
+  player holds (SJK Alpha's kind `credits`, [cards.md](cards.md#faces-and-the-first-set))
+  stick as tags too: the card's picture as a sticker, its corners rounded and a rim of the
+  card's colour round it. A tag or a card sticks in a finish the player holds a copy in
+  (Normal needs any copy; a free tag is only Normal). Both need a hub whose profiles list
+  `tag_cards` (the card kinds it lets be tags); an older hub refuses them, so the client
+  offers neither there and Collection > Tags lists no cards.
+- **Choosing:** Collection > Tags shows every tag, then the credits cards under their own
+  heading, the ones the player lacks dimmed and the Holo and Solar copies held as badges;
+  the wall scrolls (the wheel, the arrows keeping the choice in view). The card on the right
+  offers Normal, Holo and Solar (the finishes held), shown over the picture; Choose (or
+  Enter) sets `cg_tag`, the tag or card `toy_tag` sticks (default `tag_sjk`), and
+  `cg_tagFinish`, its finish (`normal`, `holo` or `solar`; one not held sticks Normal). A
+  finish chip of the tag in use changes its finish at once.
 - **Sticking:** `toy_tag` (a bind, Settings > Key bindings > Interaction "Toy: Tag", the
   quick wheel's Toys page) traces the crosshair 128 units into the world and sticks the
   chosen tag where it lands: upright on a wall, its top away from the player on a floor,
   56 units wide. One tag a player: a new one replaces the last, at most one every 10
   seconds. `toy_tag clear` takes it off. A tag the player does not hold is refused.
 - **Others see it** through the player's look: the tag rides in it (`tag`, the tag's id,
-  map, point, surface normal and turn), so players who come later see it too, and the hub
-  refuses a tag the key does not hold (`tag_not_unlocked`). It stays until the player
+  map, point, surface normal and turn, and its finish when not Normal), so players who come
+  later see it too, and the hub refuses a tag the key does not hold, or not in that finish
+  (`tag_not_unlocked`). Clients from before 31/10/2026 draw a finished tag plain and a
+  card's nothing. It stays until the player
   sticks another, clears it, changes map or server, or leaves. A client draws it only on
   the same map. `cg_toyTags 0` hides other players' tags on this PC; a muted or blocked
   player's never show.
 
 A tag is a lasting decal with a slot of its own per player
 ([decal_store.rs](../crates/sjk-viewer/src/decal_store.rs)): projected once when it
-changes (as impact marks are, over corners and patches), drawn until it goes, never pushed
-out by impact marks, and kept with `cg_marks 0`. The pictures (`gfx/tags/<id>.png`) are
-art in the hub's `sjk_tags` pack, the first ones placeholders until Sol's art; their decal
-shaders (`shaders/sjk_tags.shader`, alpha-blended) and the toy's spray-can icon are
-bundled, made by [tag_assets.py](../scripts/tag_assets.py). The pictures are put into the
-UI atlas from the hub's packs for the Collection and the holocron opening
-([tag_icons.rs](../crates/sjk-viewer/src/tag_icons.rs)), 128 pixels a side. See
-[tags.rs](../crates/sjk-viewer/src/tags.rs) and
-[tags_frame.rs](../crates/sjk-viewer/src/tags_frame.rs).
+changes (as impact marks are, over corners and patches), kept until it goes, never pushed
+out by impact marks, and kept with `cg_marks 0`. Since 31/10/2026 (Sol: tags were blurry in
+the game) tags are drawn by a pass of their own
+([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs), [rendering.md](rendering.md#tags)),
+each picture at its full size (a tag enlarged to 512 pixels, a card's sticker 1024), not as
+a 128-pixel tile of the effects' atlas, with its finish shaded per pixel: Holo a rainbow foil
+whose light follows the viewer's angle, with a glitter, and Solar the Sun's corona burning
+round the picture's own outline. The pictures (`gfx/tags/<id>.png`) are art in the hub's
+`sjk_tags` pack, the first ones placeholders until Sol's art (256 pixels: the pass takes
+any square up to 1024, so a sharper cut shows sharper); a card's is its picture in the card
+packs. The toy's spray-can icon is bundled, made by
+[tag_assets.py](../scripts/tag_assets.py). The pictures are put into the UI atlas from the
+hub's packs for the Collection and the holocron opening
+([tag_icons.rs](../crates/sjk-viewer/src/tag_icons.rs)), 128 pixels a side; a card's shows
+from the card faces' textures. See [tags.rs](../crates/sjk-viewer/src/tags.rs),
+[tags_frame.rs](../crates/sjk-viewer/src/tags_frame.rs) and
+[collection_tags.rs](../crates/sjk-viewer/src/collection_tags.rs).
 
 ## Toy sounds
 

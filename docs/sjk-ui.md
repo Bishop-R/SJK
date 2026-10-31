@@ -1550,7 +1550,12 @@ the Forge (the shop, crafting and breaking shaders down) and, since 12/10/2026, 
 (what opening holocrons brings, [cards.md](cards.md)), and since 27/10/2026 Tags after Toys
 (the tags `toy_tag` sticks, [client.md](client.md#tag): a wall of tiles, the ones not held
 dimmed, the chosen one on a card with Choose, which sets `cg_tag`; with nine tabs the row
-shrinks its names when even its narrowest gaps leave them too wide), and since 31/10/2026
+shrinks its names when even its narrowest gaps leave them too wide; since 31/10/2026 the
+wall scrolls, a line a wheel notch, the arrows (and Page Up, Page Down, Home, End) keeping
+the choice in view with its heading, a bar at its side; the credits cards a hub lets be tags
+follow the tags under "Credits cards"; a tile badges its Holo and Solar copies, and the card
+offers Normal, Holo and Solar chips, the finishes held, shown over the picture, Choose then
+setting `cg_tagFinish` too), and since 31/10/2026
 History last (what came, was opened, spent and traded, [cards.md](cards.md#history)). Sol picked the
 direction from a design canvas (`the vault`): every thing has its place from the
 start, the ones the player lacks dimmed; each tab shows its things on the left and

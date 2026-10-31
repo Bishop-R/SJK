@@ -1505,6 +1505,20 @@ pub(crate) fn owns_unlock(id: &str) -> bool {
     })
 }
 
+/// What the player's own hub profile holds of tag or card `id`, by finish
+/// ([`crate::tags::Held::of`]), by the same rule as [`owns_unlock`]: only the free tags
+/// with the identity off, no hub or before the hub answered.
+pub(crate) fn tag_held(id: &str) -> crate::tags::Held {
+    with_snapshot(|snapshot| {
+        let known = !matches!(
+            snapshot.status,
+            sjk_identity::Status::Disabled | sjk_identity::Status::NoHub
+        );
+        crate::tags::Held::of(id, snapshot.me.as_ref().filter(|_| known))
+    })
+    .unwrap_or_else(|| crate::tags::Held::of(id, None))
+}
+
 /// Whether the player's own hub profile lists a revealed copy of `gate`'s card in its
 /// finish (`blade_extras.rs`): false with the identity off, no hub or before the hub
 /// answered.

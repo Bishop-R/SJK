@@ -637,6 +637,8 @@ mod tests {
             assert_eq!(card.lines.len(), 4, "no marks");
         }
         let held = [sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: String::new(),

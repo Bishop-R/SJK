@@ -4346,6 +4346,8 @@ mod tests {
                 .unwrap()
                 .iter()
                 .map(|id| Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: id.clone(),
                     granted: 1,
                     note: String::new(),
@@ -4390,6 +4392,7 @@ mod tests {
 
     fn profile(name: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: name.to_owned(),
@@ -6952,6 +6955,7 @@ mod tests {
     fn tagged(id: &str) -> Look {
         Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: id.to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [1.0, 2.0, 3.0],

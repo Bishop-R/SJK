@@ -204,6 +204,16 @@ impl Found {
         } else {
             unlock.name.trim().to_owned()
         };
+        // A tag that came Holo or Solar (31/10/2026) says so: "Holo Gonk tag".
+        let name = match unlock
+            .finish
+            .as_deref()
+            .and_then(crate::cards::Finish::from_id)
+            .filter(|finish| finish.index > 0)
+        {
+            Some(finish) => format!("{} {name}", finish.name),
+            None => name,
+        };
         Some(Self {
             holocron: opened.holocron,
             tier: holocrons::any(&opened.tier)?.slot,

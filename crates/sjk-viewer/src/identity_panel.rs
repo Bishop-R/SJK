@@ -725,6 +725,7 @@ mod tests {
 
     fn me(name: &str, bio: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),

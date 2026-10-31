@@ -1,9 +1,11 @@
 //! World shots of tags ([`crate::tags`]) on `mp/duel6`: from where the client opens, the
 //! crosshair's trace finds walls round about and the floor below, a tag goes on each as
 //! `toy_tag` sticks one (upright on a wall, facing the player on the floor), and each is
-//! seen from in front. The pictures come from the hub's `sjk_tags` pack in the folder
-//! `SJK_TEST_TAGS` names (the hub's `assets/dist`), else the decals draw their missing
-//! picture. Ignored like the other world shots.
+//! seen from in front. The pictures come from the hub's `sjk_tags` and `sjk_cards` packs
+//! in the folder `SJK_TEST_TAGS` names (the hub's `assets/dist`), else nothing is drawn.
+//! Since 31/10/2026 the tags show their finishes and cards stick too: a Normal tag, a
+//! Holo one, a Holo and a Solar credits card, and a Solar tag on the floor. Ignored like
+//! the other world shots.
 
 use super::*;
 use glam::Vec3;
@@ -20,11 +22,9 @@ fn duel6_tags_on_walls_and_floor() {
         if let Some(dist) = std::env::var_os("SJK_TEST_TAGS") {
             let assets = crate::sjk_packs::directory_in(cache.path());
             std::fs::create_dir_all(&assets).unwrap();
-            std::fs::copy(
-                std::path::Path::new(&dist).join("sjk_tags.pk3"),
-                assets.join("sjk_tags.pk3"),
-            )
-            .unwrap();
+            for pack in ["sjk_tags.pk3", "sjk_cards.pk3"] {
+                std::fs::copy(std::path::Path::new(&dist).join(pack), assets.join(pack)).unwrap();
+            }
             crate::sjk_packs::mount_at_start(cache.path());
         }
         let Some((mut gpu, _profile)) = open("maps/mp/duel6.bsp", [1280, 720], None, &[]) else {
@@ -62,22 +62,34 @@ fn duel6_tags_on_walls_and_floor() {
                 spots.push((at, normal, forward));
             }
         }
-        spots.truncate(3);
+        spots.truncate(4);
         let down = Vec3::new(1.0, 0.0, -1.5).normalize();
         if let Some((at, normal)) = trace(&mut gpu, eye + down * 600.0) {
             spots.push((at, normal, down));
         }
         assert!(!spots.is_empty(), "the eye sees a wall or the floor");
+        // What each spot shows: the walls', then the floor's (the last spot).
+        let shows = [
+            ("tag_gonk", None),
+            ("tag_kyber", Some("holo")),
+            ("sjk_alpha_000", Some("holo")),
+            ("sjk_alpha_001", Some("solar")),
+        ];
+        let floor = ("tag_solar_fox", Some("solar"));
         let mut images = Vec::new();
         for (index, (at, normal, forward)) in spots.iter().enumerate() {
+            let (id, finish) = if normal.z.abs() >= 0.7 {
+                floor
+            } else {
+                shows[index % shows.len()]
+            };
             let tag = sjk_identity::PlacedTag {
-                id: crate::tags::CATALOGUE[index * 4 % crate::tags::CATALOGUE.len()]
-                    .id
-                    .to_owned(),
+                id: id.to_owned(),
                 map: "mp/duel6".to_owned(),
                 at: at.to_array(),
                 normal: normal.to_array(),
                 spin: crate::tags::spin_for(*normal, crate::tags::up_for(*normal, *forward)),
+                finish: finish.map(str::to_owned),
             };
             gpu.effect_aux.decals.set_tag(index, Some(&tag));
             // Seen from in front, a little back from where it was stuck.
@@ -88,9 +100,11 @@ fn duel6_tags_on_walls_and_floor() {
             aim(&mut gpu, back.to_array(), yaw, pitch);
             images.push(frame(&mut gpu, 6));
             println!(
-                "tag {} at {at} facing {normal}: {} fragments",
+                "tag {} ({:?}) at {at} facing {normal}: {} fragments, drawn {}",
                 tag.id,
-                gpu.effect_aux.decals.tag_polys()
+                tag.finish,
+                gpu.effect_aux.decals.tag_polys(),
+                gpu.tag_render.has_draws()
             );
         }
         assert!(

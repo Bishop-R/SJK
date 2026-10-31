@@ -59,6 +59,8 @@ fn dress(me: &mut sjk_identity::Profile, faces: &[crate::cards::faces::Face], no
     for unlockable in &crate::unlockables::ALL {
         if !me.unlocks.iter().any(|unlock| unlock.id == unlockable.id) {
             me.unlocks.push(sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: unlockable.id.to_owned(),
                 granted: now,
                 note: NOTE.to_owned(),
@@ -124,6 +126,8 @@ mod tests {
         let me = sjk_identity::Profile {
             staff,
             unlocks: vec![sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 7,
                 note: "kept".to_owned(),

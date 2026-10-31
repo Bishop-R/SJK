@@ -189,7 +189,8 @@ const _: () = assert!(CARD_BASE as usize + CARD_TILES_MAX <= CARD_SHOW_BASE as u
 /// Choose button.
 const TAG_BASE: u16 = 8_100;
 const TAG_CHOOSE_TOKEN: u16 = 8_099;
-const _: () = assert!(TAG_BASE as usize + crate::tags::CATALOGUE.len() <= 8_200);
+/// The Tags tab's finish chips, Normal, Holo and Solar (31/10/2026).
+const TAG_FINISH_BASE: u16 = 8_090;
 const OPTION_TOKENS: usize =
     crate::blade_skin_file::extras::MAX_OPTIONS + crate::blade_extras::MAX_EXTRAS;
 /// The Shaders tab's rows: the stock blade, then every blade skin, the rarest first
@@ -384,7 +385,8 @@ pub(crate) enum PanelAction {
     /// toggled.
     Banana(bool),
     /// Set `cg_tag` to this tag's id: the one `toy_tag` sticks.
-    ChooseTag(&'static str),
+    /// Pick a tag (or a card) for `toy_tag`, in a finish (`cg_tag`, `cg_tagFinish`).
+    ChooseTag(String, &'static str),
     /// Show a tab another page draws: the Holocrons page.
     Hub(Tab),
     /// Switch blade skin `skin`'s option `option` on or off (`cg_saberSkinOptions`).
@@ -572,6 +574,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) toys_unseen: u16,
     /// `cg_tag`: the tag `toy_tag` sticks.
     pub(crate) tag: &'a str,
+    /// `cg_tagFinish`: the finish it sticks it in, when held.
+    pub(crate) tag_finish: &'a str,
 }
 
 /// What the last frame showed of a shader's row, for keys and clicks.
@@ -613,10 +617,22 @@ pub(crate) struct Panel {
     /// 4 the Ragdoll, 5 the Drone, 6 the Boombox, 7 the Monitor, 8 Box hunt, 9 the Banana
     /// peel.
     toy: usize,
-    /// The tag chosen on Tags, in `tags::CATALOGUE`'s order, and which tags the last
-    /// frame showed as held (Enter picks only one of those).
+    /// The tag chosen on Tags, in the wall's order (the catalogue's tags, then the
+    /// cards), the things the last frame listed and what the player held of each (Enter
+    /// picks only one held).
     tag: usize,
-    tag_held: Vec<bool>,
+    tag_entries: Vec<tags::Entry>,
+    tag_held: Vec<crate::tags::Held>,
+    /// The wall's lines as the last frame laid them out, the first shown, and whether the
+    /// next frame brings the choice into view (an arrow moved it).
+    tag_lines: Vec<tags::Line>,
+    tag_first: usize,
+    tag_follow: bool,
+    /// The finish shown on the card (a place in `cards::FINISHES`), the entry it was set
+    /// for, and the tag in use (`cg_tag`) as the last frame read it.
+    tag_finish: usize,
+    tag_finish_for: Option<String>,
+    tag_in_use: Option<String>,
     /// The player was in the cardboard box, as the last frame's inputs said.
     box_on: bool,
     /// Order 66 was on, as the last frame's inputs said.
@@ -803,7 +819,14 @@ impl Panel {
             shader: 0,
             toy: 0,
             tag: 0,
+            tag_entries: Vec::new(),
             tag_held: Vec::new(),
+            tag_lines: Vec::new(),
+            tag_first: 0,
+            tag_follow: false,
+            tag_finish: 0,
+            tag_finish_for: None,
+            tag_in_use: None,
             box_on: false,
             order66_on: false,
             hax_on: false,
@@ -1120,7 +1143,7 @@ impl Panel {
             Tab::Shaders => self.shader_count,
             Tab::Cards => self.cards_shown,
             Tab::Toys => TOY_COUNT,
-            Tab::Tags => crate::tags::CATALOGUE.len(),
+            Tab::Tags => self.tag_entries.len().max(1),
             _ => 0,
         }
     }
@@ -1539,6 +1562,9 @@ impl Panel {
     /// A pressed key, by its code.
     fn key(&mut self, key: KeyCode, shift: bool, illuminate: bool) -> PanelAction {
         let vertical = self.tab == Tab::Shaders;
+        if self.tab == Tab::Tags && self.tag_key(key) {
+            return PanelAction::None;
+        }
         if self.tab == Tab::Cards && self.card_inspect {
             // Looking at a card closely: the arrows go to the previous or next tile,
             // Escape, Enter, Space and I put it back.
@@ -1795,6 +1821,15 @@ impl Panel {
             return PanelAction::None;
         }
         if let InputEvent::PointerWheel { delta, .. } = event
+            && self.tab == Tab::Tags
+        {
+            // The wheel scrolls the wall a line a notch.
+            if delta.y != 0.0 {
+                self.scroll_tags(delta.y > 0.0);
+            }
+            return PanelAction::None;
+        }
+        if let InputEvent::PointerWheel { delta, .. } = event
             && self.tab == Tab::Shaders
         {
             // The wheel scrolls the wall or the list a line a notch; the shader chosen
@@ -1891,11 +1926,18 @@ impl Panel {
             if let Some(tag) = token
                 .checked_sub(TAG_BASE)
                 .map(usize::from)
-                .filter(|tag| *tag < crate::tags::CATALOGUE.len())
+                .filter(|tag| *tag < self.tag_entries.len())
             {
                 // A click chooses (and shows) a tag; Choose or Enter picks it for toy_tag.
                 self.tag = tag;
                 return PanelAction::None;
+            }
+            if let Some(finish) = token
+                .checked_sub(TAG_FINISH_BASE)
+                .map(usize::from)
+                .filter(|finish| *finish < crate::cards::FINISHES.len())
+            {
+                return self.choose_tag_finish(finish);
             }
             if token == TAG_CHOOSE_TOKEN {
                 return self.choose_tag();
@@ -2176,7 +2218,7 @@ impl Panel {
             }
             Tab::Shaders => SHADER_BASE + self.shader as u16,
             Tab::Toys => TOY_TOKENS[self.toy.min(TOY_COUNT - 1)],
-            Tab::Tags => TAG_BASE + self.tag.min(crate::tags::CATALOGUE.len() - 1) as u16,
+            Tab::Tags => TAG_BASE + self.tag.min(self.tag_entries.len().saturating_sub(1)) as u16,
             Tab::Cards if self.cards_shown > 0 => CARD_BASE + self.card as u16,
             Tab::Nameplates => SHARE_TOKEN,
             Tab::History => self.history_focus(),
@@ -2205,6 +2247,8 @@ mod tests {
 
     fn sun() -> Unlock {
         Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: "Thanks for testing the blade".into(),
@@ -2242,6 +2286,7 @@ mod tests {
             toy_keys: &[],
             toys_unseen: 0,
             tag: "",
+            tag_finish: "",
         }
     }
 
