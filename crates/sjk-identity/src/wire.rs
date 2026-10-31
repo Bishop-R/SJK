@@ -1117,7 +1117,21 @@ pub struct Achievement {
     /// before, whose players read the client's own table.
     #[serde(default)]
     pub reward: Option<String>,
+    /// For an achievement the hub alone knows (since 30/10/2026, the Toy Master's: a
+    /// client's catalogue cannot hold a secret), sent only once it is unlocked: its name,
+    /// what it was for and the group it shows in ([`TOY_MASTER`]). `None` for the others.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// What it was for, in a sentence (an achievement the hub alone knows).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The group it shows in (an achievement the hub alone knows).
+    #[serde(default)]
+    pub group: Option<String>,
 }
+
+/// The group of the achievements the Toy Master's secrets unlock ([`Achievement::group`]).
+pub const TOY_MASTER: &str = "toy_master";
 
 /// The hub's answer to `POST /v1/staff/search`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

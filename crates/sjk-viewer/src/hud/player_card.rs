@@ -417,7 +417,7 @@ pub(crate) struct ProfileFacts {
 
 impl ProfileFacts {
     pub(crate) fn of(profile: &sjk_identity::Profile) -> Self {
-        use crate::achievements::{ALL, Kind, find};
+        use crate::achievements::{ALL, Category, Kind, held_kind};
         // A kind's step: how many kinds of the same counter have a lower goal.
         let step = |kind: &Kind| {
             ALL.iter()
@@ -428,7 +428,7 @@ impl ProfileFacts {
             .achievements
             .iter()
             .filter(|got| got.unlocked > 0 || (got.goal > 0 && got.progress >= got.goal))
-            .filter_map(|got| find(&got.id).map(|kind| (kind, got.unlocked)))
+            .filter_map(|got| held_kind(got).map(|kind| (kind, got.unlocked)))
             .collect();
         done.sort_by(|a, b| step(b.0).cmp(&step(a.0)).then(b.1.cmp(&a.1)));
         // The rarest holocron ever found: the counts are the unopened ones only, so the
@@ -461,9 +461,13 @@ impl ProfileFacts {
                 .unwrap_or_default()
                 .to_owned(),
             unlocked: done.len(),
+            // The Toy Master's found count in the total too: they are listed only then.
             total: crate::achievements::total_for(|kind| {
                 done.iter().any(|(held, _)| held.id == kind.id)
-            }),
+            }) + done
+                .iter()
+                .filter(|(kind, _)| kind.category == Category::ToyMaster)
+                .count(),
             rarest: done.iter().take(RAREST).map(|(kind, _)| *kind).collect(),
             holocron,
             created: profile.created,
@@ -2096,6 +2100,9 @@ mod tests {
             goal,
             unlocked,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         };
         sjk_identity::Profile {
             tag_cards: Vec::new(),
@@ -2216,6 +2223,9 @@ mod tests {
                 goal: 5,
                 unlocked: 1_791_336_225,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             });
         }
         let facts = ProfileFacts::of(&profile);
@@ -2228,6 +2238,9 @@ mod tests {
             goal: 5,
             unlocked: 0,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         });
         let facts = ProfileFacts::of(&unfinished);
         assert_eq!((facts.unlocked, facts.total), (4, total - 1));

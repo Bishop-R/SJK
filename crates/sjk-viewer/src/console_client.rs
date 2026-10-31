@@ -341,6 +341,7 @@ fn all_commands() -> impl Iterator<Item = &'static (&'static str, &'static str)>
         .chain(crate::saber_hilt_command::COMMANDS)
         .chain(crate::map_edits::editor::COMMANDS)
         .chain(crate::mystery_box::COMMANDS)
+        .chain(crate::toy_master::COMMANDS)
         .chain(jof_commands())
 }
 
@@ -976,6 +977,9 @@ impl crate::GpuState {
             }
             name if crate::mystery_box::is_command(name) => {
                 return self.mystery_box_command(name, args);
+            }
+            name if crate::toy_master::is_command(name) => {
+                return self.toy_master_command(name, args);
             }
             "speedometer" | "strafehelper" => {
                 return hud_commands::execute(

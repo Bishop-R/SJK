@@ -1110,6 +1110,9 @@ mod tests {
                 goal: 1,
                 unlocked: 5,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             }],
             ..profile("aaaaaaaaaaaaaaaa", "^1Sol")
         }

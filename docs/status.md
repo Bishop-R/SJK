@@ -1068,6 +1068,18 @@ every 3 minutes; another with it on who kills the mark wins a free roll (the mar
 tells the hub who killed it). Needs the hub's `box-hunt` branch (not deployed). Verified:
 unit tests on both sides. Not verified: in a game.
 
+## The Toy Master
+
+30/10/2026, `personal/toy-master`, based on `main` `dbfb7e9a` (Sol's idea): secret toys
+SJK's creator hides on maps (`toymaster_place <kind>`), found with `+use`
+([toy-master.md](toy-master.md)). The client knows a generic prop only; the hub (its
+branch `toy-master`, not deployed) keeps what each toy is, counts every player's presses
+towards a number it rolls per map load, starts the toy's show once for that map load and
+unlocks a hidden achievement, named only to whoever found it, on a player's first press.
+Collection > Toys has the Toy Master's "?". Verified: unit tests on both sides, the
+workspace checks, world shots of the "?", the wall and a hub toy in each phase. Not
+verified: in a game with a hub.
+
 Slash's test the same day: `give all` showed no jetpack. It did hold one, but the server
 never set `EF_JETPACK` on a player (only on NPCs), so no pack hung on the back; the
 player's think now sets it from the held jetpack, as `ClientThink_real` does. A new cheat,

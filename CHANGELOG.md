@@ -35,6 +35,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Tags on walls are sharp: each picture is drawn at its full size in a pass of its own, where they were squeezed into small tiles before and blurred up close _(Sol)_
 - Tags come Holo or Solar now and then from holocrons (4 % and 0.5 %). Holo's rainbow foil shifts as you walk past, Solar burns round the tag's outline; choose the finish on Collection > Tags (`cg_tagFinish`) _(Sol)_
 - The credits cards you hold stick as tags too, their picture as a sticker in the finish of a copy you hold; Collection > Tags lists them under the tags and now scrolls _(Sol)_
+- The Toy Master: SJK's creator hides toys on maps for you to find, and each one found with Use is a secret achievement. The "?" on Collection > Toys tells more; Settings > Sound > Toys silences their shows (`s_toyMasterSound`) _(Sol)_
 
 ## 2026.1031.2 (Alpha) | 31/10/2026
 

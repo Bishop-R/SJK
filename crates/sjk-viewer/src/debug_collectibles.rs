@@ -95,6 +95,9 @@ fn dress(me: &mut sjk_identity::Profile, faces: &[crate::cards::faces::Face], no
                 goal: kind.goal,
                 unlocked: now,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             }),
         }
     }

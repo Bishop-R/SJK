@@ -80,9 +80,10 @@ const MEDAL_BASE: u16 = 1_200;
 /// toys' tokens past 60) and the board's pages' switch.
 const ACHIEVEMENT_BASE: u16 = 6_000;
 const ACHIEVEMENT_PAGE_BASE: u16 = 6_200;
-const _: () = assert!(
-    ACHIEVEMENT_BASE as usize + crate::achievements::ALL.len() <= ACHIEVEMENT_PAGE_BASE as usize
-);
+/// Most medallions the wall shows: the catalogue's, then the Toy Master's the player
+/// found (`achievements::secret_kind`), up to the pages' switch after them.
+const WALL_MAX: usize = (ACHIEVEMENT_PAGE_BASE - ACHIEVEMENT_BASE) as usize;
+const _: () = assert!(crate::achievements::ALL.len() + 8 <= WALL_MAX);
 /// The shaders' rows have a range of their own, 7000 to 7299, for a catalogue of up
 /// to 299 skins (the stock blade is row 0).
 const SHADER_BASE: u16 = 7_000;
@@ -115,6 +116,9 @@ const MONITOR_TOKEN: u16 = 1_303;
 const BOX_HUNT_TOKEN: u16 = 1_304;
 /// The Banana peel's niche on Toys.
 const BANANA_TOKEN: u16 = 1_375;
+/// The Toys tab's "?", the Toy Master's (`collection_toys::Panel::toy_master_badge`): its
+/// hover card tells of the toys hidden on maps and names those the player found.
+const TOY_MASTER_TOKEN: u16 = 1_376;
 /// The Shaders tab's lone saber, where the pointer takes hold of it to turn it.
 const SABER_TOKEN: u16 = 1_316;
 /// The shader card's way to the Forge: Craft in the Forge (one not held) or Break down
@@ -2127,7 +2131,7 @@ impl Panel {
         };
         if let Some(index) = within(MEDAL_BASE, self.medals_shown) {
             self.medal = index;
-        } else if let Some(index) = within(ACHIEVEMENT_BASE, crate::achievements::ALL.len()) {
+        } else if let Some(index) = within(ACHIEVEMENT_BASE, WALL_MAX) {
             self.achievement = index;
         } else if let Some(index) = within(SHADER_BASE, self.shader_count) {
             self.shader = index;
@@ -2177,10 +2181,14 @@ impl Panel {
             Tab::Cards => CARD_BASE,
             // The Forge's shots name the token itself.
             Tab::Forge => 0,
-            // A toy's row, by its place in the tab.
+            // A toy's row, by its place in the tab; past the last, the Toy Master's "?".
             _ => {
-                self.hover
-                    .pin(index.and_then(|index| TOY_TOKENS.get(index).copied()));
+                self.hover.pin(index.and_then(|index| {
+                    TOY_TOKENS
+                        .get(index)
+                        .copied()
+                        .or((index == TOY_COUNT).then_some(TOY_MASTER_TOKEN))
+                }));
                 return;
             }
         };
@@ -2213,9 +2221,7 @@ impl Panel {
     fn focus_token(&self) -> u16 {
         match self.tab {
             Tab::Medals => MEDAL_BASE + self.medal as u16,
-            Tab::Achievements => {
-                ACHIEVEMENT_BASE + self.achievement.min(crate::achievements::ALL.len() - 1) as u16
-            }
+            Tab::Achievements => ACHIEVEMENT_BASE + self.achievement.min(WALL_MAX - 1) as u16,
             Tab::Shaders => SHADER_BASE + self.shader as u16,
             Tab::Toys => TOY_TOKENS[self.toy.min(TOY_COUNT - 1)],
             Tab::Tags => TAG_BASE + self.tag.min(self.tag_entries.len().saturating_sub(1)) as u16,
