@@ -8068,3 +8068,14 @@ test: choose a Holo or Solar copy, toy_tag: the foil shifts as you walk past; So
 test: choose a credits card you hold, toy_tag: its picture with a rim of its colour.
 test: a second SJK client on the server sees the same tag, finish and card.
 note: Finishes and card tags need the hub's tag-cards branch deployed; before, none show.
+
+[toy-master]
+area: Gameplay
+title: Toy Master: hidden toys on maps
+change: The creator places Toy Master props (toymaster_place, toymaster_remove, toymaster_list).
+change: Everyone's Use presses on a server add up; at the hub's hidden count every SJK player sees the show.
+change: Collection > Toys has a "?" hint; found toys show in a Toy Master group on the Achievements wall.
+test: toymaster_place on a local server, then Use the prop until the show plays; a second SJK client sees and hears it.
+test: Settings > Sound > Toys mutes the show's sound.
+test: Achievements wall: the toy's secret achievement shows in the Toy Master group once earned.
+note: Needs the hub's toy-master branch deployed (01/11/2026).

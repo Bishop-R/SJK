@@ -9,6 +9,8 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 01/11/2026 | - | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
+- 17af01d |  | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
 + 31/10/2026 | - | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
 - 98fcaf3 |  | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
 + 31/10/2026 | - | Release 2026.1031.2
