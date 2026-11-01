@@ -4635,6 +4635,7 @@ The player's own toy still shows, and nothing changes for the toys' rules.
 | Boombox | See and hear others' boomboxes | `cg_toyBoomboxShow` | their stereo and its music |
 | Monitor | See monitors | `cg_toyMonitorShow` | every monitor and its sounds, yours too ([Monitor](#monitor)) |
 | Banana peel | See banana peels | `cg_toyBananaShow` | every peel and its sounds, yours too ([Banana peel](#banana-peel)) |
+| Prop gun | (console only) | `cg_toyPropGunShow` | their guns, bolts and sounds ([Prop gun](#prop-gun)) |
 
 Order 66, the Hax and Box hunt act only on players who have them on, so they have none.
 The holocron, the box and the boombox are hidden as if those players had them off here
@@ -5404,6 +5405,81 @@ a PK3 with the same paths replaces them
 `banana_peel_toys_card`, and `banana_slip_on_a_demo` (with `SJK_TEST_DEMO`). See
 [banana.rs](../crates/sjk-viewer/src/banana.rs) and
 [banana_frame.rs](../crates/sjk-viewer/src/banana_frame.rs).
+
+## Prop gun
+
+The Prop gun (Sol's idea, 01/11/2026) is a toy for every SJK player: a fake weapon held
+instead of the real one, whose bolts knock down the players who have the toy on too, as
+the [Monitor](#monitor) does. SJK ships no gun: each is a file in a pk3 the player adds
+themselves, and other players see and hear a gun only when they have the same file.
+
+- **The guns** are `propguns/<id>.gun` in any pk3 or the game folder; `<id>` is 1 to 24
+  of `a` to `z`, `0` to `9` and `_`. One setting a line, its name then its values (`//`
+  starts a comment):
+
+  | Setting | Values | Default |
+  | --- | --- | --- |
+  | `name` | the name said when it is taken out | the id |
+  | `view`, `world` | the first-person and third-person models (MD3), needed | |
+  | `viewOffset`, `worldOffset` | x y z on the model's own axes (X forward, Y left, Z up) | 0 0 0 |
+  | `viewAngles`, `worldAngles` | pitch yaw roll, degrees | 0 0 0 |
+  | `viewScale`, `worldScale` | how much bigger | 1 |
+  | `fire` | a shot others hear (several lines: one each shot in turn) | |
+  | `fireOwn` | the shooter's own shot, in both ears (else `fire`) | |
+  | `impact` | where a bolt meets the world or a body (several lines) | |
+  | `raise` | played when the gun is taken out | |
+  | `boltModel`, `boltScale` | the bolt's model along its way (none: its light only) | none, 1 |
+  | `boltColor`, `boltLight` | its light's colour (0 to 1) and reach | 0.4 1 0.3, 120 |
+  | `boltSpeed`, `boltLife` | units a second, milliseconds | 1800, 3000 |
+  | `impactEffect` | an effect where it meets the world (`repeater/wall_impact`) | none |
+  | `refire` | milliseconds between two shots | 350 |
+  | `push` | how hard a bolt pushes the body it strikes, units a second | 900 |
+
+  A file with a fault is skipped and the console says which line. The models load with
+  the map, so a gun added during a match is drawn from the next one.
+- **`toy_propgun`** (a bind, the console) is the switch, both the right to fire and the
+  consent to be hit (always opt in). It stays as last switched, across maps, servers and
+  restarts (`cl_toyPropGun`, archived), and says the gun's name and ON, or "Prop gun OFF".
+  **`propgun`** lists the guns; `propgun <id>`, `next` and `prev` choose one (`cl_propGun`,
+  archived; the first gun at first).
+- **Held:** while it is on, the gun is drawn instead of whatever the player holds, saber
+  included. In first person it floats ahead, right and down of the eyes, moved by the
+  view bob and the view-model FOV (it does not follow a hand rig's animations), and
+  `cg_drawGun 0` hides it. In third person it hangs on the right hand (`*r_hand`), where
+  the real weapon would; the body keeps the animations the server plays (a saber stance
+  with a saber out).
+- **Firing:** attack and alt attack never reach the game server while a gun is held
+  ([live_session.rs](../crates/sjk-viewer/src/live_session.rs)); a press, or attack held,
+  fires once every `refire`. The bolt leaves from by the eyes (16 ahead, 5 right, 5 down)
+  towards what the crosshair meets, and flies straight at its speed until it meets the
+  world (its impact sound and effect) or a body, or for its life. Nobody fires while limp,
+  dead, spectating, in a duel, held by the server or in a vehicle (the Ragdoll's rules).
+- **The hit** is decided by the struck player's client alone, against its own body (a
+  standing player's box, or a limp one's ragdoll points), when a bolt passes within 6
+  units of it, tried every 4 units of its way. The body falls limp as the Ragdoll's and
+  takes a blow at the point nearest, along the bolt's way at `push` with 220 upwards
+  (3,000 units a second at most). Not by the player's own bolts, not twice by one bolt, not
+  within 0.25 seconds of a blow, and not while typing or away (the Monitor's rules). The
+  fall travels as the Ragdoll's, its blow naming the shooter and no monitor
+  (`ragdoll::UNTHROWN`).
+- **Seen, or not:** `cg_toyPropGunShow` (archived, default 1) at 0 hides other players'
+  guns, bolts and their sounds on this PC; `s_toyPropGunSound` silences every Prop gun
+  sound. In a duel, or following one, no gun is drawn and no bolt flies.
+
+No game server knows of it, and the hub never carries a gun's files. What a player holds
+and fires goes through the [toy relay](hub-chat.md#toy-relay), one event every 30 ms,
+the player's newest shots first: `hold_<id>` (told to each SJK player, again every 15
+seconds; forgotten after 40 seconds untold), `put`, and
+`fire_<number>_<moment>_<x>_<y>_<z>_<dx>_<dy>_<dz>_<id>` (the shot's number among the
+player's, 0 to 99; the game server time; where it left, whole units; its way, in
+thousandths). Each client flies the same bolt from its moment and drops a shot heard more
+than 1.5 seconds late. A sender counts only when the game shows the name they claimed,
+and never one blocked here. Players on stock clients see nothing. Not in the Collection's
+Toys tab, the quick wheel or the settings yet. World shot:
+`world_shot::propgun_shots::propgun_on_a_demo` (with `SJK_TEST_DEMO` and
+`SJK_TEST_PROPGUN`, the id of a gun in the game data). See
+[propgun.rs](../crates/sjk-viewer/src/propgun.rs) and
+[propgun_frame.rs](../crates/sjk-viewer/src/propgun_frame.rs).
 
 ## Tag
 

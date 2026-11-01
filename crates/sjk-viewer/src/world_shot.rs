@@ -309,6 +309,8 @@ mod mystery_box_shots;
 mod order66_shots;
 #[path = "world_shot_petals.rs"]
 mod petals;
+#[path = "world_shot_propgun.rs"]
+mod propgun_shots;
 #[path = "world_shot_ragdoll.rs"]
 mod ragdoll_shots;
 #[path = "world_shot_toy_master.rs"]

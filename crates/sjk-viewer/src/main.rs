@@ -57,6 +57,8 @@ mod editions;
 mod entity_view;
 mod kyber;
 mod loot_odds;
+mod propgun;
+mod propgun_frame;
 
 mod saber_colour_command;
 mod shader_image;
@@ -580,13 +582,15 @@ struct GpuState {
     box_hunt: box_hunt::BoxHunt,
     /// The Banana peel toy (`toy_banana`): its switch and the peels on the floor.
     banana: banana::Banana,
+    /// The Prop gun toy (`toy_propgun`): the gun held, the bolts and what others hold.
+    propgun: propgun::PropGun,
     /// The Tag toy (`toy_tag`): the own tag stuck on the world.
     tags: tags::Tags,
     /// The Ragdoll toy (`toy_ragdoll`): the player's own fall and the falls of others.
     ragdoll: ragdoll::Ragdoll,
-    /// Order 66's, the Hax's, the Drone's, the Monitor's, Box hunt's and the Banana peel's
-    /// switches as last saved (`toy_saved`).
-    toys_saved: [toy_saved::Saved; 6],
+    /// Order 66's, the Hax's, the Drone's, the Monitor's, Box hunt's, the Banana peel's and
+    /// the Prop gun's switches as last saved (`toy_saved`).
+    toys_saved: [toy_saved::Saved; 7],
     /// The Holocrons tab's 3D holocron ([`holocrons::stage`]).
     holocron_stage: holocrons::stage::Stage,
     /// The time its turn and bob are drawn at, instead of the clock's, for a world shot.
@@ -1583,6 +1587,7 @@ impl GpuState {
             monitor: Default::default(),
             box_hunt: Default::default(),
             banana: Default::default(),
+            propgun: Default::default(),
             tags: Default::default(),
             ragdoll: Default::default(),
             toys_saved: Default::default(),
@@ -1862,6 +1867,7 @@ impl GpuState {
         // actors.
         self.step_monitors(presentation_time);
         self.step_bananas(presentation_time);
+        self.step_propgun(presentation_time);
         self.step_ragdolls(presentation_time);
         timing.mark(Phase::Config);
         self.refresh_config_strings(game_audio);
@@ -2723,6 +2729,7 @@ impl GpuState {
         self.submit_drones(presentation_time, visual_now);
         self.submit_monitors(presentation_time);
         self.submit_bananas(presentation_time);
+        self.submit_propgun(presentation_time);
         self.submit_holocron_stage(visual_now);
         self.sync_saber_skins(game_audio, presentation_time);
         let debug_missiles = effect_debug::sync(self.console.as_ref());
@@ -2865,12 +2872,15 @@ impl GpuState {
             }
             self.pickups.clear();
         }
+        // A held prop gun hangs on the pistol's hand rig, whatever the player holds.
+        let prop_view = self.propgun_view();
         let view_weapon = first_person_weapon::frame_inputs(
             self,
             active_snapshot,
             first_person,
             local_entity_id,
             presentation_time,
+            prop_view.map(|_| first_person_weapon::PROP_RIG),
         );
         let first_person_charge = view_weapon.and(active_snapshot).and_then(|snapshot| {
             let predicted = self
@@ -2880,7 +2890,17 @@ impl GpuState {
             charge_flash::Charges::collect(Some(snapshot), predicted)
                 .of(snapshot.player.client_num())
         });
-        if let Some(inputs) = view_weapon {
+        if let Some(inputs) = view_weapon
+            && let Some(prop) = prop_view
+        {
+            first_person_weapon::submit_prop(
+                &self.first_person_weapon,
+                inputs,
+                prop,
+                &mut self.object_groups,
+            );
+            self.last_first_person_flash = None;
+        } else if let Some(inputs) = view_weapon {
             first_person_weapon::submit(&self.first_person_weapon, inputs, &mut self.object_groups);
             // `CG_AddPlayerWeapon` records the view gun's `tag_flash` for
             // trace-weapon beams (`cg_weapons.c:579`) and plays the

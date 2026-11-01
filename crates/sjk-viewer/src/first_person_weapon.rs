@@ -130,13 +130,19 @@ pub(crate) struct View {
     pub(crate) pitch: f32,
 }
 
-/// The local player's weapon state at the presented camera.
+/// The hand rig a prop gun hangs on in first person (`propgun.rs`): the Bryar pistol's,
+/// a one-handed hold.
+pub(crate) const PROP_RIG: u8 = 4;
+
+/// The local player's weapon state at the presented camera; with `as_weapon`, as if
+/// that weapon were held (a prop gun's rig, whatever the player holds).
 pub(crate) fn frame_inputs(
     state: &GpuState,
     snapshot: Option<&Snapshot>,
     camera: Option<first_person_view::Camera>,
     local_entity: Option<u64>,
     presentation_time: i64,
+    as_weapon: Option<u8>,
 ) -> Option<Inputs> {
     (|| {
         let view = camera.map_or(
@@ -161,6 +167,7 @@ pub(crate) fn frame_inputs(
             local_torso_frame(&state.actor_meshes, local_entity, presentation_time),
             presentation_time,
             predicted_weapon,
+            as_weapon,
         )
     })()
     .map(|mut inputs| {
@@ -196,10 +203,12 @@ fn inputs_with_weapon(
     torso_frame: Option<(usize, f32)>,
     presentation_time: i64,
     predicted_weapon: Option<&sjk_client::pmove::MovementState>,
+    as_weapon: Option<u8>,
 ) -> Option<Inputs> {
-    let weapon = match predicted_weapon {
-        Some(state) => legacy_view_weapon_visible_as(snapshot, third_person, state.weapon)?,
-        None => legacy_view_weapon_visible(snapshot, third_person)?,
+    let weapon = match (as_weapon, predicted_weapon) {
+        (Some(weapon), _) => legacy_view_weapon_visible_as(snapshot, third_person, weapon)?,
+        (None, Some(state)) => legacy_view_weapon_visible_as(snapshot, third_person, state.weapon)?,
+        (None, None) => legacy_view_weapon_visible(snapshot, third_person)?,
     };
     let state = &snapshot.player;
     let frames = match (&catalog.animations, torso_frame) {
@@ -280,6 +289,43 @@ pub(crate) fn submit(
         submitted += 1;
     }
     submitted
+}
+
+/// Push a prop gun in place of the gun (`inputs` made with `as_weapon` [`PROP_RIG`], for
+/// the bob and the view-model FOV): placed from the bobbing view itself, X forward, Y
+/// left, Z up, at [`PROP_HOLD`] plus the gun's own offset, so no hand rig's tag
+/// convention matters. False when `cg_drawGun` is 0.
+pub(crate) fn submit_prop(
+    catalog: &Catalog,
+    inputs: Inputs,
+    prop: crate::propgun_frame::HeldDraw,
+    object_groups: &mut [Vec<ActorInstance>],
+) -> bool {
+    if !catalog.visible {
+        return false;
+    }
+    let (hand_origin, hand_rotation) = hand_frame(inputs);
+    let (origin, rotation, scale) = prop_in_view(prop, inputs.forward_scale);
+    let mut instance = ActorInstance::new(
+        (hand_origin + hand_rotation * origin).to_array(),
+        (hand_rotation * rotation).normalize().to_array(),
+        scale.to_array(),
+    );
+    instance.depth_hack = 1.0;
+    object_groups[prop.mesh].push(instance);
+    true
+}
+
+/// Where a prop gun's grip sits from the eye: forward, to the right and down, as a
+/// one-handed gun is held.
+pub(crate) const PROP_HOLD: Vec3 = Vec3::new(10.0, -5.0, -6.0);
+
+/// A prop gun's placing in the view's frame: its origin, turn and scale (the view-model
+/// FOV's `forward_scale` squashing it along the view, as stock does the hand).
+fn prop_in_view(prop: crate::propgun_frame::HeldDraw, forward_scale: f32) -> (Vec3, Quat, Vec3) {
+    let along = Vec3::new(forward_scale, 1.0, 1.0);
+    let origin = (PROP_HOLD + prop.offset) * along;
+    (origin, prop.rotation, along * prop.scale)
 }
 
 /// The muzzle socket of the gun placed by `inputs`: the gun's `tag_flash`
@@ -532,5 +578,24 @@ mod tests {
         let mut x_scaled = placed;
         x_scaled.scale = Vec3::new(scale, 1.0, 1.0);
         assert!(on_instance(&x_scaled, point).distance(engine) > 1.5);
+    }
+
+    /// A prop gun points the way the view looks and sits ahead, right and down.
+    #[test]
+    fn a_prop_gun_sits_ahead_right_and_down_pointing_where_the_view_looks() {
+        let prop = crate::propgun_frame::HeldDraw {
+            mesh: 0,
+            offset: Vec3::new(1.0, 0.0, 2.0),
+            rotation: Quat::IDENTITY,
+            scale: 1.0,
+        };
+        let (origin, rotation, scale) = prop_in_view(prop, 1.0);
+        assert_eq!(origin, PROP_HOLD + Vec3::new(1.0, 0.0, 2.0));
+        assert!(origin.x > 0.0 && origin.y < 0.0);
+        assert_eq!(rotation, Quat::IDENTITY);
+        assert_eq!(scale, Vec3::ONE);
+        let (squashed, _, scale) = prop_in_view(prop, 0.5);
+        assert_eq!(squashed.x, origin.x * 0.5);
+        assert_eq!(scale, Vec3::new(0.5, 1.0, 1.0));
     }
 }

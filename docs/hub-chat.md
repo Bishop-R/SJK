@@ -1227,7 +1227,8 @@ cannot: the [Hax](client.md#hax)'s hacker steering the hacked player, the
 [Boombox](client.md#boombox)'s track, told to each player within reach, and the
 [Monitor](client.md#monitor)'s throws, told to every SJK player, the nearest first (its
 hits ride the Ragdoll's falls), and the [Banana peel](client.md#banana-peel)'s peels, told
-the same way, and their slips (since 29/10/2026). Two threads of
+the same way, and their slips (since 29/10/2026), and the [Prop gun](client.md#prop-gun)'s
+guns held and shots fired (since 01/11/2026). Two threads of
 the identity service of their own ([relay.rs](../crates/sjk-identity/src/relay.rs),
 `sjk-hub-relay-send` and `sjk-hub-relay-read`), each with its own HTTP client, read the
 hub and the game server as the feed does:

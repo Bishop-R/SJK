@@ -70,6 +70,10 @@ pub(super) fn register(shell: &mut sjk_shell::Shell) -> Result<(), sjk_shell::Co
             "Toy: Banana peel on or off (on, you drop peels with banana_drop and slip on the ones you walk onto; only players with it on slip)",
         ),
         (
+            crate::propgun::COMMAND,
+            "Toy: Prop gun on or off (on, you hold the gun propgun chose instead of your weapon, attack fires its bolts, and others' bolts knock you down; only players with it on are hit)",
+        ),
+        (
             crate::banana::DROP_COMMAND,
             "Drop a banana peel at your feet, or tossed ahead when you move (the Banana peel toy on); players who have it on slip on it",
         ),
