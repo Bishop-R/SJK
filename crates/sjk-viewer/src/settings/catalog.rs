@@ -817,6 +817,11 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Save game chat logs",
+        cvar: crate::console::chat_log::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Game PM-only chat",
         cvar: crate::chat::pm_only::CVAR,
         kind: ValueKind::Bool,

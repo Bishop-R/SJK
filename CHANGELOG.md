@@ -30,6 +30,12 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+= cl_logChat: Game-server chat logs are on by default for new profiles. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
+
+- Chat logs: received game-server chat is saved by default for new profiles, with Save game chat logs in Settings > Chat (classic: HUD); saved choices are kept _(Lumaya)_
+
 ## 2026.1101.1 (Alpha) | 01/11/2026
 
 Sharp tags in Holo and Solar, credits cards on walls, hidden toys to find and a Tester medal for playing.

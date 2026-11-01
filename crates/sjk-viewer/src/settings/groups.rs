@@ -84,6 +84,7 @@ impl Advanced {
 /// (Network's).
 const CHAT_ROWS: &[&str] = &[
     "cg_drawChat",
+    crate::console::chat_log::CVAR,
     crate::chat::pm_only::CVAR,
     "cg_chatBoxFontSize",
     crate::chat::emoji::CVAR,
@@ -549,6 +550,7 @@ impl Group {
                 crate::ground_hud::CVAR,
                 "cg_drawChat",
                 crate::chat::pm_only::CVAR,
+                crate::console::chat_log::CVAR,
                 "cg_chatBoxFontSize",
                 crate::chat::emoji::CVAR,
                 crate::chat::reply::REMEMBER_CVAR,

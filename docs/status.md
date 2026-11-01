@@ -1,3 +1,25 @@
+## Default-on received game-chat logs
+
+01/11/2026, `feat/chat-logs`, based on `main` `57f60dde` (requested default):
+`cl_logChat` defaults to 1 for new profiles; saved choices, including 0, stay.
+Save game chat logs is an on/off row in SJK Settings > Chat and the classic HUD
+settings, offered on the update's what's-new card too. Received game-server
+public, team and private chat appends to the profile's `chatlogs/chat.log` before
+display filters, with Unix timestamps and bounded UTF-8-safe numeric-colour/control
+cleanup. Mode 2 still synchronizes entries. Disabling then enabling clears a
+write-failure latch even without a message while disabled. The separate SJK hub
+chat and encrypted whispers remain outside this game-chat log. I/O is on incoming
+chat events, with no new work on HUD frames.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy. Focused temporary-file tests cover default-on receive filtering, append
+across restart, saved opt-outs and switch persistence, synchronized mode, real
+Unicode truncation and retry after a directory-write error. The offline GPU
+fixture `duel6_settings_chat_logs` was inspected: the SJK Chat row, On default,
+console name and help fit at 1080p. Actual live-session logging and non-Windows
+runtime behavior remain unverified; no public-server chat was automated. See
+[chat logs](client.md#chat-logs).
+
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
 31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`

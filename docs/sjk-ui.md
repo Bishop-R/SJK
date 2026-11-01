@@ -2794,6 +2794,18 @@ Incoming chat colour, cyan selected (offline fixture):
 
 ![Incoming chat colour](images/incoming-chat-colour.png)
 
+## Game chat logs
+
+Settings > Chat in Advanced mode includes **Save game chat logs**, an on/off row
+shared with the classic HUD settings. It defaults on for new profiles and keeps
+saved choices. Its help names the profile's `chatlogs/chat.log` and explains that
+received game-server public, team and private chat is saved before display filters.
+The release's what's-new card offers the same switch; console value 2 retains
+synchronized writes. See [chat logs](client.md#chat-logs).
+
+![Save game chat logs in SJK Settings](images/chat-logs-settings.png)
+
+
 ## Plan
 
 The next screens, in order; each gets snapshot tests before it replaces its

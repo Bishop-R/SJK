@@ -733,6 +733,10 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
+        crate::console::chat_log::CVAR,
+        "Log all game-server chat, including team/PMs before filters, in this profile's chatlogs/chat.log. Default on.",
+    ),
+    (
         "cg_chatBoxFontSize",
         "Size of chat messages and their rows; 1 is EternalJK's size, higher is larger and wraps sooner.",
     ),
