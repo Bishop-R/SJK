@@ -16,6 +16,7 @@ use glam::Vec3;
 use sjk_identity::service::SecretDone;
 use sjk_identity::toy_master::{self as wire, Placing, Show};
 use sjk_protocol::UserCommand;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// `BUTTON_USE`, `+use`.
@@ -165,6 +166,98 @@ fn length(show: &Show) -> Duration {
     Duration::from_millis(u64::from(show.vanish + show.gone + show.pop + show.spin))
 }
 
+/// How fast a spin of `spin` milliseconds goes `t` milliseconds into it, from 0 to 1 (its
+/// full speed), as [`spin_turn`] turns it.
+fn spin_speed(spin: f32, t: f32) -> f32 {
+    let up = SPIN_UP.min(spin / 4.0);
+    let down_from = (spin * 0.75).max(up);
+    let down = (spin - down_from).max(1.0);
+    if t < 0.0 || t >= spin {
+        0.0
+    } else if t < up {
+        t / up.max(1.0)
+    } else if t < down_from {
+        1.0
+    } else {
+        1.0 - (t - down_from) / down
+    }
+}
+
+/// Players' models within this distance of a spinning toy spin and squish with it (Sol,
+/// 01/11/2026), fading out to none at [`DANCE_FADE`].
+const DANCE_FULL: f32 = 320.0;
+const DANCE_FADE: f32 = 512.0;
+/// How much a model squishes at full speed: this much shorter at the bottom of a hop,
+/// as much wider as keeps it about its size.
+const SQUISH: f32 = 0.3;
+
+/// A toy's spin as the players around it dance it this frame: where it stands, how far
+/// it turned (degrees) and how far its hop squishes them (0 to 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Dance {
+    origin: Vec3,
+    turn: f32,
+    squish: f32,
+}
+
+/// What `show`, `elapsed` into it, has the players around it dance: only while it spins.
+fn dance(show: &Show, elapsed: Duration) -> Option<(f32, f32)> {
+    let t = elapsed.as_secs_f32() * 1_000.0 - (show.vanish + show.gone + show.pop) as f32;
+    let spin = show.spin as f32;
+    if t < 0.0 || t >= spin {
+        return None;
+    }
+    let speed = spin_speed(spin, t);
+    // In step with the toy's hops ([`pose`]'s lift).
+    let hop = ((t / 1_000.0) * std::f32::consts::TAU * show.turns.max(0.5))
+        .sin()
+        .abs();
+    Some((spin_turn(show.turns, spin, t), hop * speed))
+}
+
+/// This frame's dances, for the actors drawn after ([`dance_actor`]).
+static DANCES: std::sync::Mutex<Vec<Dance>> = std::sync::Mutex::new(Vec::new());
+
+fn dances() -> std::sync::MutexGuard<'static, Vec<Dance>> {
+    DANCES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Turn and squish an actor's drawn `transform` (feet `foot` units under its origin) as
+/// the spinning toy nearest it has the players around dance: its looks alone, never
+/// where the game has it nor which way it faces.
+pub(crate) fn dance_actor(transform: &mut sjk_runtime::Transform, foot: f32) {
+    let dances = dances();
+    if !dances.is_empty() {
+        dance_with(transform, foot, &dances);
+    }
+}
+
+/// [`dance_actor`] among `dances`.
+fn dance_with(transform: &mut sjk_runtime::Transform, foot: f32, dances: &[Dance]) {
+    let at = Vec3::from_array(transform.translation);
+    let Some((dance, near)) = dances
+        .iter()
+        .map(|dance| (dance, dance.origin.distance(at)))
+        .filter(|(_, near)| *near < DANCE_FADE)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+    else {
+        return;
+    };
+    let strength = 1.0 - ((near - DANCE_FULL) / (DANCE_FADE - DANCE_FULL)).clamp(0.0, 1.0);
+    let turn = glam::Quat::from_rotation_z((dance.turn * strength).to_radians());
+    transform.rotation = (turn * glam::Quat::from_array(transform.rotation)).to_array();
+    let squish = dance.squish * strength * SQUISH;
+    if squish > 0.0 {
+        let [x, y, z] = transform.scale;
+        let wide = 1.0 + squish * 0.5;
+        transform.scale = [x * wide, y * wide, z * (1.0 - squish)];
+        // The feet stay on the floor.
+        transform.translation[2] -= foot * z * squish;
+    }
+}
+
 /// One toy standing on the loaded map.
 #[derive(Clone, Debug, PartialEq)]
 struct Here {
@@ -228,8 +321,9 @@ pub(crate) struct ToyMaster {
     cues: Vec<Cue>,
     /// Where this frame's sparkles go.
     sparkles: Vec<Vec3>,
-    /// The audio generation and the list revision the sounds were handed over for.
-    sounds_registered: Option<(u64, u64)>,
+    /// The audio generation, the list revision and the game data (its address) the
+    /// sounds were handed over for: a pack that came since (the Sith cloud's) is heard.
+    sounds_registered: Option<(u64, u64, usize)>,
     /// A world shot's toys, kept without a session.
     #[cfg(test)]
     shot: bool,
@@ -276,6 +370,22 @@ impl ToyMaster {
         self.meshes.clear();
         self.presses = None;
         self.use_pressed = false;
+        dances().clear();
+    }
+
+    /// Hand the actors drawn this frame the spinning toys' dances, as at `now`.
+    fn publish_dances(&self, now: Instant) {
+        let mut dances = dances();
+        dances.clear();
+        dances.extend(self.here.iter().filter_map(|here| {
+            let (started, _) = here.playing?;
+            let (turn, squish) = dance(&here.show, now.saturating_duration_since(started))?;
+            Some(Dance {
+                origin: here.origin,
+                turn,
+                squish,
+            })
+        }));
     }
 
     /// Take the toys standing on `map` of `checksum` on `server` from `secrets`, keeping
@@ -404,6 +514,16 @@ impl ToyMaster {
     }
 }
 
+/// What the Use prompt says at a toy: what it does is the secret.
+const PROMPT: &str = "???";
+
+/// Whether `here` stands to be seen at `now`: not while its show has it shrunk away.
+fn shown(here: &Here, now: Instant) -> bool {
+    here.playing
+        .and_then(|(started, _)| pose(&here.show, now.saturating_duration_since(started)))
+        .is_none_or(|pose| pose.scale > 0.01)
+}
+
 /// The toy among `toys` the player at `from` facing `yaw` (radians) may press: within
 /// [`REACH`] across the floor and [`REACH_UP`] up or down, within [`FACING`] of their
 /// facing; the nearest of those.
@@ -512,6 +632,7 @@ impl GpuState {
             }
         }
         self.toy_master.tick(now);
+        self.toy_master.publish_dances(now);
         if self.toy_master.here.is_empty() {
             self.toy_master.use_pressed = false;
             return;
@@ -521,22 +642,32 @@ impl GpuState {
         };
         let player = &session.latest_snapshot().player;
         let pressed = std::mem::take(&mut self.toy_master.use_pressed);
-        if pressed && crate::mystery_box::plays(player) {
-            let from = self
-                .local_prediction
-                .predicted_state()
-                .map_or_else(|| player.origin(), |state| state.origin);
-            let at = pick(
-                Vec3::from_array(from),
-                self.camera_yaw,
-                &self.toy_master.here,
-            );
-            // A toy that played its show here, once the player found it, takes no more.
-            let counts = at.and_then(|id| self.toy_master.here.iter().find(|here| here.id == id));
-            if let Some(here) = counts
-                && !(here.done && here.told)
-            {
-                let id = here.id;
+        let faced = crate::mystery_box::plays(player)
+            .then(|| {
+                let from = self
+                    .local_prediction
+                    .predicted_state()
+                    .map_or_else(|| player.origin(), |state| state.origin);
+                pick(
+                    Vec3::from_array(from),
+                    self.camera_yaw,
+                    &self.toy_master.here,
+                )
+            })
+            .flatten()
+            .and_then(|id| self.toy_master.here.iter().find(|here| here.id == id))
+            .filter(|here| shown(here, now));
+        // A toy that played its show here, once the player found it, takes no more.
+        let counts = faced.map(|here| (here.id, !(here.done && here.told)));
+        if let Some((id, counts)) = counts {
+            // What Use does at it, by the crosshair as at a mystery box (`use_prompt`): a
+            // secret, so "???" (Sol, 01/11/2026), greyed once it takes no more.
+            self.want_use_prompt(crate::use_prompt::Prompt {
+                action: PROMPT.to_owned(),
+                line: None,
+                ready: counts,
+            });
+            if pressed && counts {
                 self.toy_master.press(id);
             }
         }
@@ -781,7 +912,8 @@ impl GpuState {
             .taken
             .as_ref()
             .map_or(0, |(revision, ..)| *revision);
-        if self.toy_master.sounds_registered != Some((audio.generation(), revision))
+        let data = self.vfs.as_ref().map_or(0, |vfs| Arc::as_ptr(vfs) as usize);
+        if self.toy_master.sounds_registered != Some((audio.generation(), revision, data))
             && !self.toy_master.here.is_empty()
             && let Some(vfs) = self.vfs.as_deref()
         {
@@ -792,7 +924,7 @@ impl GpuState {
                 .map(|here| here.sound.as_str())
                 .filter(|sound| !sound.is_empty());
             audio.register_effect_paths(vfs, [VANISH_SOUND, POP_SOUND].into_iter().chain(shows));
-            self.toy_master.sounds_registered = Some((audio.generation(), revision));
+            self.toy_master.sounds_registered = Some((audio.generation(), revision, data));
         }
         if let Some(vfs) = self.vfs.clone() {
             for at in self.toy_master.sparkles.drain(..) {
@@ -819,6 +951,10 @@ impl GpuState {
             if cue.show {
                 // Not every player has the show's sound: without it the toy spins silent.
                 if !audio.has_sound(&path) {
+                    crate::log::progress(format_args!(
+                        "toy master: the show's sound {path} is not in the game data (an \
+                         optional pack such as the Sith cloud's has it): the toy spins silent"
+                    ));
                     continue;
                 }
                 audio.play_toy_reaching(
@@ -916,6 +1052,87 @@ mod tests {
         assert!(speed(7_950) < speed(6_500) && speed(7_950) < 0.5);
         assert_eq!(at(1_600 + 8_000), None);
         assert_eq!(length(&SHOW), Duration::from_millis(9_600));
+    }
+
+    /// The players around dance only while the toy spins, turning as it turns, squishing
+    /// in step with its hops and harder as it speeds up.
+    #[test]
+    fn players_dance_only_while_the_toy_spins() {
+        let dance_at = |ms: u64| dance(&SHOW, Duration::from_millis(ms));
+        assert_eq!(dance_at(0), None);
+        assert_eq!(dance_at(1_000), None);
+        assert_eq!(dance_at(1_599), None);
+        assert_eq!(dance_at(1_600 + 8_000), None);
+        let (turn, _) = dance_at(1_600 + 3_000).unwrap();
+        assert_eq!(turn, at(1_600 + 3_000).unwrap().turn);
+        // At the top of a hop it squishes most, on landing not at all.
+        let squish = |ms: u64| dance_at(1_600 + ms).unwrap().1;
+        assert!(squish(3_125) > 0.99, "{}", squish(3_125));
+        assert!(squish(3_250) < 0.01, "{}", squish(3_250));
+        // Speeding up, it squishes less.
+        assert!(squish(125) < 0.2);
+        assert!(spin_speed(8_000.0, 7_999.0) < 0.01);
+    }
+
+    /// A model near a spinning toy turns and squishes with its feet on the floor; one far
+    /// off is left as it was, one between fades.
+    #[test]
+    fn a_dance_turns_and_squishes_the_model_feet_down() {
+        let dances = [Dance {
+            origin: Vec3::ZERO,
+            turn: 90.0,
+            squish: 1.0,
+        }];
+        let start = sjk_runtime::Transform {
+            translation: [100.0, 0.0, 24.0],
+            rotation: glam::Quat::IDENTITY.to_array(),
+            scale: [1.0; 3],
+        };
+        let mut near = start;
+        dance_with(&mut near, 24.0, &dances);
+        let turned = glam::Quat::from_array(near.rotation) * Vec3::X;
+        assert!((turned - Vec3::Y).length() < 1e-4, "{turned}");
+        assert!((near.scale[2] - (1.0 - SQUISH)).abs() < 1e-5);
+        assert!(near.scale[0] > 1.0 && near.scale[0] == near.scale[1]);
+        // The feet, 24 under the origin times the height, stay at 0.
+        assert!((near.translation[2] - 24.0 * near.scale[2]).abs() < 1e-4);
+        let mut far = start;
+        far.translation[0] = DANCE_FADE + 1.0;
+        dance_with(&mut far, 24.0, &dances);
+        assert_eq!(far, start_at(&start, DANCE_FADE + 1.0));
+        let mut between = start;
+        between.translation[0] = (DANCE_FULL + DANCE_FADE) / 2.0;
+        dance_with(&mut between, 24.0, &dances);
+        let squished = 1.0 - between.scale[2];
+        assert!(squished > 0.0 && squished < SQUISH, "{squished}");
+    }
+
+    fn start_at(start: &sjk_runtime::Transform, x: f32) -> sjk_runtime::Transform {
+        let mut moved = *start;
+        moved.translation[0] = x;
+        moved
+    }
+
+    /// A toy shrunk away in its show is not shown, so no prompt stands over it.
+    #[test]
+    fn a_toy_gone_in_its_show_is_not_shown() {
+        let mut toys = ToyMaster::default();
+        toys.take(
+            &wire::Secrets {
+                secrets: vec![toy(1, [0.0; 3])],
+                ..Default::default()
+            },
+            "mp/ffa3",
+            -5,
+            "",
+            true,
+        );
+        let now = Instant::now();
+        assert!(shown(&toys.here[0], now));
+        toys.start(1, now);
+        assert!(shown(&toys.here[0], now));
+        assert!(!shown(&toys.here[0], now + Duration::from_millis(700)));
+        assert!(shown(&toys.here[0], now + Duration::from_millis(2_000)));
     }
 
     #[test]

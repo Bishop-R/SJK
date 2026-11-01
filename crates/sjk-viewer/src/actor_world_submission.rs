@@ -546,6 +546,16 @@ fn submit_actor(
     {
         crate::ragdoll::place(transform, &points);
     }
+    // Players around the Toy Master's spinning toy spin and squish with it, their looks
+    // alone (`toy_master::dance_actor`); not a limp one nor a vehicle.
+    if entity.kind == EntityKind::Actor
+        && !mesh.is_some_and(|index| {
+            sinks.actor_meshes[index].ragdoll.posed
+                || sinks.actor_meshes[index].preview.vehicle.is_some()
+        })
+    {
+        crate::toy_master::dance_actor(transform, 24.0);
+    }
     // `EV_VEH_FIRE`: this vehicle's volleys, at its muzzles as posed now.
     if let Some(index) = mesh
         && sinks.actor_meshes[index].preview.vehicle.is_some()
