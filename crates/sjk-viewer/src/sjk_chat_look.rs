@@ -162,12 +162,18 @@ pub(crate) fn official_mark(
     rect
 }
 
+/// A holocron's or crystal's picture against a tick's side: its glow reaches its edges,
+/// so it is drawn a little larger to read as large as the tick.
+const PICTURE_GROWTH: f32 = 1.3;
+
 /// The SJK UI's accent gold, the SJK team's sender's colour.
 pub(crate) const ACCENT: Color = crate::menu::sjk::color::GOLD;
 
-/// Draw a holocron drop's mark (the tier's gem, in place of the verified tick) after a
-/// name drawn at `size` that ends at `x`, centred on the height `middle`, at `alpha`.
-/// Returns where it was drawn; the room it takes is [`tick_room`]'s.
+/// Draw a holocron drop's mark (in place of the verified tick) after a name drawn at
+/// `size` that ends at `x`, centred on the height `middle`, at `alpha`: the holocron's
+/// or kyber crystal's own picture (01/11/2026, Sol's request), a little larger than a
+/// tick, or the tier's gem where the picture is missing. Returns where it was drawn; the
+/// room it takes is [`tick_room`]'s.
 pub(crate) fn gem_mark(
     list: &mut DrawList,
     x: f32,
@@ -178,6 +184,20 @@ pub(crate) fn gem_mark(
 ) -> Rect {
     let side = tick_side(size);
     let rect = Rect::new(x + size * 0.2, middle - side * 0.5, side, side);
+    if crate::holocrons::icons::is_loaded(tier.slot) {
+        let grown = side * PICTURE_GROWTH;
+        let _ = list.push(DrawCommand::TexturedQuad {
+            rect: Rect::new(
+                rect.x + (side - grown) * 0.5,
+                middle - grown * 0.5,
+                grown,
+                grown,
+            ),
+            texture: crate::holocrons::icons::texture(tier.slot),
+            color: Color::new(1.0, 1.0, 1.0, alpha),
+        });
+        return rect;
+    }
     crate::holocrons::gem::draw(
         list,
         [rect.x + side * 0.5, middle],

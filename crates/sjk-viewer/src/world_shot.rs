@@ -378,6 +378,9 @@ mod chat_gifs_shots;
 #[path = "world_shot_jof_sjk_chat.rs"]
 mod jof_sjk_chat_shots;
 
+#[path = "world_shot_find_blades.rs"]
+mod find_blades_shots;
+
 #[path = "world_shot_text_sizes.rs"]
 mod text_sizes_shots;
 

@@ -8092,3 +8092,16 @@ test: play the show with another player near it: their model spins and squishes,
 test: in third person your own model dances too; first person and aim are unchanged.
 test: without the SJK extras pack the log says the show's sound is missing.
 note: The song is in the Sith cloud's SJK Extras group (sound/sjk/toys/oiia.mp3).
+
+[chat-find-blades]
+area: Console & chat
+title: Grand finds in chat: crystal picture, coloured prize, blade
+change: Drop and find lines start with the holocron's or crystal's picture, not SJK's emblem.
+change: A find's prize is in its own rarity colour; a blade find shows the blade, small and live.
+change: With the chat open, resting the pointer on that blade shows it large above the line.
+test: debug_find: a Legendary Kyber Crystal line with a Mythical blade; the crystal comes first.
+test: The blade's name is gold (Mythical), the rest of the line purple (Legendary).
+test: debug_find kyber_rare saber_phoenix: the Phoenix blade, small, moves as in Collection.
+test: Open the chat (Enter), rest the pointer on the small blade: the large card above it.
+test: debug_holocron legendary: the drop line starts with the holocron's picture.
+note: The chat page and the dock get the crystal picture only, not the colour or blade.

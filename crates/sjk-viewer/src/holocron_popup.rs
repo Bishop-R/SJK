@@ -577,6 +577,21 @@ impl crate::GpuState {
         Ok(lines)
     }
 
+    /// `debug_find`: a made-up grand find of a blade in the chat feed (`chat/find_blade.rs`).
+    pub(crate) fn debug_find_command(&mut self, args: &[String]) -> Result<Vec<String>, String> {
+        let (tier, skin) = crate::chat::find_blade::parse(args)?;
+        self.chat.rehearse_find(tier, skin, Instant::now());
+        if let Some(console) = &mut self.console {
+            console.set_open(false);
+        }
+        self.sync_cursor_policy();
+        Ok(vec![format!(
+            "A {} find of {} is in the chat: open the chat and rest the pointer on its blade.",
+            tier.title(),
+            skin.id
+        )])
+    }
+
     /// `debug_open`: play the Holocrons tab's opening of made-up holocrons
     /// ([`crate::cards::rehearsal`]); alone, list the tiers. In the SJK UI the
     /// Collection's Holocrons tab shows it, in the classic menus the page on its own.

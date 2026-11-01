@@ -1340,6 +1340,9 @@ pub struct FindMark {
     /// The card's id (empty for a shader or a sealed card): its face may name a rank
     /// in place of its rarity.
     pub card: String,
+    /// The shader's unlock id (empty for a card, or from a hub that sends none): the
+    /// chat draws that blade beside the line.
+    pub skin: String,
 }
 
 /// A grand find (`PROTOCOL.md`, "The feed", `finds`; since 17/10/2026): a holocron someone

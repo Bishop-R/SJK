@@ -68,6 +68,7 @@ impl ChatOverlay {
         }
         self.ui.begin_transparent(viewport);
         self.visible_people.fill(None);
+        self.visible_blades.fill(None);
         let mut g = self.options.geometry(viewport);
         if self.scoreboard_layout == crate::scoreboard::behavior::ChatLayout::SideColumn {
             place_beside_scoreboard(&mut g, viewport, self.options.font);
@@ -146,6 +147,8 @@ impl ChatOverlay {
             g.scale = feed_scale;
         }
         self.chat_text = [feed_text, (composer_start, self.ui.next_text_id())];
+        // A find's blade under the pointer shows large, over the feed and the composer.
+        self.build_find_blade(&g, viewport);
         // A name under the pointer shows its profile card, over everything.
         self.follow_card(self.is_typing(), ms);
         self.build_card(font, &g, viewport);
@@ -290,6 +293,11 @@ impl ChatOverlay {
                     } else {
                         tint(line.channel, alpha * 0.75)
                     },
+                    prize: line
+                        .hub
+                        .as_ref()
+                        .and_then(|hub| hub.prize)
+                        .map(|prize| (prize.range(&line.body), prize.colour)),
                 },
                 &prefix,
                 font,
@@ -312,6 +320,16 @@ impl ChatOverlay {
             // Resting the pointer on the sender's name shows their profile card.
             if !active {
                 continue;
+            }
+            // Resting it on a find's blade shows the blade large (`find_blade.rs`).
+            if let (Some(skin), Some(rect)) = (prefix.blade, prefix.blade_rect(font, [x, y])) {
+                let colour = line
+                    .hub
+                    .as_ref()
+                    .and_then(|hub| hub.prize)
+                    .map_or(skin.tier.colour(), |prize| prize.colour);
+                self.visible_blades[token] = Some((skin, rect, colour));
+                self.ui.hit_region(find_blade::BLADE + token as u16, rect);
             }
             if let Some(hub) = &line.hub {
                 self.visible_people[token] = Some(card::Who::Hub(hub.id));
@@ -337,7 +355,8 @@ fn line_marks<'a>(
 ) -> Option<(&'a str, sjk_line::Marks<'a>)> {
     if let Some(hub) = &line.hub {
         let marks = sjk_line::Marks {
-            sjk: true,
+            // A drop starts with its holocron's picture, not SJK's emblem.
+            sjk: hub.tier.is_none(),
             icon: hub.client,
             mark: crate::ui_renderer::mark_texture(hub.verified, hub.tick, hub.trust),
             tier: hub.tier,
@@ -351,6 +370,7 @@ fn line_marks<'a>(
             },
             emoji: &hub.emoji,
             accent: hub.official,
+            blade: hub.prize.and_then(|prize| prize.skin),
         };
         return Some((&line.name, marks));
     }
@@ -400,6 +420,7 @@ fn line_marks<'a>(
         },
         emoji: mark.map_or("", |mark| mark.emoji.as_str()),
         accent: false,
+        blade: None,
     };
     let name = mark
         .and_then(|mark| mark.name.as_deref())

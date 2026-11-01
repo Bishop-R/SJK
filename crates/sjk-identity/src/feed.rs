@@ -619,6 +619,11 @@ fn find_message(find: FindEvent, own: &str) -> ChatMessage {
                 rarity: find.rarity,
                 finish: find.finish,
                 card: if find.prize == "card" {
+                    find.item.clone()
+                } else {
+                    String::new()
+                },
+                skin: if find.prize == "shader" {
                     find.item
                 } else {
                     String::new()
@@ -1101,6 +1106,10 @@ mod tests {
         assert_eq!((mark.tier.as_str(), mark.own), ("mythical", false));
         let find = mark.find.as_ref().expect("its prize");
         assert!(find.shader);
+        assert_eq!(
+            (find.skin.as_str(), find.card.as_str()),
+            ("saber_phoenix", "")
+        );
         assert_eq!(
             (find.name.as_str(), find.rarity.as_str()),
             ("Phoenix blade", "mythical")

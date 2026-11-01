@@ -6,6 +6,7 @@ mod editing;
 mod editor;
 pub(crate) mod emoji;
 mod feed_gif;
+pub(crate) mod find_blade;
 pub(crate) mod incoming_color;
 
 pub(crate) mod client_icons;
@@ -109,6 +110,9 @@ struct HubLine {
     /// The line is a holocron drop of this tier (`holocrons/line.rs`): in the tier's
     /// colour, a gem before it instead of the verified tick.
     tier: Option<&'static crate::holocrons::Tier>,
+    /// A grand find's prize (`holocrons/line.rs`): its words in its own colour, and its
+    /// blade drawn small after the holocron's picture (`chat/find_blade.rs`).
+    prize: Option<crate::holocrons::line::Prize>,
     /// The line is the SJK team's (an announcement or a reward round, `official.rs`):
     /// "SJK" in the SJK UI's accent gold, no label.
     official: bool,
@@ -141,6 +145,9 @@ pub(crate) struct ChatOverlay {
     pressed_who: Option<card::Who>,
     /// Whose name each feed token is, for the profile card (`chat/card.rs`).
     visible_people: [Option<card::Who>; MAX_VISIBLE],
+    /// The finds' blades the feed shows, by line token, while the pointer is free: the
+    /// skin, where it is drawn and its prize's colour (`chat/find_blade.rs`).
+    visible_blades: [Option<find_blade::Shown>; MAX_VISIBLE],
     /// The profile card on show while the composer is open.
     card: Option<card::Card>,
     /// Mute or Unmute asked from the card, until the frame takes it.
@@ -275,6 +282,7 @@ impl ChatOverlay {
             pressed_action: None,
             pressed_who: None,
             visible_people: [None; MAX_VISIBLE],
+            visible_blades: [None; MAX_VISIBLE],
             card: None,
             mute_request: None,
             map_block_request: None,

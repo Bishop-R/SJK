@@ -725,7 +725,9 @@ request, 08/10/2026):
   theirs too.
 - In the game's chat a line starts with SJK's emblem, small (1.35 times the text's
   height, in its own colours, `ui_renderer::LOGO_TEXTURE`; Sol's request, 11/10/2026),
-  where it used to read the letters SJK. The dock and the page, which show only SJK
+  where it used to read the letters SJK. A holocron drop or grand find starts with the
+  holocron's or crystal's picture instead (01/11/2026,
+  [holocrons.md](holocrons.md#chat-lines)). The dock and the page, which show only SJK
   chat, have no mark. A message sent from another client that takes part in SJK chat
   starts with that client's icon instead, at the same size: the clients are the
   entries of [chat/client_icons.rs](../crates/sjk-viewer/src/chat/client_icons.rs)

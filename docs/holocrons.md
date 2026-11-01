@@ -406,6 +406,21 @@ goes, in all three places the SJK chat shows ([hub-chat.md](hub-chat.md#how-a-li
   the prize (`DropMark::find`, [feed.rs](../crates/sjk-identity/src/feed.rs)); the
   words are [holocrons/line.rs](../crates/sjk-viewer/src/holocrons/line.rs)'s. Muted
   players' finds and unknown tiers are left out as drops are.
+- **How a find looks** (01/11/2026, Sol's request): in all three views a drop's or
+  find's mark is the holocron's or crystal's own picture (`gfx/sjk/holocron_<tier>`,
+  [holocrons/icons.rs](../crates/sjk-viewer/src/holocrons/icons.rs), drawn 1.3 times a
+  tick's side), the gem only where the picture is missing; in the game's chat it starts
+  the line, in place of SJK's emblem. In the game's chat the prize's words are drawn in
+  the prize's own colour (the blade's tier, a card's rarity or rank), the rest of the
+  line in the holocron's; a find of a blade skin the client knows draws that blade after
+  the picture, small and live as the Collection's swatches draw it, fading with its
+  line. The hub's `item` (the shader's unlock id) comes through as `FindMark::skin`; a
+  hub without it gives the colour from the shader's tier and no blade. While the
+  composer is open, resting the pointer on the blade shows it large in a card above the
+  line (its tier in its colour, its name, the blade), as long as the pointer stays on
+  it ([chat/find_blade.rs](../crates/sjk-viewer/src/chat/find_blade.rs)).
+  `debug_find [tier] [blade id or #number]` puts a made-up find of a blade in the feed
+  (a Legendary Kyber Crystal and a Mythical blade by default), nothing sent.
 
 ### Staff
 
