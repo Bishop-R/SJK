@@ -1,3 +1,18 @@
+## Minimized chat bubble switch
+
+01/11/2026, `fix/minimized-chat-bubble`, based on `main` `57f60dde`: a minimized
+window's automatic talk flag follows `cl_minimizedChatbox` alone. Previously,
+`cl_unfocusedChatbox 1` restored the bubble even with the minimized setting at 0,
+as minimized windows also lose focus. Restoring returns to the unfocused switch;
+real chat/console/menu key catchers retain their ordinary talk flag. Defaults
+and the protocol-26 button bits are unchanged.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy; focused tests cover both focus flags, disabled/nonzero settings, live cvar
+changes and minimize/focus/restore event ordering through the console's cached
+window state. Actual OS window events and another client's view of the bubble
+on an isolated server remain unverified. See [talk balloons](client.md#talk-balloons).
+
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
 31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`

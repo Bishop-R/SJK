@@ -30,6 +30,10 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+- Chat bubble: `cl_minimizedChatbox 0` now disables the automatic away bubble while minimized even when the unfocused bubble is enabled _(Lumaya)_
+
 ## 2026.1101.1 (Alpha) | 01/11/2026
 
 Sharp tags in Holo and Solar, credits cards on walls, hidden toys to find and a Tester medal for playing.

@@ -323,15 +323,19 @@ fn private_flash(away: bool, setting: Option<bool>) -> bool {
     away && setting != Some(false)
 }
 
-/// `CL_CmdButtons`' away test: unfocused with `cl_unfocusedChatbox`, or minimised
-/// with `cl_minimizedChatbox`, each enabled by any nonzero value.
+/// The minimized setting owns a minimized window, which is usually unfocused too.
+/// Otherwise the unfocused setting applies. Any nonzero value enables the bubble.
 fn away_talk(
     unfocused: bool,
     minimized: bool,
     unfocused_chatbox: i64,
     minimized_chatbox: i64,
 ) -> bool {
-    unfocused && unfocused_chatbox != 0 || minimized && minimized_chatbox != 0
+    if minimized {
+        minimized_chatbox != 0
+    } else {
+        unfocused && unfocused_chatbox != 0
+    }
 }
 
 #[cfg(test)]
@@ -420,10 +424,34 @@ mod away_talk_tests {
         assert!(away_talk(true, false, 1, 1));
         assert!(away_talk(true, true, 1, 1));
         assert!(!away_talk(true, false, 0, 1));
-        // A minimised window is usually unfocused too; either setting raises it.
+        // An unfocused setting must not turn the minimized bubble back on.
         assert!(away_talk(true, true, 0, 1));
-        assert!(away_talk(true, true, 1, 0));
+        assert!(!away_talk(true, true, 1, 0));
         assert!(!away_talk(true, true, 0, 0));
         assert!(away_talk(false, true, 0, 2));
+    }
+
+    #[test]
+    fn minimized_focus_and_setting_changes_follow_the_minimized_switch() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console = super::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(console.set_cvar("cl_minimizedChatbox", "0"));
+        console.window_state(Some(false), None);
+        assert!(console.window_talk(), "unfocused setting still works");
+        console.window_state(None, Some(true));
+        assert!(!console.window_talk(), "minimized overrides unfocused");
+        console.window_state(Some(false), None);
+        assert!(
+            !console.window_talk(),
+            "a later focus event cannot restore it"
+        );
+        assert!(console.set_cvar("cl_minimizedChatbox", "2"));
+        assert!(console.window_talk(), "nonzero values work immediately");
+        assert!(console.set_cvar("cl_minimizedChatbox", "0"));
+        assert!(!console.window_talk());
+        console.window_state(None, Some(false));
+        assert!(console.window_talk(), "restored but still unfocused");
+        console.window_state(Some(true), None);
+        assert!(!console.window_talk());
     }
 }

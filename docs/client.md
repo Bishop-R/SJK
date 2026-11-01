@@ -2591,7 +2591,10 @@ target name, origin) and the outline is a box round its origin.
 Opening chat, the console or a menu sends the stock talk button and disables
 other movement input while that keyboard catcher is active. As in EternalJK, so
 does a window you alt-tab away from or minimise, so others see you are away:
-`cl_unfocusedChatbox` and `cl_minimizedChatbox` (archived, both 1) turn that off. Players carrying
+`cl_unfocusedChatbox` and `cl_minimizedChatbox` (archived, both 1) turn that off. While minimized, only
+`cl_minimizedChatbox` controls the automatic away bubble: the unfocused switch
+cannot turn it back on. Restoring the window returns to the unfocused switch.
+An actually open chat field, console or menu still carries the normal talk flag. Players carrying
 the talk flag have a chatbubble over their heads; the connection-trouble icon
 takes priority when the server marks a lost connection. These are upright frame
 billboards using the existing [sprite orientation](rendering.md#billboard-icons).
