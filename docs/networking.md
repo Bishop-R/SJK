@@ -284,6 +284,7 @@ Stock and other servers, SJK's dedicated server included, keep the stock rules.
 | Taunts | Every JA+ server | Meditation keeps the player in place but the view free; other taunts leave movement and view free |
 | Staff kick | Every JA+ server | A staff's alternate attack standing still is a front kick |
 | Melee kicks | Every JA+ server | JA+ plays its own kicks server-side (melee's spin and back kicks in place of the stock W+A and W+D kicks, the jumping back kick, the backflip kick and the flip stab); the kicker is held still with the view free. A kiss, a ledge, a get-up, a stab or a backflip kick taken holds the player and the view (JoF EternalJK `bg_pmove.c:12470-12498`, `SVMOD_JAPLUS`, at bd5e202). The client predicts the stock kick until the server's kick arrives, as JoF EternalJK does |
+| Dual jump hull | Every JA+ server (`dmflags` 256: every window) | The dual sabers' forward jump attack raises the feet to 0 in its stock windows only when another player stands within 70 units ahead along the view, so the attacker is not sunk into the floor when nobody is there |
 
 Not predicted: the options EternalJK never reads outside its `serverconfig`
 listing (single-player attacks, new DFA, model scale, kata, auto replier, ledge
@@ -359,7 +360,7 @@ displayed snapshots carry different mover trajectories.
 Jump prediction respects `PMF_RESPAWNED`: holding attack or use after spawning
 blocks jumping until those buttons are released. The latch is cleared before
 movement for every weapon, as in OpenJK `codemp/game/bg_pmove.c`.
-PR #266's timed dual-attack hull resizing was rolled back in #307. An original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull and acquired downward velocity (about 254 units/s in the captured case). The fixed -24-unit foot minimum is restored. Timed hull resizing remains unsupported. Source agreement with OpenJK did not establish runtime compatibility.
+PR #266 added timed hull resizing for the dual sabers' forward jump attack and #307 rolled it back, because an original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull. On JA+ servers ([pmove_dual_jump_hull.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull.rs)) the feet are raised to 0 in the stock windows only when a box trace 70 units along the view hits another player; with `dmflags` 256 (`old_collision`) they are raised in every window, as stock does. The rule comes from VisionJK's port of the JA+ 2.4 B7 server module. All other servers, SJK's dedicated server included, keep the fixed -24-unit foot minimum. Not verified against a running JA+ server.
 Local prediction loads the equipped hilts' movement flags, named special-move
 overrides and ready/draw/putaway animations from the shared `.sab` catalog.
 The shared catalog follows OpenJK's `FS_GetFileList` order and keeps the first

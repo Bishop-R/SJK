@@ -448,6 +448,12 @@ did: #163 No hitch when a map remaps to a missing skin
 did: #194 JoF EternalJK in SJK chat: its icon, SJK chat said in All chat on JoF servers
 link: Milamber's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AMilamber0
 
+[Blackwolf1337]
+github: Blackwolf1337
+role: Contributor: 1 merged pull request
+did: #333 JA+ dual jump attack: feet lift only over a player ahead, as the server does
+link: Blackwolf1337's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337
+
 == Art
 
 [Reyced]

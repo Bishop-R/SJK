@@ -1823,7 +1823,7 @@ impl Predictor {
         if let Some(npc) = self.npc {
             return self.npc_check_duck(npc, command, collision);
         }
-        let minimums = [-15.0, -15.0, -24.0];
+        let minimums = [-15.0, -15.0, self.dual_jump_minimum(collision)];
         if self.state.movement_type == PM_DEAD {
             // `bg_pmove.c:4484-4489`: a corpse is a low box with a dead view.
             self.state.view_height = DEAD_VIEW_HEIGHT;
@@ -2539,6 +2539,9 @@ mod gesture;
 #[cfg(test)]
 #[path = "pmove_predict_legacy_tests.rs"]
 mod predict_legacy_tests;
+
+#[path = "pmove_dual_jump_hull.rs"]
+mod dual_jump_hull;
 
 #[cfg(test)]
 #[path = "pmove_dual_jump_hull_tests.rs"]

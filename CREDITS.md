@@ -890,6 +890,14 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
   servers SJK chat is said in All chat too (moved into JoF tools at JoF's request, with a
   one-time notice), each line shown once and labelled ALL/SJK.
 
+Blackwolf1337 ([Blackwolf1337](https://github.com/Blackwolf1337)), contributor, has 1 pull
+request merged into SJK
+([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337)):
+
+- #333 on JA+ servers the dual sabers' forward jump attack raises the feet only when another
+  player stands within 70 units ahead (every time with `dmflags` 256), as the JA+ 2.4 B7
+  server does, so the attacker no longer sinks into the floor with nobody in front.
+
 ## Art
 
 Reyced made Solfox, a fox player model (`models/players/solfox`), for Sol in October

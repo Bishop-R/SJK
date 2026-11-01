@@ -538,7 +538,9 @@ x64. Live respawn behavior against an OpenJK server remains unverified.
 
 ## Dual jump-attack collision hull
 
-PR #266's timed dual-attack hull resizing was rolled back in #307. An original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull and acquired downward velocity (about 254 units/s in the captured case). The fixed -24-unit foot minimum is restored. Timed hull resizing remains unsupported.
+PR #266 added timed hull resizing for the dual sabers' forward jump attack and #307 rolled it back, because an original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull. On JA+ servers ([pmove_dual_jump_hull.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull.rs)) the feet are raised to 0 in the stock windows only when a box trace 70 units along the view hits another player; with `dmflags` 256 (`old_collision`) they are raised in every window, as stock does. The rule comes from VisionJK's port of the JA+ 2.4 B7 server module. All other servers, SJK's dedicated server included, keep the fixed -24-unit foot minimum. Not verified against a running JA+ server.
+
+Verification, 01/11/2026, branch `fix/japlus-dual-jump-hull` on top of `main` `90f1d7d8`, Linux x86_64 (Arch, LXC), Rust 1.99.1: tests in [pmove_dual_jump_hull_tests.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull_tests.rs) at 8/7/4/3 ms command steps cover feet raised only over a player ahead (not over the attacker or an NPC), every window with `dmflags` 256, the stock fixed hull, the #307 landing case on JA+ without a player, and feet put back or a crouch under a ceiling; `dmflags_256_keeps_the_old_collision_on_ja_plus_only` covers the flag. Not verified: a running JA+ server (no capture or live run yet); stock servers are unchanged.
 
 ## Equipped saber definitions in client prediction
 

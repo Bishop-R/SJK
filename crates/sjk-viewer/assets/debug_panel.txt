@@ -342,6 +342,16 @@ change: The join menu and the match card read your own team, not the followed pl
 test: Local FFA server with a bot, spectate and follow the bot: Join the game is offered.
 test: The match card's Join works too; Spectate goes back to the free camera.
 
+[blackwolf-dual-jump-hull]
+area: Gameplay
+title: JA+ dual jump attack hull (Blackwolf1337, PR #333)
+change: On JA+ the dual forward jump attack lifts the feet only with a player 70 units ahead.
+change: dmflags 256 on the JA+ server: the feet lift every time. Other servers unchanged.
+test: Local JA+ 2.4 B7 server, dual sabers, forward jump attack with nobody ahead: no sinking.
+test: Same, aimed at a bot standing in front: you sail over it with no snap back.
+test: Base or SJK server: the attack behaves as before.
+note: Not yet checked against a real JA+ server; revert the merge if it mispredicts.
+
 [lumaya-saber-order]
 area: Gameplay
 title: Duplicate saber names follow the original game's file order (Lumaya, PRs #313, #314)
