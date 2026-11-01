@@ -465,6 +465,9 @@ impl Panel {
                 if self.cards_shown > 1 {
                     keys.push((&["Left", "Right"], "previous, next"));
                 }
+                if self.chosen_finishes_held() > 1 {
+                    keys.push((&["V"], "finish"));
+                }
                 keys.push((&["Esc"], "put back"));
             }
             Tab::Cards => {
@@ -473,6 +476,9 @@ impl Panel {
                 }
                 if self.cards_shown > 1 {
                     keys.push((&["Arrows"], "choose"));
+                }
+                if self.chosen_finishes_held() > 1 {
+                    keys.push((&["V"], "finish"));
                 }
                 if self.cards_shown > cards::COLUMNS * cards::LINES {
                     keys.push((&["PgUp", "PgDn"], "page"));

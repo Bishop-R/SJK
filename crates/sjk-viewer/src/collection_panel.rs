@@ -188,6 +188,9 @@ const CARD_CLOSE_UP_TOKEN: u16 = 8_007;
 /// the player lacks it (21/10/2026, where its copy crafts the shader for less), else on
 /// the Shaders tab.
 const CARD_SHADER_TOKEN: u16 = 8_008;
+/// Under the card up close and looked at closely, when more than one finish is held: a
+/// chip each for Normal, Holo and Solar, showing the card in it (01/11/2026).
+const CARD_LOOK_BASE: u16 = 8_010;
 const _: () = assert!(CARD_BASE as usize + CARD_TILES_MAX <= CARD_SHOW_BASE as usize);
 /// The Tags tab's tiles, one to each tag of `tags::CATALOGUE` (27/10/2026), and its card's
 /// Choose button.
@@ -669,6 +672,9 @@ pub(crate) struct Panel {
     /// Whether the chosen tile is looked at closely, large over the darkened tab
     /// (`collection_cards.rs`, `card_inspect_view`).
     card_inspect: bool,
+    /// The finish (its index) the chosen tile is shown in, for the tile it was chosen on
+    /// (`self.card` then): its best held otherwise.
+    card_look: Option<(usize, usize)>,
     /// The Cards tab's filter, and the tiles it showed last frame (for the hover cards).
     card_filter: crate::cards::binder::Filter,
     card_tiles: Vec<crate::cards::binder::Tile>,
@@ -846,6 +852,7 @@ impl Panel {
             cards_shown: 0,
             card_first: 0,
             card_inspect: false,
+            card_look: None,
             card_filter: Default::default(),
             card_tiles: Vec::new(),
             card_blade: None,
@@ -1246,6 +1253,10 @@ impl Panel {
                 KeyCode::KeyT => filter.cycle_rarity(shift),
                 KeyCode::KeyK => filter.cycle_kind(&faces, shift),
                 KeyCode::KeyF => filter.cycle_finish(shift),
+                KeyCode::KeyV => {
+                    self.cycle_card_look(shift);
+                    return PanelAction::None;
+                }
                 KeyCode::KeyI => return self.activate(illuminate),
                 _ => return self.key(key, shift, illuminate),
             }
@@ -1345,6 +1356,41 @@ impl Panel {
     fn inspect_step(&mut self, by: isize) {
         let last = self.cards_shown.saturating_sub(1) as isize;
         self.card = (self.card as isize + by).clamp(0, last) as usize;
+    }
+
+    /// How many finishes the chosen tile holds copies in.
+    pub(super) fn chosen_finishes_held(&self) -> usize {
+        self.card_tiles
+            .get(self.card)
+            .map_or(0, |tile| tile.finishes_held().len())
+    }
+
+    /// The finish the chosen tile is shown in, when one was chosen for it.
+    fn card_look_for(&self) -> Option<usize> {
+        self.card_look
+            .filter(|(card, _)| *card == self.card)
+            .map(|(_, finish)| finish)
+    }
+
+    /// Show the chosen tile in the next finish held (the previous with `back`), round.
+    fn cycle_card_look(&mut self, back: bool) {
+        let Some(tile) = self.card_tiles.get(self.card) else {
+            return;
+        };
+        let held = tile.finishes_held();
+        if held.len() < 2 {
+            return;
+        }
+        let now = tile
+            .in_finish(self.card_look_for())
+            .map_or(0, |stack| stack.finish.index);
+        let at = held.iter().position(|finish| *finish == now).unwrap_or(0);
+        let next = if back {
+            (at + held.len() - 1) % held.len()
+        } else {
+            (at + 1) % held.len()
+        };
+        self.card_look = Some((self.card, held[next]));
     }
 
     fn card_filter_changed(&mut self) -> PanelAction {
@@ -1579,6 +1625,7 @@ impl Panel {
                 }
                 KeyCode::Home => self.card = 0,
                 KeyCode::End => self.card = self.cards_shown.saturating_sub(1),
+                KeyCode::KeyV => self.cycle_card_look(shift),
                 KeyCode::Escape
                 | KeyCode::Enter
                 | KeyCode::NumpadEnter
@@ -1991,6 +2038,14 @@ impl Panel {
             }
             // Looking at a card closely: a click anywhere puts it back; a click on the
             // card up close or on a tile looks at it.
+            if let Some(finish) = token
+                .checked_sub(CARD_LOOK_BASE)
+                .map(usize::from)
+                .filter(|finish| *finish < crate::cards::FINISHES.len())
+            {
+                self.card_look = Some((self.card, finish));
+                return PanelAction::None;
+            }
             if token == CARD_INSPECT_TOKEN {
                 self.card_inspect = false;
                 return PanelAction::None;

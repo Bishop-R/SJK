@@ -790,6 +790,12 @@ contact sheets of twelve).
     is picked for each when it is revealed), then when the first was found, or for a card
     not found yet how it is obtained with its odds. A card not found yet shows greyed.
     A click on it looks at it closely.
+  - **Every finish held** (01/11/2026, Sol's request: not only the best): when the
+    copies of the tile chosen are in more than one finish, chips Normal, Holo and Solar
+    ("Solar  x1", one not held dimmed and inert) stand for the copies' line up close and
+    under it looked at closely, the finish shown ringed gold; a click on one, or V
+    (Shift+V back), shows the card in that finish (and that copy's edition). Choosing
+    another tile shows its best again; the tiles keep their best finish.
   - **Looking closer** (20/10/2026, Sol's request: the cards should be easier to see):
     Enter, Space or I, a click on a tile or on the card up close shows the chosen tile's
     card large over the darkened tab (660 frame pixels wide, nearly the frame's height,
@@ -801,7 +807,7 @@ contact sheets of twelve).
     wheel) go to the previous or next tile, stopping at the ends, Home and End to the
     first and last; Escape, Enter, Space, I or a click anywhere put it back, on the tile
     it was left on (the grid scrolls to it). The keys' hint then reads "Left Right
-    previous, next" and "Esc put back".
+    previous, next", "V finish" when more than one is held, and "Esc put back".
   - **Hovering** a tile shows its hover card ([sjk-ui.md](sjk-ui.md#hover-cards)): how a
     card of its rarity comes ("From holocrons: about 1 in 136 holocrons found holds a
     Legendary card (0.734%), one of the 9 Legendary cards."), what it is ("Legendary
