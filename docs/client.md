@@ -5446,7 +5446,8 @@ themselves, and other players see and hear a gun only when they have the same fi
   included. In first person it floats ahead, right and down of the eyes, moved by the
   view bob and the view-model FOV (it does not follow a hand rig's animations), and
   `cg_drawGun 0` hides it. In third person it hangs on the right hand (`*r_hand`), where
-  the real weapon would; the body keeps the animations the server plays (a saber stance
+  the real weapon would, turned as the game's own world guns are (the world model has the
+  view model's axes); the body keeps the animations the server plays (a saber stance
   with a saber out).
 - **Firing:** attack and alt attack never reach the game server while a gun is held
   ([live_session.rs](../crates/sjk-viewer/src/live_session.rs)); a press, or attack held,

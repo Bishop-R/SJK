@@ -18,6 +18,16 @@ const SLOTS: usize = crate::looks::SLOTS;
 /// How far ahead the player's aim is traced, to aim the bolt at what the crosshair meets.
 const AIM_REACH: f32 = 8_192.0;
 
+/// A gun's world model has the view model's axes (X forward, Y left, Z up); the hand's
+/// bolt (`*r_hand`) holds the game's own world guns barrel along -Y, Z up
+/// (`models/weapons2/*_w.glm`), so this turns the one into the other.
+pub(crate) const HAND_TURN: Quat = Quat::from_xyzw(
+    0.0,
+    0.0,
+    -std::f32::consts::FRAC_1_SQRT_2,
+    std::f32::consts::FRAC_1_SQRT_2,
+);
+
 /// How a held gun is drawn on one player in third person: its mesh and its placing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct HeldDraw {

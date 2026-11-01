@@ -1279,6 +1279,7 @@ fn submit_equipment(
             let (grip, hand) =
                 saber::world_attachment(origin, rotation, attachment.scaled(transform.scale));
             let scale = Vec3::from_array(transform.scale) * prop.scale;
+            let hand = hand * crate::propgun_frame::HAND_TURN;
             let at = grip + hand * (prop.offset * scale);
             let mut instance = ActorInstance::new(
                 at.to_array(),
