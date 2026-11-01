@@ -8105,3 +8105,12 @@ test: debug_find kyber_rare saber_phoenix: the Phoenix blade, small, moves as in
 test: Open the chat (Enter), rest the pointer on the small blade: the large card above it.
 test: debug_holocron legendary: the drop line starts with the holocron's picture.
 note: The chat page and the dock get the crystal picture only, not the colour or blade.
+
+[card-kind-clan]
+area: Menus & settings
+title: Card kind Clan: JoF cards read "Clan · JoF"
+change: New card kind Clan; the clan is the card's collection (JoF), one collection per clan.
+test: Once the hub's JoF cards are kind Clan: Collection > Cards, a JoF tile reads "Clan · JoF".
+test: Kind chip: "Kind: Clan" shows only the 11 JoF cards; Community no longer lists them.
+test: Hover and close-up of a JoF card name "Clan" and "JoF"; the rank (Leader/Council) stays.
+note: Clients without this change leave Clan cards out ("Unknown card"): release before the hub edit.
