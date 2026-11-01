@@ -14,11 +14,12 @@ impl GpuState {
         text: u32,
         classic_text: u32,
     ) {
-        // The game menu, the report and note dialog and a world note's selection also
-        // show over a map explored without a server.
+        // The game menu, the ghost editor's path, the report and note dialog and a world
+        // note's selection also show over a map explored without a server.
         let hud = self.live_session.is_some()
             || self.demo_session.is_some()
             || self.game_menu
+            || self.ghost.editor.is_some()
             || self.text_dialog.is_open()
             || self.world_notes.highlight().is_some()
             || self.entity_view.active()

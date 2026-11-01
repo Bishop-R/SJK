@@ -41,6 +41,8 @@ pub(crate) enum Page {
     Shot,
     /// The map editor's panel, for staff ([`crate::map_edits::panel`]).
     MapEdit,
+    /// The ghost editor's column, for staff (`ghost edit`).
+    GhostEdit,
     Team,
     /// Map/theme constrained Siege class selection.
     Siege,

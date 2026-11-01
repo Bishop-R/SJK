@@ -1423,6 +1423,7 @@ is saved. They have no other menu entry.
 | `ghost play <name>` | Walks to the recorded start, then plays the run |
 | `ghost list` | Lists the saved runs with their maps and lengths |
 | `ghost info <name>` | A run's map, length, start (position and facing, to teleport there) and how much of it the server confirmed |
+| `ghost edit [name]` | Opens the [ghost editor](#ghost-editor) on `name` (else the first run of this map) |
 | `ghost` | Help and what it is doing |
 
 Runs are text files in `ghosts/` beside `config.cfg` (`<name>.ghost`, letters,
@@ -1481,6 +1482,53 @@ second takeoff's command and a command in the air, it lands every pillar and end
 0.4 units from the recording; shoved sideways at 60 units a second on the platform,
 it ends 7 units off where an unsteered replay ends 46 off. Not yet tried on a live
 server.
+
+### Ghost editor
+
+`ghost edit [name]` opens a column down the window's right edge, in a game or on an
+explored map, to cut a run and clear its chat bubble
+([ghost_replay/editor.rs](../crates/sjk-viewer/src/ghost_replay/editor.rs), its look in
+[sjk-ui.md](sjk-ui.md#ghost-editor)). Like `ghost`, it is for staff keys with the showcase
+tools on; switching them off, leaving the game or changing map closes it. Sol asked for it
+on 01/11/2026.
+
+- **Ghosts:** every `.ghost` file with its map and length, read from the header and the
+  last line only; another map's runs are quiet, an unreadable file says so. Up and Down
+  or a click open one; a cut not saved is dropped, and the answer line says so.
+- **Duplicate** writes the run as it is cut under the name in its field (the first free
+  `<name>_2`, `<name>_3`...) and opens the copy; the original is untouched. An existing
+  name is refused.
+- **Cut:** a timeline of the run in 104 slices (standing, moving, in the air, the bubble,
+  the loudest in each slice), a green strip under it where a replay can begin cleanly,
+  the cut parts dimmed, and Start and End rows with the times. A replay always begins
+  standing on the start ([the start](#ghost-replay)), so the start snaps to commands the
+  player stood still on the ground before (under one unit a second): Left and Right step
+  a tenth of a second to the next such command, Page Up and Page Down a second, a drag on
+  the timeline or a row's track lands on the nearest one. Shift places it anywhere (one
+  command a step), and the start then shows in ember with "Starts mid-move". The end goes
+  anywhere after the start. **First move** puts the start on the command where the player
+  first moves (a key, a pressed button, speed or the air), cutting the console's closing
+  and the wait; **Last move** puts the end on the command the player stops on; **Reset**
+  keeps the whole run.
+- **Clear the chat bubble** (on): the saved run has no `BUTTON_TALK`. It is set while the
+  console, chat or a menu is open (`CL_CmdButtons`), as when `ghost record` and `ghost stop`
+  are typed, and a replay sends it again, so the bubble showed over the replay. Clearing it
+  changes no movement: those commands carry no movement keys. The commands are kept, not
+  deleted, so the run's timing never changes (Sol's choice). A replay still shows the
+  bubble while the replaying player's own console is open.
+- **Save** overwrites the run with its cut after a second press (the first says so);
+  **Play** runs `ghost play` on the saved run and closes the editor, or shows why it
+  refuses (a cut not saved, the start too far); **Look** or Escape hides the column to move
+  about with the path drawn and a strip at the top, and Escape brings it back; **Close**
+  turns the editor off. Ctrl+S saves.
+
+The edited run keeps commands from the first to the last kept, their times begun again at
+zero, and its start is the state after the command before the first (position, view,
+speed, weapon), so `ghost play` walks to the new start. The path is the run's feet (24
+units under the origin), a point every 12 units or more (1200 at most), the kept part holo
+blue, the cut part grey, the bubble ember when it is kept; a gold ring of 16 units marks the
+new start with a line the way it faces, a white ring the end. It is drawn over the scene
+without depth (seen through walls), only for a run of the map the player is on.
 
 ## Mimic
 

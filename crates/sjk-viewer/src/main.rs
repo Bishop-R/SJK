@@ -2435,6 +2435,9 @@ impl GpuState {
             self.append_configured_chat(viewport, text_scale, scoreboard_visible);
         }
         self.append_weapon_select_name(viewport);
+        // The ghost editor's path, under its column (or over play while looking about).
+        let ghost_overlay =
+            !self.console_covers_frame() && !medal_popup && self.append_ghost_overlay(viewport);
         if self.game_menu && !self.console_covers_frame() && !medal_popup {
             self.refresh_game_menu_players();
             let team_sizes = self.live_session.as_ref().map_or([0, 0], |session| {
@@ -2456,7 +2459,22 @@ impl GpuState {
                 staff: profile_card::with(|summary| summary.staff),
                 _frame: std::marker::PhantomData,
             };
-            if view.page == GameMenuPage::MapEdit {
+            if view.page == GameMenuPage::GhostEdit {
+                // The ghost editor has only the SJK UI's look, in every menu style.
+                let target = ingame_menu::sjk_view::text_target(
+                    &mut self.game_fonts,
+                    &mut self.text_vertices,
+                    &self.ui_font,
+                );
+                if let Some(editor) = self.ghost.editor.as_deref_mut() {
+                    self.in_game_menu.append_own_page(
+                        GameMenuPage::GhostEdit,
+                        |canvas| editor.build(canvas, viewport),
+                        target,
+                        viewport,
+                    );
+                }
+            } else if view.page == GameMenuPage::MapEdit {
                 // The map editor's panel has only the SJK UI's look, in every menu style.
                 self.refresh_map_edit_panel();
                 let target = ingame_menu::sjk_view::text_target(
@@ -2537,7 +2555,7 @@ impl GpuState {
         let launcher = self.game_menu
             && !matches!(
                 self.game_menu_page,
-                GameMenuPage::Shot | GameMenuPage::MapEdit
+                GameMenuPage::Shot | GameMenuPage::MapEdit | GameMenuPage::GhostEdit
             )
             && !self.in_game_menu.is_sjk()
             && !console_covers_frame
@@ -2615,6 +2633,11 @@ impl GpuState {
             information_visible.then(|| self.hud.draw_list()),
             chat_visible.then(|| self.chat.draw_list()),
             map_edit_strip.then(|| self.map_edits.strip.0.draw_list()),
+            self.ghost
+                .editor
+                .as_deref()
+                .filter(|_| ghost_overlay)
+                .map(|editor| editor.overlay.draw_list()),
             scoreboard_visible.then(|| self.scoreboard.draw_list()),
             (self.game_menu && !console_covers_frame && !medal_popup)
                 .then(|| self.in_game_menu.draw_list()),
