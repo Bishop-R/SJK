@@ -4811,9 +4811,9 @@ note: Watch the FPS counter during a barrage; send logs\last-client.log if it dr
 
 [away-talk-balloon]
 area: HUD
-title: Your chat balloon shows while you are alt-tabbed or minimised (EternalJK)
+title: Your chat balloon shows while you are alt-tabbed or minimised
 change: Losing focus or minimising sends the talk button, so others see you are away.
-change: cl_unfocusedChatbox 0 / cl_minimizedChatbox 0 turn either case off (both 1).
+change: One switch, cl_unfocusedChatbox 0, turns both away cases off (default 1).
 test: On a server with a friend: alt-tab away; they see your chat balloon until you return.
 test: Minimise the window: same. Back in the game you move normally at once.
 test: cl_unfocusedChatbox 0, alt-tab again: no balloon.

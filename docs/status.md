@@ -1,17 +1,23 @@
-## Minimized chat bubble switch
+## One automatic away chat bubble switch
 
-01/11/2026, `fix/minimized-chat-bubble`, based on `main` `57f60dde`: a minimized
-window's automatic talk flag follows `cl_minimizedChatbox` alone. Previously,
-`cl_unfocusedChatbox 1` restored the bubble even with the minimized setting at 0,
-as minimized windows also lose focus. Restoring returns to the unfocused switch;
-real chat/console/menu key catchers retain their ordinary talk flag. Defaults
-and the protocol-26 button bits are unchanged.
+01/11/2026, `fix/minimized-chat-bubble`, based on `main` `57f60dde`: one archived
+switch, `cl_unfocusedChatbox` (default 1), controls the automatic bubble whenever
+the window is unfocused or minimized. The separate `cl_minimizedChatbox`
+registration, cache and consumer are removed; a documented retirement table
+removes old saved entries after profile load. The saved unfocused choice is kept.
+Chat bubble while away is available in SJK Settings > Chat and the classic HUD
+settings, and the update's what's-new card offers that same switch. Actual open
+chat/console/menu key catchers retain their normal talk flag. Protocol-26 encoding
+and the window frame caps are unchanged.
 
 Verified on Windows x64: formatting, locked workspace build/tests and all-target
-Clippy; focused tests cover both focus flags, disabled/nonzero settings, live cvar
-changes and minimize/focus/restore event ordering through the console's cached
-window state. Actual OS window events and another client's view of the bubble
-on an isolated server remain unverified. See [talk balloons](client.md#talk-balloons).
+Clippy. Focused tests cover all focus/minimize combinations, disabled and nonzero
+values, live callbacks, minimized events before focus loss, and old profiles with
+opposite saved choices, including removal of the obsolete entry from the next
+saved config. The offline GPU fixture `duel6_settings_away_chat` was inspected:
+the single SJK switch, default, console name and help fit at 1080p. Actual native
+window events and another client's view of the bubble on an isolated server
+remain unverified. See [talk balloons](client.md#talk-balloons).
 
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
@@ -11398,10 +11404,11 @@ now keeps 256 slots that only those billboards use (`particle_types.rs`); effect
 stop at their own cap (4,096 since the rocket-trail change below). Unit tests replay that frame. No game was started: the busy
 scene Sol saw is not reproduced on screen.
 
-The same branch raises your balloon while the window is unfocused or minimised, as
-EternalJK's `cl_unfocusedChatbox` / `cl_minimizedChatbox` do in `CL_CmdButtons`
-(both 1). A unit test covers the settings; whether commands keep flowing while
-Windows has the window minimised (which the minimised case needs) is unverified.
+At that revision the branch also raised your balloon while unfocused or minimized,
+using EternalJK's two-switch policy in `CL_CmdButtons`. The controls have since
+been consolidated into `cl_unfocusedChatbox` ([talk balloons](client.md#talk-balloons)).
+Whether commands keep flowing while Windows has the window minimized remains
+unverified.
 
 ## Force power presentation
 

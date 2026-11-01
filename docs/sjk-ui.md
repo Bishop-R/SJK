@@ -2794,6 +2794,18 @@ Incoming chat colour, cyan selected (offline fixture):
 
 ![Incoming chat colour](images/incoming-chat-colour.png)
 
+## Away chat bubble
+
+Settings > Chat in Advanced mode offers **Chat bubble while away**, shared with
+the classic HUD settings. `cl_unfocusedChatbox` controls both unfocused and
+minimized windows; there is no separate minimized switch. The default remains
+on, saved unfocused choices are kept, and the update's what's-new card offers
+the same switch. Actual chat, console and menu key catchers retain their normal
+bubble. See [talk balloons](client.md#talk-balloons).
+
+![One away bubble switch in SJK Settings](images/away-chat-settings.png)
+
+
 ## Plan
 
 The next screens, in order; each gets snapshot tests before it replaces its

@@ -2589,13 +2589,18 @@ target name, origin) and the outline is a box round its origin.
 ## Talk balloons
 
 Opening chat, the console or a menu sends the stock talk button and disables
-other movement input while that keyboard catcher is active. As in EternalJK, so
-does a window you alt-tab away from or minimise, so others see you are away:
-`cl_unfocusedChatbox` and `cl_minimizedChatbox` (archived, both 1) turn that off. While minimized, only
-`cl_minimizedChatbox` controls the automatic away bubble: the unfocused switch
-cannot turn it back on. Restoring the window returns to the unfocused switch.
-An actually open chat field, console or menu still carries the normal talk flag. Players carrying
-the talk flag have a chatbubble over their heads; the connection-trouble icon
+other movement input while that keyboard catcher is active. A window you alt-tab
+away from or minimize sends an automatic away bubble too. **Chat bubble while
+away** in SJK Settings > Chat (Advanced; classic menus: HUD) controls both away
+states through `cl_unfocusedChatbox` (archived, default 1). Set it to 0 to disable
+the automatic bubble in either state. Actual open chat, console and menu key
+catchers keep their normal talk flag.
+
+The separate `cl_minimizedChatbox` setting is removed. Old saved entries of that name
+are discarded on profile load; the saved `cl_unfocusedChatbox` choice is used
+for both states. The update's what's-new card offers this shared switch.
+
+Players carrying the talk flag have a chatbubble over their heads; the connection-trouble icon
 takes priority when the server marks a lost connection. These are upright frame
 billboards using the existing [sprite orientation](rendering.md#billboard-icons).
 Their texture opacity is preserved near walls even with soft particles enabled.

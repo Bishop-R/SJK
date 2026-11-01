@@ -32,7 +32,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
-- Chat bubble: `cl_minimizedChatbox 0` now disables the automatic away bubble while minimized even when the unfocused bubble is enabled _(Lumaya)_
+= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
+
+- Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

@@ -817,6 +817,11 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Chat bubble while away",
+        cvar: "cl_unfocusedChatbox",
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Game PM-only chat",
         cvar: crate::chat::pm_only::CVAR,
         kind: ValueKind::Bool,
