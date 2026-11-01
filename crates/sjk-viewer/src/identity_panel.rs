@@ -687,6 +687,9 @@ mod tests {
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -725,6 +728,7 @@ mod tests {
 
     fn me(name: &str, bio: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),

@@ -181,6 +181,11 @@ pub struct Profile {
     /// answers the person's [`Profile::key_id`] for it everywhere.
     #[serde(default)]
     pub keys: Vec<String>,
+    /// The kinds of card a key may stick as a tag (`PROTOCOL.md`, "Unlocks", Tags; since
+    /// 31/10/2026, `["credits"]`), the same in every profile. Hubs before leave it out and
+    /// refuse a card's id or a finish in a look's tag: a client offers neither then.
+    #[serde(default)]
+    pub tag_cards: Vec<String>,
 }
 
 impl Profile {
@@ -370,6 +375,10 @@ pub struct OpenedUnlock {
     /// How many of it the key holds now, this one included.
     #[serde(default = "one")]
     pub count: u32,
+    /// A dropped tag's finish when it is not Normal (`holo` or `solar`, since 31/10/2026);
+    /// `None` for a Normal one and a shader, and from hubs before.
+    #[serde(default)]
+    pub finish: Option<String>,
 }
 
 /// A sealed copy the hub revealed (`POST /v1/cards/reveal`): the card it turned out to be.
@@ -835,6 +844,10 @@ pub struct LootTier {
     /// (17/10/2026; none from hubs before).
     #[serde(default)]
     pub card_shards: [u64; 2],
+    /// How often a dropped tag comes Holo and Solar, per mille, in that order (since
+    /// 31/10/2026; none from hubs before, whose tags are all Normal).
+    #[serde(default)]
+    pub tag_finish: [u32; 2],
 }
 
 /// A holocron dropping for a key, as the feed relays it (`PROTOCOL.md`, "The feed").
@@ -884,6 +897,13 @@ pub struct Unlock {
     /// medal. `None` otherwise, and from hubs before 20/10/2026.
     #[serde(default)]
     pub card: Option<String>,
+    /// How many of its copies are Holo and Solar, among [`Self::count`] (a tag's, since
+    /// 31/10/2026: holocrons drop tags in a finish now and then); 0 from hubs before.
+    #[serde(default)]
+    pub holo: u32,
+    /// How many are Solar, among [`Self::count`].
+    #[serde(default)]
+    pub solar: u32,
 }
 
 /// What a player wears that others draw (`PROTOCOL.md`, "Looks"). The default is
@@ -934,10 +954,11 @@ pub struct Look {
 /// A tag stuck on the world (`PROTOCOL.md`, "Looks", since 27/10/2026): a tag unlock the
 /// wearer holds (or a free one), on map `map`, centred at `at` on a surface facing
 /// `normal`, turned `spin` degrees about it. The hub checks the numbers are finite, so
-/// the look stays `Eq`.
+/// the look stays `Eq`. Since 31/10/2026 it may be a card the wearer holds (a credits
+/// card, its id in place of the tag's) and may have a finish.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct PlacedTag {
-    /// The tag's unlock id.
+    /// The tag's unlock id, or since 31/10/2026 a card's id (`sjk_alpha_003`).
     pub id: String,
     /// The map it is stuck on (`mp/ffa3`).
     pub map: String,
@@ -947,6 +968,10 @@ pub struct PlacedTag {
     pub normal: [f32; 3],
     /// Its turn about the normal, in degrees from 0 up to 360.
     pub spin: f32,
+    /// Its finish, `holo` or `solar` (since 31/10/2026); `None` for Normal, which is
+    /// also how a hub before sends every tag. Sent only when set: a hub before refuses it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<String>,
 }
 
 impl Eq for PlacedTag {}
@@ -1092,7 +1117,21 @@ pub struct Achievement {
     /// before, whose players read the client's own table.
     #[serde(default)]
     pub reward: Option<String>,
+    /// For an achievement the hub alone knows (since 30/10/2026, the Toy Master's: a
+    /// client's catalogue cannot hold a secret), sent only once it is unlocked: its name,
+    /// what it was for and the group it shows in ([`TOY_MASTER`]). `None` for the others.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// What it was for, in a sentence (an achievement the hub alone knows).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The group it shows in (an achievement the hub alone knows).
+    #[serde(default)]
+    pub group: Option<String>,
 }
+
+/// The group of the achievements the Toy Master's secrets unlock ([`Achievement::group`]).
+pub const TOY_MASTER: &str = "toy_master";
 
 /// The hub's answer to `POST /v1/staff/search`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -1597,6 +1636,7 @@ mod tests {
         assert_eq!(
             opened.unlock,
             Some(OpenedUnlock {
+                finish: None,
                 id: "saber_tidal".into(),
                 name: "Tidal blade".into(),
                 count: 2
@@ -1641,6 +1681,7 @@ mod tests {
         assert_eq!(
             revealed[0].unlock,
             Some(OpenedUnlock {
+                finish: None,
                 id: "saber_sun".into(),
                 name: "Sun blade".into(),
                 count: 2
@@ -1730,6 +1771,8 @@ mod tests {
             profile.unlocks,
             [
                 Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "saber_sun".to_owned(),
                     granted: 1_791_000_000,
                     note: "Thanks".to_owned(),
@@ -1738,6 +1781,8 @@ mod tests {
                     card: None,
                 },
                 Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "from_the_future".to_owned(),
                     granted: 7,
                     note: String::new(),
@@ -1746,6 +1791,8 @@ mod tests {
                     card: None,
                 },
                 Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "saber_glitch".to_owned(),
                     granted: 8,
                     note: String::new(),
@@ -1754,6 +1801,8 @@ mod tests {
                     card: None,
                 },
                 Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "saber_sun".to_owned(),
                     granted: 9,
                     note: String::new(),

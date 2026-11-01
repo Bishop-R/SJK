@@ -311,6 +311,8 @@ mod order66_shots;
 mod petals;
 #[path = "world_shot_ragdoll.rs"]
 mod ragdoll_shots;
+#[path = "world_shot_toy_master.rs"]
+mod toy_master_shots;
 
 #[path = "world_shot_blade_cards.rs"]
 mod blade_cards;
@@ -1234,6 +1236,7 @@ mod tests {
             rank: 1,
         };
         let me = sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1271,6 +1274,8 @@ Found the fog bug, ask me about it!"
             achievements: Vec::new(),
             avatar: String::new(),
             unlocks: vec![sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 1_791_336_225,
                 note: String::new(),
@@ -1313,6 +1318,9 @@ Found the fog bug, ask me about it!"
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -1444,6 +1452,7 @@ like this one.",
     #[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
     fn duel6_sjk_staff() {
         let profile = |key: &str, name: &str| sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1495,6 +1504,9 @@ like this one.",
                     goal: kind.goal,
                     unlocked: 1_791_336_225,
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect(),
             names: vec![
@@ -1570,6 +1582,8 @@ like this one.",
                 verified: true,
                 medals: vec![medal("early_contributor", 1, "")],
                 unlocks: vec![sjk_identity::Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "saber_sun".to_owned(),
                     granted: 1_791_336_225,
                     note: String::new(),
@@ -2328,6 +2342,8 @@ like this one.",
                 ("name", "^1Sol^7Vulpes"),
             ];
             let sun = || sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 1_791_336_225,
                 note: "Thanks for testing the blades with us".to_owned(),

@@ -609,6 +609,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Play Banana peel sounds (SJK)",
         ),
         CvarDefinition::new(
+            crate::toy_sounds::Toy::Master.cvar(),
+            true,
+            archive,
+            "Play the sounds of the Toy Master's hidden toys (SJK)",
+        ),
+        CvarDefinition::new(
             crate::held_view::LOOK_CVAR,
             crate::held_view::DEFAULT_LOOK,
             archive,
@@ -992,7 +998,13 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             crate::tags::CVAR,
             crate::tags::DEFAULT,
             archive,
-            "The tag toy_tag sticks, by id (tag_gg); one you do not hold is not stuck (the Collection's Tags tab chooses it; SJK)",
+            "The tag toy_tag sticks, by id (tag_gg), or a credits card you hold (sjk_alpha_001); one you do not hold is not stuck (the Collection's Tags tab chooses it; SJK)",
+        ),
+        CvarDefinition::new(
+            crate::tags::FINISH_CVAR,
+            "normal",
+            archive,
+            "The finish toy_tag sticks your tag in: normal, holo or solar; one you hold no copy in sticks normal (the Collection's Tags tab chooses it; SJK)",
         ),
         CvarDefinition::new(
             crate::tags::SHOW_CVAR,

@@ -30,6 +30,25 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+- Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
+
+## 2026.1101.1 (Alpha) | 01/11/2026
+
+Sharp tags in Holo and Solar, credits cards on walls, hidden toys to find and a Tester medal for playing.
+
+> Tags: Sharp on walls, and now and then Holo or Solar.
+> Cards: Stick the credits cards you hold as tags.
+> Toy Master: Toys hidden on maps wait to be found.
+> Tester medal: Playing SJK earns it until 22/11.
+
+- Tags on walls are sharp: each picture is drawn at its full size in a pass of its own, where they were squeezed into small tiles before and blurred up close _(Sol)_
+- Tags come Holo or Solar now and then from holocrons (4 % and 0.5 %). Holo's rainbow foil shifts as you walk past, Solar burns round the tag's outline; choose the finish on Collection > Tags (`cg_tagFinish`) _(Sol)_
+- The credits cards you hold stick as tags too, their picture as a sticker in the finish of a copy you hold; Collection > Tags lists them under the tags and now scrolls _(Sol)_
+- The Toy Master: SJK's creator hides toys on maps for you to find, and each one found with Use is a secret achievement. The "?" on Collection > Toys tells more; Settings > Sound > Toys silences their shows (`s_toyMasterSound`) _(Sol)_
+- Playing SJK now earns the Tester medal by itself: rank IV until Sunday 01/11/2026, then a week each of rank III, II and I; from 23/11/2026 it is given by hand again _(Sol)_
+
 ## 2026.1031.2 (Alpha) | 31/10/2026
 
 One News panel, cloud content that updates itself, faster blades and a fairer box hunt.
@@ -43,7 +62,6 @@ One News panel, cloud content that updates itself, faster blades and a fairer bo
 - The switches on the what's-new card's Settings to review work for every setting: some (the dynamic glow's saber setting) did nothing and always showed Off _(Sol)_
 - JoF content and the Sith cloud can update themselves: turn on Update automatically on their card (or Settings > JoF content auto-update, Sith cloud auto-update) and tick Auto on the groups you want; SJK checks at start and every hour, also during a match, downloads what changed and says so in a small card, the new files loading from the next map. Off by default (`jof.contentAuto`, `sith.cloudAuto`) _(Sol)_
 - Legendary and Mythical saber shaders draw faster, looking the same: about a quarter less GPU time over the 48 of them, and half or more on Bleeding Kyber, Abyssal Eye, Sith Holocron, Reactor and Felucia Spores _(Sol)_
-- Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
 - Box hunt: a mark is picked only among players in play (not typing in the chat, in a menu, spectating or idle), only when at least 3 are, and a mark away for a minute hands it to another; hunters see an arrow to the mark through walls, or round the crosshair pointing their way _(Sol)_
 - Box hunt: the mark is no longer shown for up to 20 seconds after their time is up, when killing them won nothing; the mark's game tells a kill made in the first seconds and tries again if the hub missed it; a hunter who wins no free roll reads why in the centre _(Sol)_
 - Mystery boxes are open inside under their lid (the top was closed with planks and the iron bands crossed it) and a faint halo of light rises over them, to find them from afar _(Sol)_

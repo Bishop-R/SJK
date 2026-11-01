@@ -3907,6 +3907,53 @@ validation of the material program and its glow variant in both lighting modes. 
 emission map has been rendered: appearance, halo and the light added in real-time
 lighting are unverified.
 
+## Tags
+
+Players' tags ([client.md](client.md#tag)) have a pass of their own since 31/10/2026
+([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs),
+[tag_render.wgsl](../crates/sjk-viewer/src/tag_render.wgsl); Sol: tags were blurry in
+the game). They were impact-mark decals with decal shaders, whose pictures the effects'
+atlas squeezes into 128-pixel tiles: a 256-pixel tag kept a quarter of its texels,
+stretched over 56 units of wall.
+
+- **Geometry:** the decal store still projects each tag onto the world once
+  ([decal_store.rs](../crates/sjk-viewer/src/decal_store.rs), `tag_fragments`); the pass
+  rebuilds its vertices (a triangle list, the picture's axes and the finish on each
+  vertex) only when the store's tags version changes, so a frame with tags on show uploads
+  16 bytes (the finishes' clock).
+- **Pictures:** each picture on show has textures of its own: the picture (`Rgba8Unorm`,
+  its stored values as the effects' are, mipmapped by alpha-weighted averaging so the
+  transparent surroundings do not darken its edge) and its outline (`R8Unorm`, the signed
+  distance to where its alpha crosses a half, from a quarter of its edge outside to as far
+  inside, an exact Euclidean transform). A tag is made square and a power of two from 512
+  to 1024 pixels, a smaller one enlarged once with Catmull-Rom (alpha-weighted, so no dark
+  fringe) rather than left for the GPU to magnify; a card is a 1024 sticker (its 6:5
+  picture at 92 % of the width, corners rounded, a rim of its colour, the outline the
+  rounded box's own). `r_picmip` 1 or more halves them. They are built on a worker thread
+  the first time one is on show (inline in tests), drawn from the next frame, let go 60 s
+  after they were last drawn and all dropped when the packs are mounted anew. Sampling is
+  trilinear and anisotropic (the adapter's limit, up to 16).
+- **Finishes** (`tag_render.wgsl`), the cards' (`sjk_ui::shine`, `ui_shapes.wgsl`) at the
+  scale of a 512-pixel picture: Holo's rainbow foil on the picture only, its light crossing
+  where the viewer's angle puts it (it slides as one walks past) and drifting, stronger and
+  with more bands than a card's, plus a glitter of points catching the light; Solar's
+  corona along the outline, inside the picture, and its glow outside fading within a few of
+  its reaches and to nothing before the decal's edge. Normal is the picture alone.
+- **Drawn** in the effect layer right after the world's marks (`particle_draw.rs`), so
+  heat haze, weather and effects lie over them; depth-tested with the marks' polygon offset
+  (`qglPolygonOffset(-1, -2)`), never writing depth, alpha blended, fullbright as the marks
+  are. The main view's effect rectangle takes them in (`effect_bounds.rs`); mirror and
+  portal views draw them too.
+
+Cost: one draw per tag on show with its picture ready, a few hundred vertices at most;
+Holo and Solar shade a few dozen operations a pixel (Solar three noise lookups and three
+flares) over the tags' own pixels only. Video memory: about 1.75 MB a tag and 7 MB a card
+sticker, for the distinct pictures on show. World shot:
+`world_shot::tags::duel6_tags_on_walls_and_floor` (a Normal and a Holo tag, a Holo and a
+Solar credits card, a Solar tag on the floor; `SJK_TEST_TAGS` names the hub's
+`assets/dist`). Unit tests cover the outline's distances, the pictures' sizes and
+edges, and the sticker. Not measured: frame time with many finished tags on show.
+
 ## Floor reflections
 
 Polished floors show a real mirror image of the scene

@@ -100,6 +100,29 @@ pub type MapEditsPublished = Result<(String, i32, u64), String>;
 const MAP_EDITS_EVERY: Duration = Duration::from_secs(600);
 /// How often the hub's mystery boxes are read while registered.
 const MYSTERY_BOXES_EVERY: Duration = Duration::from_secs(600);
+/// How often the Toy Master's toys are read while registered.
+const SECRETS_EVERY: Duration = Duration::from_secs(600);
+
+/// What a request about the Toy Master's toys did ([`Snapshot::secret`]).
+#[derive(Clone, Debug, PartialEq)]
+pub enum SecretDone {
+    /// The player's presses on toy `id` were counted: whether they started its show,
+    /// whether it played one on this map load already, and whether they found it.
+    Used {
+        /// The toy.
+        id: i64,
+        /// The presses started its show.
+        show: bool,
+        /// It played its show on this map load (now or before).
+        done: bool,
+        /// The player found it with these presses (its achievement unlocked).
+        found: bool,
+    },
+    /// SJK's creator hid a toy: its id.
+    Placed(i64),
+    /// SJK's creator took toy `id` away.
+    Removed(i64),
+}
 
 /// What a mystery box request did ([`Snapshot::mystery_box`]).
 #[derive(Clone, Debug, PartialEq)]
@@ -266,6 +289,13 @@ pub struct Snapshot {
     /// The box hunt as last read, by serial, for the server named
     /// ([`Service::read_box_hunt`]).
     pub box_hunt: Option<(u64, String, crate::mystery_box::HuntState)>,
+    /// The Toy Master's toys, once read ([`Service::use_secret`]).
+    pub secrets: Option<crate::toy_master::Secrets>,
+    /// Counts the times [`Snapshot::secrets`] changed.
+    pub secrets_revision: u64,
+    /// The answer to the last request about the Toy Master's toys, by serial, or why it
+    /// was refused (in the player's words).
+    pub secret: Option<(u64, Result<SecretDone, String>)>,
     /// Counts crash reports the hub took ([`Service::send_crashes`]).
     pub crashes_sent: u64,
     /// What the last round of crash reports did, for the log, once a round sent,
@@ -626,6 +656,9 @@ impl Snapshot {
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             crashes_sent: 0,
             crash_note: None,
             holocrons: None,
@@ -760,6 +793,18 @@ enum Command {
         server: String,
         away: bool,
     },
+    /// The player pressed Use `presses` times on the Toy Master's toy `id` on `server`,
+    /// in map load `round`.
+    UseSecret {
+        id: i64,
+        server: String,
+        round: i32,
+        presses: u32,
+    },
+    /// SJK's creator: hide a toy.
+    PlaceSecret(crate::toy_master::Placing),
+    /// SJK's creator: take toy `id` away.
+    RemoveSecret(i64),
     /// The player, the box hunt's mark on `server`, was killed by slot `by`.
     BoxHuntKilled {
         server: String,
@@ -935,6 +980,9 @@ struct Worker {
     due_mystery_boxes: Instant,
     mystery_box_serial: u64,
     box_hunt_serial: u64,
+    /// When the Toy Master's toys are next read, and the last request's serial.
+    due_secrets: Instant,
+    secret_serial: u64,
     /// The folder crash reports wait in; without one none is sent.
     crash_dir: Option<PathBuf>,
     /// When the crash folder is next looked at.
@@ -1233,6 +1281,8 @@ impl Worker {
             due_mystery_boxes: now,
             mystery_box_serial: 0,
             box_hunt_serial: 0,
+            due_secrets: now,
+            secret_serial: 0,
             crash_dir: None,
             due_crashes: now,
             due_assets: now,
@@ -1663,6 +1713,31 @@ impl Worker {
             Command::RemoveMysteryBox(id) => self.mystery_box(now, |hub, identity| {
                 hub.remove_mystery_box(identity, id)
                     .map(|_| (BoxDone::Removed(id), None))
+            }),
+            Command::UseSecret {
+                id,
+                server,
+                round,
+                presses,
+            } => self.secret(now, |hub, identity| {
+                hub.use_secret(identity, id, &server, round, presses)
+                    .map(|used| {
+                        let done = SecretDone::Used {
+                            id,
+                            show: used.show,
+                            done: used.done,
+                            found: used.profile.is_some(),
+                        };
+                        (done, used.profile)
+                    })
+            }),
+            Command::PlaceSecret(placing) => self.secret(now, |hub, identity| {
+                hub.place_secret(identity, &placing)
+                    .map(|id| (SecretDone::Placed(id), None))
+            }),
+            Command::RemoveSecret(id) => self.secret(now, |hub, identity| {
+                hub.remove_secret(identity, id)
+                    .map(|_| (SecretDone::Removed(id), None))
             }),
             Command::Crashes(dir) => {
                 if self.crash_dir != dir {
@@ -2392,6 +2467,7 @@ impl Worker {
         self.keep_map_edits(now);
         self.keep_mystery_boxes(now);
         self.look_between(now);
+        self.keep_secrets(now);
         self.send_crashes(now);
         self.look_between(now);
         let mut wait = IDLE_MAX;
@@ -2427,6 +2503,7 @@ impl Worker {
         }
         if self.registered {
             wait = wait.min(self.due_mystery_boxes.saturating_duration_since(now));
+            wait = wait.min(self.due_secrets.saturating_duration_since(now));
         }
         if self.crash_dir.is_some() {
             wait = wait.min(self.due_crashes.saturating_duration_since(now));
@@ -2875,6 +2952,62 @@ impl Worker {
                 Err(error) => Err(crate::mystery_box::refusal(&error)),
             };
             snapshot.mystery_box = Some((serial, outcome));
+        });
+    }
+
+    /// Read the Toy Master's toys once registered, if it is time: next time
+    /// [`SECRETS_EVERY`] later. Cosmetic: a failure keeps the last list.
+    fn keep_secrets(&mut self, now: Instant) {
+        if !self.registered || now < self.due_secrets {
+            return;
+        }
+        let Some(hub) = self.hub.as_mut() else {
+            return;
+        };
+        self.due_secrets = now + SECRETS_EVERY;
+        if let Ok(secrets) = hub.secrets(&self.identity) {
+            self.update(|snapshot| {
+                if snapshot.secrets.as_ref() != Some(&secrets) {
+                    snapshot.secrets = Some(secrets);
+                    snapshot.secrets_revision += 1;
+                }
+            });
+        }
+    }
+
+    /// Send a request about the Toy Master's toys: its outcome goes in
+    /// [`Snapshot::secret`], the profile after a find in [`Snapshot::me`]. The toys are
+    /// read again at once after a placing or a removal, and after a toy that is gone.
+    fn secret(
+        &mut self,
+        now: Instant,
+        request: impl FnOnce(&mut dyn Hub, &Identity) -> Result<(SecretDone, Option<Profile>), HubError>,
+    ) {
+        self.secret_serial += 1;
+        let serial = self.secret_serial;
+        let outcome = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => request(hub.as_mut(), &self.identity),
+            _ => Err(self.not_connected()),
+        };
+        let reread = match &outcome {
+            Ok((SecretDone::Placed(_) | SecretDone::Removed(_), _)) => true,
+            Err(HubError::Rejected { code, .. }) => code == "no_such_secret",
+            _ => false,
+        };
+        if reread {
+            self.due_secrets = now;
+        }
+        self.update(|snapshot| {
+            let outcome = match outcome {
+                Ok((done, profile)) => {
+                    if let Some(profile) = profile {
+                        snapshot.set_me(profile);
+                    }
+                    Ok(done)
+                }
+                Err(error) => Err(crate::toy_master::refusal(&error)),
+            };
+            snapshot.secret = Some((serial, outcome));
         });
     }
 
@@ -3764,6 +3897,29 @@ impl Service {
         let _ = self.commands.send(Command::RemoveMysteryBox(id));
     }
 
+    /// The player pressed Use `presses` times on the Toy Master's toy `id` on `server` in
+    /// map load `round` (the game's `sv_serverid`): what came of it arrives in
+    /// [`Snapshot::secret`], a find's profile in [`Snapshot::me`].
+    pub fn use_secret(&self, id: i64, server: String, round: i32, presses: u32) {
+        let _ = self.commands.send(Command::UseSecret {
+            id,
+            server,
+            round,
+            presses,
+        });
+    }
+
+    /// SJK's creator: hide a toy; the answer arrives in [`Snapshot::secret`] and the list
+    /// is read again.
+    pub fn place_secret(&self, placing: crate::toy_master::Placing) {
+        let _ = self.commands.send(Command::PlaceSecret(placing));
+    }
+
+    /// SJK's creator: take the Toy Master's toy `id` away.
+    pub fn remove_secret(&self, id: i64) {
+        let _ = self.commands.send(Command::RemoveSecret(id));
+    }
+
     /// Read the box hunt on `server`, saying whether the player is `away` (in the chat,
     /// a menu, idle: the hub picks no mark among them): it arrives in
     /// [`Snapshot::box_hunt`].
@@ -4346,6 +4502,8 @@ mod tests {
                 .unwrap()
                 .iter()
                 .map(|id| Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: id.clone(),
                     granted: 1,
                     note: String::new(),
@@ -4390,6 +4548,7 @@ mod tests {
 
     fn profile(name: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: name.to_owned(),
@@ -5045,6 +5204,9 @@ mod tests {
                     goal: 100,
                     unlocked: i64::from(cap.map_or(count, |cap| count.min(cap)) >= 100),
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect();
             *self.held.lock().unwrap() = held.clone();
@@ -6952,6 +7114,7 @@ mod tests {
     fn tagged(id: &str) -> Look {
         Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: id.to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [1.0, 2.0, 3.0],

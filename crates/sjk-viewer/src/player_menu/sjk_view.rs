@@ -3129,6 +3129,8 @@ mod tests {
                 crate::unlockables::ALL
                     .iter()
                     .map(|unlockable| sjk_identity::Unlock {
+                        holo: 0,
+                        solar: 0,
                         id: unlockable.id.to_owned(),
                         granted: 1_791_336_225,
                         note: String::new(),

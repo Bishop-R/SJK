@@ -2824,6 +2824,8 @@ mod tests {
 
     fn unlock(id: &str) -> sjk_identity::Unlock {
         sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.into(),
             granted: 1_791_336_225,
             note: String::new(),
@@ -2836,6 +2838,8 @@ mod tests {
     #[test]
     fn the_owned_line_names_the_medal_that_brings_a_shader() {
         let grant = |medal: Option<&str>| sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_glitch".to_owned(),
             granted: 0,
             note: String::new(),

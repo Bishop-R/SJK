@@ -9,6 +9,28 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 01/11/2026 | - | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
+- 17af01d |  | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
++ 31/10/2026 | - | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
+- 98fcaf3 |  | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
++ 31/10/2026 | - | Release 2026.1031.2
+- 4fcdeca |  | Release 2026.1031.2
++ 31/10/2026 | - | Map editor: easier to use, and say why the hub sync failed
+- f0021d0 |  | Map editor: easier to use, and say why the hub sync failed
++ 31/10/2026 | - | Box hunt: marks only among players in play, an arrow to the mark; boxes open inside, with a halo
+- 514946f |  | Box hunt: marks only among players in play, an arrow to the mark; boxes open inside, with a halo
++ 31/10/2026 | - | Identity: announcement markup (links, pictures, switches), staff announce and news pictures
+- 39acb88 |  | Identity: announcement markup (links, pictures, switches), staff announce and news pictures
++ 31/10/2026 | - | News panel: what's new and announcements in one panel, with links, pictures and switches
+- f235658 |  | News panel: what's new and announcements in one panel, with links, pictures and switches
++ 31/10/2026 | - | News panel: docs, changelog, credits, debug panel; close puts it away; empty recap pointer
+- 583c9f9 |  | News panel: docs, changelog, credits, debug panel; close puts it away; empty recap pointer
++ 31/10/2026 | - | Cloud content: opt-in automatic updates for JoF content and the Sith cloud
+- 6cd9768 |  | Cloud content: opt-in automatic updates for JoF content and the Sith cloud
++ 31/10/2026 | - | Cloud auto-update: docs, changelog, credits, debug panel
+- d48d80b |  | Cloud auto-update: docs, changelog, credits, debug panel
++ 31/10/2026 | - | What's new: Settings to review switches read number cvars as Settings does
+- 6294787 |  | What's new: Settings to review switches read number cvars as Settings does
 + 31/10/2026 | - | Collection > History: the player's inventory history from GET /v1/history
 - 21e5def |  | Collection > History: the player's inventory history from GET /v1/history
 + 31/10/2026 | - | History: bought holocrons show their price on their own line; plainer mystery box words

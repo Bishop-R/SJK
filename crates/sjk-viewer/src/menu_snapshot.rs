@@ -1474,6 +1474,7 @@ fn identity_page(shots: &Snapshot, art: ArtSet) {
         status,
         key_id: "44f3d0b36c9b2510".to_owned(),
         me: Some(Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1558,6 +1559,9 @@ fn identity_page(shots: &Snapshot, art: ArtSet) {
         mystery_boxes_revision: 0,
         mystery_box: None,
         box_hunt: None,
+        secrets: None,
+        secrets_revision: 0,
+        secret: None,
         assets_note: None,
         crashes_sent: 0,
         crash_note: None,
@@ -1797,8 +1801,12 @@ fn player_card_profile(shots: &mut Snapshot) {
         goal: 1,
         unlocked,
         reward: None,
+        name: None,
+        description: None,
+        group: None,
     };
     let profile = sjk_identity::Profile {
+        tag_cards: Vec::new(),
         credits: 0,
         cards: Vec::new(),
         keys: Vec::new(),
@@ -2972,6 +2980,7 @@ fn medals_snapshot() {
         status: Status::Online,
         key_id: "44f3d0b36c9b2510".to_owned(),
         me: Some(Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -3018,6 +3027,9 @@ fn medals_snapshot() {
         mystery_boxes_revision: 0,
         mystery_box: None,
         box_hunt: None,
+        secrets: None,
+        secrets_revision: 0,
+        secret: None,
         assets_note: None,
         crashes_sent: 0,
         crash_note: None,

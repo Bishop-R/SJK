@@ -42,6 +42,8 @@ pub(crate) struct Table {
     /// The shards a card brings beside its credits (the card pack): the least and the
     /// most.
     pub(crate) card_shards: [(u32, u32); COUNT],
+    /// How often a dropped tag comes Holo and Solar (31/10/2026).
+    pub(crate) tag_finish: [[u32; 2]; COUNT],
 }
 
 /// This client's copy of the hub's tables (`src/holocrons.rs`, `src/cards.rs` and
@@ -68,6 +70,9 @@ pub(crate) const BUILT_IN: Table = Table {
     tag: [0, 0, 0, 0],
     shards: [(5, 15), (10, 25), (25, 50), (100, 200)],
     card_shards: [(1, 3), (2, 5), (5, 10), (20, 40)],
+    // The hub sends them (40 and 5 per mille in every tier since 31/10/2026); the copy
+    // keeps a hub's from before, whose tags are all Normal.
+    tag_finish: [[0, 0]; COUNT],
 };
 
 static HUB: Mutex<Option<Table>> = Mutex::new(None);
@@ -117,7 +122,8 @@ fn of_hub(tiers: &[sjk_identity::LootTier]) -> Option<Table> {
             && tier.shader + tier.tag + tier.shard_pile <= 1_000
             && tier.credits[0] <= tier.credits[1]
             && tier.shards[0] <= tier.shards[1]
-            && tier.card_shards[0] <= tier.card_shards[1];
+            && tier.card_shards[0] <= tier.card_shards[1]
+            && tier.tag_finish[0] + tier.tag_finish[1] <= 1_000;
         if !fits {
             return None;
         }
@@ -136,6 +142,7 @@ fn of_hub(tiers: &[sjk_identity::LootTier]) -> Option<Table> {
         table.shader_tier[index].copy_from_slice(&tier.shader_tier);
         table.shard_pile[index] = tier.shard_pile;
         table.tag[index] = tier.tag;
+        table.tag_finish[index] = tier.tag_finish;
         table.shards[index] = (
             u32::try_from(tier.shards[0]).ok()?,
             u32::try_from(tier.shards[1]).ok()?,
@@ -184,6 +191,7 @@ mod tests {
                     u64::from(table.card_shards[index].0),
                     u64::from(table.card_shards[index].1),
                 ],
+                tag_finish: table.tag_finish[index],
             })
             .collect()
     }

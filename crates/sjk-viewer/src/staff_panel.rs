@@ -1065,6 +1065,7 @@ mod tests {
 
     pub(super) fn profile(key_id: &str, name: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1109,6 +1110,9 @@ mod tests {
                 goal: 1,
                 unlocked: 5,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             }],
             ..profile("aaaaaaaaaaaaaaaa", "^1Sol")
         }
@@ -1362,6 +1366,8 @@ mod tests {
         // Once the profile lists it: Relock, and no second Unlock.
         let held = Profile {
             unlocks: vec![sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".into(),
                 granted: 1,
                 note: String::new(),

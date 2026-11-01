@@ -29,6 +29,7 @@ pub mod relay;
 pub mod report;
 pub mod service;
 pub mod staff;
+pub mod toy_master;
 pub mod trades;
 pub mod usage;
 pub mod vitals;

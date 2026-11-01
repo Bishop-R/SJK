@@ -171,6 +171,7 @@ pub(crate) fn row_labels(
         toy_keys: &[],
         toys_unseen: 0,
         tag: "",
+        tag_finish: "",
     };
     counts(&inputs).iter().map(|count| count.label()).collect()
 }

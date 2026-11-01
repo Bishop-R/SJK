@@ -488,6 +488,12 @@ Tester and Contributor were called Early Tester and Early Contributor until 27/1
 team keeps giving them. Only the names players read changed; the ids stay
 `early_tester` and `early_contributor`, as the hub stores and sends them.
 
+Since 31/10/2026 (Sol's decision) the hub gives Tester by itself, by date, to every
+player it sees on SJK who does not hold it yet: rank IV until Sunday 01/11/2026
+included, then a week each of rank III (to 08/11), II (to 15/11) and I (to 22/11/2026).
+From 23/11/2026 it is only given by hand again, and rank V is no longer earned. The
+client needs no change: the medal arrives in the player's profile like any award.
+
 ### Medal ranks
 
 Since 27/10/2026 (Sol's decision) every medal a player holds has a rank from I to V,
@@ -1059,6 +1065,12 @@ hub's `"retired": true` on Surveyor's entry is not needed by the client.
 Totals ("12 of 39 unlocked", the player card's "Achievements 12 / 39", the profile
 card) count every obtainable achievement and the retired ones the player holds, so a
 holder of Surveyor reads "of 40".
+
+The Toy Master's achievements (since 30/10/2026, [toy-master.md](toy-master.md)) are not
+in the client's catalogue: the hub sends one only once it is unlocked, with its `name`,
+`description` and `group` (`toy_master`), fields no other achievement carries. The board
+shows them in a "Toy Master" category, and totals count them like retired ones held:
+in both numbers, only for whoever holds them.
 
 What the client counts comes from its live matches on servers, never a demo, a game
 it hosts or a server on the player's own machine (a loopback address: Create game and

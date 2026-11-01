@@ -516,6 +516,7 @@ mod tests {
 
     fn me() -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -583,6 +584,9 @@ mod tests {
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -709,6 +713,8 @@ mod tests {
     fn the_card_names_the_blade_skin_worn_while_it_is_owned() {
         let owned = Profile {
             unlocks: vec![sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 1,
                 note: String::new(),

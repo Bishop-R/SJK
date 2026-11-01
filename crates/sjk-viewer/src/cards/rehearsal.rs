@@ -148,6 +148,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Vec<Opened>, String> {
                     card: None,
                     credits: 0,
                     unlock: Some(OpenedUnlock {
+                        finish: None,
                         id: skin.id.to_owned(),
                         name: skin.name.to_owned(),
                         count: 1 + (at as u32 % 2),
@@ -179,6 +180,7 @@ pub(crate) fn parse(args: &[String]) -> Result<Vec<Opened>, String> {
                     card: None,
                     credits: 0,
                     unlock: Some(OpenedUnlock {
+                        finish: None,
                         id: skin.id.to_owned(),
                         name: skin.name.to_owned(),
                         count: 1 + (at as u32 % 2),

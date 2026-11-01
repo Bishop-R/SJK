@@ -8055,3 +8055,28 @@ test: debug_announce long: click the Collection link, the setting link, the chip
 test: debug_announce picture: a framed Picture loading... where the picture goes.
 test: announce, type cg_nameplate then Ctrl+L / Ctrl+K; Ctrl+L alone opens the picker.
 note: Pictures and staff announcing need the hub's news-panel branch deployed.
+
+[tag-cards]
+area: Rendering & effects
+title: Tags: sharp on walls, Holo and Solar, credits cards as tags
+change: Tags draw at their picture's full size in a pass of their own: no longer blurry.
+change: Holocrons drop tags Holo (4 %) or Solar (0.5 %); held credits cards stick as tags.
+change: Collection > Tags scrolls, lists the credits cards and offers Normal, Holo, Solar.
+test: toy_tag on a wall, walk up close: the picture stays sharp (compare with main).
+test: Collection > Tags: the wheel and the arrows scroll; the card shows the finish chips.
+test: choose a Holo or Solar copy, toy_tag: the foil shifts as you walk past; Solar burns.
+test: choose a credits card you hold, toy_tag: its picture with a rim of its colour.
+test: a second SJK client on the server sees the same tag, finish and card.
+note: Finishes and card tags need the hub's tag-cards branch deployed; before, none show.
+
+[toy-master]
+area: Gameplay
+title: Toy Master: hidden toys on maps
+change: The creator places Toy Master props: toymaster_place, _remove, _list.
+change: Use presses on a server add up; at a hidden count every SJK player sees a show.
+change: Collection > Toys has a ? hint; found toys get a Toy Master group on Achievements.
+test: toymaster_place on a local server, Use it until the show plays.
+test: a second SJK client on the server sees and hears the show.
+test: Settings > Sound > Toys mutes the show's sound.
+test: once earned, the secret achievement shows in the Toy Master group.
+note: Needs the hub's toy-master branch, deployed 01/11/2026.

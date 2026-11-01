@@ -25,6 +25,8 @@ use crate::profile_hub::Tab;
 /// A made-up copy of `id`, held `count` times.
 fn held(id: &str, count: u32) -> sjk_identity::Unlock {
     sjk_identity::Unlock {
+        holo: 0,
+        solar: 0,
         id: id.to_owned(),
         granted: 1_791_336_225,
         note: String::new(),

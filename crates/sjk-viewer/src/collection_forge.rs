@@ -1358,6 +1358,8 @@ mod tests {
 
     fn copy(id: &str, count: u32) -> sjk_identity::Unlock {
         sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.to_owned(),
             granted: 1,
             note: String::new(),

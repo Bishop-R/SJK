@@ -594,6 +594,46 @@ pub trait Hub: Send {
         ))
     }
 
+    /// Every toy the Toy Master hid (`GET /v1/secrets`, 30/10/2026).
+    fn secrets(&mut self, _identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not read the Toy Master's toys".to_owned(),
+        ))
+    }
+
+    /// The player pressed Use `presses` times on toy `id` on `server` in map load `round`
+    /// (`POST /v1/secrets/use`).
+    fn use_secret(
+        &mut self,
+        _identity: &Identity,
+        _id: i64,
+        _server: &str,
+        _round: i32,
+        _presses: u32,
+    ) -> Result<crate::toy_master::Used, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not use the Toy Master's toys".to_owned(),
+        ))
+    }
+
+    /// SJK's creator: hide a toy (`POST /v1/creator/secret`); answers its id.
+    fn place_secret(
+        &mut self,
+        _identity: &Identity,
+        _placing: &crate::toy_master::Placing,
+    ) -> Result<i64, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not hide toys".to_owned(),
+        ))
+    }
+
+    /// SJK's creator: take toy `id` away (`POST /v1/creator/secret/remove`).
+    fn remove_secret(&mut self, _identity: &Identity, _id: i64) -> Result<(), HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not remove toys".to_owned(),
+        ))
+    }
+
     /// Buy a holocron of tier `tier` with credits (`POST /v1/holocrons/buy`, 17/10/2026).
     fn buy_holocron(
         &mut self,
@@ -1835,6 +1875,59 @@ impl Hub for HttpHub {
         .map(|_| ())
     }
 
+    fn secrets(&mut self, identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
+        parse(self.send(Some(identity), "GET", "/v1/secrets", None)?)
+    }
+
+    fn use_secret(
+        &mut self,
+        identity: &Identity,
+        id: i64,
+        server: &str,
+        round: i32,
+        presses: u32,
+    ) -> Result<crate::toy_master::Used, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/secrets/use",
+            Some(json!({ "secret": id, "server": server, "round": round, "presses": presses })),
+        )?)
+    }
+
+    fn place_secret(
+        &mut self,
+        identity: &Identity,
+        placing: &crate::toy_master::Placing,
+    ) -> Result<i64, HubError> {
+        let answer = self.send(
+            Some(identity),
+            "POST",
+            "/v1/creator/secret",
+            Some(json!({
+                "kind": placing.kind,
+                "map": placing.map,
+                "checksum": placing.checksum,
+                "server": placing.server,
+                "origin": placing.origin,
+                "yaw": placing.yaw,
+            })),
+        )?;
+        answer["id"]
+            .as_i64()
+            .ok_or_else(|| HubError::Protocol("a hidden toy without its id".to_owned()))
+    }
+
+    fn remove_secret(&mut self, identity: &Identity, id: i64) -> Result<(), HubError> {
+        self.send(
+            Some(identity),
+            "POST",
+            "/v1/creator/secret/remove",
+            Some(json!({ "id": id })),
+        )
+        .map(|_| ())
+    }
+
     fn buy_holocron(
         &mut self,
         identity: &Identity,
@@ -2490,6 +2583,7 @@ mod tests {
         // A stuck tag goes whole, only while there is one.
         let tagged = Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: "tag_gg".to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [120.5, -64.0, 24.0],

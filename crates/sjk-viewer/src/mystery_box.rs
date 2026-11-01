@@ -959,7 +959,7 @@ fn pile_spots(copies: u8) -> impl Iterator<Item = (Vec3, Quat)> {
 }
 
 /// `pmtype_t`: the player plays (not dead, spectating or in intermission).
-fn plays(player: &PlayerState) -> bool {
+pub(crate) fn plays(player: &PlayerState) -> bool {
     /// `PMF_FOLLOW`: the player state is that of the player being followed.
     const PMF_FOLLOW: u16 = 4096;
     player.health() > 0

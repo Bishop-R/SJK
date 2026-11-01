@@ -58,10 +58,13 @@ fn prize(find: &sjk_identity::FindMark) -> String {
     if find.shader {
         let name = crate::text::Plain(&find.name).to_string();
         let name: String = name.trim().chars().take(PRIZE_NAME_MAX).collect();
-        return if name.is_empty() {
-            "a saber shader".to_owned()
-        } else {
-            name
+        if name.is_empty() {
+            return "a saber shader".to_owned();
+        }
+        // A tag that came Holo or Solar (31/10/2026) says so: "Solar Gonk tag".
+        return match crate::cards::Finish::from_id(&find.finish) {
+            Some(finish) if finish.index > 0 => format!("{} {name}", finish.name),
+            _ => name,
         };
     }
     // A ranked card says its rank, never its rarity.
@@ -125,6 +128,19 @@ mod tests {
             drop.find = Some(mark);
         }
         message
+    }
+
+    /// A Solar tag's find says its finish (31/10/2026).
+    #[test]
+    fn a_solar_tag_find_says_its_finish() {
+        let mark = sjk_identity::FindMark {
+            finish: "solar".to_owned(),
+            ..shader("Gonk tag")
+        };
+        assert_eq!(
+            said(&find("Sol", "rare", false, mark)),
+            "Sol opened a Rare Holocron: Solar Gonk tag!"
+        );
     }
 
     fn shader(name: &str) -> sjk_identity::FindMark {
