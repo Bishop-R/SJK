@@ -1343,18 +1343,36 @@ mod tests {
         assert_eq!(panel.card, 0);
         assert_eq!(panel.chosen_finishes_held(), 2);
         let tile = panel.card_tiles[0].clone();
-        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "solar");
+        assert_eq!(
+            tile.in_finish(panel.card_look_for()).unwrap().finish.id,
+            "solar"
+        );
         assert!(panel.ui.rect_for(CARD_LOOK_BASE).is_some(), "Normal's chip");
-        assert!(panel.ui.rect_for(CARD_LOOK_BASE + 1).is_none(), "no Holo held");
-        assert!(panel.ui.rect_for(CARD_LOOK_BASE + 2).is_some(), "Solar's chip");
+        assert!(
+            panel.ui.rect_for(CARD_LOOK_BASE + 1).is_none(),
+            "no Holo held"
+        );
+        assert!(
+            panel.ui.rect_for(CARD_LOOK_BASE + 2).is_some(),
+            "Solar's chip"
+        );
         panel.cycle_card_look(false);
-        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "normal");
+        assert_eq!(
+            tile.in_finish(panel.card_look_for()).unwrap().finish.id,
+            "normal"
+        );
         panel.cycle_card_look(false);
-        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "solar");
+        assert_eq!(
+            tile.in_finish(panel.card_look_for()).unwrap().finish.id,
+            "solar"
+        );
         // Looked at closely, V goes on and the chips stand by the words.
         panel.card_inspect = true;
         let _ = panel.key(KeyCode::KeyV, false, true);
-        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "normal");
+        assert_eq!(
+            tile.in_finish(panel.card_look_for()).unwrap().finish.id,
+            "normal"
+        );
         panel.build(&shown, &fonts.font, [1920.0, 1080.0]);
         assert!(panel.ui.rect_for(CARD_LOOK_BASE + 2).is_some());
         assert!(!panel.overflowed());
