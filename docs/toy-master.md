@@ -32,8 +32,11 @@ The creator's list also names each toy's kind and the kinds there are.
 ## Finding one
 
 Standing at a toy (within 80 units across the floor and 96 up or down) and facing it
-(within 60 degrees), each `+use` press counts. Nothing says a toy is there: it is a
-surprise. The client sends the presses on the toy twice a second at most
+(within 60 degrees), each `+use` press counts. Nothing says what a toy does: it is a
+surprise. Facing one shows the [Use prompt](client.md) by the crosshair, as at a
+[mystery box](mystery-boxes.md), with only "???" for its action (Sol, 01/11/2026); the
+cap greys once the toy takes no more presses, and no prompt stands while the toy is
+shrunk away in its show. The client sends the presses on the toy twice a second at most
 (`POST /v1/secrets/use`, at most 10 a time), with the server and the map load
 (the game's `sv_serverid`, which every player of a server reads alike).
 
@@ -48,11 +51,22 @@ surprise. The client sends the presses on the toy twice a second at most
   slowing to a stop, while its sound plays from where it stands (heard to 1400 units).
   The hub tells the server's other SJK players through its toy event (`secrets`,
   `show_<id>`), so they see and hear the same show.
+- While it spins, the players' models around it dance (Sol, 01/11/2026): each turns
+  with the toy and squishes in step with its hops, flattened by up to 30 % and as much
+  wider, feet kept on the floor, harder as the spin speeds up. Within 320 units fully,
+  fading out to none at 512; vehicles and limp players are left out. It is the drawing
+  alone (`toy_master::dance_actor`, from `actor_world_submission`): where the game has
+  them and where they face never change, and the local player sees their own model
+  dance only in third person.
 - Once a toy played its show on a map load, presses on it count no more until the next
   (a player who has not found it yet still finds it with one press).
 
 Every sound plays on a source of the toy's own (`0x5300_0000` and its id), and the
-show's sound stops when the show ends or the player leaves the map. Settings > Sound >
+show's sound stops when the show ends or the player leaves the map. The sounds are
+looked up again when the game data changes, so a pack that brings the show's sound
+during a session (the Sith cloud's extras) is heard from its next map. A show whose sound
+is not in the game data plays silent and says so in the log (`toy master: the show's
+sound ... is not in the game data`). Settings > Sound >
 Toys, "Toy Master sounds" (`s_toyMasterSound`), silences them.
 
 ## The "?" and the achievements

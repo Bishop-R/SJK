@@ -8080,3 +8080,15 @@ test: a second SJK client on the server sees and hears the show.
 test: Settings > Sound > Toys mutes the show's sound.
 test: once earned, the secret achievement shows in the Toy Master group.
 note: Needs the hub's toy-master branch, deployed 01/11/2026.
+
+[toy-master-show]
+area: Gameplay
+title: Toy Master: ??? Use prompt, players dance with the spin
+change: Facing a toy shows the Use prompt with ??? (grey once it takes no more presses).
+change: While a show spins, player models within 320 units spin and squish with it.
+change: Looks only: positions and facing never change. A missing show sound is logged.
+test: face a toy: the Use key cap and ??? by the crosshair; none while it is shrunk away.
+test: play the show with another player near it: their model spins and squishes, feet down.
+test: in third person your own model dances too; first person and aim are unchanged.
+test: without the SJK extras pack the log says the show's sound is missing.
+note: The song is in the Sith cloud's SJK Extras group (sound/sjk/toys/oiia.mp3).

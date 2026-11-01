@@ -9,6 +9,14 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 01/11/2026 | - | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
+- b0232b5 |  | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
++ 01/11/2026 | - | Release 2026.1101.1
+- 57f60dd |  | Release 2026.1101.1
++ 01/11/2026 | - | Toy Master props: hidden map toys that count Use presses and play a show
+- 60c27fe |  | Toy Master props: hidden map toys that count Use presses and play a show
++ 01/11/2026 | - | Debug panel: Toy Master entry within the line limit
+- caf616c |  | Debug panel: Toy Master entry within the line limit
 + 01/11/2026 | - | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
 - 17af01d |  | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
 + 31/10/2026 | - | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
