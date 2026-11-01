@@ -8114,3 +8114,14 @@ test: Once the hub's JoF cards are kind Clan: Collection > Cards, a JoF tile rea
 test: Kind chip: "Kind: Clan" shows only the 11 JoF cards; Community no longer lists them.
 test: Hover and close-up of a JoF card name "Clan" and "JoF"; the rank (Leader/Council) stays.
 note: Clients without this change leave Clan cards out ("Unknown card"): release before the hub edit.
+
+[card-finishes-held]
+area: Menus & settings
+title: Cards: look at every finish you hold, not only the best
+change: A card held in two or three finishes shows Normal / Holo / Solar chips up close.
+change: A chip (or V, Shift+V back) shows the card in that finish; also when looked at closely.
+test: Collection > Cards, pick a card you hold in Normal and Holo (or Solar): the chips show.
+test: Click Normal: the big card loses its foil; click Holo/Solar: the foil comes back.
+test: Enter on it: the chips stand under the copies line; V cycles the finishes.
+test: Pick a card held in one finish: no chips, the copies line as before.
+note: The grid's tiles still show the best finish held.

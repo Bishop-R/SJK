@@ -658,8 +658,9 @@ impl Panel {
             0,
             seconds,
         );
-        let finish = tile.finish();
-        let edition = tile.best().map_or("", |stack| stack.edition.as_str());
+        let shown = tile.in_finish(self.card_look_for());
+        let finish = shown.map_or(&FINISHES[0], |stack| stack.finish);
+        let edition = shown.map_or("", |stack| stack.edition.as_str());
         look::draw(
             &mut self.ui,
             frame,
@@ -700,20 +701,31 @@ impl Panel {
             TextAlign::Center,
         );
         y += 46.0;
-        text(
-            &mut self.ui,
-            TextFamily::Body,
-            format_args!("{}", words.held),
-            frame.rect(SHOWCASE_X, y, SHOWCASE_WIDTH, 26.0),
-            18.0 * s,
-            if tile.owned() {
-                color::TEXT
-            } else {
-                color::MUTED
-            },
-            FontWeight::Regular,
-            TextAlign::Center,
-        );
+        if tile.finishes_held().len() > 1 {
+            // More than one finish held: their chips stand for the copies' line.
+            self.card_look_chips(
+                frame,
+                [SHOWCASE_X + 30.0, y - 2.0, SHOWCASE_WIDTH - 60.0, 30.0],
+                tile,
+                finish,
+                seconds,
+            );
+        } else {
+            text(
+                &mut self.ui,
+                TextFamily::Body,
+                format_args!("{}", words.held),
+                frame.rect(SHOWCASE_X, y, SHOWCASE_WIDTH, 26.0),
+                18.0 * s,
+                if tile.owned() {
+                    color::TEXT
+                } else {
+                    color::MUTED
+                },
+                FontWeight::Regular,
+                TextAlign::Center,
+            );
+        }
         y += 34.0;
         text(
             &mut self.ui,
@@ -774,6 +786,100 @@ impl Panel {
         }
     }
 
+    /// The chips over `[x, y, width, height]` that show the chosen tile in each finish held
+    /// (01/11/2026, Sol's request: every copy can be looked at, not only the best): Normal,
+    /// Holo and Solar with how many are held in it, `shown` ringed gold, one not held
+    /// dimmed and inert. A click (or V) shows the card in it.
+    fn card_look_chips(
+        &mut self,
+        frame: &Frame,
+        [x, y, width, height]: [f32; 4],
+        tile: &Tile,
+        shown: &cards::Finish,
+        seconds: f32,
+    ) {
+        let s = frame.s;
+        let gap = 10.0;
+        let chip = (width - gap * 2.0) / 3.0;
+        for finish in &FINISHES {
+            let left = x + finish.index as f32 * (chip + gap);
+            let copies: u32 = tile
+                .copies
+                .iter()
+                .filter(|stack| stack.finish.index == finish.index)
+                .map(|stack| stack.count)
+                .sum();
+            let has = copies > 0;
+            let token = CARD_LOOK_BASE + finish.index as u16;
+            let hovered = has && self.ui.token_hovered(token);
+            let rect = frame.rect(left, y, chip, height);
+            let active = finish.index == shown.index && has;
+            let _ = self.ui.draw_list_mut().push(DrawCommand::RoundedRect {
+                rect,
+                radius: height * 0.5 * s,
+                color: color::alpha(
+                    if active { color::GOLD } else { color::HOLO },
+                    if active {
+                        0.16
+                    } else if hovered {
+                        0.12
+                    } else {
+                        0.05
+                    },
+                ),
+            });
+            if finish.index > 0 && has {
+                let kind = if finish.index == 1 {
+                    sjk_ui::ShineKind::Holo
+                } else {
+                    sjk_ui::ShineKind::Solar
+                };
+                crate::tile_shine::push(
+                    self.ui.draw_list_mut(),
+                    rect,
+                    height * 0.5 * s,
+                    Some(kind),
+                    None,
+                    seconds,
+                );
+            }
+            let _ = self.ui.draw_list_mut().push(DrawCommand::Border {
+                rect,
+                radius: height * 0.5 * s,
+                width: if active { 1.6 } else { 1.0 } * s,
+                color: if active {
+                    color::GOLD_BRIGHT
+                } else {
+                    color::alpha(color::HOLO, if has { 0.35 } else { 0.12 })
+                },
+            });
+            let label = if has {
+                format!("{}  x{copies}", finish.name)
+            } else {
+                finish.name.to_owned()
+            };
+            text(
+                &mut self.ui,
+                TextFamily::Body,
+                format_args!("{label}"),
+                frame.rect(left, y + (height - 22.0) * 0.5, chip, 22.0),
+                16.0 * s,
+                if active {
+                    color::GOLD_BRIGHT
+                } else if has {
+                    color::TEXT
+                } else {
+                    color::QUIET
+                },
+                FontWeight::Semibold,
+                TextAlign::Center,
+            );
+            if has {
+                self.ui.hit_region(token, rect);
+            }
+        }
+    }
+
     /// The chosen tile looked at closely (20/10/2026, Sol's request: the cards should be
     /// easier to see): over the darkened page, its card as tall as the frame allows
     /// ([`INSPECT_WIDTH`] wide), tilting under the pointer in its finish's light, and at
@@ -803,14 +909,16 @@ impl Panel {
         let height = INSPECT_WIDTH * look::ASPECT;
         let place = [INSPECT_X, (1_080.0 - height) * 0.5 - 14.0, INSPECT_WIDTH];
         let tilt = self.card_tilt(frame, place, 0, seconds);
+        let shown = tile.in_finish(self.card_look_for());
+        let finish = shown.map_or(&FINISHES[0], |stack| stack.finish);
         look::draw(
             &mut self.ui,
             frame,
             place,
             look::Card {
                 rarity: tile.rarity,
-                finish: tile.finish(),
-                edition: tile.best().map_or("", |stack| stack.edition.as_str()),
+                finish,
+                edition: shown.map_or("", |stack| stack.edition.as_str()),
                 face: shown_face(tile, faces),
                 tilt,
                 dim: !tile.owned(),
@@ -863,6 +971,10 @@ impl Panel {
             TextAlign::Start,
         );
         y += 38.0;
+        if tile.finishes_held().len() > 1 {
+            self.card_look_chips(frame, [x, y, 420.0, 34.0], tile, finish, seconds);
+            y += 50.0;
+        }
         text(
             &mut self.ui,
             TextFamily::Body,
@@ -1203,6 +1315,56 @@ mod tests {
                 last: 1_791_641_100,
             })
             .collect()
+    }
+
+    /// Sol's request (01/11/2026): every finish held can be looked at. A card held in
+    /// Normal and Solar shows Solar first, with a chip for each finish held; V (and a
+    /// chip) shows it in the other, up close and looked at closely; another tile starts
+    /// on its best again.
+    #[test]
+    fn every_finish_held_can_be_looked_at() {
+        let fonts = crate::text::load_modern(1.0, None).expect("Inter");
+        let shown = inputs(Holdings::Known(&[]), "");
+        let stack = |finish: &str, count| sjk_identity::CardStack {
+            card: Some("card_000".to_owned()),
+            rarity: "legendary".to_owned(),
+            finish: finish.to_owned(),
+            edition: "alpha".to_owned(),
+            count,
+            first: 1_791_641_100,
+            last: 1_791_641_100,
+        };
+        let mut held = vec![stack("normal", 2), stack("solar", 1)];
+        held.extend(revealed(3).into_iter().skip(1));
+        let mut panel = Panel::new();
+        panel.open(Tab::Cards, true, true, ReturnTarget::MainMenu);
+        panel.preview_cards = Some((held, 0, 0));
+        panel.build(&shown, &fonts.font, [1920.0, 1080.0]);
+        assert_eq!(panel.card, 0);
+        assert_eq!(panel.chosen_finishes_held(), 2);
+        let tile = panel.card_tiles[0].clone();
+        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "solar");
+        assert!(panel.ui.rect_for(CARD_LOOK_BASE).is_some(), "Normal's chip");
+        assert!(panel.ui.rect_for(CARD_LOOK_BASE + 1).is_none(), "no Holo held");
+        assert!(panel.ui.rect_for(CARD_LOOK_BASE + 2).is_some(), "Solar's chip");
+        panel.cycle_card_look(false);
+        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "normal");
+        panel.cycle_card_look(false);
+        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "solar");
+        // Looked at closely, V goes on and the chips stand by the words.
+        panel.card_inspect = true;
+        let _ = panel.key(KeyCode::KeyV, false, true);
+        assert_eq!(tile.in_finish(panel.card_look_for()).unwrap().finish.id, "normal");
+        panel.build(&shown, &fonts.font, [1920.0, 1080.0]);
+        assert!(panel.ui.rect_for(CARD_LOOK_BASE + 2).is_some());
+        assert!(!panel.overflowed());
+        // Another tile: its best again, and one finish held offers no chips.
+        let _ = panel.key(KeyCode::ArrowRight, false, true);
+        assert_eq!(panel.card_look_for(), None);
+        panel.card_inspect = false;
+        panel.build(&shown, &fonts.font, [1920.0, 1080.0]);
+        assert_eq!(panel.chosen_finishes_held(), 1);
+        assert!(panel.ui.rect_for(CARD_LOOK_BASE).is_none());
     }
 
     /// Kushina's report #124: the card up close stands under the row of tabs, so the

@@ -54,6 +54,22 @@ impl Tile {
         self.best().map_or(&FINISHES[0], |stack| stack.finish)
     }
 
+    /// The copy shown in the finish of index `finish` when one is held in it, else the
+    /// best (01/11/2026, Sol's request: every finish held can be looked at).
+    pub(crate) fn in_finish(&self, finish: Option<usize>) -> Option<&Stack> {
+        finish
+            .and_then(|index| self.copies.iter().find(|stack| stack.finish.index == index))
+            .or_else(|| self.best())
+    }
+
+    /// The finishes held, by their index (Normal first).
+    pub(crate) fn finishes_held(&self) -> Vec<usize> {
+        let mut held: Vec<usize> = self.copies.iter().map(|stack| stack.finish.index).collect();
+        held.sort_unstable();
+        held.dedup();
+        held
+    }
+
     /// Whether a copy in `finish` is held.
     pub(crate) fn holds(&self, finish: &Finish) -> bool {
         self.copies.iter().any(|stack| stack.finish.id == finish.id)
