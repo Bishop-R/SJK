@@ -17,6 +17,10 @@ const SOURCE: sjk_audio::SourceId = sjk_audio::SourceId(0x5400_0000);
 const SLOTS: usize = crate::looks::SLOTS;
 /// How far ahead the player's aim is traced, to aim the bolt at what the crosshair meets.
 const AIM_REACH: f32 = 8_192.0;
+/// Milliseconds between two of a bolt's trail effects.
+const TRAIL_GAP: i64 = 25;
+/// Flying bolts heard at once.
+const MAX_LOOPS: usize = 8;
 
 /// A gun's world model has the view model's axes (X forward, Y left, Z up); the hand's
 /// bolt (`*r_hand`) holds the game's own world guns barrel along -Y, Z up
@@ -35,6 +39,8 @@ pub(crate) struct HeldDraw {
     pub(crate) offset: Vec3,
     pub(crate) rotation: Quat,
     pub(crate) scale: f32,
+    /// The muzzle on the model's own axes (first person only).
+    pub(crate) muzzle: Option<Vec3>,
 }
 
 /// The models of every gun in the game's files, for the map-load appearance set.
@@ -301,6 +307,7 @@ impl GpuState {
                 mine: false,
             });
         }
+        self.propgun_muzzle(gun, &shot);
         self.propgun
             .add_bolt(Bolt::new(slot, gun, shot, speed, life));
     }
@@ -430,7 +437,10 @@ impl GpuState {
         let aim = self
             .propgun_trace(eye, eye + forward * AIM_REACH)
             .map_or(eye + forward * AIM_REACH, |(at, _, _)| at);
-        let mut from = eye + forward * 16.0 + right * 5.0 - Vec3::Z * 5.0;
+        let mut from = self
+            .propgun
+            .view_muzzle
+            .unwrap_or(eye + forward * 16.0 + right * 5.0 - Vec3::Z * 5.0);
         // Not from inside a wall in front of the player.
         if self.propgun_trace(eye, from).is_some() {
             from = eye;
@@ -451,8 +461,21 @@ impl GpuState {
                 mine: true,
             });
         }
+        self.propgun_muzzle(gun_index, &shot);
         self.propgun
             .add_bolt(Bolt::new(own, gun_index, shot, speed, life));
+    }
+
+    /// The gun's muzzle effect where shot `shot` leaves, along its way.
+    fn propgun_muzzle(&mut self, gun: usize, shot: &Shot) {
+        if let Some(effect) = self.propgun.guns[gun].fire_effect.clone() {
+            // Where the shot left: the drawn muzzle, for the player's own in first person.
+            self.propgun.splashes.push(Splash {
+                effect,
+                at: shot.origin(),
+                normal: shot.direction(),
+            });
+        }
     }
 
     /// Fire if attack asks, then step every bolt on to `time` (game server
@@ -580,6 +603,7 @@ impl GpuState {
                 offset: gun.world.offset,
                 rotation: gun.world.rotation(),
                 scale: gun.world.scale,
+                muzzle: None,
             })
         };
         if let (Some(own), Some((_, gun))) = (own, self.propgun.holding()) {
@@ -618,11 +642,13 @@ impl GpuState {
             offset: gun.view.offset,
             rotation: gun.view.rotation(),
             scale: gun.view.scale,
+            muzzle: gun.view_muzzle,
         })
     }
 
     /// Add this frame's bolts and their lights.
     pub(crate) fn submit_propgun(&mut self, presentation_time: i64) {
+        self.propgun.loops.clear();
         if self.propgun.bolts.is_empty() || self.propgun.duel {
             return;
         }
@@ -638,6 +664,26 @@ impl GpuState {
             }
             let gun = &self.propgun.guns[bolt.gun];
             let at = bolt.at(presentation_time);
+            if let Some(sound) = gun.bolt_sound.clone()
+                && self.propgun.loops.len() < MAX_LOOPS
+            {
+                let source = sjk_audio::SourceId(
+                    SOURCE.0 + 1 + u32::from(bolt.shooter) * 128 + u32::from(bolt.shot.number),
+                );
+                self.propgun.loops.push((source, sound, at.to_array()));
+            }
+            if let Some(effect) = gun.bolt_effect.clone()
+                && bolt.trailed.saturating_add(TRAIL_GAP) <= presentation_time
+            {
+                self.propgun.splashes.push(Splash {
+                    effect,
+                    at,
+                    normal: -bolt.shot.direction(),
+                });
+                self.propgun.bolts[index].trailed = presentation_time;
+            }
+            let bolt = &self.propgun.bolts[index];
+            let gun = &self.propgun.guns[bolt.gun];
             let light = crate::dynamic_lights::PointLight {
                 origin: at.to_array(),
                 radius: gun.bolt_light,
@@ -689,6 +735,7 @@ impl GpuState {
             self.propgun.cues.clear();
             return;
         };
+        audio.set_propgun_loops(&self.propgun.loops);
         if self.propgun.sounds_registered != Some(audio.generation())
             && let Some(vfs) = self.vfs.as_deref()
         {
@@ -730,6 +777,41 @@ impl GpuState {
             console.set_cvar(crate::toy_saved::PROPGUN_CVAR, "1");
         }
         assert!(self.propgun.gun().is_some(), "gun {id} in the game data");
+    }
+
+    /// For the world shots: the chosen gun's muzzle effect where a shot leaves the
+    /// rendered view, and its impact effect where the crosshair meets the world.
+    pub(crate) fn shot_propgun_effects(&mut self) {
+        let Some((gun, def)) = self.propgun.gun() else {
+            return;
+        };
+        let (yaw, pitch) = (self.camera_yaw, self.camera_pitch);
+        let way = Vec3::new(
+            yaw.cos() * pitch.cos(),
+            yaw.sin() * pitch.cos(),
+            pitch.sin(),
+        );
+        let right = Vec3::new(yaw.sin(), -yaw.cos(), 0.0);
+        let from = self
+            .propgun
+            .view_muzzle
+            .unwrap_or(self.view_origin + way * 16.0 + right * 5.0 - Vec3::Z * 5.0);
+        let impact = def.impact_effect.clone();
+        self.propgun_muzzle(gun, &Shot::new(0, 0, from, way));
+        if let (Some(effect), Some((at, normal, _))) =
+            (impact, self.propgun_trace(from, from + way * AIM_REACH))
+        {
+            self.propgun.splashes.push(Splash {
+                effect: effect.clone(),
+                at,
+                normal,
+            });
+            // And one on the floor close ahead, to see it.
+            let ahead = self.view_origin + Vec3::new(way.x, way.y, 0.0).normalize_or_zero() * 160.0;
+            if let Some((at, normal, _)) = self.propgun_trace(ahead, ahead - Vec3::Z * 400.0) {
+                self.propgun.splashes.push(Splash { effect, at, normal });
+            }
+        }
     }
 
     /// For the world shots: a bolt of the chosen gun flying from `from` along `way`,

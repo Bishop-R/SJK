@@ -2890,10 +2890,11 @@ impl GpuState {
             charge_flash::Charges::collect(Some(snapshot), predicted)
                 .of(snapshot.player.client_num())
         });
+        self.propgun.view_muzzle = None;
         if let Some(inputs) = view_weapon
             && let Some(prop) = prop_view
         {
-            first_person_weapon::submit_prop(
+            self.propgun.view_muzzle = first_person_weapon::submit_prop(
                 &self.first_person_weapon,
                 inputs,
                 prop,

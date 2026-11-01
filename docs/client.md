@@ -5431,7 +5431,10 @@ themselves, and other players see and hear a gun only when they have the same fi
   | `boltModel`, `boltScale` | the bolt's model along its way (none: its light only) | none, 1 |
   | `boltColor`, `boltLight` | its light's colour (0 to 1) and reach | 0.4 1 0.3, 120 |
   | `boltSpeed`, `boltLife` | units a second, milliseconds | 1800, 3000 |
-  | `impactEffect` | an effect where it meets the world (`repeater/wall_impact`) | none |
+  | `impactEffect` | an effect where it meets the world or a body (`repeater/wall_impact`) | none |
+  | `fireEffect` | an effect where it leaves, along its way, at each shot | none |
+  | `boltEffect` | an effect started behind the bolt every 25 ms as it flies (a trail) | none |
+  | `boltSound` | a sound looped at the bolt as it flies (8 heard at once at most) | none |
   | `refire` | milliseconds between two shots | 350 |
   | `push` | how hard a bolt pushes the body it strikes, units a second | 900 |
 
@@ -5451,8 +5454,8 @@ themselves, and other players see and hear a gun only when they have the same fi
   with a saber out).
 - **Firing:** attack and alt attack never reach the game server while a gun is held
   ([live_session.rs](../crates/sjk-viewer/src/live_session.rs)); a press, or attack held,
-  fires once every `refire`. The bolt leaves from by the eyes (16 ahead, 5 right, 5 down)
-  towards what the crosshair meets, and flies straight at its speed until it meets the
+  fires once every `refire`. The bolt leaves from the first-person gun's muzzle (the view
+  model's `tag_flash`, as drawn), else from by the eyes (16 ahead, 5 right, 5 down), towards what the crosshair meets, and flies straight at its speed until it meets the
   world (its impact sound and effect) or a body, or for its life. Nobody fires while limp,
   dead, spectating, in a duel, held by the server or in a vehicle (the Ragdoll's rules).
 - **The hit** is decided by the struck player's client alone, against its own body (a

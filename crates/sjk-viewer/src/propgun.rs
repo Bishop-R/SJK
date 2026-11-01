@@ -107,6 +107,14 @@ pub(crate) struct Gun {
     pub(crate) bolt_life_ms: i64,
     /// An effect (`.efx`) where the bolt meets the world.
     pub(crate) impact_effect: Option<String>,
+    /// An effect where the bolt leaves, along its way, at each shot.
+    pub(crate) fire_effect: Option<String>,
+    /// An effect started along the bolt's way as it flies (a trail).
+    pub(crate) bolt_effect: Option<String>,
+    /// A sound looped at the bolt as it flies.
+    pub(crate) bolt_sound: Option<String>,
+    /// The view model's `tag_flash`, on its own axes (read from the model, not the file).
+    pub(crate) view_muzzle: Option<Vec3>,
     /// Between two shots, milliseconds.
     pub(crate) refire_ms: i64,
     /// How hard a bolt pushes the body it strikes, units a second.
@@ -198,6 +206,10 @@ impl Gun {
             bolt_speed: 1_800.0,
             bolt_life_ms: 3_000,
             impact_effect: None,
+            fire_effect: None,
+            bolt_effect: None,
+            bolt_sound: None,
+            view_muzzle: None,
             refire_ms: 350,
             push: 900.0,
         };
@@ -249,6 +261,9 @@ impl Gun {
                 "boltlife" => number(values, 0, &key)
                     .map(|n| gun.bolt_life_ms = (n as i64).clamp(100, 10_000)),
                 "impacteffect" => path(values, &key).map(|p| gun.impact_effect = Some(p)),
+                "fireeffect" => path(values, &key).map(|p| gun.fire_effect = Some(p)),
+                "bolteffect" => path(values, &key).map(|p| gun.bolt_effect = Some(p)),
+                "boltsound" => path(values, &key).map(|p| gun.bolt_sound = Some(p)),
                 "refire" => {
                     number(values, 0, &key).map(|n| gun.refire_ms = (n as i64).clamp(80, 5_000))
                 }
@@ -274,6 +289,7 @@ impl Gun {
             .chain(&self.fire_own)
             .chain(&self.impact)
             .chain(&self.raise)
+            .chain(&self.bolt_sound)
             .map(String::as_str)
     }
 
@@ -288,6 +304,17 @@ impl Gun {
         .flatten()
         .map(String::as_str)
     }
+}
+
+/// Where `model` (an MD3) has its `tag_flash`, in its first frame.
+fn muzzle_of(vfs: &VirtualFileSystem, model: &str) -> Option<Vec3> {
+    let asset = vfs.read(model).ok().flatten()?;
+    let md3 = sjk_model::Md3::parse(&asset.bytes).ok()?;
+    md3.tags
+        .first()?
+        .iter()
+        .find(|tag| tag.name.eq_ignore_ascii_case("tag_flash"))
+        .map(|tag| Vec3::from_array(tag.origin))
 }
 
 /// The guns in the game's files, by id, and the problems with the others (one line
@@ -305,7 +332,10 @@ pub(crate) fn catalogue(vfs: &VirtualFileSystem) -> (Vec<Gun>, Vec<String>) {
         let Some(asset) = vfs.read(&format!("{FOLDER}/{name}")).ok().flatten() else {
             continue;
         };
-        match Gun::parse(&id, &String::from_utf8_lossy(&asset.bytes)) {
+        match Gun::parse(&id, &String::from_utf8_lossy(&asset.bytes)).map(|mut gun| {
+            gun.view_muzzle = muzzle_of(vfs, &gun.view.model);
+            gun
+        }) {
             Ok(gun) => guns.push(gun),
             Err(problem) => problems.push(problem),
         }
@@ -438,6 +468,8 @@ pub(crate) struct Bolt {
     pub(crate) end: Option<End>,
     /// The SJK players told of it (the shooter's own bolts).
     pub(crate) told: u64,
+    /// When its trail effect was last started (game server ms).
+    pub(crate) trailed: i64,
 }
 
 impl Bolt {
@@ -451,6 +483,7 @@ impl Bolt {
             stepped: i64::from(shot.moment),
             end: None,
             told: 0,
+            trailed: i64::MIN,
         }
     }
 
@@ -537,7 +570,7 @@ pub(crate) struct Cue {
     pub(crate) mine: bool,
 }
 
-/// An impact effect to start this frame.
+/// An effect to start this frame (an impact, a muzzle, a trail).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Splash {
     pub(crate) effect: String,
@@ -578,6 +611,10 @@ pub(crate) struct PropGun {
     pub(crate) bolts: Vec<Bolt>,
     pub(crate) cues: Vec<Cue>,
     pub(crate) splashes: Vec<Splash>,
+    /// Where the first-person gun's muzzle was drawn this frame, if it was.
+    pub(crate) view_muzzle: Option<Vec3>,
+    /// This frame's flying bolts' loops: their source, sound and where.
+    pub(crate) loops: Vec<(sjk_audio::SourceId, String, [f32; 3])>,
     /// When the player was last struck, and by which bolts (shooter, number).
     pub(crate) last_struck: Option<i64>,
     pub(crate) struck_by: Vec<(u8, u8)>,
@@ -708,6 +745,9 @@ fireOwn sound/propguns/raygun/fire_own.wav
 impact sound/propguns/raygun/impact.wav
 boltColor 0.2 1 0.3
 boltSpeed 2000
+fireEffect propguns/raygun/muzzle
+boltEffect propguns/raygun/trail
+boltSound sound/propguns/raygun/flight.wav
 refire 300
 "#;
 
@@ -718,12 +758,19 @@ refire 300
         assert_eq!(gun.view.model, "models/propguns/raygun/view.md3");
         assert_eq!(gun.view.offset, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(gun.view.scale, 0.8);
+        assert_eq!(gun.fire_effect.as_deref(), Some("propguns/raygun/muzzle"));
+        assert_eq!(gun.bolt_effect.as_deref(), Some("propguns/raygun/trail"));
+        assert_eq!(
+            gun.bolt_sound.as_deref(),
+            Some("sound/propguns/raygun/flight.wav")
+        );
+        assert!(gun.sounds().any(|path| path.ends_with("flight.wav")));
         assert_eq!(gun.world.angles, Vec3::new(0.0, 90.0, 0.0));
         assert_eq!(gun.fire, ["sound/propguns/raygun/fire.wav"]);
         assert_eq!(gun.fire_own.len(), 1);
         assert_eq!(gun.bolt_speed, 2000.0);
         assert_eq!(gun.refire_ms, 300);
-        assert_eq!(gun.sounds().count(), 3);
+        assert_eq!(gun.sounds().count(), 4);
         assert_eq!(gun.models().count(), 2);
     }
 

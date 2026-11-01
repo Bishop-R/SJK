@@ -300,9 +300,9 @@ pub(crate) fn submit_prop(
     inputs: Inputs,
     prop: crate::propgun_frame::HeldDraw,
     object_groups: &mut [Vec<ActorInstance>],
-) -> bool {
+) -> Option<Vec3> {
     if !catalog.visible {
-        return false;
+        return None;
     }
     let (hand_origin, hand_rotation) = hand_frame(inputs);
     let (origin, rotation, scale) = prop_in_view(prop, inputs.forward_scale);
@@ -313,7 +313,9 @@ pub(crate) fn submit_prop(
     );
     instance.depth_hack = 1.0;
     object_groups[prop.mesh].push(instance);
-    true
+    // Where its muzzle is drawn: the model's `tag_flash` through the same placing.
+    prop.muzzle
+        .map(|muzzle| hand_origin + hand_rotation * (origin + rotation * (muzzle * scale)))
 }
 
 /// Where a prop gun's grip sits from the eye: forward, to the right and down, as a
@@ -588,6 +590,7 @@ mod tests {
             offset: Vec3::new(1.0, 0.0, 2.0),
             rotation: Quat::IDENTITY,
             scale: 1.0,
+            muzzle: None,
         };
         let (origin, rotation, scale) = prop_in_view(prop, 1.0);
         assert_eq!(origin, PROP_HOLD + Vec3::new(1.0, 0.0, 2.0));

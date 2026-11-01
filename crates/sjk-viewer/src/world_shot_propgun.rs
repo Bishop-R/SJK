@@ -57,6 +57,33 @@ fn propgun_on_a_demo() {
                 }
             }
             let shot = frame(&mut gpu, 30);
+            if camera == demo_playback::Camera::FirstPerson {
+                // A shot's muzzle flash and its impact on what the crosshair meets.
+                gpu.shot_propgun_effects();
+                let fx = frame(&mut gpu, 1);
+                println!(
+                    "{}",
+                    sheet(
+                        std::slice::from_ref(&fx),
+                        1,
+                        1200,
+                        &format!("propgun_{gun}_fx")
+                    )
+                    .display()
+                );
+                gpu.shot_propgun_effects();
+                let fx_late = frame(&mut gpu, 10);
+                println!(
+                    "{}",
+                    sheet(
+                        std::slice::from_ref(&fx_late),
+                        1,
+                        1200,
+                        &format!("propgun_{gun}_fx_late")
+                    )
+                    .display()
+                );
+            }
             if matches!(camera, demo_playback::Camera::Orbit(_)) {
                 // The player framed whole stands in the middle: close on them.
                 shots.push(image::imageops::crop_imm(&shot, 380, 390, 400, 300).to_image());

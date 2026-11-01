@@ -6,7 +6,10 @@ none; `propgun` chooses, `cl_propGun`) instead of the real weapon or saber, in f
 (placed from the bobbing view, not a hand rig) and third person (on `*r_hand`); attack
 never reaches the server while it is held and fires a bolt instead, flown alike by every
 client from the relay's `fire_...` event; a bolt that reaches a player who has the toy on
-knocks them down through the Ragdoll ([client.md](client.md#prop-gun)). No hub change (the
+knocks them down through the Ragdoll ([client.md](client.md#prop-gun)). A gun may add a muzzle effect, a
+trail and a looped flight sound (`fireEffect`, `boltEffect`, `boltSound`); in first person
+the bolt leaves from the drawn gun's `tag_flash`; in third person the world model is turned
+onto the hand as the game's own world guns are. No hub change (the
 relay checks no toy ids). Not in the look, the Collection's Toys tab, the quick wheel or
 the settings (`cg_toyPropGunShow`, `s_toyPropGunSound` are console cvars). Verified: fmt,
 workspace build and tests (gun files read and refused, events read back, the bolt's line
