@@ -30,7 +30,14 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
-## Unreleased
+## 2026.1101.1 (Alpha) | 01/11/2026
+
+Sharp tags in Holo and Solar, credits cards on walls, hidden toys to find and a Tester medal for playing.
+
+> Tags: Sharp on walls, and now and then Holo or Solar.
+> Cards: Stick the credits cards you hold as tags.
+> Toy Master: Toys hidden on maps wait to be found.
+> Tester medal: Playing SJK earns it until 22/11.
 
 - Tags on walls are sharp: each picture is drawn at its full size in a pass of its own, where they were squeezed into small tiles before and blurred up close _(Sol)_
 - Tags come Holo or Solar now and then from holocrons (4 % and 0.5 %). Holo's rainbow foil shifts as you walk past, Solar burns round the tag's outline; choose the finish on Collection > Tags (`cg_tagFinish`) _(Sol)_
