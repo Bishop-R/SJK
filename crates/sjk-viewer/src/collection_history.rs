@@ -573,6 +573,9 @@ pub(super) fn credits_text(ledger: &Ledger) -> String {
             "Another player's mystery box blew up: what they paid came to you".to_owned()
         }
         "mystery_box" => "Mystery box".to_owned(),
+        "box_hunt" if ledger.note == "survived" => {
+            "Box hunt: you outlasted every hunter".to_owned()
+        }
         reason => with_note(format!("Credits: {}", capitalised(reason)), &ledger.note),
     }
 }
@@ -1055,6 +1058,10 @@ pub(crate) mod tests {
         assert_eq!(
             credits_text(&ledger(0, 100, "mystery_box", "explode_gift")),
             "Another player's mystery box blew up: what they paid came to you"
+        );
+        assert_eq!(
+            credits_text(&ledger(0, 300, "box_hunt", "survived")),
+            "Box hunt: you outlasted every hunter"
         );
         assert_eq!(
             shards_text(&ledger(0, 15, "shatter", "saber_sun")),

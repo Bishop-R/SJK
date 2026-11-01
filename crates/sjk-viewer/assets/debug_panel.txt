@@ -7992,6 +7992,19 @@ test: Over the box: MYSTERY BOX + price, Rolling..., then e.g. JACKPOT! +500; no
 test: The lid swings open on Use and closes once the prize is taken.
 test: #185: a 2nd player far from the opener hears the tune from the box, not from the opener.
 
+[box-hunt-lives]
+area: Gameplay
+title: Box hunt: one life per hunter, teleport/noclip cheats out, the mark wins 100 x hunters
+change: A hunter the mark kills is out (no mark shown, a later kill wins nothing; card YOU'RE OUT).
+change: amtele, admin teleports or noclip in a hunt: out for cheating; the mark cheating ends it.
+change: All hunters out (1+ killed by the mark): the mark wins 100 credits each, 3 times a day.
+test: Needs the hub's box-hunt-lives branch; 4 SJK players with Box hunt on, one the mark.
+test: The mark kills a hunter: they read The mark got you, lose the MARK label/ring/arrow.
+test: That hunter respawns and kills the mark: nothing won. The card counts 2 OF 3 HUNTERS LEFT.
+test: A hunter uses a map teleporter: still in. amtele / noclip: out for cheating, chat says so.
+test: The mark kills the last hunters: You outlasted every hunter, credits + History line.
+note: The mark amtele'd: the hunt is off for everyone. Out of a hunt, teleports are free.
+
 [box-hunt]
 area: Gameplay
 title: Box hunt toy: kill the mark for a free mystery box roll

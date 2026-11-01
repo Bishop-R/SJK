@@ -720,6 +720,15 @@ impl Snapshot {
     }
 }
 
+/// What a box hunt read first tells the hub.
+#[derive(Clone, Copy)]
+enum HuntReport {
+    /// The player, the mark, was killed by this slot.
+    Killed(u8),
+    /// The player is out of the chase.
+    Out(crate::mystery_box::HuntOut),
+}
+
 /// A request to the worker.
 enum Command {
     Configure(Settings),
@@ -809,6 +818,12 @@ enum Command {
     BoxHuntKilled {
         server: String,
         by: u8,
+        away: bool,
+    },
+    /// The player is out of the box hunt's chase on `server`.
+    BoxHuntOut {
+        server: String,
+        out: crate::mystery_box::HuntOut,
         away: bool,
     },
     /// Staff: publish a map's edits.
@@ -1708,7 +1723,10 @@ impl Worker {
             }),
             Command::BoxHunt { server, away } => self.box_hunt(&server, None, away),
             Command::BoxHuntKilled { server, by, away } => {
-                self.box_hunt(&server, Some(by), away);
+                self.box_hunt(&server, Some(HuntReport::Killed(by)), away);
+            }
+            Command::BoxHuntOut { server, out, away } => {
+                self.box_hunt(&server, Some(HuntReport::Out(out)), away);
             }
             Command::RemoveMysteryBox(id) => self.mystery_box(now, |hub, identity| {
                 hub.remove_mystery_box(identity, id)
@@ -3011,18 +3029,23 @@ impl Worker {
         });
     }
 
-    /// Read the box hunt on `server` into [`Snapshot::box_hunt`], first saying the
-    /// player (the mark) was killed by slot `killed_by` when given (tried twice: a kill
-    /// lost is a hunter's free roll lost), and whether the player is `away`. A failed
-    /// read leaves the last one.
-    fn box_hunt(&mut self, server: &str, killed_by: Option<u8>, away: bool) {
+    /// Read the box hunt on `server` into [`Snapshot::box_hunt`], first telling the hub
+    /// `report` when given (the player, the mark, killed by a slot; or out of the chase),
+    /// tried twice (a kill lost is a hunter's free roll lost), and whether the player is
+    /// `away`. A failed read leaves the last one.
+    fn box_hunt(&mut self, server: &str, report: Option<HuntReport>, away: bool) {
         let (Some(hub), true) = (self.hub.as_mut(), self.registered) else {
             return;
         };
-        if let Some(by) = killed_by
-            && hub.box_hunt_killed(&self.identity, server, by).is_err()
-        {
-            let _ = hub.box_hunt_killed(&self.identity, server, by);
+        for _ in 0..2 {
+            let told = match report {
+                Some(HuntReport::Killed(by)) => hub.box_hunt_killed(&self.identity, server, by),
+                Some(HuntReport::Out(out)) => hub.box_hunt_out(&self.identity, server, out),
+                None => Ok(true),
+            };
+            if told.is_ok() {
+                break;
+            }
         }
         let Ok(state) = hub.box_hunt(&self.identity, server, away) else {
             return;
@@ -3933,6 +3956,14 @@ impl Service {
         let _ = self
             .commands
             .send(Command::BoxHuntKilled { server, by, away });
+    }
+
+    /// The player is out of the box hunt's chase on `server` (killed by the mark, or
+    /// caught cheating); the hunt is read again after, the player `away` or not.
+    pub fn box_hunt_out(&self, server: String, out: crate::mystery_box::HuntOut, away: bool) {
+        let _ = self
+            .commands
+            .send(Command::BoxHuntOut { server, out, away });
     }
 
     /// Staff: publish `edits` for `map` and `checksum`; the answer lands in
