@@ -1,3 +1,16 @@
+## Spawn beam lightning back to retail's
+
+01/11/2026, `personal/fxrunner-count`, based on `main` `529dc04f` (Sol's report: the green
+spawn/teleport beam throws a lot of lightning, like a bug). The beam's `env/beam_lights`
+runs `env/beam_bolts` through an `FxRunner` with `count 0 0.6`, which retail rounds to one
+run about one time in six; SJK ignored a runner's count and played all its `playFx`
+entries every time, so the beam threw about six times the bolts. Runners now roll their
+rounded count and play one random entry per run, as `CFxScheduler` does
+([rendering.md](rendering.md)). Verified on Windows 11: fmt, Clippy on `sjk-viewer`, the
+effect tests with a new one (a `count 0 0.6` runner with two entries fires about 1/6 of the
+time, one entry per run). Not verified in game: other retail effects with runners now fire
+less often or pick one entry, which is what retail does.
+
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
 31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`
