@@ -1,3 +1,24 @@
+## Ghost editor
+
+01/11/2026, `personal/ghost-editor`, based on `main` `1f2c6c2f` (Sol's request: duplicate a
+ghost from a list, cut part of its start, and take out the commands where the chat bubble
+shows; Sol's choices: clear the bubble rather than delete commands, a timeline plus the
+path drawn in the world, the start snapping to standstills with Shift to override).
+`ghost edit [name]` opens a staff column like the map editor's
+([client.md](client.md#ghost-editor), [sjk-ui.md](sjk-ui.md#ghost-editor)). The bubble on
+a replay came from the recording itself: the console was open while `ghost record` and
+`ghost stop` were typed, so the first and last commands carried `BUTTON_TALK`, which a
+replay sends again. Verified on Windows 11: fmt, build, Clippy on `sjk-viewer` (no new
+warnings) and the workspace's tests, with new ones (clean starts, the timeline's slices,
+the path's thinning, first and last move, an edited run's start and clock, the list's
+summary, copy names, key steps and drags, Save asking twice, Duplicate, the column's
+layout at four window shapes, the overlay), and on the real Pmove pillar course: a run
+behind a second of console-open standing, cut at First move, is command for command the
+run alone and replays to within 0.01 unit of its end. GPU world shots with the game data:
+`duel6_ghost_editor` (the whole run, the cut, Look with the path, 4:3). Not verified: in a
+game (the column's keys and drags by hand, Play from the editor on a server, the path
+over a real recording).
+
 ## Spawn beam lightning back to retail's
 
 01/11/2026, `personal/fxrunner-count`, based on `main` `529dc04f` (Sol's report: the green

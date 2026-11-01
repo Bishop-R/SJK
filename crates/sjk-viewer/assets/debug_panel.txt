@@ -4203,6 +4203,19 @@ test: Press any movement key mid-replay: it stops and you have control.
 test: Start farther than 192 units: it prints the start to teleport to (ghost info too).
 note: Console only, no menu entry. Force-wheel Stasis/Repulse/Dash picks are not recorded.
 
+[ghost-editor]
+area: Gameplay
+title: Ghost editor: cut a ghost's start and end, clear the chat bubble, duplicate it
+change: ghost edit [name] opens a column (the map editor's) with the ghosts and a cut timeline.
+change: The start snaps to where you stood still (Shift: anywhere); First/Last move cut the waits.
+change: Clear chat bubble (on) drops the console's bubble; the path shows in the world (gold start).
+test: Showcase tools on, ghost record test, run a bit, ghost stop; then ghost edit test.
+test: First move, then Last move: the timeline dims both ends; "keeps N s of M s" shrinks.
+test: Duplicate (test_2): the copy opens; Play walks to the gold ring and replays without bubble.
+test: Drag the Start on the timeline mid-run: it snaps; Shift-drag: ember "Starts mid-move".
+test: Save once asks again, the second press overwrites; Esc (or Look) hides, Esc brings it back.
+note: Not tried in a real game yet; the path draws through walls (no depth test).
+
 [join-retries]
 area: Gameplay
 title: Joining resends lost packets and never hangs as a floating camera

@@ -188,7 +188,7 @@ impl GpuState {
             self.chat_key(&event);
             return;
         }
-        if self.shot_key(&event) || self.map_edit_key(&event) {
+        if self.shot_key(&event) || self.map_edit_key(&event) || self.ghost_edit_key(&event) {
             return;
         }
         if self.game_menu {
@@ -262,6 +262,11 @@ impl GpuState {
                 .as_ref()
                 .is_some_and(|c| c.has_key_binding("ESCAPE"))
         {
+            // While the ghost editor is on, Escape brings its column back.
+            if self.ghost_editor_looking() {
+                self.open_ghost_panel();
+                return;
+            }
             self.release_pointer();
             if self.live_session.is_some() || self.resident.exploring() {
                 self.game_menu = true;

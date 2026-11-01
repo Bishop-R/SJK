@@ -291,6 +291,9 @@ mod cardboard_box;
 #[path = "world_shot_map_edits.rs"]
 mod map_edit_shots;
 
+#[path = "world_shot_ghost_editor.rs"]
+mod ghost_editor_shots;
+
 #[path = "world_shot_banana.rs"]
 mod banana_shots;
 #[path = "world_shot_body_fade.rs"]

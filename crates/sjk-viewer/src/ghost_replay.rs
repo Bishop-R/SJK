@@ -22,6 +22,12 @@ use std::time::{Duration, Instant};
 use sjk_game_jka::pmove::MovementState;
 use sjk_protocol::{PlayerState, UserCommand};
 
+#[path = "ghost_replay/edit.rs"]
+mod edit;
+#[path = "ghost_replay/editor.rs"]
+mod editor;
+#[path = "ghost_replay/editor_view.rs"]
+mod editor_view;
 #[path = "ghost_replay/file.rs"]
 mod file;
 #[path = "ghost_replay/frame.rs"]
@@ -43,7 +49,7 @@ pub(crate) fn showcase_off(command: &str) -> String {
 }
 
 pub(crate) const HELP: &str = "Showcase tools, SJK staff only: ghost record <name>, ghost stop, \
-     ghost play <name>, ghost list, ghost info <name>";
+     ghost play <name>, ghost list, ghost info <name>, ghost edit [name]";
 
 /// No ground entity (`ENTITYNUM_NONE`).
 const NO_GROUND: u16 = 1023;
@@ -210,6 +216,11 @@ pub(crate) struct Ghost {
     pending_save: bool,
     /// Lines for the console, taken by [`Self::take_messages`].
     messages: Vec<String>,
+    /// The editor (`ghost edit`), while it is on.
+    pub(crate) editor: Option<Box<editor::Editor>>,
+    /// A world shot's showcase tools are on without a staff key.
+    #[cfg(test)]
+    pub(crate) showcase_for_shot: bool,
 }
 
 /// What a replay does with one command.

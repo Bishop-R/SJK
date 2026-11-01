@@ -114,7 +114,7 @@ impl Tab {
     /// The bar button whose pop-up `page` is, if it has one.
     pub(crate) fn of_page(page: Page) -> Option<Self> {
         match page {
-            Page::Main | Page::Shot | Page::MapEdit => None,
+            Page::Main | Page::Shot | Page::MapEdit | Page::GhostEdit => None,
             Page::Sjk | Page::Players | Page::ReportPlayer => Some(Self::Sjk),
             Page::About => Some(Self::About),
             Page::Team | Page::Siege => Some(Self::Join),

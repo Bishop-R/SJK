@@ -2056,6 +2056,40 @@ from the panel's state, which lives with the map's edits; its keys come before t
 menu's (`GpuState::map_edit_key`), its pointer through `map_edit_pointer`. World shot:
 `duel6_map_editor_panel` (`world_shot_map_edits.rs`).
 
+## Ghost editor
+
+[editor_view.rs](../crates/sjk-viewer/src/ghost_replay/editor_view.rs): the staff ghost
+editor's column ([client.md](client.md#ghost-editor) has what it does), opened by
+`ghost edit` (01/11/2026, Sol's request), in every menu style. It is the map editor's
+column: the 1080-line frame on the window's right edge, the column at x 1440, 416 wide,
+over the same navy fade, the scene left of x 1400 undimmed, where the run's path is the
+screen's one memorable thing (holo blue, the new start a gold ring with its facing line).
+
+- **Top:** "Ghost editor" (Rajdhani 42) and how many ghosts, how many on this map.
+- **Ghosts** (heading at 166): a list of six rows from 182 (34 each), the name left and its
+  map and length right (Exo 2 14), another map's quiet, the open one gold with the list's
+  gold tick. Under it at 412 the copy's name (the kit's field, 260 wide) and Duplicate.
+- **Cut** (heading at 494, "keeps N s of M s" right of it): the timeline at 510 (36 high)
+  on the list's ground, the slices standing (holo 14 %), moving (50 %), in the air (85 %),
+  the bubble (ember, faint while it is to be cleared), the cut parts under navy at 70 %,
+  the handles as gold bars (the start ember when it is not clean); the clean starts as a
+  green line at 550. Start and End rows of 56 at 566 and 626 as Camera control's sliders
+  (name Exo 2 19, value Rajdhani 21), then First move, Last move and Reset at 694, and
+  at 744 "Starts mid-move" in ember, or the map a run of another map shows its path on.
+- **Foot:** "Clear the chat bubble" with how many times and the kit's switch at 800, the
+  last answer (ember when refused) or "Not saved" at 840, Save (gold), Play, Look and Close
+  at 898, two lines of keys from 964 (Left Right snap, Shift free, Page Up Page Down on a
+  handle; Enter, Ctrl+S, Up Down elsewhere; Esc look).
+- **Strip:** while looking about, the map editor's strip: "Ghost editor" in gold, which
+  path is drawn, and Esc "back to the editor".
+
+It is a page of the in-game menu (`Page::GhostEdit`), drawn by
+`InGameMenu::append_own_page` from the editor's state on `Ghost`; its keys come before the
+game menu's (`GpuState::ghost_edit_key`), its pointer through `ghost_edit_pointer` (a press
+on the timeline or a track starts a drag that keeps to it). The path and the strip are the
+editor's own canvas, a layer under the in-game menu's. World shot: `duel6_ghost_editor`
+(`world_shot_ghost_editor.rs`).
+
 ## Report a bug and its dialogs
 
 [text_dialog_sjk.rs](../crates/sjk-viewer/src/text_dialog_sjk.rs) draws the
