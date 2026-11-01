@@ -1922,6 +1922,13 @@ does. Lines used to take only their authored `origin2`, so a traced line had no 
 and drew as a camera-facing square at the floor. Trip mine beams keep their own cached
 trace. Stock's `CG_Trace` also stops the dropped box on solid entities such as a lift;
 SJK drops it onto the world only, and `traceImpactFx` on a traced line is not played.
+The beam's emitter climbs at 3000 units/s and plays `env/beam_lights` every 100 units: a
+green light and an `FxRunner` with `count 0 0.6` running `env/beam_bolts` (two
+`Electricity` bolts traced out to the walls, `count 0 0.6` each). `CFxScheduler::PlayEffect`
+rounds every primitive's count, runners included, so each runner fires about one time in
+six, and a run plays one random `playFx` entry (`CMediaHandles::GetHandle`). SJK used to
+play every runner's entries once whatever its count, which gave the spawn beam about six
+times retail's lightning ([effect_runtime.rs](../crates/sjk-viewer/src/effect_runtime.rs)).
 
 The Force Speed afterimages use it: two copies of the actor in its current pose
 at alpha 100 and 50, spaced by `(int)(6 * speed * 0.004)` units along the

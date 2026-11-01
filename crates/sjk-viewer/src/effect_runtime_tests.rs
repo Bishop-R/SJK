@@ -293,3 +293,47 @@ fn a_random_flash_colour_dims_as_one_and_never_changes_hue() {
     }
     assert!(dimmed, "the random flag still dims the flash");
 }
+
+/// `env/beam_lights`' runner: `count 0 0.6` rounds to one run about one time in six, and a
+/// run plays one random `playFx` entry, never both.
+#[test]
+fn a_runner_rolls_its_count_and_plays_one_random_entry() {
+    const RUNNER: &str = "FxRunner\n{\n\tcount 0 0.6\n\tplayFx [ test/a test/b ]\n}\n";
+    const ONE: &str = "Particle\n{\n\tlife 100\n\tshaders [ gfx/test/dot ]\n}\n";
+    let mut vfs = VirtualFileSystem::new();
+    vfs.mount_memory(
+        "test",
+        [
+            ("effects/test/runner.efx", RUNNER),
+            ("effects/test/a.efx", ONE),
+            ("effects/test/b.efx", ONE),
+        ],
+    )
+    .expect("mount the test effects");
+    let mut library = EffectLibrary::default();
+    let (mut runs, plays) = (0, 600);
+    for seed in 0..plays {
+        let mut particles = Vec::new();
+        spawn_effect(
+            &mut particles,
+            &mut crate::effect_aux::Runtime::default(),
+            &mut library,
+            &vfs,
+            "test/runner",
+            Vec3::ZERO,
+            Instant::now(),
+            seed,
+            0,
+            &mut None,
+            Quat::IDENTITY,
+        );
+        assert!(
+            particles.len() <= 1,
+            "one entry per run, got {}",
+            particles.len()
+        );
+        runs += particles.len();
+    }
+    // 1/6 of 600 is 100.
+    assert!((60..=140).contains(&runs), "{runs} runs in {plays}");
+}

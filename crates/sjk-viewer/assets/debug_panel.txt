@@ -8135,3 +8135,13 @@ test: Click Normal: the big card loses its foil; click Holo/Solar: the foil come
 test: Enter on it: the chips stand under the copies line; V cycles the finishes.
 test: Pick a card held in one finish: no chips, the copies line as before.
 note: The grid's tiles still show the best finish held.
+
+[fxrunner-count]
+area: Rendering & effects
+title: Spawn beam lightning back to retail's (effect runners roll their count)
+change: FxRunner primitives roll their rounded count and play one random playFx entry.
+change: The spawn/teleport beam throws about a sixth of the lightning it did.
+test: Spawn or teleport: a few bolts from the green beam to the walls, not a storm.
+test: Blaster deflects and sparks: one or two smoke puffs, black or grey, not both every time.
+test: Saber clashes and blocks: one or two smoke puffs.
+note: Effect sounds still ignore their count, and runner delays are still not applied.
