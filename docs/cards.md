@@ -337,7 +337,10 @@ less keeps it: sticking spends nothing.
 A card's kind says what it is about and reads on its strip: `community` (Community),
 `place` (Place), `personality` (Personality), `game` (Jedi Academy), since
 19/10/2026 `credits` (Credits: the people the project owes) and `meme` (Meme), and since
-20/10/2026 `blade` (Blade: a saber shader, [SJK Blades](#sjk-blades)). Its
+20/10/2026 `blade` (Blade: a saber shader, [SJK Blades](#sjk-blades)), and since
+01/11/2026 `clan` (Clan, Sol's decision: a clan's cards, the clan being the card's
+collection, so JoF's cards read "Clan · JoF" and each further clan gets a set of its own;
+the JoF cards were `community` before). Its
 rarity is one of `common`, `uncommon`, `rare`, `legendary` and `mythical`. A face whose
 kind or rarity a client does not know is left out on its own (named in the log) while the
 pack's other faces still read: a client from before 19/10/2026 shows no Bishop face, and

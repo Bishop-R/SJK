@@ -57,11 +57,14 @@ pub(crate) enum Kind {
     /// A droppable saber shader (20/10/2026, the SJK Blades collection): its Solar copies
     /// drop that blade too ([`Face::blade`]).
     Blade,
+    /// A clan's card (01/11/2026): the clan is its set ("JoF"), so the strip reads
+    /// "Clan · JoF" and each clan gets a set of its own.
+    Clan,
 }
 
 impl Kind {
     /// Every kind the client knows, in the order the Cards tab's filter walks them.
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Community,
         Self::Place,
         Self::Personality,
@@ -69,6 +72,7 @@ impl Kind {
         Self::Credits,
         Self::Meme,
         Self::Blade,
+        Self::Clan,
     ];
 
     fn from_id(id: &str) -> Option<Self> {
@@ -80,6 +84,7 @@ impl Kind {
             "credits" => Some(Self::Credits),
             "meme" => Some(Self::Meme),
             "blade" => Some(Self::Blade),
+            "clan" => Some(Self::Clan),
             _ => None,
         }
     }
@@ -94,6 +99,7 @@ impl Kind {
             Self::Credits => "credits",
             Self::Meme => "meme",
             Self::Blade => "blade",
+            Self::Clan => "clan",
         }
     }
 
@@ -107,6 +113,7 @@ impl Kind {
             Self::Credits => "Credits",
             Self::Meme => "Meme",
             Self::Blade => "Blade",
+            Self::Clan => "Clan",
         }
     }
 }
@@ -724,6 +731,14 @@ mod tests {
   "artist": "Sol"
 }
 "#;
+
+    #[test]
+    fn every_kind_reads_back_from_its_id() {
+        for kind in Kind::ALL {
+            assert_eq!(Kind::from_id(kind.id()), Some(kind));
+        }
+        assert_eq!(Kind::from_id("clan").map(Kind::name), Some("Clan"));
+    }
 
     #[test]
     fn a_card_file_reads_and_bad_ones_are_refused() {
