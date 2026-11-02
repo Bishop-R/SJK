@@ -44,6 +44,8 @@ const EFFECT: &str = "mp/spawn";
 /// How far the show's sound carries: full up to the first, gone at the second.
 const SOUND_FULL: f32 = 300.0;
 const SOUND_RANGE: f32 = 1_400.0;
+/// How loud the show's sound plays (twice its recording; the mixer clips the output).
+const SHOW_VOLUME: f32 = 2.0;
 /// The first of the toys' sound sources: past the game's entity numbers, the boombox's
 /// (`0x5000_0000`), the Monitor's (`0x5100_0000`) and the mystery boxes'
 /// (`0x5200_0000`).
@@ -1147,7 +1149,7 @@ impl GpuState {
                 audio.play_toy_reaching(
                     crate::toy_sounds::Toy::Master,
                     &path,
-                    1.0,
+                    SHOW_VOLUME,
                     cue.origin,
                     cue.source,
                     SHOW_CHANNEL,
