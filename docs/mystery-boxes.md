@@ -242,14 +242,14 @@ teleports are free.
 
 **The mark blows up** (Sol, 02/11/2026): a mark caught cheating, or typing in the chat
 for 30 seconds straight (warned "Leave the chat!" at 20; their client watches it and says
-`chat`), blows up and the hunt ends. What they played for, 100 credits per hunter
-counted, leaves their credits (as much as they hold; History: "you blew up as the mark")
-for a hunter still in the chase picked at random by the hub (another hunter there when
-none is; History: "the mark blew up, their credits came to you"). Everyone taking part
+`chat`), blows up and the hunt ends. A hunter still in the chase picked at random by the
+hub (another hunter there when none is) wins the free mystery box roll killing the mark
+would have, within the same limits (3 unspent, 5 a day); the mark loses no credits.
+Everyone taking part
 sees the box's explosion where the mark stands (when their game server sends the mark)
 and hears it; the mark's own client sends the game's `kill`, as a box that blows up on
-its opener does. The mark reads "BOOM!" and where their credits went, the hunter who got
-them "You get their N credits", the others a chat line. The card telling a player they
+its opener does. The mark reads "BOOM!" and who gets the roll, the hunter picked "Free
+mystery box roll" (or why not), the others a chat line. The card telling a player they
 are the mark says so. Other away (a menu, the console, idle) still hands the mark on
 after a minute, with nothing lost.
 
@@ -272,7 +272,7 @@ wins at most 5 a day. The client reads the hunt (`POST /v1/box-hunt`) every 20 s
 while the toy is on or a box stands on the map, and at once after the hub's toy events
 (`box_hunt`: `mark_<slot>`, `hunted_<slot>_<won>`, and since 01/11/2026 `out_<slot>_dead`,
 `out_<slot>_cheat`, `survived_<slot>_<credits>_<hunters>`, and since 02/11/2026
-`blown_<slot>_<cheat|chat>_<to>_<credits>` for the mark, `to` 255 for nobody).
+`blown_<slot>_<cheat|chat>_<to>_<won>` for the mark, `to` 255 for nobody).
 All the numbers are the hub's, PROVISIONAL.
 
 ## Limits
@@ -286,8 +286,8 @@ All the numbers are the hub's, PROVISIONAL.
 - Three friends with the toy on could take turns being killed for free rolls; the
   3-minute mark, the pause and the 5 a day cap how much that pays. The same friends could
   let the mark kill them for its credits: only the mark's kills count, and 3 wins a day
-  cap it (at most 300 x hunters a day). A mark blowing up on purpose only moves the
-  mark's own credits to a friend: the hub makes none.
+  cap it (at most 300 x hunters a day). A mark blowing up on purpose hands a friend a
+  free roll, as letting them kill it would: the same 3 unspent and 5 a day cap it.
 - The chat watch is the mark's own client, as the cheat watch is: a modified client could
   keep quiet.
 - Teleports and noclip are seen by the player's own client: a modified client could keep
@@ -305,6 +305,6 @@ All the numbers are the hub's, PROVISIONAL.
   the mark by the event before a read, the cheat watch (a teleport off the map's landing points, noclip, a spawn, a new map), the out and outlasted words and card, the blown words, the chat warning and limit, the hunters ringed for the mark, the mark's end by the hub's seconds left or its
   clock; on the hub, the mark picked among hunters in play only and 3 of them, the away
   mark handed on after a minute (or kept with too few others), the kill counted only
-  from the mark and for a hunter still in the chase, a hunter out by the mark's kill or a cheat, the mark's win once all are out (not for cheaters alone, nor past 3 a day, nor held up by one who left), the mark's cheat or chat blowing it up and paying a hunter in the chase (at most what it holds), the mark alone reading its hunters, the pause, the free roll spent; on the hub, the odds, placing and
+  from the mark and for a hunter still in the chase, a hunter out by the mark's kill or a cheat, the mark's win once all are out (not for cheaters alone, nor past 3 a day, nor held up by one who left), the mark's cheat or chat blowing it up and a hunter in the chase winning a free roll (within the limits), the mark alone reading its hunters, the pause, the free roll spent; on the hub, the odds, placing and
   removing as the creator only, the price, the roll, the cooldown and another server's
   box). Not tried in a game; the hub side is deployed (27/10/2026).

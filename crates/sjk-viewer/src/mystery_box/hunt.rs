@@ -9,9 +9,9 @@
 //! (Sol, 01/11/2026): killed by the mark they are out of the chase, and a player caught
 //! teleporting or in noclip ([`super::hunt_watch`]) is out at once; this client tells
 //! the hub both. Once every hunter is out, the mark wins credits. A mark caught cheating
-//! or typing in the chat [`CHAT_LIMIT`] blows up (Sol, 02/11/2026): the hub hands what
-//! they played for to a hunter at random, everyone taking part sees the explosion, and the
-//! mark's own client kills them. The mark sees the hunters still after them ringed red,
+//! or typing in the chat [`CHAT_LIMIT`] blows up (Sol, 02/11/2026): the hub gives a
+//! hunter at random the free box roll a kill would have, everyone taking part sees the
+//! explosion, and the mark's own client kills them. The mark sees the hunters still after them ringed red,
 //! as they see the mark.
 
 use super::label::{Label, Tone};
@@ -279,32 +279,38 @@ fn survived_words(slot: u8, own: u8, credits: u64, hunters: u32, name: &str) -> 
 }
 
 /// What the player on `own` is told when the mark on `slot` (named `name`) blew up,
-/// caught cheating or in the `chat` too long, and `credits` of theirs went to the hunter
-/// on `to` (named `to_name`).
+/// caught cheating or in the `chat` too long, and the hunter on `to` (named `to_name`)
+/// was picked for a free box roll, which they `won` or not.
 fn blown_words(
     (slot, own): (u8, u8),
     chat: bool,
-    (to, credits): (Option<u8>, u64),
+    (to, won): (Option<u8>, bool),
     name: &str,
     to_name: &str,
 ) -> (bool, String) {
+    let won = won && to.is_some();
     if slot == own {
         let why = if chat {
             "You stayed in the chat too long"
         } else {
             "Teleporting or noclip is cheating"
         };
-        let after = if credits > 0 {
-            format!("Your {credits} credits went to {to_name}^7")
+        let after = if won {
+            format!("{to_name}^7 gets a free box roll")
         } else {
             "The hunt is off".to_owned()
         };
         return (true, format!("BOOM! {why}\n{after}"));
     }
-    if to == Some(own) && credits > 0 {
+    if to == Some(own) {
         return (
             true,
-            format!("The mark blew up!\nYou get their {credits} credits"),
+            if won {
+                "The mark blew up!\nFree mystery box roll".to_owned()
+            } else {
+                "The mark blew up!\nNo free roll: you hold the most unspent, or won enough today"
+                    .to_owned()
+            },
         );
     }
     let why = if chat {
@@ -312,11 +318,11 @@ fn blown_words(
     } else {
         "for cheating"
     };
-    if credits > 0 {
+    if won {
         (
             false,
             format!(
-                "Box hunt: the mark, {name}^7, blew up {why}, and {to_name}^7 gets their {credits} credits"
+                "Box hunt: the mark, {name}^7, blew up {why}, and {to_name}^7 gets a free box roll"
             ),
         )
     } else {
@@ -486,7 +492,7 @@ impl GpuState {
                     slot,
                     chat,
                     to,
-                    credits,
+                    won,
                 } => {
                     hunt.hunted();
                     blown.push(slot);
@@ -497,7 +503,7 @@ impl GpuState {
                     lines.push(blown_words(
                         (slot, own),
                         chat,
-                        (to, credits),
+                        (to, won),
                         &event.claimed_name,
                         &to_name,
                     ));
@@ -808,34 +814,35 @@ mod tests {
 
     #[test]
     fn a_mark_who_blew_up_is_told_to_everyone() {
-        let (centre, words) = blown_words((1, 1), false, (Some(4), 300), "Kyle", "Jan");
+        let (centre, words) = blown_words((1, 1), false, (Some(4), true), "Kyle", "Jan");
         assert!(centre);
         assert_eq!(
             words,
-            "BOOM! Teleporting or noclip is cheating\nYour 300 credits went to Jan^7"
+            "BOOM! Teleporting or noclip is cheating\nJan^7 gets a free box roll"
+        );
+        assert_eq!(
+            blown_words((1, 1), true, (None, false), "Kyle", "a hunter").1,
+            "BOOM! You stayed in the chat too long\nThe hunt is off"
+        );
+        assert_eq!(
+            blown_words((1, 4), true, (Some(4), true), "Kyle", "Jan"),
+            (true, "The mark blew up!\nFree mystery box roll".to_owned())
         );
         assert!(
-            blown_words((1, 1), true, (None, 0), "Kyle", "a hunter")
+            blown_words((1, 4), true, (Some(4), false), "Kyle", "Jan")
                 .1
-                .starts_with("BOOM! You stayed in the chat too long")
+                .contains("No free roll")
         );
         assert_eq!(
-            blown_words((1, 4), true, (Some(4), 300), "Kyle", "Jan"),
-            (
-                true,
-                "The mark blew up!\nYou get their 300 credits".to_owned()
-            )
-        );
-        assert_eq!(
-            blown_words((1, 6), true, (Some(4), 300), "Kyle", "Jan"),
+            blown_words((1, 6), true, (Some(4), true), "Kyle", "Jan"),
             (
                 false,
-                "Box hunt: the mark, Kyle^7, blew up for staying in the chat, and Jan^7 gets their 300 credits"
+                "Box hunt: the mark, Kyle^7, blew up for staying in the chat, and Jan^7 gets a free box roll"
                     .to_owned()
             )
         );
         assert_eq!(
-            blown_words((1, 6), false, (None, 0), "Kyle", "a hunter").1,
+            blown_words((1, 6), false, (None, false), "Kyle", "a hunter").1,
             "Box hunt: the mark, Kyle^7, blew up for cheating. The hunt is off"
         );
     }

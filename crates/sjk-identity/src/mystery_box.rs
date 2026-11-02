@@ -241,18 +241,18 @@ pub enum HuntEvent {
         cheat: bool,
     },
     /// The mark on `slot` blew up, caught cheating or typing in the chat too long, and
-    /// `credits` of theirs went to the hunter on `to` (`None`: nobody else hunted there)
-    /// (`blown_<slot>_<cheat|chat>_<to>_<credits>`, `to` 255 for nobody; since
-    /// 02/11/2026).
+    /// the hunter on `to` (`None`: nobody else hunted there) was picked for a free mystery
+    /// box roll, which they `won` unless they held or won the most already
+    /// (`blown_<slot>_<cheat|chat>_<to>_<won>`, `to` 255 for nobody; since 02/11/2026).
     Blown {
         /// The mark's slot.
         slot: u8,
         /// Typing in the chat, not teleporting or in noclip.
         chat: bool,
-        /// The slot of the hunter who got the credits.
+        /// The slot of the hunter picked.
         to: Option<u8>,
-        /// What they got.
-        credits: u64,
+        /// Whether it won them a free opening.
+        won: bool,
     },
     /// The mark on `slot` outlasted every hunter, `hunters` of them, and won `credits`
     /// (`survived_<slot>_<credits>_<hunters>`; 0 credits past the day's wins).
@@ -291,12 +291,16 @@ pub fn parse_hunt_event(event: &str) -> Option<HuntEvent> {
             _ => return None,
         };
         let to: u8 = parts.next()?.parse().ok()?;
-        let credits = parts.next()?.parse().ok()?;
+        let won = match parts.next()? {
+            "1" => true,
+            "0" => false,
+            _ => return None,
+        };
         return parts.next().is_none().then_some(HuntEvent::Blown {
             slot,
             chat,
             to: (to != 255).then_some(to),
-            credits,
+            won,
         });
     }
     if let Some(rest) = event.strip_prefix("out_") {
@@ -415,12 +419,12 @@ mod tests {
             })
         );
         assert_eq!(
-            parse_hunt_event("blown_1_cheat_4_300"),
+            parse_hunt_event("blown_1_cheat_4_1"),
             Some(HuntEvent::Blown {
                 slot: 1,
                 chat: false,
                 to: Some(4),
-                credits: 300
+                won: true
             })
         );
         assert_eq!(
@@ -429,7 +433,7 @@ mod tests {
                 slot: 1,
                 chat: true,
                 to: None,
-                credits: 0
+                won: false
             })
         );
         assert_eq!(
@@ -445,9 +449,10 @@ mod tests {
             "survived_1_300",
             "survived_1_300_3_4",
             "cheat_1",
-            "blown_1_away_4_300",
+            "blown_1_away_4_1",
             "blown_1_cheat_4",
-            "blown_1_cheat_4_300_9",
+            "blown_1_cheat_4_300",
+            "blown_1_cheat_4_1_9",
         ] {
             assert_eq!(parse_hunt_event(bad), None, "{bad}");
         }
