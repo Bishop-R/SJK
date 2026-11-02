@@ -465,6 +465,7 @@ mod away_talk_tests {
                 "cl_unfocusedChatbox",
                 if unfocused == 0 { "1" } else { "0" }
             ));
+            console.flush_config();
             let saved = std::fs::read_to_string(directory.path().join("config.cfg")).unwrap();
             assert!(!saved.to_ascii_lowercase().contains("cl_minimizedchatbox"));
         }

@@ -32,6 +32,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
+= cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
+
 - Toon models: an option draws players and other models with cartoon-style shading, light in soft bands with a bright rim around them, only on your screen (Settings > Graphics > Image, `r_toonModels`) _(Sol)_
 - Grand finds in the game's chat look the part: the line starts with the holocron's or kyber crystal's picture, the prize is written in its own rarity colour, and a blade shows small and live; with the chat open, rest the pointer on it to see it large (`debug_find` rehearses one) _(Sol)_
 - The Toy Master's toys: facing one shows the Use prompt by the crosshair, as at a mystery box, saying only "???"; while a toy's show spins, the players around it spin and squish with it (on your screen only, where they really stand and face is unchanged), and a show whose sound you lack says so in the log, its sound heard once a pack bringing it loads _(Sol)_
@@ -45,9 +48,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
 - JA+ tools: `japlus.guntele` with a distance (`japlus.guntele 300`, from the console or a quick wheel choice) takes you that far straight ahead, level, and stops just before a wall or step in the way, so it no longer drops you under the floor when you look down or into a wall _(Slash, after hub report #218, Nib)_
 - Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
-= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
 - Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
-= cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
 - Chat logs: Save game chat logs in Settings > Chat (classic: HUD) saves received game-server chat in your profile's chatlogs/chat.log; off by default _(Lumaya)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026

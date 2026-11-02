@@ -207,6 +207,7 @@ mod tests {
         let obstruction = directory.path().join("chatlogs");
         std::fs::write(&obstruction, "a file blocks the log directory").unwrap();
         let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(console.set_cvar(CVAR, "1"));
         console.log_chat(&ServerEventKind::Chat, "first failure");
         assert!(console.chat_log.failed);
         std::fs::remove_file(obstruction).unwrap();

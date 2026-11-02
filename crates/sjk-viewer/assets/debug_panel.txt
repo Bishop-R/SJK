@@ -73,9 +73,8 @@ note: Needs the hub's history branch deployed.
 [pr-batch-1102]
 area: Gameplay
 title: PRs 02/11: hilt and day-sky crashes, trade chat, card shaders, guntele, chat logs
-change: #326 empty hilt crash; #329 day tint crash + DX12 shaders (Slash).
-change: #324 chat over trade; #325 Long Distance Call 40 m; #330 card second shader (Slash).
-change: #327 guntele N level, stops at walls (crouched box under low ceilings) (Slash).
+change: Slash: #326 hilt crash; #329 day tint crash + DX12; #324 chat over trade; #325 40 m.
+change: Slash: #330 card second shader; #327 guntele N level, stops at walls (crouch box too).
 change: #328 shaders chosen on click, New outline (Creyon); #331 #332 away bubble, chat logs.
 test: Pick Empty Hilt (Stance) in the hilt list: blade with no hilt, the game stays open.
 test: Sun follows PC clock on, load a map: no crash. Trade open: chat key opens chat on top.
