@@ -156,6 +156,10 @@ impl GpuState {
             .map(|s| s.game_state())
             .or_else(|| self.demo_session.as_ref().map(|s| s.game_state()))
             .or_else(|| self.resident.scenery.as_ref().map(|(game, _)| game));
+        if let Some(game) = game {
+            self.world_materials
+                .update_light_styles(&self.queue, game, time);
+        }
         let snapshot = crate::first_person_view::presented_snapshot(
             self.live_session.as_ref(),
             self.demo_session.as_ref(),

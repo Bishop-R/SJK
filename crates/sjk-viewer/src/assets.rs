@@ -66,6 +66,7 @@ pub(crate) fn load_bsp_from_vfs(
         .ok_or_else(|| format!("map {map_path:?} was not found in the mounted game data"))?;
     let mut bsp = Bsp::parse(&asset.bytes)?;
     crate::external_lightmaps::load(vfs, map_path, &mut bsp);
+    crate::lightmap_styles::compose(&mut bsp);
     Ok(bsp)
 }
 

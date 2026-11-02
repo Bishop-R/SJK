@@ -109,6 +109,8 @@ pub struct RenderData {
     light_grid: Box<[LightGridSample]>,
     light_grid_array: Box<[u16]>,
     visibility: Option<Visibility>,
+    /// The styled light [`crate::Bsp::compose_light_styles`] folded into the pages.
+    pub(super) light_style_layers: Option<Box<crate::LightStyleLayers>>,
 }
 
 impl RenderData {
@@ -128,6 +130,7 @@ impl RenderData {
             light_grid: Box::default(),
             light_grid_array: Box::default(),
             visibility: None,
+            light_style_layers: None,
         }
     }
 
@@ -182,6 +185,11 @@ impl RenderData {
 
     pub fn visibility(&self) -> Option<&Visibility> {
         self.visibility.as_ref()
+    }
+
+    /// The pages light styles add to and how, once composed.
+    pub fn light_style_layers(&self) -> Option<&crate::LightStyleLayers> {
+        self.light_style_layers.as_deref()
     }
 }
 

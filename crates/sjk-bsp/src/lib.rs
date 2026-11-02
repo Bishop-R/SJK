@@ -20,6 +20,7 @@ use validation::*;
 mod brush_winding;
 mod leaf_links;
 mod light_grid;
+mod light_styles;
 mod mark_fragments;
 mod model_append;
 mod patch_collision;
@@ -33,6 +34,9 @@ mod write;
 pub use collision::{Aabb, AabbError, CollisionTrace, trace_box_against_box};
 pub use leaf_links::BoxLeaves;
 pub use light_grid::{GridLight, LIGHT_STYLE_NONE, LightGridLayout};
+pub use light_styles::{
+    LightStyleLayers, MAX_LIGHT_STYLES, StyleColors, StyledBlock, WHITE_STYLES, style_colors,
+};
 pub use mark_fragments::{MAX_VERTICES_ON_POLY, MarkFragment, MarkFragments, MarkProjection};
 pub use render_data::{
     DrawVertex, LightGridSample, Lightmap, Model, RenderData, Surface, SurfaceKind, Visibility,
@@ -327,6 +331,42 @@ impl Bsp {
             }
             _ => false,
         }
+    }
+
+    /// Fold every surface's further light styles into its lightmap and vertex colours,
+    /// lit by `colors` ([`light_styles`]): a styled surface is pointed at a block of its
+    /// own on pages added after the file's, which stay as they were. The blocks and the
+    /// light they add stay in [`RenderData::light_style_layers`], so a renderer can
+    /// light them again when the style colours change. Call once, after any external
+    /// pages are loaded.
+    pub fn compose_light_styles(&mut self, colors: &StyleColors) -> Option<&LightStyleLayers> {
+        let render = &mut self.render;
+        for surface in render.surfaces.iter() {
+            // `LIGHTMAP_BY_VERTEX`: only vertex-lit surfaces sum their vertex styles.
+            if surface.lightmaps[0] != -3 {
+                continue;
+            }
+            let Some(points) = render.vertices.get_mut(surface.vertices.clone()) else {
+                continue;
+            };
+            for point in points {
+                if let Some(color) =
+                    light_styles::vertex_color(&point.colors, surface.vertex_styles, colors)
+                {
+                    point.colors[0] = color;
+                }
+            }
+        }
+        let mut lightmaps = std::mem::take(&mut render.lightmaps).into_vec();
+        let layers = LightStyleLayers::build(
+            &mut render.surfaces,
+            &mut render.vertices,
+            &mut lightmaps,
+            colors,
+        );
+        render.lightmaps = lightmaps.into_boxed_slice();
+        render.light_style_layers = Some(Box::new(layers?));
+        render.light_style_layers.as_deref()
     }
 
     pub fn leaf_surface_indices(&self, leaf_index: usize) -> Option<&[usize]> {

@@ -127,6 +127,7 @@ mod force_overlay_submission;
 mod frame_pacing;
 mod frame_queue;
 mod frame_split;
+mod lightmap_styles;
 
 mod charge_flash;
 mod e2e_whisper_card;
