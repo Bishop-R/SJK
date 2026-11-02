@@ -24,6 +24,19 @@
 
 # ---- Console & chat ----
 
+[boombox-place]
+area: Gameplay
+title: Boombox on the floor (boombox_place, after VisionJK)
+change: boombox_place stands the boombox on the floor ahead (toy on first); again picks it up.
+change: Its music plays from the box, same range, about 45% as loud right behind it.
+change: Relay put_<x>_<y>_<z>_<yaw> / take; goes with toy off, new map, leaving or hub drop.
+test: Bind boombox_place (Key bindings > Interaction); press it: box on the floor, music plays.
+test: Walk round the box: quieter behind it, as loud in front and beside; fades with range.
+test: Press again: back on the shoulder, music in both ears; toy_boombox off takes it too.
+test: Second SJK client: sees the box where it stands, hears it from there, and it goes on take.
+test: Second client with See and hear others' boomboxes off: no box and no music.
+note: Not verified in game. Placing needs a floor ahead or under you (not mid-air).
+
 [join-stack-overflow]
 area: Gameplay
 title: Joining JoF public no longer crashes (main thread stack overflow)

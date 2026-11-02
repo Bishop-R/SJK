@@ -501,6 +501,8 @@ pub(crate) struct Toys {
     pub(crate) drone: bool,
     /// The Boombox is carried.
     pub(crate) boombox: bool,
+    /// The Boombox stands on the floor.
+    pub(crate) boombox_down: bool,
     /// The Monitor toy is on.
     pub(crate) monitor: bool,
     /// Box hunt is on.
@@ -526,6 +528,7 @@ fn in_effect(console: &crate::console::ViewerConsole, state: State, toys: Toys) 
         State::Ragdoll => toys.ragdoll,
         State::Drone => toys.drone,
         State::Boombox => toys.boombox,
+        State::BoomboxDown => toys.boombox_down,
         State::Monitor => toys.monitor,
         State::BoxHunt => toys.box_hunt,
         State::Banana => toys.banana,
@@ -693,6 +696,7 @@ impl crate::GpuState {
             ragdoll: self.ragdoll.on(),
             drone: self.drone.on(),
             boombox: self.boombox.on(),
+            boombox_down: self.boombox.down(),
             monitor: self.monitor.on(),
             box_hunt: self.box_hunt.on(),
             banana: self.banana.on(),

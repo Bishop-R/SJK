@@ -106,6 +106,8 @@ pub(crate) enum InputAction {
     Drone,
     /// `toy_boombox`: carry the stereo and play music, or not ([`crate::boombox`]).
     Boombox,
+    /// `boombox_place`: stand the boombox on the floor, or pick it up ([`crate::boombox`]).
+    PlaceBoombox,
     /// `toy_monitor`: throw monitors and be hit by them, or not ([`crate::monitor`]).
     Monitor,
     /// `monitor_throw`: throw a monitor ([`crate::monitor`]).
@@ -330,6 +332,7 @@ impl GameplayInput {
                     | crate::ragdoll::COMMAND
                     | crate::drone::COMMAND
                     | crate::boombox::COMMAND
+                    | crate::boombox::PLACE_COMMAND
                     | crate::monitor::COMMAND
                     | crate::monitor::THROW_COMMAND
                     | crate::monitor::CHARGE_COMMAND
@@ -507,6 +510,7 @@ impl GameplayInput {
             crate::ragdoll::COMMAND => Some(InputAction::Ragdoll),
             crate::drone::COMMAND => Some(InputAction::Drone),
             crate::boombox::COMMAND => Some(InputAction::Boombox),
+            crate::boombox::PLACE_COMMAND => Some(InputAction::PlaceBoombox),
             crate::monitor::COMMAND => Some(InputAction::Monitor),
             crate::monitor::THROW_COMMAND => Some(InputAction::ThrowMonitor),
             crate::monitor::CHARGE_COMMAND => Some(InputAction::ChargeMonitor(true)),
@@ -671,6 +675,7 @@ impl super::GpuState {
             Some(InputAction::Ragdoll) => self.toggle_ragdoll(),
             Some(InputAction::Drone) => self.toggle_drone(),
             Some(InputAction::Boombox) => self.toggle_boombox(),
+            Some(InputAction::PlaceBoombox) => self.place_boombox(),
             Some(InputAction::Monitor) => self.toggle_monitor(),
             Some(InputAction::StickTag) => self.stick_tag(),
             Some(InputAction::ClearTag) => self.clear_tag(),
@@ -920,6 +925,7 @@ mod tests {
             ("toy_banana", InputAction::Banana),
             ("banana_drop", InputAction::DropBanana),
             ("toy_propgun", InputAction::PropGun),
+            ("boombox_place", InputAction::PlaceBoombox),
         ] {
             assert!(GameplayInput::recognizes(command), "{command}");
             assert_eq!(input.apply(command), Some(action), "{command}");

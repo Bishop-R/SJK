@@ -1226,7 +1226,8 @@ second, which the feed's toy events (one a second, read by a poll every few seco
 cannot: the [Hax](client.md#hax)'s hacker steering the hacked player, the
 [Ragdoll](client.md#ragdoll)'s falls, told to every SJK player on the server, the
 [Drone](client.md#drone)'s place, told to each in turn, the
-[Boombox](client.md#boombox)'s track, told to each player within reach, and the
+[Boombox](client.md#boombox)'s track, told to each player within reach, and its box on
+the floor, told to every SJK player (since 03/11/2026), and the
 [Monitor](client.md#monitor)'s throws, told to every SJK player, the nearest first (its
 hits ride the Ragdoll's falls), and the [Banana peel](client.md#banana-peel)'s peels, told
 the same way, and their slips (since 29/10/2026), and the [Prop gun](client.md#prop-gun)'s

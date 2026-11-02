@@ -49,7 +49,7 @@ impl GpuState {
 
     /// What a small box (a peel's width) meets between two points of the map's
     /// brushes, if anything.
-    fn banana_trace(&mut self, from: Vec3, to: Vec3) -> Option<crate::banana::Ground> {
+    pub(crate) fn banana_trace(&mut self, from: Vec3, to: Vec3) -> Option<crate::banana::Ground> {
         let bounds = sjk_bsp::Aabb::new([-PEEL_HALF, -PEEL_HALF, 0.0], [PEEL_HALF, PEEL_HALF, 1.0])
             .expect("the peel's bounds are valid");
         let trace = self.bsp.trace_box_with(
@@ -74,7 +74,7 @@ impl GpuState {
 
     /// Where a peel relayed to land at `at` rests here, and the floor's normal there:
     /// the floor found just under it (whole units carry it half a unit off), else as told.
-    fn banana_rest(&mut self, at: [i32; 3]) -> (Vec3, Vec3) {
+    pub(crate) fn banana_rest(&mut self, at: [i32; 3]) -> (Vec3, Vec3) {
         let at = Vec3::from_array(at.map(|c| c as f32));
         self.banana_trace(at + Vec3::Z * 8.0, at - Vec3::Z * 16.0)
             .filter(|floor| !floor.sky)

@@ -45,6 +45,7 @@ const ICONS: &[(&str, &str)] = &[
     // SJK's Boombox, which the client bundles (`crate::boombox`).
     (crate::boombox::COMMAND, crate::boombox::ICON),
     ("boombox next", crate::boombox::ICON),
+    (crate::boombox::PLACE_COMMAND, crate::boombox::ICON),
     // SJK's Monitor, which the client bundles (`crate::monitor`).
     (crate::monitor::COMMAND, crate::monitor::ICON),
     (crate::monitor::CHARGE_COMMAND, crate::monitor::ICON),

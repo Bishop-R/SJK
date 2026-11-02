@@ -29,6 +29,8 @@ pub(crate) enum State {
     Drone,
     /// The Boombox is carried (`toy_boombox` flips it).
     Boombox,
+    /// The Boombox stands on the floor (`boombox_place` flips it).
+    BoomboxDown,
     /// The Monitor toy is on (`toy_monitor` flips it).
     Monitor,
     /// Box hunt is on (`toy_boxhunt` flips it).
@@ -659,6 +661,15 @@ pub(crate) const ACTIONS: &[Action] = &[
         crate::boombox::COMMAND,
         Toys,
         State::Boombox,
+        Some("boombox"),
+    ),
+    // Stands the stereo on the floor ahead; again picks it back up.
+    action(
+        "boombox_place",
+        "Place boombox",
+        crate::boombox::PLACE_COMMAND,
+        Toys,
+        State::BoomboxDown,
         Some("boombox"),
     ),
     // Lets the player throw monitors, and be hit by them.

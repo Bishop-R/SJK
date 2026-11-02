@@ -2790,6 +2790,7 @@ impl GpuState {
         self.submit_drones(presentation_time, visual_now);
         self.submit_monitors(presentation_time);
         self.submit_bananas(presentation_time);
+        self.submit_boomboxes();
         self.submit_propgun(presentation_time);
         self.submit_holocron_stage(visual_now);
         self.sync_saber_skins(game_audio, presentation_time);

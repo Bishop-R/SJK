@@ -4828,7 +4828,7 @@ The player's own toy still shows, and nothing changes for the toys' rules.
 | Cardboard box | See others' boxes | `cg_toyBoxShow` | their box (not lifted either) |
 | Ragdoll | See others fall limp | `cg_toyRagdollShow` | their falls: their bodies as the game shows them |
 | Drone | See others' drones | `cg_toyDroneShow` | their drones, names and sounds (who peeks at you is still told) |
-| Boombox | See and hear others' boomboxes | `cg_toyBoomboxShow` | their stereo and its music |
+| Boombox | See and hear others' boomboxes | `cg_toyBoomboxShow` | their stereo (on the shoulder or the floor) and its music |
 | Monitor | See monitors | `cg_toyMonitorShow` | every monitor and its sounds, yours too ([Monitor](#monitor)) |
 | Banana peel | See banana peels | `cg_toyBananaShow` | every peel and its sounds, yours too ([Banana peel](#banana-peel)) |
 | Prop gun | (console only) | `cg_toyPropGunShow` | their guns, bolts and sounds ([Prop gun](#prop-gun)) |
@@ -5361,6 +5361,22 @@ close by. It works like emotes: the music is in pk3s, and SJK passes only its na
 - **Others hear it** only when they have the same file: the same id and size. A listener
   without it reads once in the console which track it is
   (`Name's boombox plays <id>, which you do not have`).
+- **On the floor** (03/11/2026, after VisionJK's boombox by Blackwolf, who agreed):
+  `boombox_place` (Collection > Toys "Place key", the quick wheel's "Place boombox",
+  Settings > Key bindings > Interaction "Boombox: place or pick up") stands the stereo
+  on the floor 40 units ahead of the player, short of a wall, facing the way they look
+  (on the floor under them when there is none ahead; "Nowhere to put the boombox down
+  here" when neither is near), putting the toy on first if it was off; pressed again it
+  goes back on the shoulder ("Boombox back on your shoulder"). Not while dead,
+  spectating or following. One box a player. The music then plays from the box (its
+  owner hears it there too, no longer in both ears), with the same range and fade, and
+  quieter behind it: right behind, 45% as loud as in front, beside it as loud (the
+  audio fades a track by distance only, so behind the box it plays from further away
+  along the same line, [heard_from](../crates/sjk-viewer/src/boombox.rs)). The box goes
+  when picked up, with the toy turned off, on a new map or server, and for the others
+  when its owner leaves the server, drops off the hub or is blocked here.
+  `cg_toyBoomboxShow` 0 hides others' boxes and their music, as their shoulder stereo.
+  Staff cannot remove another player's box yet (that needs the hub).
 
 No game server knows of it, and the hub never carries sound. The stereo is a toy in the
 player's look (`toys: ["boombox"]`), so every SJK player on the server draws it over the
@@ -5370,7 +5386,12 @@ on the dead; one's own in first person only in mirrors). What plays travels thro
 its file's size, the game server's time it began at and how far it carries; `stop` ends
 it. The carrier's client tells each SJK player within the range and 128 units more, one
 event every 50 ms, again whenever one comes back within reach and every 15 seconds; a
-track not told again for 40 seconds stops. A listener starts the track as far in as the
+track not told again for 40 seconds stops. A box on the floor is told to every SJK
+player on the server, before its music (the players within the music's reach first) and
+again every 15 seconds: `put_<x>_<y>_<z>_<yaw>`, its floor point in whole units (each
+client finds the floor under it itself) and the way it faces in degrees; `take` picks it
+up, and a box not told again for 40 seconds goes. Clients from before 03/11/2026 ignore
+both and keep the stereo on its carrier's shoulder. A listener starts the track as far in as the
 server's time says, so everyone hears the same part of it whenever they arrive: the file
 is read and decoded when first needed (not before), the start waits for the decoder and
 then skips the time it waited (`AudioCommand::PlayTrack`), and a track nothing plays any

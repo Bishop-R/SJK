@@ -118,6 +118,12 @@ pub(crate) const ACTIONS: &[BindableAction] = &[
     // The Boombox: the stereo on the shoulder, and its next track.
     action(Interaction, "Toy: Boombox", crate::boombox::COMMAND, ""),
     action(Interaction, "Boombox: next track", "boombox next", ""),
+    action(
+        Interaction,
+        "Boombox: place or pick up",
+        crate::boombox::PLACE_COMMAND,
+        "",
+    ),
     // The Monitor: the switch (throw, and be hit), and the throw (held, it charges).
     action(Interaction, "Toy: Monitor", crate::monitor::COMMAND, ""),
     action(
