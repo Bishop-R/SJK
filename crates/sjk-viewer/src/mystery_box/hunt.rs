@@ -8,7 +8,11 @@
 //! and hands their mark on after a minute (Sol, 31/10/2026). Each hunter has one life
 //! (Sol, 01/11/2026): killed by the mark they are out of the chase, and a player caught
 //! teleporting or in noclip ([`super::hunt_watch`]) is out at once; this client tells
-//! the hub both. Once every hunter is out, the mark wins credits.
+//! the hub both. Once every hunter is out, the mark wins credits. A mark caught cheating
+//! or typing in the chat [`CHAT_LIMIT`] blows up (Sol, 02/11/2026): the hub hands what
+//! they played for to a hunter at random, everyone taking part sees the explosion, and the
+//! mark's own client kills them. The mark sees the hunters still after them ringed red,
+//! as they see the mark.
 
 use super::label::{Label, Tone};
 use crate::GpuState;
@@ -29,6 +33,12 @@ const MARK_RISE: f32 = 70.0;
 const MARK_SIGHT: f32 = 20.0;
 /// `MAX_CLIENTS`: slots of players.
 const SLOTS: u16 = 32;
+/// How long the mark may type in the chat before blowing up, and when they are warned
+/// (the hub hands an away mark on after a minute; this comes first).
+const CHAT_LIMIT: Duration = Duration::from_secs(30);
+const CHAT_WARN: Duration = Duration::from_secs(20);
+/// The sound source of a mark's explosion, past the alarm's.
+const BLAST_SOURCE: sjk_audio::SourceId = sjk_audio::SourceId(super::SOURCE_BASE | 0x1_0001);
 
 /// The hunt as this client follows it.
 #[derive(Default)]
@@ -63,6 +73,9 @@ pub(crate) struct Hunt {
     /// The map the landings are of (its BSP's address), and where its teleporters and
     /// spawns put a player.
     landings: (usize, Vec<Vec3>),
+    /// Since when the player, the mark, has been typing in the chat, and whether they
+    /// were warned.
+    typing: Option<(Instant, bool)>,
 }
 
 /// The card at the top of the screen naming the mark (Sol's idea, 28/10/2026), from the
@@ -117,6 +130,7 @@ impl Hunt {
         self.card = None;
         self.ends = None;
         self.out = None;
+        self.typing = None;
         if let Some((_, state)) = &mut self.state {
             state.mark = None;
         }
@@ -127,6 +141,51 @@ impl Hunt {
     fn marked(&self, own: u8) -> bool {
         self.mark().is_some_and(|mark| mark.slot == own)
             || self.card.as_ref().is_some_and(|card| card.own)
+    }
+
+    /// The hunters still after the player, the mark on slot `own`, as the hub last said:
+    /// a bit a slot.
+    fn chasers(&self, own: u8) -> u32 {
+        let Some((_, state)) = self.state.as_ref().filter(|_| self.marked(own)) else {
+            return 0;
+        };
+        state
+            .chasers
+            .iter()
+            .filter(|slot| u16::from(**slot) < SLOTS && **slot != own)
+            .fold(0, |bits, slot| bits | 1 << slot)
+    }
+
+    /// The hunter on `slot` is out: no longer ringed for the mark.
+    fn chaser_out(&mut self, slot: u8) {
+        if let Some((_, state)) = &mut self.state {
+            state.chasers.retain(|chaser| *chaser != slot);
+        }
+    }
+
+    /// Whether the player, the mark on slot `own` still in the chase, has stayed in the
+    /// chat too long at `now` (`typing` or not): the words of a warning first.
+    fn watch_chat(&mut self, typing: bool, now: Instant) -> (bool, Option<String>) {
+        if !typing {
+            self.typing = None;
+            return (false, None);
+        }
+        let (since, warned) = *self.typing.get_or_insert((now, false));
+        let long = now.saturating_duration_since(since);
+        if long >= CHAT_LIMIT {
+            return (true, None);
+        }
+        if !warned && long >= CHAT_WARN {
+            self.typing = Some((since, true));
+            return (
+                false,
+                Some(format!(
+                    "Leave the chat!\nThe mark blows up after {} seconds in it",
+                    CHAT_LIMIT.as_secs()
+                )),
+            );
+        }
+        (false, None)
     }
 
     /// Whether the hunt should be read at `now`.
@@ -157,7 +216,9 @@ fn mark_words(slot: u8, own: u8, name: &str) -> (bool, String) {
     if slot == own {
         (
             true,
-            "You are the mark!\nOutlast every hunter for 100 credits each".to_owned(),
+            "You are the mark!\nOutlast every hunter for 100 credits each\n\
+             Teleport or sit in the chat and you blow up"
+                .to_owned(),
         )
     } else {
         (
@@ -213,6 +274,55 @@ fn survived_words(slot: u8, own: u8, credits: u64, hunters: u32, name: &str) -> 
         (
             true,
             "You outlasted every hunter!\nNo credits: you won enough today".to_owned(),
+        )
+    }
+}
+
+/// What the player on `own` is told when the mark on `slot` (named `name`) blew up,
+/// caught cheating or in the `chat` too long, and `credits` of theirs went to the hunter
+/// on `to` (named `to_name`).
+fn blown_words(
+    (slot, own): (u8, u8),
+    chat: bool,
+    (to, credits): (Option<u8>, u64),
+    name: &str,
+    to_name: &str,
+) -> (bool, String) {
+    if slot == own {
+        let why = if chat {
+            "You stayed in the chat too long"
+        } else {
+            "Teleporting or noclip is cheating"
+        };
+        let after = if credits > 0 {
+            format!("Your {credits} credits went to {to_name}^7")
+        } else {
+            "The hunt is off".to_owned()
+        };
+        return (true, format!("BOOM! {why}\n{after}"));
+    }
+    if to == Some(own) && credits > 0 {
+        return (
+            true,
+            format!("The mark blew up!\nYou get their {credits} credits"),
+        );
+    }
+    let why = if chat {
+        "for staying in the chat"
+    } else {
+        "for cheating"
+    };
+    if credits > 0 {
+        (
+            false,
+            format!(
+                "Box hunt: the mark, {name}^7, blew up {why}, and {to_name}^7 gets their {credits} credits"
+            ),
+        )
+    } else {
+        (
+            false,
+            format!("Box hunt: the mark, {name}^7, blew up {why}. The hunt is off"),
         )
     }
 }
@@ -325,6 +435,8 @@ impl GpuState {
         }
         let told_before = hunt.told;
         let mut lines = Vec::new();
+        // Marks that blew up, for their explosions.
+        let mut blown = Vec::new();
         for event in events.iter().filter(|event| event.toy == wire::HUNT_TOY) {
             let Some(said) = wire::parse_hunt_event(&event.event) else {
                 continue;
@@ -360,6 +472,7 @@ impl GpuState {
                     });
                 }
                 HuntEvent::Out { slot, cheat } => {
+                    hunt.chaser_out(slot);
                     if slot == own {
                         hunt.out.get_or_insert(if cheat {
                             HuntOut::Cheat
@@ -369,22 +482,25 @@ impl GpuState {
                     }
                     lines.push(out_words(slot, own, cheat, &event.claimed_name));
                 }
-                HuntEvent::MarkCheated(slot) => {
+                HuntEvent::Blown {
+                    slot,
+                    chat,
+                    to,
+                    credits,
+                } => {
                     hunt.hunted();
-                    lines.push(if slot == own {
-                        (
-                            true,
-                            "Out of this box hunt\nTeleporting or noclip is cheating".to_owned(),
-                        )
-                    } else {
-                        (
-                            false,
-                            format!(
-                                "Box hunt: the mark, {}^7, was caught cheating. The hunt is off",
-                                event.claimed_name
-                            ),
-                        )
-                    });
+                    blown.push(slot);
+                    let to_name = to
+                        .and_then(|to| self.chat.player_name(u16::from(to)))
+                        .unwrap_or("a hunter")
+                        .to_owned();
+                    lines.push(blown_words(
+                        (slot, own),
+                        chat,
+                        (to, credits),
+                        &event.claimed_name,
+                        &to_name,
+                    ));
                 }
                 HuntEvent::Survived {
                     slot,
@@ -476,10 +592,15 @@ impl GpuState {
             let sample = super::hunt_watch::Sample::of(&snapshot.player, snapshot.server_time, own);
             hunt.watch.step(sample, &hunt.landings.1)
         });
+        // The mark typing in the chat too long blows up.
+        let (chatted, warning) = hunt.watch_chat(marked && in_chase && self.chat.is_typing(), now);
+        lines.extend(warning.map(|text| (true, text)));
         let out = if !in_chase {
             None
         } else if cheated {
             Some(HuntOut::Cheat)
+        } else if chatted {
+            Some(HuntOut::Chat)
         } else {
             killer
                 .filter(|by| !marked && Some(*by) == chased)
@@ -525,6 +646,9 @@ impl GpuState {
             self.mystery_boxes.hunt.card = None;
             self.mystery_boxes.hunt.away = None;
         }
+        for slot in blown {
+            self.box_hunt_blast(slot, own);
+        }
         for (centre, text) in lines {
             if centre {
                 self.mystery_box_centre(text);
@@ -534,28 +658,62 @@ impl GpuState {
         }
     }
 
-    /// The mark's client slot while the player takes part and someone else is the mark:
-    /// their body is ringed in red ([`crate::hud::team_outline`]).
-    pub(crate) fn box_hunt_outlined(&self) -> Option<u16> {
-        if !self.box_hunt.on() || self.mystery_boxes.hunt.out.is_some() {
-            return None;
+    /// The players ringed in red ([`crate::hud::team_outline`]), a bit a client slot,
+    /// while the player takes part and is in the chase: the mark for a hunter, and for
+    /// the mark the hunters still after them (Sol, 02/11/2026).
+    pub(crate) fn box_hunt_outlined(&self) -> u32 {
+        let hunt = &self.mystery_boxes.hunt;
+        if !self.box_hunt.on() || hunt.out.is_some() {
+            return 0;
         }
-        let slot = self.mystery_boxes.hunt.mark()?.slot;
-        let own = self.live_session.as_ref()?.game_state().client_num;
-        (i32::from(slot) != own).then_some(u16::from(slot))
+        let Some(own) = self
+            .live_session
+            .as_ref()
+            .and_then(|session| u8::try_from(session.game_state().client_num).ok())
+        else {
+            return 0;
+        };
+        if hunt.marked(own) {
+            return hunt.chasers(own);
+        }
+        hunt.mark()
+            .filter(|mark| u16::from(mark.slot) < SLOTS)
+            .map_or(0, |mark| 1 << mark.slot)
     }
 
-    /// Where the mark stands, while the player takes part, someone else is the mark and
-    /// the game server sends them (in this player's snapshot).
-    pub(super) fn box_hunt_mark_origin(&mut self) -> Option<Vec3> {
-        if !self.box_hunt.on() || self.mystery_boxes.hunt.out.is_some() {
-            return None;
+    /// The mark on `slot` blew up (the player's slot `own`): the box's explosion where
+    /// they stand, when this client sees them, and when they are this client's player,
+    /// the game's `kill` (as a box that blows up on its opener; not where the Ragdoll could
+    /// not strike them either).
+    fn box_hunt_blast(&mut self, slot: u8, own: u8) {
+        let mine = slot == own;
+        let stands = if mine {
+            self.local_prediction
+                .predicted_state()
+                .map(|state| Vec3::from_array(state.origin))
+        } else {
+            self.box_hunt_player_origin(slot)
+        };
+        if let Some(stands) = stands {
+            self.mystery_boxes.blasts.push(stands);
+            self.mystery_boxes.cues.push(super::Cue {
+                path: super::BLAST_SOUND,
+                origin: Some(stands.to_array()),
+                source: BLAST_SOURCE,
+            });
         }
-        let slot = self.mystery_boxes.hunt.mark()?.slot;
+        if mine
+            && self.ragdoll.strikable()
+            && let Some(session) = self.live_session.as_mut()
+            && let Err(error) = session.send_reliable_command(b"kill")
+        {
+            crate::log::progress(format_args!("box hunt: kill not sent: {error}"));
+        }
+    }
+
+    /// Where the player on `slot` stands, when the game server sends them.
+    fn box_hunt_player_origin(&mut self, slot: u8) -> Option<Vec3> {
         let session = self.live_session.as_ref()?;
-        if i32::from(slot) == session.game_state().client_num {
-            return None;
-        }
         let sent = session
             .latest_snapshot()
             .entities
@@ -569,6 +727,19 @@ impl GpuState {
             .live_world
             .entity(sjk_runtime::EntityId::new(u64::from(slot) + 1))?;
         Some(Vec3::from_array(presented.sample(time).translation))
+    }
+
+    /// Where the mark stands, while the player takes part, someone else is the mark and
+    /// the game server sends them (in this player's snapshot).
+    pub(super) fn box_hunt_mark_origin(&mut self) -> Option<Vec3> {
+        if !self.box_hunt.on() || self.mystery_boxes.hunt.out.is_some() {
+            return None;
+        }
+        let slot = self.mystery_boxes.hunt.mark()?.slot;
+        if i32::from(slot) == self.live_session.as_ref()?.game_state().client_num {
+            return None;
+        }
+        self.box_hunt_player_origin(slot)
     }
 
     /// The mark's label over their head (`origin`, [`Self::box_hunt_mark_origin`]): the
@@ -633,6 +804,86 @@ mod tests {
                 "Box hunt: Kyle^7 outlasted every hunter and won 200 credits".to_owned()
             )
         );
+    }
+
+    #[test]
+    fn a_mark_who_blew_up_is_told_to_everyone() {
+        let (centre, words) = blown_words((1, 1), false, (Some(4), 300), "Kyle", "Jan");
+        assert!(centre);
+        assert_eq!(
+            words,
+            "BOOM! Teleporting or noclip is cheating\nYour 300 credits went to Jan^7"
+        );
+        assert!(
+            blown_words((1, 1), true, (None, 0), "Kyle", "a hunter")
+                .1
+                .starts_with("BOOM! You stayed in the chat too long")
+        );
+        assert_eq!(
+            blown_words((1, 4), true, (Some(4), 300), "Kyle", "Jan"),
+            (
+                true,
+                "The mark blew up!\nYou get their 300 credits".to_owned()
+            )
+        );
+        assert_eq!(
+            blown_words((1, 6), true, (Some(4), 300), "Kyle", "Jan"),
+            (
+                false,
+                "Box hunt: the mark, Kyle^7, blew up for staying in the chat, and Jan^7 gets their 300 credits"
+                    .to_owned()
+            )
+        );
+        assert_eq!(
+            blown_words((1, 6), false, (None, 0), "Kyle", "a hunter").1,
+            "Box hunt: the mark, Kyle^7, blew up for cheating. The hunt is off"
+        );
+    }
+
+    #[test]
+    fn the_mark_in_the_chat_is_warned_then_blows_up() {
+        let now = Instant::now();
+        let mut hunt = Hunt::default();
+        assert_eq!(hunt.watch_chat(true, now), (false, None));
+        assert_eq!(
+            hunt.watch_chat(true, now + Duration::from_secs(10)),
+            (false, None)
+        );
+        let (out, warning) = hunt.watch_chat(true, now + CHAT_WARN);
+        assert!(!out && warning.is_some_and(|text| text.starts_with("Leave the chat!")));
+        assert_eq!(hunt.watch_chat(true, now + CHAT_WARN), (false, None));
+        assert_eq!(hunt.watch_chat(true, now + CHAT_LIMIT), (true, None));
+        // Leaving the chat starts the count again.
+        assert_eq!(hunt.watch_chat(false, now + CHAT_LIMIT), (false, None));
+        assert_eq!(hunt.watch_chat(true, now + CHAT_LIMIT * 2), (false, None));
+    }
+
+    #[test]
+    fn the_mark_sees_the_hunters_still_after_them() {
+        let now = Instant::now();
+        let mut hunt = Hunt {
+            state: Some((
+                "server".to_owned(),
+                HuntState {
+                    hunting: true,
+                    mark: Some(wire::HuntMark {
+                        slot: 2,
+                        ..wire::HuntMark::default()
+                    }),
+                    chasers: vec![1, 2, 5, 40],
+                    ..HuntState::default()
+                },
+            )),
+            ..Hunt::default()
+        };
+        assert_eq!(hunt.chasers(2), 1 << 1 | 1 << 5);
+        // A hunter does not.
+        assert_eq!(hunt.chasers(5), 0);
+        hunt.chaser_out(5);
+        assert_eq!(hunt.chasers(2), 1 << 1);
+        hunt.tell(2, 2, "Sol", now);
+        hunt.hunted();
+        assert_eq!(hunt.chasers(2), 0);
     }
 
     #[test]

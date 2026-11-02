@@ -191,6 +191,8 @@ pub enum HuntOut {
     },
     /// Teleported (not by a map teleporter or a spawn) or in noclip.
     Cheat,
+    /// The mark typed in the chat too long (since 02/11/2026): it blows up.
+    Chat,
 }
 
 /// `POST /v1/box-hunt`: the hunt on a server as the player reads it.
@@ -209,6 +211,9 @@ pub struct HuntState {
     /// in it.
     #[serde(default)]
     pub out: Option<String>,
+    /// For the mark: the slots of the hunters still in the chase (since 02/11/2026).
+    #[serde(default)]
+    pub chasers: Vec<u8>,
     /// How long a mark lasts, in seconds.
     #[serde(default)]
     pub every: u64,
@@ -235,8 +240,20 @@ pub enum HuntEvent {
         /// Caught teleporting or in noclip, not killed.
         cheat: bool,
     },
-    /// The mark on this slot was caught cheating: the chase is off (`cheat_<slot>`).
-    MarkCheated(u8),
+    /// The mark on `slot` blew up, caught cheating or typing in the chat too long, and
+    /// `credits` of theirs went to the hunter on `to` (`None`: nobody else hunted there)
+    /// (`blown_<slot>_<cheat|chat>_<to>_<credits>`, `to` 255 for nobody; since
+    /// 02/11/2026).
+    Blown {
+        /// The mark's slot.
+        slot: u8,
+        /// Typing in the chat, not teleporting or in noclip.
+        chat: bool,
+        /// The slot of the hunter who got the credits.
+        to: Option<u8>,
+        /// What they got.
+        credits: u64,
+    },
     /// The mark on `slot` outlasted every hunter, `hunters` of them, and won `credits`
     /// (`survived_<slot>_<credits>_<hunters>`; 0 credits past the day's wins).
     Survived {
@@ -265,8 +282,22 @@ pub fn parse_hunt_event(event: &str) -> Option<HuntEvent> {
     if let Some(slot) = event.strip_prefix("mark_") {
         return Some(HuntEvent::Mark(slot.parse().ok()?));
     }
-    if let Some(slot) = event.strip_prefix("cheat_") {
-        return Some(HuntEvent::MarkCheated(slot.parse().ok()?));
+    if let Some(rest) = event.strip_prefix("blown_") {
+        let mut parts = rest.split('_');
+        let slot = parts.next()?.parse().ok()?;
+        let chat = match parts.next()? {
+            "cheat" => false,
+            "chat" => true,
+            _ => return None,
+        };
+        let to: u8 = parts.next()?.parse().ok()?;
+        let credits = parts.next()?.parse().ok()?;
+        return parts.next().is_none().then_some(HuntEvent::Blown {
+            slot,
+            chat,
+            to: (to != 255).then_some(to),
+            credits,
+        });
     }
     if let Some(rest) = event.strip_prefix("out_") {
         let (slot, why) = rest.split_once('_')?;
@@ -383,7 +414,24 @@ mod tests {
                 cheat: true
             })
         );
-        assert_eq!(parse_hunt_event("cheat_1"), Some(HuntEvent::MarkCheated(1)));
+        assert_eq!(
+            parse_hunt_event("blown_1_cheat_4_300"),
+            Some(HuntEvent::Blown {
+                slot: 1,
+                chat: false,
+                to: Some(4),
+                credits: 300
+            })
+        );
+        assert_eq!(
+            parse_hunt_event("blown_1_chat_255_0"),
+            Some(HuntEvent::Blown {
+                slot: 1,
+                chat: true,
+                to: None,
+                credits: 0
+            })
+        );
         assert_eq!(
             parse_hunt_event("survived_1_300_3"),
             Some(HuntEvent::Survived {
@@ -396,7 +444,10 @@ mod tests {
             "out_5_away",
             "survived_1_300",
             "survived_1_300_3_4",
-            "cheat_x",
+            "cheat_1",
+            "blown_1_away_4_300",
+            "blown_1_cheat_4",
+            "blown_1_cheat_4_300_9",
         ] {
             assert_eq!(parse_hunt_event(bad), None, "{bad}");
         }

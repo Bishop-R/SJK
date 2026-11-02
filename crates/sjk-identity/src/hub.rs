@@ -577,8 +577,8 @@ pub trait Hub: Send {
     }
 
     /// The player is out of the box hunt's chase on `server` (`POST /v1/box-hunt/out`):
-    /// killed by the mark, or caught cheating (a teleport, noclip); whether the hub
-    /// counted it.
+    /// killed by the mark, caught cheating (a teleport, noclip), or as the mark typing in
+    /// the chat too long; whether the hub counted it.
     fn box_hunt_out(
         &mut self,
         _identity: &Identity,
@@ -1868,6 +1868,7 @@ impl Hub for HttpHub {
                 json!({ "server": server, "why": "dead", "by": by })
             }
             crate::mystery_box::HuntOut::Cheat => json!({ "server": server, "why": "cheat" }),
+            crate::mystery_box::HuntOut::Chat => json!({ "server": server, "why": "chat" }),
         };
         let answer = self.send(Some(identity), "POST", "/v1/box-hunt/out", Some(body))?;
         Ok(answer

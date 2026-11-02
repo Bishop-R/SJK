@@ -576,6 +576,12 @@ pub(super) fn credits_text(ledger: &Ledger) -> String {
         "box_hunt" if ledger.note == "survived" => {
             "Box hunt: you outlasted every hunter".to_owned()
         }
+        "box_hunt" if ledger.note == "blown" => {
+            "Box hunt: you blew up as the mark, your credits went to a hunter".to_owned()
+        }
+        "box_hunt" if ledger.note == "blown_gift" => {
+            "Box hunt: the mark blew up, their credits came to you".to_owned()
+        }
         reason => with_note(format!("Credits: {}", capitalised(reason)), &ledger.note),
     }
 }
@@ -1062,6 +1068,10 @@ pub(crate) mod tests {
         assert_eq!(
             credits_text(&ledger(0, 300, "box_hunt", "survived")),
             "Box hunt: you outlasted every hunter"
+        );
+        assert_eq!(
+            credits_text(&ledger(0, 300, "box_hunt", "blown_gift")),
+            "Box hunt: the mark blew up, their credits came to you"
         );
         assert_eq!(
             shards_text(&ledger(0, 15, "shatter", "saber_sun")),

@@ -8003,7 +8003,20 @@ test: The mark kills a hunter: they read The mark got you, lose the MARK label/r
 test: That hunter respawns and kills the mark: nothing won. The card counts 2 OF 3 HUNTERS LEFT.
 test: A hunter uses a map teleporter: still in. amtele / noclip: out for cheating, chat says so.
 test: The mark kills the last hunters: You outlasted every hunter, credits + History line.
-note: The mark amtele'd: the hunt is off for everyone. Out of a hunt, teleports are free.
+note: Out of a hunt, teleports are free.
+
+[box-hunt-blown]
+area: Gameplay
+title: Box hunt: a cheating or chatting mark blows up; the mark sees hunters red
+change: Mark amtele/noclip or 30 s typing in chat: explosion, kill, credits to a hunter.
+change: The stake (100 x hunters, at most what the mark holds) moves to a random hunter.
+change: The mark sees the hunters still in the chase ringed red.
+test: Needs the hub's box-hunt-lives branch; 4 SJK players with Box hunt on, one the mark.
+test: As the mark: the hunters are ringed red; one killed loses the ring.
+test: The mark opens the chat: Leave the chat! at 20 s, BOOM at 30 s, the mark dies.
+test: The others see the explosion; one hunter reads You get their N credits; History lines.
+test: The mark uses amtele or noclip: same blow-up, cheating words.
+note: A mark with 0 credits still blows up, nobody gets anything.
 
 [box-hunt]
 area: Gameplay
