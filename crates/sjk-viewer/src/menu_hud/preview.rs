@@ -170,9 +170,7 @@ pub(crate) fn render_with(
     match &plan.kind {
         Kind::Sjk => {}
         Kind::Text => {
-            if let Some(readout) = readout {
-                frame.simple_hud(readout, &mut timers);
-            }
+            frame.simple_hud(readout, None, &mut timers);
         }
         Kind::Menus {
             layout,

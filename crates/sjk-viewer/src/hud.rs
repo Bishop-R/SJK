@@ -316,7 +316,7 @@ impl RadialPlacement {
 
 /// The radial look's status meters, the pills, arcs and numbers round the crosshair:
 /// what [`RadialPlacement`] moves. The crosshair, its name, the timer and the rest stay.
-const RADIAL_STATUS: [&str; 13] = [
+const RADIAL_STATUS: [&str; 15] = [
     "left_pill",
     "right_pill",
     "health_arc",
@@ -330,6 +330,8 @@ const RADIAL_STATUS: [&str; 13] = [
     "force_value",
     "style_value",
     "weapon_value",
+    "vehicle_arc",
+    "vehicle_value",
 ];
 
 /// Which side of the crosshair a status widget is on: -1 left, 1 right, 0 under it. An
@@ -605,6 +607,9 @@ impl HudOverlay {
             timer: !self.match_timer.is_empty(),
             warmup: !self.warmup_text.is_empty(),
             interrupted: self.interrupted,
+            // SJK's own looks draw the vehicle as their layouts' hull meter; the game
+            // HUD look keeps the vector strip, where the game HUD does not draw it.
+            vehicle_ratio: self.vehicle.hull_ratio().filter(|_| look != HudLook::Game),
         };
         let mut visible = [false; WIDGET_LIMIT];
         for (index, widget) in document.widgets.iter().take(WIDGET_LIMIT).enumerate() {
@@ -760,7 +765,7 @@ impl HudOverlay {
             let start = self.draw_list.len();
             jetpack_fuel::emit(&mut self.draw_list, viewport, user_scale, self.jetpack_fuel);
             self.place_from(Element::Jetpack, start, viewport);
-            if visibility.vehicle {
+            if visibility.vehicle && look == HudLook::Game {
                 let start = self.draw_list.len();
                 self.vehicle
                     .emit(&mut self.draw_list, self.theme, viewport, user_scale);

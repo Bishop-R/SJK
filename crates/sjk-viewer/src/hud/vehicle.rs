@@ -1,7 +1,10 @@
 //! The vehicle HUD: what OpenJK codemp's `CG_DrawVehicleHud` (`cg_draw.c`) shows a
 //! pilot, drawn in SJK's vector style instead of the `swoopvehiclehud` menu's pictures.
 //! Under `cg_hudStyle game` the game-data HUD draws those pictures instead, from the
-//! values this module samples ([`State::readout`], `crate::menu_hud::frame::vehicle_hud`).
+//! values this module samples ([`State::readout`], `crate::menu_hud::frame::vehicle_hud`),
+//! and the text HUD of a nonzero `cg_hudFiles` shows only the hull's number. SJK's own
+//! looks show only the hull too, as their layouts' `vehicle_*` widgets: a yellow arc
+//! under the crosshair in the radial layout, a yellow bar in the classic one.
 //!
 //! Stock reads the maxima from the vehicle's `.veh` definition ([`Profile`]) and the
 //! values from `cg.predictedVehicleState`: `stats[STAT_HEALTH]` against `armor` (hull,
@@ -29,6 +32,10 @@ const HULL_TEXT: u32 = TEXT_FIRST;
 const SHIELD_TEXT: u32 = TEXT_FIRST + 1;
 const SPEED_TEXT: u32 = TEXT_FIRST + 2;
 const AMMO_TEXT: u32 = TEXT_FIRST + 3;
+/// The hull's number and its labelled line, for the layouts' `vehicle_value` and
+/// `vehicle_text` widgets.
+pub(super) const VALUE_TEXT: u32 = 328;
+pub(super) const LABEL_TEXT: u32 = 329;
 
 /// `MAX_VHUD_SHIELD_TICS`, `MAX_VHUD_ARMOR_TICS`, `MAX_VHUD_SPEED_TICS`,
 /// `MAX_VHUD_AMMO_TICS`.
@@ -150,6 +157,15 @@ pub(super) fn turbo_charge(time: i32, turbo_time: i32, recharge: i32) -> (f32, b
     (fraction, false)
 }
 
+/// The hull's share of its maximum, `0..=1`; a vehicle without a maximum reads full
+/// while it has any hull, as its tics do ([`tic_alphas`]).
+pub(super) fn hull_ratio(hull: i32, max: i32) -> f32 {
+    if max <= 0 {
+        return if hull > 0 { 1.0 } else { 0.0 };
+    }
+    (hull as f32 / max as f32).clamp(0.0, 1.0)
+}
+
 /// The turbo burns while `cg.time` has not passed `m_iTurboTime` (`CG_DrawVehicleSpeed`).
 pub(super) fn turbo_burning(time: i32, turbo_time: i32) -> bool {
     time <= turbo_time
@@ -223,6 +239,8 @@ pub(crate) struct State {
     hides_player: bool,
     doubled: bool,
     hull: [f32; HULL_TICS],
+    /// The hull against its maximum, `0..=1`.
+    hull_ratio: f32,
     shield: [f32; SHIELD_TICS],
     speed: [f32; SPEED_TICS],
     ammo: [f32; AMMO_TICS],
@@ -241,6 +259,8 @@ pub(crate) struct State {
     shield_text: String,
     speed_text: String,
     ammo_text: String,
+    hull_value: String,
+    hull_label: String,
     /// `crosshairShader` of the riding vehicle, and the one last tried to load.
     wanted: Option<String>,
     attempted: Option<String>,
@@ -254,6 +274,7 @@ impl Default for State {
             hides_player: false,
             doubled: false,
             hull: [0.0; HULL_TICS],
+            hull_ratio: 0.0,
             shield: [0.0; SHIELD_TICS],
             speed: [0.0; SPEED_TICS],
             ammo: [0.0; AMMO_TICS],
@@ -269,6 +290,8 @@ impl Default for State {
             shield_text: String::with_capacity(24),
             speed_text: String::with_capacity(24),
             ammo_text: String::with_capacity(24),
+            hull_value: String::with_capacity(12),
+            hull_label: String::with_capacity(24),
             wanted: None,
             attempted: None,
             picture: None,
@@ -295,6 +318,7 @@ impl State {
         };
         self.hides_player = profile.hide_rider;
         self.hull = tic_alphas(sample.hull as f32, profile.hull as f32, HULL_TICS);
+        self.hull_ratio = hull_ratio(sample.hull, profile.hull);
         self.shield = tic_alphas(sample.shield as f32, profile.shields as f32, SHIELD_TICS);
         self.speed = tic_alphas(sample.speed, profile.speed_max, SPEED_TICS);
         self.weapons = profile.has_weapon;
@@ -330,7 +354,11 @@ impl State {
         self.shield_text.clear();
         self.speed_text.clear();
         self.ammo_text.clear();
+        self.hull_value.clear();
+        self.hull_label.clear();
         let _ = write!(self.hull_text, "HULL {}", sample.hull.max(0));
+        let _ = write!(self.hull_value, "{}", sample.hull.max(0));
+        let _ = write!(self.hull_label, "^3HP ^7{}", sample.hull.max(0));
         let _ = write!(self.shield_text, "SHIELD {}", sample.shield.max(0));
         // The speed is shown in game units a second, as the `cg_speedometer` default.
         let speed = if sample.speed.is_finite() {
@@ -367,6 +395,12 @@ impl State {
     /// status HUD (`CG_DrawVehicleHud` returns false).
     pub(crate) fn hides_player(&self) -> bool {
         self.hides_player
+    }
+
+    /// The hull against its maximum while the vehicle HUD shows, for the layouts'
+    /// `vehicle_ratio` meters.
+    pub(crate) fn hull_ratio(&self) -> Option<f32> {
+        self.shown.then_some(self.hull_ratio)
     }
 
     /// This frame's values for the game HUD, which draws the vehicle HUD from
@@ -425,6 +459,8 @@ impl State {
             SHIELD_TEXT => &self.shield_text,
             SPEED_TEXT => &self.speed_text,
             AMMO_TEXT => &self.ammo_text,
+            VALUE_TEXT => &self.hull_value,
+            LABEL_TEXT => &self.hull_label,
             _ => "",
         }
     }
@@ -692,6 +728,68 @@ mod tests {
         assert_eq!(turbo_charge(i32::MAX, i32::MIN, 3_000), (1.0, true));
         assert!(turbo_burning(1_000, 1_000));
         assert!(!turbo_burning(1_001, 1_000));
+    }
+
+    #[test]
+    fn the_hull_ratio_is_its_share_of_the_maximum() {
+        assert_eq!(hull_ratio(60, 120), 0.5);
+        assert_eq!(hull_ratio(500, 120), 1.0);
+        assert_eq!(hull_ratio(-5, 120), 0.0);
+        assert_eq!(hull_ratio(10, 0), 1.0);
+        assert_eq!(hull_ratio(0, 0), 0.0);
+    }
+
+    /// The vehicle HUD each look draws for a pilot at half hull: the radial layout's
+    /// yellow arc, the classic layout's yellow bar, and the vector strip only under
+    /// the game HUD look (where the game HUD does not draw it).
+    #[test]
+    fn each_look_draws_the_vehicle_its_own_way() {
+        use crate::hud::{HudLook, HudOverlay, HudVisibility};
+        let font = crate::text::load_modern(1.0, None).unwrap().font;
+        let profile = profile();
+        let mut riding = sample(&profile);
+        riding.hull = 60;
+        let visibility = HudVisibility {
+            hud: true,
+            status: true,
+            vehicle: true,
+            weapon: true,
+            selection: true,
+            crosshair: false,
+            crosshair_names: false,
+            timer: false,
+            lagometer: false,
+            ground_hud: false,
+            menu_hud: false,
+        };
+        let yellow =
+            |color: Color| color.r > 0.95 && (color.g - 0.82).abs() < 0.01 && color.b < 0.2;
+        for look in [HudLook::Radial, HudLook::Classic, HudLook::Game] {
+            let mut hud = HudOverlay::new();
+            hud.vehicle.update(&riding);
+            let _ = hud.layout(&font, look, [1920.0, 1080.0], 1.0, visibility, 0);
+            let commands = hud.draw_list().commands();
+            let arc = commands
+                .iter()
+                .any(|command| matches!(*command, DrawCommand::Arc { color, .. } if yellow(color)));
+            let bar = commands.iter().any(|command| {
+                matches!(*command, DrawCommand::RoundedRect { color, .. } if yellow(color))
+            });
+            let strip = commands.iter().any(
+                |command| matches!(*command, DrawCommand::SolidRect { color, .. } if color == tint::HULL),
+            );
+            assert_eq!(
+                (arc, bar, strip),
+                match look {
+                    HudLook::Radial => (true, false, false),
+                    HudLook::Classic => (false, true, false),
+                    HudLook::Game => (false, false, true),
+                },
+                "{look:?}"
+            );
+            assert_eq!(hud.resolve_text(sjk_ui::TextId(VALUE_TEXT)), "60");
+            assert_eq!(hud.resolve_text(sjk_ui::TextId(LABEL_TEXT)), "^3HP ^760");
+        }
     }
 
     #[test]

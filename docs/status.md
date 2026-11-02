@@ -776,6 +776,21 @@ the workspace build, tests and Clippy (no new warning), and the Mods page in
 `menu_snapshot::sjk_settings_snapshot` (`sjk-settings-plugin-options.png`).
 Not verified: switching them in a match on a JA+ or jaPRO server.
 
+## Lugormod-v3 movement prediction
+
+29/10/2026, `feat/prediction-lugormod`, based on `main` `1c1036b2`: native
+movement policy for LugorDev/Lugormod-v3 `50f42520`'s default multiplayer build.
+The [movement adapter](networking.md#lugormod-v3-movement) uses the advertised
+v3 name and existing scale/admin fields for scaled player posture, lower-box
+stand clearance, enhanced FFA jetpacks, public baton rolls and velocity snapping.
+It refreshes with the current dialect; foreign/reused metadata stays inert.
+Windows x64 tests match 248 MSVC-emitted bounds/stand/jetpack branch outputs;
+command, reseed and preview checks cover 8/7/4/3 ms and server switches. Rope
+fields missing from ordinary snapshots, extended Force curves and scaled active
+Force rises use authoritative position interpolation with immediate look.
+Private skills/restrictions, custom build switches, scaled riders/NPCs, full
+Pmove/live gameplay, animation playback and rendered performance remain unverified.
+
 ## Prediction: incomplete command history
 
 29/10/2026, `fix/prediction-command-overflow`, based on `main` `e702b0b1`:
@@ -3377,6 +3392,18 @@ the alignment, JoF's table, and its application to only the game-data HUD. On
 Linux x86_64 with Rust 1.99.1, formatting, the locked workspace build and test
 suite, workspace all-target Clippy, and the locked release viewer build pass;
 existing warnings remain. The result has not yet been inspected in game.
+
+## Vehicle HUD per HUD style
+
+30/10/2026, `feat/vehicle-hud-styles`, based on `Sol-Vulpes/SJK` `d7c1f21b`: the
+vector vehicle strip (hull, speed, shield, ammunition) drew the same under every HUD
+but the retail one. Now each style shows only the vehicle's health in its own way:
+Text only a yellow hull number centred at the bottom (`menu_hud::Frame::simple_hud`,
+also when the vehicle hides its rider), SJK radial a yellow arc under the crosshair
+with the number inside, SJK classic a yellow bar with an `HP` line (layout widgets
+`vehicle_arc`, `vehicle_value`, `vehicle_label`, `vehicle_meter`). The strip stays only
+for game-data HUDs without `swoopvehiclehud`; the retail vehicle HUD is unchanged.
+Unit tests pin the text HUD run and which look draws the arc, the bar or the strip.
 
 ## Stock vehicle HUD in the game HUD
 

@@ -49,6 +49,9 @@ pub(super) struct WidgetData<'a> {
     pub(super) warmup: bool,
     /// interrupted binding supplied by the owning HUD.
     pub(super) interrupted: bool,
+    /// The vehicle's hull against its maximum while SJK's own look draws the vehicle
+    /// HUD; `None` on foot, and when the game HUD or the vector strip draws it.
+    pub(super) vehicle_ratio: Option<f32>,
 }
 
 impl HudDataSource for WidgetData<'_> {
@@ -60,6 +63,7 @@ impl HudDataSource for WidgetData<'_> {
             "ammo_ratio" => Some(self.ammo_ratio),
             // A saber style has no amount: its meter is one full line.
             "style_ratio" => Some(if self.saber_style.is_some() { 1.0 } else { 0.0 }),
+            "vehicle_ratio" => Some(self.vehicle_ratio.unwrap_or(0.0)),
             _ => None,
         }
     }
@@ -114,6 +118,7 @@ impl HudDataSource for WidgetData<'_> {
             "draw_warmup" => Some(self.visibility.hud && self.warmup),
             "draw_lagometer" => Some(self.visibility.lagometer),
             "draw_interrupted" => Some(self.visibility.hud && self.interrupted),
+            "draw_vehicle" => Some(self.visibility.vehicle && self.vehicle_ratio.is_some()),
             _ => None,
         }
     }
@@ -136,6 +141,8 @@ pub(super) fn text_id(binding: Option<&str>) -> Option<TextId> {
         Some("match_timer") => Some(TextId(311)),
         Some("warmup_text") => Some(TextId(312)),
         Some("connection_interrupted") => Some(TextId(313)),
+        Some("vehicle_value") => Some(TextId(vehicle::VALUE_TEXT)),
+        Some("vehicle_text") => Some(TextId(vehicle::LABEL_TEXT)),
         _ => None,
     }
 }

@@ -268,7 +268,7 @@ link: Creyon's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr
 
 [Lumaya]
 github: lumayaa
-role: Contributor: 87 merged pull requests
+role: Contributor: 88 merged pull requests
 medal: early_contributor
 did: #24 Saber blades stop at walls instead of shining through them
 did: #29 Free camera: /freecam flies the camera away from your body
@@ -338,6 +338,7 @@ did: #332 Save game chat logs, a switch in Settings > Chat
 did: #274 Riders and vehicles predicted with their own collision exclusions
 did: #316 Emoji reactions on SJK chat messages
 did: #319 Profile banners: covers to collect, wear and show on your card
+did: #287 Lugormod v3: own movement predicted as the server moves you
 link: Lumaya's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa
 
 [Lukas]
@@ -367,7 +368,7 @@ link: Lukas's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+
 
 [Slash]
 github: JoFSlash
-role: Contributor: 89 merged pull requests
+role: Contributor: 90 merged pull requests
 did: #114 Tab completes cfg file names after exec and writeconfig
 did: #113 CTF team saber colours, an option
 did: #153 The SJK scoreboard tells who won the Siege round or team match
@@ -459,6 +460,7 @@ did: #295 Move HUD elements with the mouse (hud_edit)
 did: #301 Sound sonar: arcs toward the sounds you hear
 did: #302 Quiet mode: only the duel opponent and whispers in chat
 did: #303 Chat and console fonts from the PC
+did: #318 Each HUD style shows the vehicle's HP its own way
 link: Slash's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash
 
 [Milamber]

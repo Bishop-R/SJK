@@ -621,6 +621,103 @@
    }
   },
   {
+   "id": "vehicle_arc",
+   "kind": "arc",
+   "binding": "vehicle_ratio",
+   "anchor": "center",
+   "offset": {
+    "x": 0.0,
+    "y": 0.0
+   },
+   "offset_fraction": {
+    "x": 0.0,
+    "y": 0.19
+   },
+   "size": {
+    "width": {
+     "unit": "px",
+     "value": 407.0
+    },
+    "height": {
+     "unit": "px",
+     "value": 407.0
+    }
+   },
+   "visibility": {
+    "kind": "flag",
+    "binding": "draw_vehicle"
+   },
+   "layer": 2,
+   "style": {
+    "foreground": {
+     "r": 1.0,
+     "g": 0.82,
+     "b": 0.1,
+     "a": 1.0
+    },
+    "background": {
+     "r": 1,
+     "g": 1,
+     "b": 1,
+     "a": 0.14
+    },
+    "border": {
+     "r": 0,
+     "g": 0,
+     "b": 0,
+     "a": 0.5
+    },
+    "border_width": 5.0,
+    "arc": {
+     "start_degrees": 132.0,
+     "sweep_degrees": -84.0,
+     "width": 7.0,
+     "segments": 4,
+     "gap_degrees": 3.0
+    }
+   }
+  },
+  {
+   "id": "vehicle_value",
+   "kind": "text",
+   "binding": "vehicle_value",
+   "anchor": "center",
+   "offset": {
+    "x": 0.0,
+    "y": 170.0
+   },
+   "offset_fraction": {
+    "x": 0.0,
+    "y": 0.19
+   },
+   "size": {
+    "width": {
+     "unit": "px",
+     "value": 120.0
+    },
+    "height": {
+     "unit": "px",
+     "value": 32.0
+    }
+   },
+   "visibility": {
+    "kind": "flag",
+    "binding": "draw_vehicle"
+   },
+   "layer": 3,
+   "style": {
+    "foreground": {
+     "r": 1.0,
+     "g": 0.88,
+     "b": 0.36,
+     "a": 1.0
+    },
+    "type_scale": 1.4,
+    "weight": "semibold",
+    "centered": true
+   }
+  },
+  {
    "id": "vote_panel",
    "kind": "repeater",
    "binding": "vote_panel",

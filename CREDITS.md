@@ -554,7 +554,7 @@ pull requests merged into SJK, most of them bringing SJK in line with EternalJK
 - #321 a finished trade's toast says what it gave and received, names shown in full.
 - #236 JoF hats as in JoF EJK: their pictures from the old EternalJK folder, McFox two-sided.
 
-Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 87 pull requests
+Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 88 pull requests
 merged into SJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa)):
 
@@ -691,6 +691,8 @@ merged into SJK
 - #316 SJK chat: six shared emoji reactions on public messages.
 - #319 profile banners: collectible covers on the Profile and player card, Collection >
   Banners, a bonus roll on holocron openings once the hub turns them on.
+- #287 Lugormod v3 servers: own movement predicted as the server moves the player (scale,
+  stand-up clearance, FFA admin jetpack, baton rolls).
 
 Lukas ([LukasMoudry](https://github.com/LukasMoudry)), contributor, has 20 pull requests
 merged into SJK
@@ -739,7 +741,7 @@ merged into SJK
 - #306 long game-chat messages sent whole, as up to four messages split at a word; at the
   merge a draft refused past four pieces stays in the composer.
 
-Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 89 pull requests merged
+Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 90 pull requests merged
 into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash)):
 
 - #114 Tab completes the cfg file argument of `exec`, `execq`, `writeconfig` and `write`
@@ -904,6 +906,7 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
 - #302 quiet mode (`quiet`): only the duel opponent and whispers reach the chat, after Lex's idea.
 - #303 chat and console fonts installed on the PC (`cg_chatFont`, `con_font`), after Saturn's
   idea.
+- #318 each HUD style shows the piloted vehicle's HP in its own look.
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,

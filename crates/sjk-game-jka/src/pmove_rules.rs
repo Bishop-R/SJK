@@ -62,6 +62,11 @@ impl MovementConfig {
         let player_bhop = self.ja_pro.player_bhop;
         self.ja_pro = crate::pmove_japro::JaProRules::from_game_state(game);
         self.ja_pro.player_bhop = player_bhop;
+        self.lugormod = crate::pmove_lugormod::LugormodRules::from_game_state(game);
+        if self.lugormod.enabled {
+            // Lugormod-v3 PmoveSingle always calls trap_SnapVector.
+            self.snap_velocity = true;
+        }
     }
 
     /// CG_PredictPlayerState's fixed-step timestamp ceiling (:1239-1241).

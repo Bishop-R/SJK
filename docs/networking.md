@@ -144,6 +144,61 @@ them into the int fields; only `STAT_WEAPONS` is an unsigned 19-bit field.
 a score of -1 after a suicide, negative health on death and ammo's -1 sentinel
 read as -1, not 65535.
 
+
+### Lugormod-v3 movement
+
+The movement dialect recognises the colour-stripped advertised `Lugormod v3`
+name through a documented compatibility table in
+[dialect.rs](../crates/sjk-protocol/src/dialect.rs). A filesystem directory named
+`lugormod`, an unversioned name, U# or v2 does not establish v3 rules. This adds
+native movement support; the client-plugin identity/handshake policy is unchanged.
+The current serverinfo selects the rules again on refresh, so reused fields from
+another mod cannot enable them. `cg_noPredict 1` remains the player's override.
+
+Reference: [LugorDev/Lugormod-v3 `50f42520` multiplayer game][lugormod-pmove],
+with the default [CMake definitions][lugormod-build]: `LMD_NEW_FORCEPOWERS` and
+`LMD_NEW_WEAPONS` enabled, `LMD_NEW_JUMP` and `LMD_NEW_JETPACK` absent.
+[pmove_lugormod.rs](../crates/sjk-game-jka/src/pmove_lugormod.rs) owns the
+snapshot adapter; [pmove_lugormod_motion.rs](../crates/sjk-game-jka/src/pmove_lugormod_motion.rs)
+owns the local-player posture rules.
+
+| Behavior | Prediction and source |
+| --- | --- |
+| Model bounds and view | `iModelScale` scales the horizontal half-width (15), corpse top (-8) and final integer eye height. Feet stay at -24; standing/crouching tops already come from the server and are not scaled twice. Meditate/crouch/sit poses use the short hull while their timer runs (`PM_SetBounds`, line 5850; `Pmove`, line 13064) |
+| Duck/stand/roll posture | Sample ground with the old posture before changing it. Stand-up clearance sweeps the lower half of the scaled box upwards; allsolid or fraction below 1 blocks it, startsolid alone does not (`PM_CanStand`/`PM_CheckDuck`, lines 5960-6063) |
+| Enhanced jetpack | With `PM_JETPACK`, snapshot `userInt1` and FFA together select fivefold horizontal control and bypass the ordinary 256 upward cap. Positive vertical speed gets `18 - ground_distance/256` thrust when positive; nonpositive speed keeps the ordinary 12. Other modes/profiles keep stock thrust/control (`PM_AirMove`, line 4612; `PmoveSingle`, line 12634) |
+| Public roll rules | A stun baton may roll under the normal published Force eligibility gates. The roll-entry speed-squared threshold and horizontal clearance scale with the model (`PM_TryRoll`, line 5027; `PM_Footsteps`, line 6839). Private mercenary skill/roll restriction checks are not inferred |
+| Velocity precision | The default v3 `PmoveSingle` unconditionally snaps final velocity. The adapter keeps that behavior even if a reused `pmove_float` key exists; fixed/66 ms command slicing remains unchanged |
+
+The grapple uses `PM_GRAPPLING` 9 and reuses `vehOrientation`, `hyperSpaceAngles`
+and `vehSurfaces` ([g_active.c][lugormod-grapple], line 2643). Stock ordinary
+protocol-26 player snapshots omit those vehicle-only fields. In that mode the
+viewer interpolates server positions and retains immediate mouse-look, rather
+than simulating a rope without its anchor. It also uses server positions for
+extended Force levels (the levitation bit in stat 11), scaled active Force rises,
+and invalid authored corpse hulls whose top falls below their feet. These
+policies consult the current movement dialect without per-frame allocation.
+No snapshot schema or wire codec changed.
+
+Remaining limits: extended Force curves/air jumps, private profession/skill and
+restriction state, overridden unpublished `lmd_noPlayerBounce`/`g_blockspeedhack`,
+custom build switches, scaled rider/NPC boxes, dual-jump resize integration,
+full weapon timing and game-owned emote/menu movement are not established by
+this change. Snapshot interpolation for the states above is a fallback, not proof
+of prediction parity for those mechanics.
+
+Windows x64 focused checks match 248 MSVC `/O2 /fp:precise` outputs from the
+referenced bounds/stand functions and default jetpack/air-control branches.
+Synthetic ordinary players, trace stubs, animation selection stubs and no spinning
+saber randomness bound that evidence. Command/reseed/preview tests cover
+8/7/4/3 ms and switches among v3, BaseJKA, JA+, jaPRO and other Lugormod names.
+Full Pmove, live servers, animation playback and rendered performance remain
+unverified; numerical branch fixtures are not wire captures or retail assets.
+
+[lugormod-pmove]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/game/bg_pmove.c
+[lugormod-build]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/CMakeLists.txt#L269
+[lugormod-grapple]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/game/g_active.c#L2643
+
 ### Server-dialect movement rules
 
 jaPRO/TaystJK command prediction also reads the existing snapshot race/style

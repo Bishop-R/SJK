@@ -645,9 +645,46 @@ impl Frame {
         }
     }
 
-    /// The text HUD of a nonzero `cg_hudFiles` (`CG_DrawHUD`'s first branch).
-    pub(crate) fn simple_hud(&mut self, readout: &Readout, timers: &mut Timers) {
+    /// The text HUD of a nonzero `cg_hudFiles` (`CG_DrawHUD`'s first branch). In a
+    /// vehicle it shows the hull as one more number, centred at the bottom, in place
+    /// of SJK's vector vehicle strip (stock draws `swoopvehiclehud`'s pictures there).
+    pub(crate) fn simple_hud(
+        &mut self,
+        readout: Option<&Readout>,
+        vehicle: Option<&VehicleReadout>,
+        timers: &mut Timers,
+    ) {
         self.clear();
+        if let Some(vehicle) = vehicle {
+            self.simple_hull(vehicle);
+        }
+        if let Some(readout) = readout {
+            self.simple_status(readout, timers);
+        }
+    }
+
+    /// The vehicle's hull, the text HUD's only vehicle number.
+    fn simple_hull(&mut self, vehicle: &VehicleReadout) {
+        let hull = vehicle.hull[0];
+        let hull = if hull.is_finite() {
+            hull.max(0.0) as i32
+        } else {
+            0
+        };
+        if let Some(run) = self.text() {
+            let _ = write!(run.text, "{hull}");
+            run.x = 320.0;
+            run.y = 480.0 - 40.0;
+            run.size = SMALL_POINTS;
+            run.color = YELLOW;
+            run.centred = true;
+            run.side = Some(Side::Centre);
+            run.end_limit = None;
+        }
+    }
+
+    /// The player's numbers of the text HUD.
+    fn simple_status(&mut self, readout: &Readout, timers: &mut Timers) {
         let y = 480.0 - 80.0;
         self.simple_text(16.0, y + 40.0, HUD_RED, |text| {
             let _ = write!(text, "{}", readout.health);
@@ -1099,12 +1136,33 @@ menuDef { name swoopvehiclehud rect 0 400 640 80
     }
 
     #[test]
+    fn the_text_hud_shows_only_the_hull_in_a_vehicle() {
+        let mut frame = Frame::default();
+        let vehicle = VehicleReadout {
+            hull: [1_500.0, 2_000.0],
+            ..VehicleReadout::default()
+        };
+        // A vehicle that hides its rider leaves no player numbers: the hull alone.
+        frame.simple_hud(None, Some(&vehicle), &mut Timers::default());
+        let runs = &frame.texts[..frame.text_count];
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].text, "1500");
+        assert!(runs[0].centred);
+        assert_eq!(runs[0].side, Some(Side::Centre));
+        assert_eq!((runs[0].x, runs[0].y), (320.0, 440.0));
+        // With the player's numbers it is one more run, which fits the frame.
+        frame.simple_hud(Some(&readout()), Some(&vehicle), &mut Timers::default());
+        assert_eq!(frame.text_count, 5);
+        assert_eq!(frame.texts[0].text, "1500");
+    }
+
+    #[test]
     fn simple_hud_prints_the_retail_strings() {
         let mut frame = Frame::default();
         let mut values = readout();
         values.armor = 25;
         values.force = 80;
-        frame.simple_hud(&values, &mut Timers::default());
+        frame.simple_hud(Some(&values), None, &mut Timers::default());
         let texts: Vec<_> = frame.texts[..frame.text_count]
             .iter()
             .map(|run| (run.text.as_str(), run.x, run.y))
