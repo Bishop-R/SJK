@@ -46,7 +46,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Profile banners: collect profile covers (Jedi Archives, Binary Sunset, Sith Eclipse, Hyperspace and Living Nebula) shown on your Profile and player card; Collection > Banners previews and wears them, a plain cover being free for everyone, and once the hub turns them on a holocron opening may bring one on top of its usual prize _(Lumaya, PR #319)_
 - Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
 - Vehicle HUD: each HUD style shows the health of the vehicle you pilot its own way: Text only just the number, SJK radial a yellow arc under the crosshair, SJK classic a yellow bar, instead of the same speed, shield and ammo strip for all _(Slash, PR #318)_
-- NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash)_
+- NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash, PR #336)_
 - Lugormod v3 servers: your own movement is predicted as the server moves you: scaled players' size and eye height, standing up under low ceilings, the admin jetpack in FFA, rolls with the stun baton; other servers are unchanged (`cg_noPredict 1` still turns prediction off) _(Lumaya, PR #287)_
 
 ## 2026.1102.1 (Alpha) | 02/11/2026
