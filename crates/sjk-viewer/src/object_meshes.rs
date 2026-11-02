@@ -98,6 +98,7 @@ pub(super) fn load<'a>(
     static_models::extend_appearances(bsp, &mut appearances);
     crate::mover_models::extend_appearances(game_state, &mut appearances);
     first_person_weapon::Catalog::extend_appearances(&mut appearances);
+    crate::propgun_frame::extend_appearances(vfs, &mut appearances);
     appearances.extend(
         (1..=16)
             .filter_map(weapon_view::held_model)

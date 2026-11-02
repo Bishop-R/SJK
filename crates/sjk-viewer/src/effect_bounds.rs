@@ -162,6 +162,7 @@ impl crate::GpuState {
         self.saber_gpu.bound_trails(&mut bounds);
         bounds.bend(self.saber_gpu.bent_reach());
         self.effect_geometry.bound(&mut bounds);
+        self.tag_render.bound(&mut bounds);
         bounds.rectangle(size)
     }
 }

@@ -13,11 +13,12 @@ SJK extras pack, not here.
 | --- | --- | --- |
 | `roll.wav` | `sound/sjk/mystery_box/roll.wav` | The roll: a music box tune slowing like a wound-down spring, its last chord at 5.2 s as the roll stops on what came out, 22050 Hz mono |
 | `take.wav` | `sound/sjk/mystery_box/take.wav` | Taking what came out: a quick rising sparkle |
-| `mystery_box.md3` | `models/sjk/mystery_box.md3` | The chest, 60 long (y) x 26 deep (x, its front facing +X) x 24 tall, its origin in the middle of its bottom: feet, a plinth, raised iron bands, corner posts, a rim, a lock plate and end handles |
+| `mystery_box.md3` | `models/sjk/mystery_box.md3` | The chest, 60 long (y) x 26 deep (x, its front facing +X) x 24 tall, its origin in the middle of its bottom: feet, a plinth, raised iron bands, corner posts, a rim, a lock plate and end handles, open at the top (dark walls and a floor inside); and a second surface, the halo: a band of light round its top rising 52 units |
 | `mystery_box_lid.md3` | `models/sjk/mystery_box_lid.md3` | The lid, arched, banded, its origin on the hinge (the chest's back top edge), reaching +X; the client pitches it open |
 | `teddy_bear.md3` | `models/sjk/teddy_bear.md3` | The teddy bear a box stops on when it blows up, about 18 units tall, facing +Y (made by [teddy_bear_model.py](../../../../scripts/teddy_bear_model.py)) |
 | `teddy_bear.jpg` | `models/sjk/teddy_bear.jpg` | 256x256: its fur, light muzzle and belly, black eyes and nose, tan pads and red bow |
 | `mystery_box.jpg` | `models/sjk/mystery_box.jpg` | 1024x1024: a long side (planks, iron bands, two question marks), the lid's top, an end, the dark inside, the iron edge |
 | `mystery_box_glow.jpg` | `models/sjk/mystery_box_glow.jpg` | The same layout, black but for the question marks' glow |
-| `mystery_box.shader` | `shaders/sjk_mystery_box.shader` | `models/sjk/mystery_box`: lit as a player model is, the glow added on top, pulsing; `models/sjk/teddy_bear`, lit the same |
+| `mystery_box_halo.jpg` | `models/sjk/mystery_box_halo.jpg` | 128x256: the halo's light, soft warm rays brightest at the foot, fading to black at the top |
+| `mystery_box.shader` | `shaders/sjk_mystery_box.shader` | `models/sjk/mystery_box`: lit as a player model is, the glow added on top, pulsing; `models/sjk/mystery_box_halo`: added, two-sided, its rays drifting, breathing; `models/sjk/teddy_bear`, lit the same |
 | `toy_boxhunt.png` | `gfx/sjk/toy_boxhunt.png` | The Box hunt toy's icon, 128x128: the chest's front |

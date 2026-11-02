@@ -926,9 +926,13 @@ def translate(src, uniforms, helpers=None, module_names=(), prefix_clash="sig_")
             tr.depth = 0
             tr.fn_assigned = set()
             for name, init in decls:
-                if not const:
-                    raise Error(f"module variable {name} is not const")
-                tr.line(f"const {rename.get(name, name)}: {TYPES[ty]} = {tr.as_type(init, ty)};")
+                if const:
+                    tr.line(f"const {rename.get(name, name)}: {TYPES[ty]} = {tr.as_type(init, ty)};")
+                elif init is None:
+                    tr.line(f"var<private> {rename.get(name, name)}: {TYPES[ty]};")
+                else:
+                    # A module variable: each pixel's own, starting from its value.
+                    tr.line(f"var<private> {rename.get(name, name)}: {TYPES[ty]} = {tr.as_type(init, ty)};")
         else:
             tr.function(item)
         out.append(notes + "\n".join(tr.out_lines))

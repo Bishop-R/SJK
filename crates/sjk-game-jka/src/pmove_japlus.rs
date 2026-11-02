@@ -39,7 +39,14 @@ pub struct JaPlusRules {
     /// (`sjk-viewer`'s `held_view::FREE_KNOCKDOWN_VIEW`, with a cvar override); off,
     /// a JA+ server keeps EternalJK's held view.
     pub free_knockdown_view: bool,
+    /// `dmflags` 256 (`JP_DF_OLD_COLLISION` of the JA+ 2.4 B7 game module): the server
+    /// keeps the original game's collision boxes, so the dual forward jump attack raises
+    /// its feet whether or not a player is in front.
+    pub old_collision: bool,
 }
+
+/// The `dmflags` bit with which a JA+ server keeps the original collision boxes.
+const JP_DF_OLD_COLLISION: i32 = 256;
 
 impl JaPlusRules {
     /// The rules a parsed dialect selects: JA+ ones only for a JA+ server.
@@ -53,6 +60,7 @@ impl JaPlusRules {
             head_slide: capabilities.contains(JaPlusCapabilities::HEAD_SLIDE),
             yellow_dfa: capabilities.contains(JaPlusCapabilities::YELLOW_DFA),
             free_knockdown_view: false,
+            old_collision: false,
         }
     }
 
@@ -63,7 +71,13 @@ impl JaPlusRules {
             .and_then(|bytes| std::str::from_utf8(bytes).ok())
             .and_then(|text| InfoString::parse(text).ok())
             .map_or_else(Self::default, |info| {
-                Self::from_dialect(&ServerProfile::from_server_info(&info).dialect)
+                let rules = Self::from_dialect(&ServerProfile::from_server_info(&info).dialect);
+                Self {
+                    // `cgs.dmflags`, `atoi` of the serverinfo key (`cg_servercmds.c`).
+                    old_collision: rules.enabled
+                        && info.get_i32("dmflags").unwrap_or_default() & JP_DF_OLD_COLLISION != 0,
+                    ..rules
+                }
             })
     }
 
@@ -167,6 +181,21 @@ mod tests {
         assert_eq!(japlus.flip_over_forward_speed(), 60.0);
         assert!(!japlus.flip_over_spins());
         assert!(japlus.standing_front_kick() && japlus.free_taunts() && japlus.flip_kick());
+    }
+
+    #[test]
+    fn dmflags_256_keeps_the_old_collision_on_ja_plus_only() {
+        let rules = |serverinfo: &str| {
+            let mut game = GameState::empty_local(0);
+            game.replace_config_string(0, serverinfo.as_bytes().to_vec())
+                .unwrap();
+            JaPlusRules::from_game_state(&game)
+        };
+        let japlus = r"\gamename\JA+ Mod v2.4 B7\jp_cinfo\196819";
+        assert!(!rules(japlus).old_collision);
+        assert!(!rules(&format!(r"{japlus}\dmflags\8")).old_collision);
+        assert!(rules(&format!(r"{japlus}\dmflags\264")).old_collision);
+        assert!(!rules(r"\gamename\basejka\dmflags\256").old_collision);
     }
 
     /// No world: every trace misses.

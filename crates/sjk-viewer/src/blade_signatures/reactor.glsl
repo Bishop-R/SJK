@@ -54,6 +54,11 @@ vec3 base_vol(vec3 ro, vec3 rd, float px){
     float H = (2.2 + 1.6*h.x + 2.0*sw + 2.5*cl)*(0.85 + 0.15*sin(t*3.0 + float(k)*1.7));
     for (int j = 0; j < 4; j++){
       float a = float(j)*0.25 + t*0.03 + float(k)*0.11;
+      // 31/10/2026: the loop lies within H/2 + (yb - ya)/2 of the middle of its span; its widest
+      // glow is 0.22 (and a pixel's), under a ten-thousandth three of them off: a ray further
+      // off skips its eight pieces
+      float tm;
+      if (rayPtRaw(ro, rd, around(1.15 + 0.5*H, a, 0.5*(ya + yb)), tm) - 0.5*H - 0.5*(yb - ya) > 0.7 + 3.0*px) continue;
       float best = 1e3, bs = 0.0;
       vec3 prev = around(1.15, a, ya);
       for (int i = 1; i <= 8; i++){

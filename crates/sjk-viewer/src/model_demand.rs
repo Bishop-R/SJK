@@ -108,6 +108,17 @@ impl GpuState {
                     .find(|appearance| !attempted.contains(appearance))
             })
             .or_else(|| {
+                // The models of the toys the Toy Master hid (`toy_master`).
+                let attempted = &self.config_string_refresh.models.attempted;
+                self.toy_master
+                    .wanted_models()
+                    .map(|model| Appearance {
+                        model: model.to_owned(),
+                        variant: String::new(),
+                    })
+                    .find(|appearance| !attempted.contains(appearance))
+            })
+            .or_else(|| {
                 // The mystery boxes' models: the box, what rolls over it (`mystery_box`).
                 let attempted = &self.config_string_refresh.models.attempted;
                 self.mystery_boxes

@@ -14,7 +14,7 @@ use winit::{
 /// Cached glyph positions from the last drawn draft; bounded by the compose budget.
 pub(super) struct DraftLayout {
     pub(super) rect: Rect,
-    pub(super) stops: [(usize, f32); sjk_client::CHAT_INPUT_BYTES + 1],
+    pub(super) stops: [(usize, f32); sjk_client::CHAT_DRAFT_CHARS + 1],
     pub(super) len: usize,
     dragging: bool,
     last_click: Option<(Instant, usize)>,
@@ -24,7 +24,7 @@ impl Default for DraftLayout {
     fn default() -> Self {
         Self {
             rect: Rect::default(),
-            stops: [(0, 0.0); sjk_client::CHAT_INPUT_BYTES + 1],
+            stops: [(0, 0.0); sjk_client::CHAT_DRAFT_CHARS + 1],
             len: 0,
             dragging: false,
             last_click: None,

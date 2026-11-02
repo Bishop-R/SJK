@@ -417,7 +417,7 @@ pub(crate) struct ProfileFacts {
 
 impl ProfileFacts {
     pub(crate) fn of(profile: &sjk_identity::Profile) -> Self {
-        use crate::achievements::{ALL, Kind, find};
+        use crate::achievements::{ALL, Category, Kind, held_kind};
         // A kind's step: how many kinds of the same counter have a lower goal.
         let step = |kind: &Kind| {
             ALL.iter()
@@ -428,7 +428,7 @@ impl ProfileFacts {
             .achievements
             .iter()
             .filter(|got| got.unlocked > 0 || (got.goal > 0 && got.progress >= got.goal))
-            .filter_map(|got| find(&got.id).map(|kind| (kind, got.unlocked)))
+            .filter_map(|got| held_kind(got).map(|kind| (kind, got.unlocked)))
             .collect();
         done.sort_by(|a, b| step(b.0).cmp(&step(a.0)).then(b.1.cmp(&a.1)));
         // The rarest holocron ever found: the counts are the unopened ones only, so the
@@ -461,9 +461,13 @@ impl ProfileFacts {
                 .unwrap_or_default()
                 .to_owned(),
             unlocked: done.len(),
+            // The Toy Master's found count in the total too: they are listed only then.
             total: crate::achievements::total_for(|kind| {
                 done.iter().any(|(held, _)| held.id == kind.id)
-            }),
+            }) + done
+                .iter()
+                .filter(|(kind, _)| kind.category == Category::ToyMaster)
+                .count(),
             rarest: done.iter().take(RAREST).map(|(kind, _)| *kind).collect(),
             holocron,
             created: profile.created,
@@ -495,8 +499,10 @@ const T_VITALS: usize = T_GOAL + RAREST;
 const T_SIGHT: usize = T_VITALS + 1;
 /// The JKR CREATOR mark, beside or in place of SJK TEAM.
 const T_JKR: usize = T_SIGHT + 1;
-const TEXTS: usize = T_JKR + 1;
-/// Draw commands a card holds: its own shapes and a shader's swatch.
+/// The second saber's (or a staff's other half's) shader, when it is not the first's.
+const T_SHADER2: usize = T_JKR + 1;
+const TEXTS: usize = T_SHADER2 + 1;
+/// Draw commands a card holds: its own shapes and two shaders' swatches.
 const LIST_CAPACITY: usize = 640;
 /// The saber shader's swatch on the card, in card units.
 const SWATCH_WIDTH: f32 = 74.0;
@@ -520,8 +526,10 @@ const MEDAL_LINE: f32 = 15.0;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Card {
     pub(crate) texts: [String; TEXTS],
-    /// The saber shader they wear, a catalogue id, when it draws on their blade.
-    shader: Option<&'static str>,
+    /// The saber shaders they wear, catalogue ids, when they draw on their blades: the
+    /// first saber's, then the second saber's (or a staff's other half's) only when it
+    /// is not the first's.
+    shaders: [Option<&'static str>; 2],
     /// 0 free, 1 red, 2 blue, 3 spectator.
     team: u8,
     /// Blade colours of the one or two sabers, if retail colours.
@@ -533,10 +541,11 @@ pub(crate) struct Card {
     avatar: Option<TextureId>,
 }
 
-/// The saber shader's loaded look and the time it moves at, for one frame's card.
+/// The saber shaders' loaded looks (as [`Card::shaders`]) and the time they move at, for
+/// one frame's card.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Look<'a> {
-    pub(crate) skin: Option<&'a crate::saber_skins::LoadedSkin>,
+    pub(crate) skins: [Option<&'a crate::saber_skins::LoadedSkin>; 2],
     pub(crate) seconds: f32,
 }
 
@@ -627,8 +636,20 @@ fn worn_line(info: LegacyClientInfo<'_>) -> String {
 }
 
 /// The card for the player whose configstring is `info`, wearing saber shader `shader`
-/// (a catalogue id, `None` for the stock blade).
+/// (a catalogue id, `None` for the stock blade) on every blade.
+#[cfg(test)]
 pub(crate) fn card_from(info: &[u8], hub: Option<HubInfo>, shader: Option<&'static str>) -> Card {
+    card_with(info, hub, [shader, shader])
+}
+
+/// [`card_from`] for a player wearing `shaders`: the first saber's, then the second
+/// saber's (or a staff's other half's; `None` the stock blade, and when they hold no
+/// second). The second gets a row of its own only when it is not the first's.
+pub(crate) fn card_with(
+    info: &[u8],
+    hub: Option<HubInfo>,
+    shaders: [Option<&'static str>; 2],
+) -> Card {
     let info = LegacyClientInfo::new(info);
     let text = |key: &str| {
         info.bytes(key)
@@ -656,9 +677,16 @@ pub(crate) fn card_from(info: &[u8], hub: Option<HubInfo>, shader: Option<&'stat
         if dual { blade(info, "c2") } else { None },
     ];
     card.texts[T_WORN] = worn_line(info);
-    if let Some(skin) = shader.and_then(crate::unlockables::blade_skin) {
-        card.shader = Some(skin.id);
+    let [first, second] = shaders.map(|id| id.and_then(crate::unlockables::blade_skin));
+    if let Some(skin) = first {
+        card.shaders[0] = Some(skin.id);
         card.texts[T_SHADER] = skin.name.to_owned();
+    }
+    if let Some(skin) = second.filter(|second| Some(second.id) != card.shaders[0]) {
+        card.shaders[1] = Some(skin.id);
+        // Named as the Collection names the side it goes on.
+        let side = if dual { "2nd blade" } else { "other half" };
+        card.texts[T_SHADER2] = format!("{}  ({side})", skin.name);
     }
     card.texts[T_EXTRA] = info
         .text("skill")
@@ -848,9 +876,11 @@ pub(crate) struct Input<'a> {
     pub(crate) entities: &'a [sjk_protocol::EntityState],
     /// The resolved model icon of a client slot.
     pub(crate) icon: &'a dyn Fn(u8) -> Option<TextureId>,
-    /// The saber shader the player in a client slot wears, a catalogue id, only when it
-    /// draws on their blade here (theirs by the looks, its pack loaded).
-    pub(crate) shader: &'a dyn Fn(u8) -> Option<&'static str>,
+    /// The saber shaders the player in a client slot wears, catalogue ids, each only when
+    /// it draws on their blade here (theirs by the looks, its pack loaded): the first
+    /// saber's, then the second saber's or a staff's other half's (`None` when they hold
+    /// neither).
+    pub(crate) shader: &'a dyn Fn(u8) -> [Option<&'static str>; 2],
     /// The loaded saber shaders, for the swatch.
     pub(crate) skins: &'a crate::saber_skins::LoadedSkins,
     /// Counts changes to the looks and the loaded shaders, so the card is rebuilt.
@@ -1063,7 +1093,10 @@ impl State {
             .filter(|hub| !hub.avatar.is_empty())
             .and_then(|hub| crate::avatars::texture(&hub.key_id, &hub.avatar));
         let look = Look {
-            skin: self.card.shader.and_then(|id| input.skins.get(id)),
+            skins: self
+                .card
+                .shaders
+                .map(|id| id.and_then(|id| input.skins.get(id))),
             seconds: now as f32 / 1_000.0,
         };
         self.emit(hips, side, input.camera.viewport, pinned.is_some(), look);
@@ -1130,11 +1163,11 @@ impl State {
                     .copied()
                     .unwrap_or_default(),
             );
-        let shader = u8::try_from(client)
+        let shaders = u8::try_from(client)
             .ok()
-            .and_then(|slot| (input.shader)(slot))
-            .filter(|_| !team_blade.plain);
-        self.card = card_from(info, hub, shader);
+            .map_or([None; 2], |slot| (input.shader)(slot))
+            .map(|shader| shader.filter(|_| !team_blade.plain));
+        self.card = card_with(info, hub, shaders);
         if team_blade.any() {
             self.card.swatches = team_swatches(info, self.card.swatches, team_blade.colors);
         }
@@ -1147,7 +1180,8 @@ impl State {
         let mut height = 14.0 * unit * 2.0 + row(30.0) + row(22.0);
         for (shown, rows) in [
             (!card.texts[T_SABER].is_empty(), 22.0),
-            (card.shader.is_some(), 24.0),
+            (card.shaders[0].is_some(), 24.0),
+            (card.shaders[1].is_some(), 24.0),
             (card.has_worn(), 22.0),
             (card.has_extra(), 22.0),
         ] {
@@ -1377,9 +1411,13 @@ impl State {
             }
             y += row(22.0);
         }
-        // The saber shader they wear: its live swatch, as the Collection draws it, and
-        // its name.
-        if card.shader.is_some() {
+        // The saber shaders they wear: each its live swatch, as the Collection draws it,
+        // and its name; the second's only when it is not the first's.
+        for side in 0..2 {
+            let Some(shader) = card.shaders[side] else {
+                continue;
+            };
+            let skin = look.skins[side];
             let swatch = [
                 left,
                 y + row(3.0),
@@ -1394,18 +1432,17 @@ impl State {
                     origin: [0.0, 0.0],
                 },
                 swatch,
-                look.skin,
+                skin,
                 look.seconds,
-                // A chroma in the first saber's colour, as the world draws it.
-                card.swatches[0].map_or(0.0, |rgb| {
-                    crate::console::collection_panel::swatch::chroma_turn(look.skin, rgb)
+                // A chroma in its saber's colour, as the world draws it (a staff's other
+                // half takes the first saber's).
+                card.swatches[side].or(card.swatches[0]).map_or(0.0, |rgb| {
+                    crate::console::collection_panel::swatch::chroma_turn(skin, rgb)
                 }),
             );
             // A thin edge in the shader's tier colour, which its name takes too.
-            let tier = card
-                .shader
-                .and_then(crate::unlockables::blade_skin)
-                .map(|skin| skin.tier.colour());
+            let blade_skin = crate::unlockables::blade_skin(shader);
+            let tier = blade_skin.map(|skin| skin.tier.colour());
             if let Some(tier) = tier {
                 let _ = self.list.push(DrawCommand::Border {
                     rect: Rect::new(swatch[0], swatch[1], swatch[2], swatch[3]),
@@ -1415,7 +1452,7 @@ impl State {
                 });
             }
             // Its tier's breath, quiet: the HUD shows only that much of a tier's show.
-            if let Some(skin) = card.shader.and_then(crate::unlockables::blade_skin) {
+            if let Some(skin) = blade_skin {
                 crate::rarity_fx::draw(
                     &mut self.list,
                     crate::rarity_fx::Item::of(skin.tier, true, crate::rarity_fx::Size::Tiny),
@@ -1426,9 +1463,8 @@ impl State {
                 );
             }
             // A chroma's colour wheel between the swatch and its name.
-            let chroma = card.shader.is_some_and(crate::unlockables::is_chroma);
             let mut text_x = left + swatch[2] + 8.0 * unit;
-            if chroma {
+            if crate::unlockables::is_chroma(shader) {
                 crate::console::collection_panel::swatch::chroma_mark(
                     &mut self.list,
                     &crate::menu::sjk::Frame {
@@ -1446,7 +1482,7 @@ impl State {
             let _ = self.list.push(DrawCommand::PopOpacity);
             put_text(
                 &mut self.list,
-                T_SHADER,
+                [T_SHADER, T_SHADER2][side],
                 Rect::new(text_x, y + row(1.0), left + beside(y) - text_x, row(22.0)),
                 15.0 * unit,
                 // The tier's colour lifted toward white, to read on the dark card.
@@ -1824,20 +1860,29 @@ impl State {
         state
     }
 
-    /// As [`Self::preview`], the worn shader drawn from `skin`.
+    /// As [`Self::preview`], the worn shaders drawn from `skins` (as [`Card::shaders`]).
     pub(crate) fn preview_with(
         card: Card,
         anchor: [f32; 2],
         viewport: [f32; 2],
         pinned: bool,
-        skin: Option<&crate::saber_skins::LoadedSkin>,
+        skins: [Option<&crate::saber_skins::LoadedSkin>; 2],
     ) -> Self {
         let mut state = Self {
             card,
             alpha: 1.0,
             ..Self::default()
         };
-        state.emit(anchor, 24.0, viewport, pinned, Look { skin, seconds: 1.3 });
+        state.emit(
+            anchor,
+            24.0,
+            viewport,
+            pinned,
+            Look {
+                skins,
+                seconds: 1.3,
+            },
+        );
         state
     }
 
@@ -2096,8 +2141,12 @@ mod tests {
             goal,
             unlocked,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         };
         sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -2216,6 +2265,9 @@ mod tests {
                 goal: 5,
                 unlocked: 1_791_336_225,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             });
         }
         let facts = ProfileFacts::of(&profile);
@@ -2228,6 +2280,9 @@ mod tests {
             goal: 5,
             unlocked: 0,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         });
         let facts = ProfileFacts::of(&unfinished);
         assert_eq!((facts.unlocked, facts.total), (4, total - 1));
@@ -2288,11 +2343,7 @@ mod tests {
     fn the_card_names_the_worn_shader_with_a_swatch() {
         let card = card_from(&info("n|Sol|st|single_1|c1|4|"), None, Some("saber_glitch"));
         assert_eq!(card.texts[T_SHADER], "Glitch blade");
-        assert!(
-            card_from(&info("n|Sol|"), None, Some("saber_nothing"))
-                .shader
-                .is_none()
-        );
+        assert!(card_from(&info("n|Sol|"), None, Some("saber_nothing")).shaders == [None; 2]);
         assert!(card_from(&info("n|Sol|"), None, None).texts[T_SHADER].is_empty());
         let loaded = crate::saber_skins::tests::loaded_sample(1);
         let sun = card_from(&info("n|Sol|st|single_1|c1|4|"), None, Some("saber_sun"));
@@ -2301,7 +2352,7 @@ mod tests {
             [900.0, 500.0],
             [1_920.0, 1_080.0],
             false,
-            loaded.get("saber_sun"),
+            [loaded.get("saber_sun"), None],
         );
         let commands = state.list.commands();
         let named = commands.iter().any(
@@ -2319,6 +2370,71 @@ mod tests {
             .unwrap();
         assert!(closed > opened + 10);
         assert!(commands.len() < LIST_CAPACITY, "the list never fills");
+    }
+
+    #[test]
+    fn a_second_sabers_own_shader_gets_a_row_of_its_own() {
+        let two = info("n|Sol|st|single_1|st2|single_2|c1|4|c2|1|");
+        let staff = info("n|Sol|st|dual_1|c1|4|");
+        let height = |card: &Card| State::height(card, 1.0, false);
+        let one = card_with(&two, None, [Some("saber_sun"), None]);
+        assert_eq!(one.shaders, [Some("saber_sun"), None]);
+        // The same shader on both: one row, as with one saber.
+        let same = card_with(&two, None, [Some("saber_sun"), Some("saber_sun")]);
+        assert_eq!(same, one);
+        assert_eq!(same, card_from(&two, None, Some("saber_sun")));
+        // Their own: a row more, named for the side it goes on.
+        let both = card_with(&two, None, [Some("saber_sun"), Some("saber_glitch")]);
+        assert_eq!(both.shaders, [Some("saber_sun"), Some("saber_glitch")]);
+        assert_eq!(both.texts[T_SHADER2], "Glitch blade  (2nd blade)");
+        assert_eq!(height(&both), height(&one) + 24.0);
+        let half = card_with(&staff, None, [Some("saber_sun"), Some("saber_glitch")]);
+        assert_eq!(half.texts[T_SHADER2], "Glitch blade  (other half)");
+        // The first stock: only the second's row.
+        let second = card_with(&two, None, [None, Some("saber_glitch")]);
+        assert_eq!(second.shaders, [None, Some("saber_glitch")]);
+        assert!(second.texts[T_SHADER].is_empty());
+        assert_eq!(height(&second), height(&one));
+        // An unknown second, or none: no row.
+        let unknown = card_with(&two, None, [None, Some("saber_nothing")]);
+        assert_eq!(unknown.shaders, [None; 2]);
+        assert_eq!(height(&unknown) + 24.0, height(&one));
+        // Both drawn, each a live swatch and its name, the list still not full on a
+        // pinned card with everything (two chromas, their wheels too).
+        let loaded = crate::saber_skins::tests::loaded_pair(1);
+        let state = State::preview_with(
+            card_with(&two, None, [Some("saber_tidal"), Some("saber_frost")]),
+            [900.0, 500.0],
+            [1_920.0, 1_080.0],
+            false,
+            [loaded.get("saber_tidal"), loaded.get("saber_frost")],
+        );
+        let commands = state.list.commands();
+        for slot in [T_SHADER, T_SHADER2] {
+            assert!(commands.iter().any(
+                |command| matches!(command, DrawCommand::Text { text, .. } if text.0 as usize == slot)
+            ));
+        }
+        let groups = commands
+            .iter()
+            .filter(|command| matches!(command, DrawCommand::PushOpacity(_)))
+            .count();
+        assert_eq!(groups, 2);
+        let mut full = full_card(None);
+        full.shaders = [Some("saber_storm"), Some("saber_glitch")];
+        full.texts[T_SHADER2] = "Glitch blade  (2nd blade)".to_owned();
+        let state = State::preview_with(
+            full,
+            [900.0, 500.0],
+            [1_920.0, 1_080.0],
+            true,
+            [loaded.get("saber_tidal"), loaded.get("saber_frost")],
+        );
+        assert!(
+            state.list.commands().len() < LIST_CAPACITY,
+            "{} commands",
+            state.list.commands().len()
+        );
     }
 
     #[test]
@@ -2346,7 +2462,7 @@ mod tests {
                         anchor,
                         viewport,
                         pinned,
-                        loaded.get(shader),
+                        [loaded.get(shader), None],
                     );
                     let card = match state.list.commands()[2] {
                         DrawCommand::RoundedRect { rect, .. } => rect,

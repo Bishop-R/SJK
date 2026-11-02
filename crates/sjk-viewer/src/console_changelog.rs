@@ -93,6 +93,13 @@ impl ViewerConsole {
         self.rebuild_prompt();
     }
 
+    /// Open Settings searched for `query` (empty: Settings as it opens) on the next
+    /// frame, closing the console: a News link to a setting.
+    pub(crate) fn search_settings(&mut self, query: &str) {
+        self.set_open(false);
+        self.pending_settings_search = Some(query.to_owned());
+    }
+
     /// The setting a chip asked Settings to be searched for, once.
     pub(crate) fn take_settings_search(&mut self) -> Option<String> {
         self.pending_settings_search.take()

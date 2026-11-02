@@ -1358,6 +1358,7 @@ mod tests {
 
     fn full_profile() -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),

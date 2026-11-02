@@ -23,7 +23,7 @@ pub const ID: &str = "japlus";
 const COMMANDS: &[Command] = &[
     command(
         "japlus.guntele",
-        "Teleport to your crosshair, or a distance along your view: japlus.guntele [distance] [yaw offset] (JA+ admin)",
+        "Teleport to your crosshair, or a distance straight ahead, short of walls: japlus.guntele [distance] [yaw offset] (JA+ admin)",
     ),
     command(
         "japlus.bring",
@@ -169,7 +169,11 @@ impl ClientMod for JaPlus {
         host: &mut dyn Host,
     ) -> Result<Vec<String>, String> {
         let command = match name {
-            "japlus.guntele" => teleport::gun_tele(args, me(host)?, host.crosshair_point())?,
+            "japlus.guntele" => {
+                teleport::gun_tele(args, me(host)?, host.crosshair_point(), |from, to| {
+                    host.trace_player(from, to)
+                })?
+            }
             "japlus.bring" => teleport::bring(args, host)?,
             "japlus.goto" => {
                 let (command, note) = teleport::go_to(args, host)?;

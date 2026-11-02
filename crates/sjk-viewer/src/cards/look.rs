@@ -102,6 +102,14 @@ pub(crate) struct Shown<'a> {
     pub(crate) index: usize,
 }
 
+impl<'a> Card<'a> {
+    /// How it reads and is coloured: its face's rank or rarity, else (sealed) its own
+    /// rarity's ([`super::Tone`]).
+    pub(crate) fn tone(&self) -> super::Tone<'a> {
+        super::Tone::of(self.rarity, self.face.map(|shown| shown.face))
+    }
+}
+
 /// How many shape commands a card of `finish` that wide (frame pixels) takes, its words
 /// apart.
 #[cfg(test)]
@@ -214,7 +222,11 @@ fn draw_flat(
     let radius = width * CORNER * s;
     let unit = width / 220.0;
     let rarity = card.rarity;
-    let plate = if card.dim { DIM_PLATE } else { rarity.colour };
+    let plate = if card.dim {
+        DIM_PLATE
+    } else {
+        card.tone().colour
+    };
     let edge = if card.finish.index == 2 { SUN } else { plate };
     let list = canvas.draw_list_mut();
     let _ = list.push(DrawCommand::PushOpacity(alpha.clamp(0.0, 1.0)));
@@ -366,7 +378,7 @@ fn face(
 ) {
     let s = frame.s;
     let height = width * ASPECT;
-    let rarity = card.rarity;
+    let tone = face.face.tone();
     // Across the card as it turns: a share of the width from its left.
     let across = |share: f32| left + share * shown;
     let list = canvas.draw_list_mut();
@@ -466,22 +478,24 @@ fn face(
         FontWeight::Semibold,
         TextAlign::Start,
     );
-    // The rarity's symbol in the corner, in its colour.
-    text(
-        canvas,
-        TextFamily::Display,
-        format_args!("{}", crate::symbols::card_rarity(rarity.index)),
-        frame.rect(
-            x + width * 0.82,
-            y + width * 0.03,
-            width * 0.13,
-            width * 0.08,
-        ),
-        width * 0.06 * s,
-        faded(rarity.colour, ink),
-        FontWeight::Semibold,
-        TextAlign::End,
-    );
+    // The rarity's symbol in the corner, in its colour (a rank has none).
+    if let Some(mark) = tone.mark {
+        text(
+            canvas,
+            TextFamily::Display,
+            format_args!("{mark}"),
+            frame.rect(
+                x + width * 0.82,
+                y + width * 0.03,
+                width * 0.13,
+                width * 0.08,
+            ),
+            width * 0.06 * s,
+            faded(tone.colour, ink),
+            FontWeight::Semibold,
+            TextAlign::End,
+        );
+    }
     if width < WORDS {
         return;
     }
@@ -554,14 +568,10 @@ fn face(
     text(
         canvas,
         TextFamily::Body,
-        format_args!(
-            "{} {}",
-            crate::symbols::card_rarity(rarity.index),
-            rarity.name
-        ),
+        format_args!("{tone}"),
         frame.rect(x + width * 0.6, foot_y, width * 0.351, width * 0.04),
         small * s,
-        faded(rarity.colour, ink),
+        faded(tone.colour, ink),
         FontWeight::Semibold,
         TextAlign::End,
     );
@@ -614,17 +624,13 @@ fn label(
     text(
         canvas,
         TextFamily::Body,
-        format_args!(
-            "{} {}",
-            crate::symbols::card_rarity(card.rarity.index),
-            card.rarity.name
-        ),
+        format_args!("{}", face.face.tone()),
         frame.rect(x + width * 0.05, foot[0], width * 0.9, foot[1]),
         width * 0.078 * s,
         if card.dim {
             quiet
         } else {
-            faded(card.rarity.colour, ink)
+            faded(face.face.tone().colour, ink)
         },
         FontWeight::Semibold,
         TextAlign::Center,
@@ -811,6 +817,7 @@ pub(crate) mod tests {
             grants: None,
             blade: None,
             scene: None,
+            rank: None,
         }
     }
 

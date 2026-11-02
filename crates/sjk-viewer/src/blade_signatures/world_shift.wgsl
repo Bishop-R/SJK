@@ -3,6 +3,7 @@
 // @part Climates
 // @part Sparks
 // @room 10
+// @raycache off
 // @solid 1
 // @palette {"corona.rim_cool":[0.35,0.20,0.55],"corona.rim_hot":[0.90,0.60,0.50],"corona.inner":[1.0,0.92,0.85],"core.white":[1.0,0.98,0.95],"core.fringe_cool":[0.50,0.70,1.0],"core.fringe_hot":[1.0,0.65,0.35],"light.color":[0.95,0.75,0.60],"trail":[0.90,0.70,0.60]}
 
@@ -296,7 +297,7 @@ fn ws_storm(ro: vec3<f32>, rd: vec3<f32>, px: f32, d: f32, top: f32, form: f32, 
             let A = around(0.35, a, y0);
             let M = around(reach, a + 0.25, y0 + dy * 0.5);
             let C = around(0.35, a + 0.5, y0 + dy);
-            let bd = min(bolt3(ro, rd, A, M, k + fi * 11.0, 0.3), bolt3(ro, rd, M, C, k + fi * 11.0 + 0.5, 0.3));
+            let bd = min(bolt3(ro, rd, A, M, k + fi * 11.0, 0.3, px), bolt3(ro, rd, M, C, k + fi * 11.0 + 0.5, 0.3, px));
             col += boltLight(bd, vec3<f32>(0.45, 0.6, 1.0), px) * on * 1.3 * form;
         }
     }
@@ -616,7 +617,7 @@ fn ws_big(ro: vec3<f32>, rd: vec3<f32>, px: f32, k: f32, top: f32, form: f32, st
             let A = around(0.35, a, y0);
             let M = around(reach, a + 0.05 * (h11(kk) - 0.5), y0 + dy * 0.5);
             let C = around(0.35, a + 0.1, y0 + dy);
-            let bd = min(bolt3(ro, rd, A, M, kk + fi * 11.0, 0.35), bolt3(ro, rd, M, C, kk + fi * 11.0 + 0.5, 0.35));
+            let bd = min(bolt3(ro, rd, A, M, kk + fi * 11.0, 0.35, px), bolt3(ro, rd, M, C, kk + fi * 11.0 + 0.5, 0.35, px));
             let fade = exp(-fract(t * (7.0 + 3.0 * st) + fi * 0.31) * 2.5);
             col += (boltLight(bd, vec3<f32>(0.45, 0.65, 1.0), px) * 2.2 + vec3<f32>(0.4, 0.6, 1.0) * halo(bd, 1.5) * 0.4) * fade * form;
         }
@@ -629,7 +630,7 @@ fn ws_big(ro: vec3<f32>, rd: vec3<f32>, px: f32, k: f32, top: f32, form: f32, st
             }
             let A = vec3(0.0, top, 0.0);
             let C = A + around(2.0 + 2.0 * h11(kk + fi), h11(kk * 2.1 + fi), 3.5 + 2.0 * h11(kk * 4.4));
-            let bd = bolt3(ro, rd, A, C, kk + fi * 7.0, 0.4);
+            let bd = bolt3(ro, rd, A, C, kk + fi * 7.0, 0.4, px);
             col += boltLight(bd, vec3<f32>(0.5, 0.7, 1.0), px) * 1.4 * exp(-fract(t * 5.0 + fi * 0.5) * 3.0) * form;
         }
         // sea spray flung off the blade
@@ -656,7 +657,7 @@ fn ws_big(ro: vec3<f32>, rd: vec3<f32>, px: f32, k: f32, top: f32, form: f32, st
             }
             let c = (b0 + b1) * 0.5;
             let A = around(0.45, atan2(c.x, c.z) / 6.2832, c.y);
-            let bd = bolt3(ro, rd, A, c, kk + fi * 5.0, 0.35);
+            let bd = bolt3(ro, rd, A, c, kk + fi * 5.0, 0.35, px);
             col += (boltLight(bd, vec3<f32>(1.0, 0.12, 0.08), px) * 1.2) * exp(-fract(t * 4.0 + fi * 0.37) * 3.0) * form;
         }
         // red salt dust streaming off the boulders and blade

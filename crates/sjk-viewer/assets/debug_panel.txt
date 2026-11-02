@@ -24,6 +24,87 @@
 
 # ---- Console & chat ----
 
+[cloud-auto-update]
+area: Menus & settings
+title: JoF content and Sith cloud update automatically (opt in, per group)
+change: The card has Update automatically (jof.contentAuto, sith.cloudAuto) and an Auto tick per group.
+change: At start (+30 s) and every hour, a run downloads what changed in the Auto groups only.
+change: It removes only files SJK fetched for an Auto group that the server dropped; a card says so.
+test: jof.downloads: Update automatically on; the foot says Next automatic check HH:MM (soon).
+test: Auto ticks dim while it is off; A or a click marks a group; jof.contentAutoGroups follows.
+test: Delete a file of an Auto group and one of another: the next check brings back only the first.
+test: In a match, the run goes on quietly; "JoF content updated: N files" shows, maps load next map.
+test: Settings > General: the JoF content / Sith cloud auto-update rows switch the same cvars.
+note: Not verified in game. Nothing runs with jof.content off or no Auto group (log: "automatic").
+
+[look-sync]
+area: Gameplay
+title: Toys (the box) reach other players faster
+change: A toy or blade change no longer waits behind the client's other hub calls.
+change: A look the hub finds too fast is retried after 1 s, not 10 s; a lapsed claim at once.
+change: The log says how long each look took: "SJK look sent: N ms after the change ...".
+test: With a second SJK client on the same server, toy_box on/off: it shows within ~1-2 s.
+test: Toggle the box quickly several times: the other client ends on the right state.
+test: logs\last-client.log has "SJK look sent" lines with small waits.
+
+[predict-legacy]
+area: Gameplay
+title: Prediction as in 2026.1028.1 (cg_predictLegacy, after Kushina's request)
+change: Settings > Game options > Prediction: Current (0) or As in 2026.1028.1 (255).
+change: Bits: 1 saber files, 2 lock facing, 4 respawn jump, 8 trigger box, 16 gesture, 32 held.
+change: 64 other players, 128 history gap. A server's own move ignores them.
+test: Settings > Game options > Prediction: As in 2026.1028.1 sets cg_predictLegacy 255.
+test: On a JA+ server with 255: strafe jumps, swings and dual jump attacks feel as on 1028.1.
+test: Respawn holding attack and jump with 4 set: you jump at once (the server may correct it).
+test: Back to Current: cg_predictLegacy 0, and the miss log (cg_showMiss 1) stays quiet.
+
+[history-tab]
+area: Menus & settings
+title: Collection > History: drops, openings, credits, shards, boxes and trades
+change: A tenth Collection tab lists GET /v1/history newest first, a row a line, dates local.
+change: An Open all is one row (+ opens it); chips filter; Load older reads the next page.
+test: Collection > History: the newest lines show with chips, amounts in green/red, dates.
+test: Open all some holocrons, reopen History: one "Opened N ..." row; Enter shows its lines.
+test: Left/Right filter: Credits keeps buys, boxes and openings that paid credits.
+test: Scroll to the end with more than 100 lines: Load older adds older lines once.
+test: On a hub without the endpoint: "History unavailable", "keeps no history yet".
+note: Needs the hub's history branch deployed.
+
+[banners]
+area: Menus & settings
+title: Profile banners (#319, Lumaya): covers on Profile and cards, Collection > Banners
+change: Collection > Banners previews six covers (one free), wears one through the hub.
+change: Holocron openings may add a banner on top of the prize, once the hub enables them.
+test: Collection > Banners: the free cover wears; held covers show copies; Profile header.
+test: Player card and SJK chat sender cards show the worn cover; unknown ids fall back.
+test: Holocron odds: Banner bonus row only on a hub with banners on, 0 otherwise.
+note: Hub banner drops stay off until SJK_HUB_BANNER_MIN_CLIENT is set (hub shared #6).
+
+[pr-batch-1102b]
+area: Menus & settings
+title: PRs 02/11 b: HUD edit, sonar, quiet mode, PC fonts, scoreboard IDs, reactions, long chat
+change: Slash: #295 move HUD with the mouse; #301 sound sonar; #302 quiet; #303 fonts from PC.
+change: Creyon: #317 scoreboard IDs + deaths rank; #321 trade toast; #236 JoF hats from EJK.
+change: #316 SJK chat emoji reactions (Lumaya); #306 long chat drafts in up to 4 pieces (Lukas).
+test: hud_edit: drag the health and chat boxes, reset one; positions kept after a restart.
+test: cg_soundSonar 1: arcs point at footsteps/shots behind you. quiet: only duel + whispers.
+test: Settings > Chat font: pick a PC font, long list scrolls; a sideways wheel does not move.
+test: cg_scoreboardIDs 1 + cg_scoreboardDeathsRank 1 on SJK's board. Finish a trade: toast.
+test: Profile with a JoF hat: its own picture. SJK chat: react to a message, count shows.
+test: Type a 400-char message: sent as pieces. Past 4 pieces: refused, the draft stays open.
+
+[pr-batch-1102]
+area: Gameplay
+title: PRs 02/11: hilt and day-sky crashes, trade chat, card shaders, guntele, chat logs
+change: Slash: #326 hilt crash; #329 day tint crash + DX12; #324 chat over trade; #325 40 m.
+change: Slash: #330 card second shader; #327 guntele N level, stops at walls (crouch box too).
+change: #328 shaders chosen on click, New outline (Creyon); #331 #332 away bubble, chat logs.
+test: Pick Empty Hilt (Stance) in the hilt list: blade with no hilt, the game stays open.
+test: Sun follows PC clock on, load a map: no crash. Trade open: chat key opens chat on top.
+test: japlus.guntele 300 crouched in a vent goes ahead, not to the crosshair; stops at walls.
+test: Collection > Shaders: hover does not choose, click does; New shaders have gold outline.
+test: Settings > Chat: Save game chat logs off by default; on writes chatlogs/chat.log.
+
 [pr-batch-1031]
 area: Gameplay
 title: PRs 31/10: chat colour, GIF hiding, Change name, melee kick, duel noclip, vehicle clips
@@ -295,6 +376,16 @@ title: Join the game while following a player (Slash, PR #310, hub #207)
 change: The join menu and the match card read your own team, not the followed player's.
 test: Local FFA server with a bot, spectate and follow the bot: Join the game is offered.
 test: The match card's Join works too; Spectate goes back to the free camera.
+
+[blackwolf-dual-jump-hull]
+area: Gameplay
+title: JA+ dual jump attack hull (Blackwolf1337, PR #333)
+change: On JA+ the dual forward jump attack lifts the feet only with a player 70 units ahead.
+change: dmflags 256 on the JA+ server: the feet lift every time. Other servers unchanged.
+test: Local JA+ 2.4 B7 server, dual sabers, forward jump attack with nobody ahead: no sinking.
+test: Same, aimed at a bot standing in front: you sail over it with no snap back.
+test: Base or SJK server: the attack behaves as before.
+note: Not yet checked against a real JA+ server; revert the merge if it mispredicts.
 
 [lumaya-saber-order]
 area: Gameplay
@@ -2095,6 +2186,17 @@ test: Once the hub has the scenes: Collection > Cards, JKA Characters: pictures 
 test: First they show the old placeholder, then the drawing; a restart shows the drawing at once.
 test: Look closer at Luke: green blade lit; JKA Arsenal: the Disruptor drawn whole, not in bits.
 note: The drawings are kept in card_scenes beside identity.key; deleting the folder draws them again.
+
+[ranked-cards]
+area: Menus & settings
+title: Ranked cards (JoF): a rank and its colour in place of the rarity
+change: A card with a rank (Leader, Council) shows it and its colour, never Mythical/Legendary.
+change: Its foot, tile, close-up, hover, opening words and chat find line name the rank.
+test: Once the hub has the JoF cards: Collection > Cards, JoF: Leader in cyan, Council in green.
+test: Hover a JoF card: "Leader card." and its own odds; no rarity name or mark anywhere.
+test: Rarity chip (T) on Mythical: JoF cards leave the grid; Any brings them back.
+test: Open holocrons until a JoF card comes: its title and words name the rank, not a rarity.
+note: A sealed copy and the crate spin still show the rolled rarity (the odds).
 
 [card-faces-lazy]
 area: Menus & settings
@@ -4136,6 +4238,19 @@ test: Press any movement key mid-replay: it stops and you have control.
 test: Start farther than 192 units: it prints the start to teleport to (ghost info too).
 note: Console only, no menu entry. Force-wheel Stasis/Repulse/Dash picks are not recorded.
 
+[ghost-editor]
+area: Gameplay
+title: Ghost editor: cut a ghost's start and end, clear the chat bubble, duplicate it
+change: ghost edit [name] opens a column (the map editor's) with the ghosts and a cut timeline.
+change: The start snaps to where you stood still (Shift: anywhere); First/Last move cut the waits.
+change: Clear chat bubble (on) drops the console's bubble; the path shows in the world (gold start).
+test: Showcase tools on, ghost record test, run a bit, ghost stop; then ghost edit test.
+test: First move, then Last move: the timeline dims both ends; "keeps N s of M s" shrinks.
+test: Duplicate (test_2): the copy opens; Play walks to the gold ring and replays without bubble.
+test: Drag the Start on the timeline mid-run: it snaps; Shift-drag: ember "Starts mid-move".
+test: Save once asks again, the second press overwrites; Esc (or Look) hides, Esc brings it back.
+note: Not tried in a real game yet; the path draws through walls (no depth test).
+
 [join-retries]
 area: Gameplay
 title: Joining resends lost packets and never hangs as a floating camera
@@ -4754,9 +4869,9 @@ note: Watch the FPS counter during a barrage; send logs\last-client.log if it dr
 
 [away-talk-balloon]
 area: HUD
-title: Your chat balloon shows while you are alt-tabbed or minimised (EternalJK)
+title: Your chat balloon shows while you are alt-tabbed or minimised
 change: Losing focus or minimising sends the talk button, so others see you are away.
-change: cl_unfocusedChatbox 0 / cl_minimizedChatbox 0 turn either case off (both 1).
+change: One switch, cl_unfocusedChatbox 0, turns both away cases off (default 1).
 test: On a server with a friend: alt-tab away; they see your chat balloon until you return.
 test: Minimise the window: same. Back in the game you move normally at once.
 test: cl_unfocusedChatbox 0, alt-tab again: no balloon.
@@ -7539,6 +7654,22 @@ test: Click a wall left of the panel: Selected shows its surface; type a shader,
 test: Place: search tree, click a row twice: a tree stands where you aimed; Turn right, Up, Bigger.
 test: Grab: the panel hides and the tree follows your aim; O puts it down and reopens the panel.
 test: Edits: choose one, Delete; Ctrl+Z undoes the newest; This server: new edits name it.
+
+[map-editor-ux]
+area: Rendering & effects
+title: Map editor made easier, and why Publish failed (staff)
+change: The live hub had no map edits (its map-edits branch was never merged): Publish says so.
+change: The world-note key opens the panel and puts a grabbed model down; a Map editor icon.
+change: Undo and redo every change; a shader search to remap; nudges, Shift fine, wheel turns.
+test: Escape menu, the globe icon (staff): the editor turns on and its panel opens.
+test: Aim at a fern, O: the panel opens on Map prop. Place: Grab, O puts the model down.
+test: Grab, then the wheel: the model turns 15 degrees a notch (Shift: 1); no weapon change.
+test: Place a model, Turn right twice, Ctrl+Z: it turns back once; Ctrl+Y turns it again.
+test: Select a wall: the shader list opens on its folder; pick one, Remap; Ctrl+Z takes it back.
+test: Place: Left, Right, Away, Closer move it along the floor; Shift-click moves 1 unit.
+test: Publish on the live hub before the hub deploy: "This SJK hub does not keep map edits yet".
+test: After the hub's map-edits branch is deployed: Publish says Published, with its revision.
+test: Log: "map edits: N maps on the hub, ..." (or "not in step with the hub: ...") at start.
 test: Esc while aiming shows the Map editor strip at the top; Editor off removes it.
 
 # ---- Bug reports, 19/10/2026 ----
@@ -7947,9 +8078,152 @@ test: The city part keeps its still Coruscant sky (that shader has no stages).
 test: A retail map with a plain sky (mp/ffa3, mp/duel6) looks the same as before.
 test: With r_dayNight 1 the clouds take the hour's tint like the box.
 
+[blade-perf]
+area: Rendering & effects
+title: Top-tier saber shaders draw faster, same look
+change: Signature blades work out the blade's hiding once per pixel; lightning skips far bolts.
+change: About a fifth less GPU time over the 48 Legendary/Mythical blades, up to half on some.
+test: debug_collectibles 1, wear Bleeding Kyber, Abyssal Eye, Exogorth: they look as before.
+test: World Shift and Sith Holocron: lightning and climates as before, no flicker or cut bolts.
+test: Reactor, Felucia Spores, Between Worlds, Starforge: loops, spores, streams as before.
+test: cg_drawFPS 1 with several top-tier blades in view: FPS a little higher than before.
+
 [tcgen-vector]
 area: Rendering & effects
 title: tcGen vector stages projected in world space
 change: Stages with tcGen vector use the position dotted with their axes, not the base UVs.
 test: Forgotten_City_02: caustics on crystals and glass panels are small ripples, not a wash.
 test: Retail maps look the same as before (no retail shader uses tcGen vector).
+
+[whats-new-switch]
+area: Menus & settings
+title: What's new: Settings to review switches flip
+change: A setting held in a number cvar (r_dynamicGlowNoSabers) showed Off and never flipped.
+test: whatsnew: on Settings to review, click each switch: it flips On and Off and stays.
+test: Settings: the same setting shows the value the card set.
+
+[news-panel]
+area: Menus & settings
+title: News panel: what's new and announcements in one
+change: One panel lists the releases' recaps and the SJK team's announcements, newest first.
+change: Announcements can hold links to a setting or a page, pictures and switches.
+change: Staff can announce; announce: Ctrl+L link, Ctrl+K switch, Ctrl+I picture.
+test: news, then whatsnew: the panel opens; Up/Down change entry, wheel scrolls the text.
+test: debug_announce long: click the Collection link, the setting link, the chip, the switch.
+test: debug_announce picture: a framed Picture loading... where the picture goes.
+test: announce, type cg_nameplate then Ctrl+L / Ctrl+K; Ctrl+L alone opens the picker.
+note: Pictures and staff announcing need the hub's news-panel branch deployed.
+
+[tag-cards]
+area: Rendering & effects
+title: Tags: sharp on walls, Holo and Solar, credits cards as tags
+change: Tags draw at their picture's full size in a pass of their own: no longer blurry.
+change: Holocrons drop tags Holo (4 %) or Solar (0.5 %); held credits cards stick as tags.
+change: Collection > Tags scrolls, lists the credits cards and offers Normal, Holo, Solar.
+test: toy_tag on a wall, walk up close: the picture stays sharp (compare with main).
+test: Collection > Tags: the wheel and the arrows scroll; the card shows the finish chips.
+test: choose a Holo or Solar copy, toy_tag: the foil shifts as you walk past; Solar burns.
+test: choose a credits card you hold, toy_tag: its picture with a rim of its colour.
+test: a second SJK client on the server sees the same tag, finish and card.
+note: Finishes and card tags need the hub's tag-cards branch deployed; before, none show.
+
+[toy-master]
+area: Gameplay
+title: Toy Master: hidden toys on maps
+change: The creator places Toy Master props: toymaster_place, _remove, _list.
+change: Use presses on a server add up; at a hidden count every SJK player sees a show.
+change: Collection > Toys has a ? hint; found toys get a Toy Master group on Achievements.
+test: toymaster_place on a local server, Use it until the show plays.
+test: a second SJK client on the server sees and hears the show.
+test: Settings > Sound > Toys mutes the show's sound.
+test: once earned, the secret achievement shows in the Toy Master group.
+note: Needs the hub's toy-master branch, deployed 01/11/2026.
+
+[toy-master-show]
+area: Gameplay
+title: Toy Master: ??? Use prompt, players dance with the spin
+change: Facing a toy shows the Use prompt with ??? (grey once it takes no more presses).
+change: While a show spins, player models within 320 units spin and squish with it.
+change: Looks only: positions and facing never change. A missing show sound is logged.
+test: face a toy: the Use key cap and ??? by the crosshair; none while it is shrunk away.
+test: play the show with another player near it: their model spins and squishes, feet down.
+test: in third person your own model dances too; first person and aim are unchanged.
+test: without the SJK extras pack the log says the show's sound is missing.
+note: The show's sound is in the Sith cloud's SJK Extras group.
+
+[toy-master-steps]
+area: Gameplay
+title: Toy Master: shows in steps, ring, floating, drops to take
+change: A show runs in steps on its song: dance, a ring on the ground, everyone floating.
+change: Floating is looks only (ragdoll bodies, no gravity); view and aim are unchanged.
+change: The toy throws credits, shards and holocrons; Use takes one at rest, first wins.
+test: play a stepped show to the end with a second SJK player inside the ring.
+test: 34 s: both dance and the ring shows; 62 s: both float; 100 s: they fall, then stand.
+test: 108 s: drops fly and land in the same spots on both clients; Use takes one.
+test: the other client sees it vanish; History says Taken from a Toy Master's toy.
+note: Needs the hub's toy-show-steps (PR #10) and the SJK Extras' unofficial_sjk_toys.pk3.
+
+[chat-find-blades]
+area: Console & chat
+title: Grand finds in chat: crystal picture, coloured prize, blade
+change: Drop and find lines start with the holocron's or crystal's picture, not SJK's emblem.
+change: A find's prize is in its own rarity colour; a blade find shows the blade, small and live.
+change: With the chat open, resting the pointer on that blade shows it large above the line.
+test: debug_find: a Legendary Kyber Crystal line with a Mythical blade; the crystal comes first.
+test: The blade's name is gold (Mythical), the rest of the line purple (Legendary).
+test: debug_find kyber_rare saber_phoenix: the Phoenix blade, small, moves as in Collection.
+test: Open the chat (Enter), rest the pointer on the small blade: the large card above it.
+test: debug_holocron legendary: the drop line starts with the holocron's picture.
+note: The chat page and the dock get the crystal picture only, not the colour or blade.
+
+[card-kind-clan]
+area: Menus & settings
+title: Card kind Clan: JoF cards read "Clan - JoF"
+change: New card kind Clan; the clan is the card's collection (JoF), one collection per clan.
+test: Once the hub's JoF cards are kind Clan: Collection > Cards, a JoF tile reads "Clan - JoF".
+test: Kind chip: "Kind: Clan" shows only the 11 JoF cards; Community no longer lists them.
+test: Hover and close-up of a JoF card name "Clan" and "JoF"; the rank (Leader/Council) stays.
+note: Clients without this change leave Clan cards out ("Unknown card"): release before the hub edit.
+
+[card-finishes-held]
+area: Menus & settings
+title: Cards: look at every finish you hold, not only the best
+change: A card held in two or three finishes shows Normal / Holo / Solar chips up close.
+change: A chip (or V, Shift+V back) shows the card in that finish; also when looked at closely.
+test: Collection > Cards, pick a card you hold in Normal and Holo (or Solar): the chips show.
+test: Click Normal: the big card loses its foil; click Holo/Solar: the foil comes back.
+test: Enter on it: the chips stand under the copies line; V cycles the finishes.
+test: Pick a card held in one finish: no chips, the copies line as before.
+note: The grid's tiles still show the best finish held.
+
+[fxrunner-count]
+area: Rendering & effects
+title: Spawn beam lightning back to retail's (effect runners roll their count)
+change: FxRunner primitives roll their rounded count and play one random playFx entry.
+change: The spawn/teleport beam throws about a sixth of the lightning it did.
+test: Spawn or teleport: a few bolts from the green beam to the walls, not a storm.
+test: Blaster deflects and sparks: one or two smoke puffs, black or grey, not both every time.
+test: Saber clashes and blocks: one or two smoke puffs.
+note: Effect sounds still ignore their count, and runner delays are still not applied.
+
+[toon-models]
+area: Rendering & effects
+title: Toon models: cartoon-style banded shading with a rim (r_toonModels, off by default)
+change: Lit models get a lit tone, a shadow tone and a half step between, plus a bright rim.
+change: Textured result a fifth more saturated; works in stock and real-time lighting.
+test: Settings > Graphics > Image > Toon models on: players look banded, edges lit; live switch.
+test: Try r_dayNight 0 and 1, bright and dark maps, saber glow and shiny hilts stay as before.
+test: Check weapons, NPCs and vehicles too; tell if any looks wrong or too bright.
+note: First pass: no ink outlines yet; the menu character preview keeps stock shading.
+
+[prop-gun]
+area: Gameplay
+title: Prop gun toy: a fake gun from your pk3
+change: cl_toyPropGun holds a gun a pk3 defines (propguns/<id>.gun); propgun lists them.
+change: Bolts with muzzle, trail and impact effects; opted-in players get knocked down.
+change: The world gun sits on the hand like JA's own guns; shots leave the drawn muzzle.
+test: with a private gun pk3, toy_propgun on; fire in first and third person.
+test: the bolt leaves the barrel tip; muzzle, trail and impact effects show.
+test: a second SJK client sees the gun, the bolts, and hears the shots.
+test: an opted-in player hit by a bolt is knocked down; others are not.
+note: SJK ships no gun; test only with a local private pack.

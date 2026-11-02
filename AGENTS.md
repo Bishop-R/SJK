@@ -68,6 +68,17 @@ multiplayer. Read [docs/status.md](docs/status.md),
 - Avoid new allocation, locking and quadratic work in per-frame paths. Measure
   performance-sensitive changes in release builds; 500+ FPS is a target, not a
   blanket claim about current performance.
+- Blades are timed and kept as cheap as possible (Sol's rule, 31/10/2026). A change to
+  a blade skin (a `.bladeskin` file, a signature under
+  `crates/sjk-viewer/src/blade_signatures/`) runs `python scripts/blade_cost.py --ids
+  <changed blades>`; a change to the shared blade shading (`saber.wgsl`, `saber_gpu.rs`,
+  the `blade_skin_*` sections) runs `python scripts/blade_cost.py` (every Legendary
+  and Mythical blade). Run it on `main` and on the branch in one sitting, as times move
+  between runs, and put both tables in the pull request. A blade costing more than on
+  `main` needs a reason and Sol's agreement. A new blade, or a new effect on one,
+  is optimized until it looks the same for less (fewer steps, shorter loops,
+  effects cut off where they no longer show) before review, not after. See
+  [the tool](docs/rendering.md#blade-lab-signature-shaders).
 
 ## Verification and scope
 

@@ -63,10 +63,14 @@ vec3 r8_vol(vec3 ro, vec3 rd, float px){
 
   // voices of light: soft streams winding loosely along the blade, two rising from the hilt and
   // two falling from the tip, glowing pulses travelling along them
+  // 31/10/2026: a stream keeps within rr + 0.1 of the axis from the hilt to the tip, and draws
+  // only where a ray passes within 2 of it: a ray further off skips its sixteen pieces
+  float nearAxis = fxNear(ro, rd, 0.0, L);
   for (int k = 0; k < 4; k++){
     float fk = float(k);
     float dir = k < 2 ? 1.0 : -1.0;
     float rr = 0.75 + 0.35*fk;
+    if (nearAxis > rr + 0.1 + 2.0) continue;
     float turns = (0.55 + 0.18*fk)*dir;
     float ph = fk*0.31 + uTime*0.04*dir;
     vec3 prev = around(rr*0.4, ph, 0.0);

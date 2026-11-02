@@ -102,6 +102,9 @@ pub(crate) struct Flight {
     /// The hardest knock on the world since [`Flight::run_to`] began, units a second.
     pub(crate) knock: f32,
     lowest: f32,
+    /// How far its centre was from where it was thrown after each step (the first at
+    /// the hand, 0), for the hits heard of a ping after their step ([`Flight::reach_at`]).
+    reach: Vec<f32>,
 }
 
 fn vector(v: [i32; 3]) -> Vec3 {
@@ -143,6 +146,7 @@ impl Flight {
             still: 0,
             knock: 0.0,
             lowest: centre.z - FLOOR_DEPTH,
+            reach: vec![0.0],
         }
     }
 
@@ -164,6 +168,12 @@ impl Flight {
     /// Its centre now.
     pub(crate) fn centre(&self) -> Vec3 {
         mean(&self.points, &[0, 1, 2, 3, 4, 5, 6, 7])
+    }
+
+    /// How far its centre was from where it was thrown after `step` steps since the
+    /// throw (where a bounce at `step` met the body); `None` before it got there.
+    pub(crate) fn reach_at(&self, step: u32) -> Option<f32> {
+        self.reach.get(usize::try_from(step).ok()?).copied()
     }
 
     /// How fast its centre went over the last step, units a second.
@@ -238,9 +248,11 @@ impl Flight {
             if self.asleep() && !deflected {
                 self.steps += 1;
                 self.earlier = self.points;
-                continue;
+            } else {
+                self.step(world);
             }
-            self.step(world);
+            let reach = self.centre().distance(vector(self.throw.origin));
+            self.reach.push(reach);
         }
     }
 
@@ -548,6 +560,35 @@ mod tests {
         let mut straight = Flight::new(&throw(5));
         straight.run_to(200, &mut world);
         assert!(in_time.centre().x < straight.centre().x - 50.0);
+    }
+
+    /// Hub reports #216, #220: a hit heard a ping after its step runs the flight again
+    /// from the hand, which must still tell how far the monitor flew to the body.
+    #[test]
+    fn the_reach_at_a_bounces_step_outlives_running_the_flight_again() {
+        let mut world = floor(false);
+        let deflect = Deflect {
+            step: 20,
+            push: [-600, 0, 300],
+        };
+        let mut flight = Flight::new(&throw(5));
+        assert_eq!(flight.reach_at(0), Some(0.0));
+        assert_eq!(flight.reach_at(1), None);
+        flight.run_to(60, &mut world);
+        let reach = flight.reach_at(deflect.step).expect("flown past the step");
+        let origin = vector(throw(5).origin);
+        let mut to_step = Flight::new(&throw(5));
+        to_step.run_to(deflect.step, &mut world);
+        assert_eq!(reach, to_step.centre().distance(origin));
+        assert!(reach > 200.0, "{reach}");
+        assert!(!flight.deflect(deflect));
+        // Run again from the hand, its centre is back there: the reach is read before.
+        let rerun = flight.rerun(deflect);
+        assert!(rerun.centre().distance(origin) < 0.01);
+        assert_eq!(rerun.reach_at(deflect.step), None);
+        // Steps asleep still count their reach.
+        flight.run_to(MAX_STEPS, &mut world);
+        assert_eq!(flight.reach.len(), MAX_STEPS as usize + 1);
     }
 
     #[test]

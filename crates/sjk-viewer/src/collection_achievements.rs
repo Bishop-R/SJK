@@ -61,7 +61,7 @@ fn on_page(standing: &Standing, page: Page) -> bool {
 /// them, else on the next band.
 pub(super) fn groups(standings: &[Standing], page: Page) -> Vec<Group> {
     let mut categories: Vec<(Category, Vec<usize>)> = Vec::with_capacity(8);
-    for (index, standing) in standings.iter().enumerate() {
+    for (index, standing) in standings.iter().enumerate().take(WALL_MAX) {
         if !standing.listed() || !on_page(standing, page) {
             continue;
         }
@@ -74,23 +74,47 @@ pub(super) fn groups(standings: &[Standing], page: Page) -> Vec<Group> {
     categories.sort_by_key(|(category, _)| *category);
     let mut groups = Vec::with_capacity(categories.len() + 1);
     let (mut band, mut column) = (0, 0);
+    // Where each band's last run ends.
+    let mut ends: Vec<usize> = Vec::with_capacity(8);
     for (category, members) in categories {
         for (run, chunk) in members.chunks(COLUMNS).enumerate() {
-            let mut start = if column == 0 { 0 } else { column + 1 };
-            if start + chunk.len() > COLUMNS {
-                band += 1;
-                start = 0;
+            // The Toy Master's (`achievements::secret_kind`), found one by one, take the
+            // first band with room for them rather than one of their own below the rest.
+            let earlier = (category == Category::ToyMaster)
+                .then(|| {
+                    ends.iter().enumerate().find_map(|(at, end)| {
+                        let start = if *end == 0 { 0 } else { end + 1 };
+                        (start + chunk.len() <= COLUMNS).then_some((at, start))
+                    })
+                })
+                .flatten();
+            let (at, start) = match earlier {
+                Some(place) => place,
+                None => {
+                    let mut start = if column == 0 { 0 } else { column + 1 };
+                    if start + chunk.len() > COLUMNS {
+                        band += 1;
+                        start = 0;
+                    }
+                    column = start + chunk.len();
+                    (band, start)
+                }
+            };
+            if ends.len() <= at {
+                ends.resize(at + 1, 0);
             }
+            ends[at] = start + chunk.len();
             groups.push(Group {
                 category,
                 members: chunk.to_vec(),
-                band,
+                band: at,
                 column: start,
                 first: run == 0,
             });
-            column = start + chunk.len();
         }
     }
+    // Reading order: band by band, left to right.
+    groups.sort_by_key(|group| (group.band, group.column));
     groups
 }
 
@@ -239,18 +263,31 @@ impl Panel {
                     .filter_map(|index| standings.get(*index))
                     .collect();
                 let held = members.iter().filter(|s| s.unlocked.is_some()).count();
+                // The heading may take the band's room after a short run, up to the next.
+                let next = groups
+                    .iter()
+                    .filter(|other| other.band == group.band && other.column > group.column)
+                    .map(|other| other.column - 1)
+                    .min()
+                    .unwrap_or(COLUMNS);
+                let heading_right = (LEFT_X + next as f32 * CELL - 8.0).max(right);
                 text(
                     &mut self.ui,
                     TextFamily::Display,
                     format_args!("{}", group.category.name()),
-                    frame.rect(left, top, right - left, 28.0),
+                    frame.rect(left, top, heading_right - left, 28.0),
                     22.0 * s,
                     hue,
                     FontWeight::Semibold,
                     TextAlign::Start,
                 );
                 let name_width = crate::text::display_width(group.category.name(), 22.0);
-                let count = format!("{held} of {}", members.len());
+                // The Toy Master's are listed only once found: their count is all held.
+                let count = if group.category == Category::ToyMaster {
+                    format!("{held} found")
+                } else {
+                    format!("{held} of {}", members.len())
+                };
                 text(
                     &mut self.ui,
                     TextFamily::Body,
@@ -615,9 +652,49 @@ mod tests {
                 goal: 1,
                 unlocked: 1_791_336_225,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             })
             .collect();
         crate::achievements::Record::default().standings(&held)
+    }
+
+    /// The Toy Master's found ones are on the Fun page and take its first band with room
+    /// (beside Order 66), not a fifth band below the wall, and the wall still reads band
+    /// by band.
+    #[test]
+    fn the_toy_masters_take_the_first_band_with_room() {
+        let found = |id: &str| sjk_identity::Achievement {
+            id: id.to_owned(),
+            progress: 1,
+            goal: 1,
+            unlocked: 1_791_336_225,
+            reward: None,
+            name: Some(id.to_owned()),
+            description: Some("Found.".to_owned()),
+            group: Some(sjk_identity::wire::TOY_MASTER.to_owned()),
+        };
+        let standings = crate::achievements::Record::default()
+            .standings(&[found("secret_wall_a"), found("secret_wall_b")]);
+        let groups = groups(&standings, Page::Fun);
+        let master = groups
+            .iter()
+            .find(|group| group.category == Category::ToyMaster)
+            .expect("on the wall");
+        let order66 = groups
+            .iter()
+            .find(|group| group.category == Category::Order66)
+            .unwrap();
+        assert_eq!(master.band, order66.band);
+        assert_eq!(master.column, order66.column + order66.members.len() + 1);
+        assert_eq!(master.members.len(), 2);
+        assert!(groups.iter().all(|group| group.band <= 3));
+        assert!(
+            groups
+                .windows(2)
+                .all(|pair| (pair[0].band, pair[0].column) < (pair[1].band, pair[1].column))
+        );
     }
 
     /// General's five categories fit four bands of twelve: Combat alone, Duels and flags
@@ -737,6 +814,9 @@ mod tests {
             goal: 1,
             unlocked: 1_791_336_225,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         }];
         let standings = crate::achievements::standings(&held);
         let chosen = first_choice(&standings, Page::General);

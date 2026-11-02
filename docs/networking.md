@@ -112,12 +112,14 @@ other character (Cyrillic, Japanese) is drawn from the wide-glyph atlas
 ([rendering.md](rendering.md#characters-beyond-the-code-page)).
 
 A chat line holds at most `MAX_SAY_TEXT` - 1 (149) bytes; the server cuts a
-longer one (`Cmd_Say_f`). The chat field counts a draft by the bytes it is sent
-with, escapes included and the whole line encoded as above
-(`chat_input_fits`, [chat.rs](../crates/sjk-client/src/chat.rs)): a Russian line
-in Windows-1251 holds 149 letters as EternalJK's does, a Japanese, Chinese or
-Korean line in UTF-8 about 49 characters (an emoji takes 4 bytes, a family up to 25),
-and the sent command is cut at a whole character, never in the middle of one.
+longer one (`Cmd_Say_f`). SJK divides one draft into at most four such lines, at a
+word where possible. The chat field counts each piece by the bytes it is sent with,
+escapes included and the whole line encoded as above (`chat_commands`,
+[chat.rs](../crates/sjk-client/src/chat.rs)): a Russian piece in Windows-1251 holds
+149 letters as EternalJK's does, a Japanese, Chinese or Korean piece in UTF-8 about
+49 characters (an emoji takes 4 bytes, a family up to 25), and no piece cuts a
+character or escape. The active `^` colour is repeated in the next piece and counts
+inside its limit.
 
 A player's name is read from the bytes of the `n` key of its `CS_PLAYERS`
 configstring and decoded on its own (`LegacyClientInfo::name`,
@@ -284,6 +286,7 @@ Stock and other servers, SJK's dedicated server included, keep the stock rules.
 | Taunts | Every JA+ server | Meditation keeps the player in place but the view free; other taunts leave movement and view free |
 | Staff kick | Every JA+ server | A staff's alternate attack standing still is a front kick |
 | Melee kicks | Every JA+ server | JA+ plays its own kicks server-side (melee's spin and back kicks in place of the stock W+A and W+D kicks, the jumping back kick, the backflip kick and the flip stab); the kicker is held still with the view free. A kiss, a ledge, a get-up, a stab or a backflip kick taken holds the player and the view (JoF EternalJK `bg_pmove.c:12470-12498`, `SVMOD_JAPLUS`, at bd5e202). The client predicts the stock kick until the server's kick arrives, as JoF EternalJK does |
+| Dual jump hull | Every JA+ server (`dmflags` 256: every window) | The dual sabers' forward jump attack raises the feet to 0 in its stock windows only when another player stands within 70 units ahead along the view, so the attacker is not sunk into the floor when nobody is there |
 
 Not predicted: the options EternalJK never reads outside its `serverconfig`
 listing (single-player attacks, new DFA, model scale, kata, auto replier, ledge
@@ -359,7 +362,7 @@ displayed snapshots carry different mover trajectories.
 Jump prediction respects `PMF_RESPAWNED`: holding attack or use after spawning
 blocks jumping until those buttons are released. The latch is cleared before
 movement for every weapon, as in OpenJK `codemp/game/bg_pmove.c`.
-PR #266's timed dual-attack hull resizing was rolled back in #307. An original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull and acquired downward velocity (about 254 units/s in the captured case). The fixed -24-unit foot minimum is restored. Timed hull resizing remains unsupported. Source agreement with OpenJK did not establish runtime compatibility.
+PR #266 added timed hull resizing for the dual sabers' forward jump attack and #307 rolled it back, because an original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull. On JA+ servers ([pmove_dual_jump_hull.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull.rs)) the feet are raised to 0 in the stock windows only when a box trace 70 units along the view hits another player; with `dmflags` 256 (`old_collision`) they are raised in every window, as stock does. The rule comes from VisionJK's port of the JA+ 2.4 B7 server module. All other servers, SJK's dedicated server included, keep the fixed -24-unit foot minimum. Not verified against a running JA+ server.
 Local prediction loads the equipped hilts' movement flags, named special-move
 overrides and ready/draw/putaway animations from the shared `.sab` catalog.
 The shared catalog follows OpenJK's `FS_GetFileList` order and keeps the first
@@ -655,6 +658,9 @@ dropped, as the server drops a stock client's extras. Pressing a hug bind twenty
 used to queue twenty hugs, still firing one a second after the player stopped. Chat
 (`say`, `say_team`, `tell`, typed or bound) is not queued twice while identical chat
 waits, but is never dropped: a message is still worth reading late, a late action is not.
+The pieces of one submitted draft are kept separately, including identical ones. A
+bind or console command queued behind them does not expire while it waits, so a team
+switch or `kill` pressed during the draft is not silently lost.
 What the player sends (chat, binds, console commands) goes ahead of the client's own
 `score` requests still waiting (every two seconds while dead or holding the
 scoreboard), so chat no longer queues a second each behind them (27/10/2026, hub
@@ -739,6 +745,37 @@ The old predictor already has an 8.875-unit initial spawn-height adjustment and
 five wall-stop endpoint disagreements in the 8 ms capture. These are not cleared
 by this review. No full base, jaPRO, custom-hilt, multiplayer-interaction or
 complete movement/animation parity claim follows from these checks.
+
+## Prediction as in 2026.1028.1 (`cg_predictLegacy`)
+
+Some players preferred how 2026.1028.1 predicted their own movement. Each
+change since then that a player on foot can feel has one bit of
+`cg_predictLegacy` (archived, default 0). A set bit brings back that release's
+behaviour for that change only. Settings > Game options > Prediction offers
+Current (0) and As in 2026.1028.1 (255), and the console takes any mix:
+
+| Bit | PR | Turned back off |
+| --- | --- | --- |
+| 1 | #267 | the equipped sabers' `.sab` move overrides and restrictions |
+| 2 | #253 | facing the opponent during a saber lock |
+| 4 | #260 | no jump after respawning until attack and use are released |
+| 8 | #254 | triggers touched with the last move's box (the box comes from the posture flags again) |
+| 16 | #262 | the gesture button starting its taunt |
+| 32 | #261 | movement held still while another client holds the player |
+| 64 | #250 | other players' and NPCs' animations and kinds for bounces and kicks |
+| 128 | #252 | the freeze after a command history overflow |
+
+The bits live in `MovementConfig::predict_legacy`
+([pmove.rs](../crates/sjk-game-jka/src/pmove.rs), `predict_legacy`). A server's
+own move (`authoritative`) never reads them. The viewer applies 2, 64 and 128
+in `LocalPrediction::set_predict_legacy`. Every set bit predicts some moves that
+the server then corrects, since the server runs the current behaviour. The
+vehicle, rocket and jaPRO changes have no bit, because they cannot change how
+a player moves on foot. The two changes that broke JA+ (#251, #266) were
+already rolled back in 2026.1030.2.
+
+The bits are there to find out which change players feel: someone on 255 can
+clear them one at a time. A change no one misses can then lose its bit.
 
 ## Prediction source comparison
 

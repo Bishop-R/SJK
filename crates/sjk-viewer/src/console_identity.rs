@@ -250,5 +250,5 @@ pub(crate) fn color_chat(command: &str, mask: u16, randomness: u32) -> String {
         _ => return command.to_owned(),
     };
     let text = randomized(message, mask, randomness);
-    sjk_client::chat_command(destination, &text).unwrap_or_else(|| command.to_owned())
+    sjk_client::chat_command_full(destination, &text).unwrap_or_else(|| command.to_owned())
 }

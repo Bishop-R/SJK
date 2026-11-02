@@ -108,7 +108,7 @@ fn sig_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let c0 = around(0.3, a, ya);
         let c1 = around(0.3, a + 0.15 * (h11(k * 7.0 + fi) - 0.5), yb);
         let mid = around(0.9 + 0.8 * h11(k * 9.3 + fi), a + 0.05, mix(ya, yb, 0.5));
-        let d = min(bolt3(ro, rd, c0, mid, k * 1.91 + fi * 1.37 + floor(t * 24.0) * 0.13, 0.45), bolt3(ro, rd, mid, c1, k * 2.71 + fi * 0.77 + floor(t * 24.0) * 0.29, 0.45));
+        let d = min(bolt3(ro, rd, c0, mid, k * 1.91 + fi * 1.37 + floor(t * 24.0) * 0.13, 0.45, px), bolt3(ro, rd, mid, c1, k * 2.71 + fi * 0.77 + floor(t * 24.0) * 0.29, 0.45, px));
         let flick = step(0.25, h11(floor(t * 30.0) + fi * 7.7));
         let life = sin(3.1416 * q) * flick * part(0.0);
         red += (vec3<f32>(1.0, 0.92, 0.95) * halo(d, max(px, 0.03)) * 2.6 + vec3<f32>(1.0, 0.25, 0.3) * halo(d, 0.12) * 1.6 + BK_RED * halo(d, 0.5) * 0.55 + BK_RED * halo(d, 1.4) * 0.12) * life;

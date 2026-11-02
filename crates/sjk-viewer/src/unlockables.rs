@@ -3091,6 +3091,8 @@ mod tests {
     fn holdings_follow_the_identity_and_the_own_profile() {
         use sjk_identity::{Profile, Snapshot, Status, Unlock};
         let unlock = Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: "Thanks".into(),
@@ -3099,6 +3101,7 @@ mod tests {
             card: None,
         };
         let me = Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -3149,11 +3152,15 @@ mod tests {
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -3168,12 +3175,14 @@ mod tests {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         };
         let online = snapshot(Status::Online, Some(me));
@@ -3202,6 +3211,8 @@ mod tests {
     fn a_unique_shader_shows_only_to_its_holders() {
         let cranes = find("saber_thousand_cranes").unwrap();
         let grant = |id: &str| sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.into(),
             granted: 1_793_000_000,
             note: String::new(),

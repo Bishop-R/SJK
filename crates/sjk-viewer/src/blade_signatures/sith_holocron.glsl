@@ -128,7 +128,7 @@ vec3 hc_bolts(vec3 ro, vec3 rd, float px, float front){
     vec3 c = around(HC_A + 1.8 + 3.0*act*h11(k*2.3 + fi), an + 0.12*(h11(k*5.0 + fi) - 0.5), y0 + (h11(k*3.7 + fi) - 0.35)*4.0);
     float facing = step(0.0, dot(c.xz, toCam));
     if (front > 0.5 && facing < 0.5) continue;
-    float d = bolt3(ro, rd, a, c, k + fi*11.0, 0.38);
+    float d = bolt3(ro, rd, a, c, k + fi*11.0, 0.38, px);
     light += (boltLight(d, vec3(1.0, 0.1, 0.05), px)*0.5 + vec3(1.0, 0.1, 0.05)*halo(d, 0.35)*0.5)*(0.4 + 0.9*act);
   }
   return light;

@@ -204,6 +204,16 @@ impl Found {
         } else {
             unlock.name.trim().to_owned()
         };
+        // A tag that came Holo or Solar (31/10/2026) says so: "Holo Gonk tag".
+        let name = match unlock
+            .finish
+            .as_deref()
+            .and_then(crate::cards::Finish::from_id)
+            .filter(|finish| finish.index > 0)
+        {
+            Some(finish) => format!("{} {name}", finish.name),
+            None => name,
+        };
         Some(Self {
             holocron: opened.holocron,
             tier: holocrons::any(&opened.tier)?.slot,
@@ -843,6 +853,7 @@ impl Panel {
                 [CARD_X, middle],
                 [card_width, height],
                 shown,
+                cards::tone_in(&faces, shown.rarity, shown.card.as_deref()).colour,
                 (elapsed - FLIP[1]) / FLOURISH,
             );
         }
@@ -1021,6 +1032,7 @@ impl Panel {
             first: 0,
         };
         let title = stack.name_in(&faces);
+        let tone = stack.tone_in(&faces);
         text(
             &mut self.ui,
             TextFamily::Display,
@@ -1030,7 +1042,7 @@ impl Panel {
             fade(if card.finish.index == 2 {
                 color::GOLD_BRIGHT
             } else {
-                card.rarity.colour
+                tone.colour
             }),
             FontWeight::Semibold,
             TextAlign::Center,
@@ -1044,7 +1056,7 @@ impl Panel {
                 if stack.sealed() {
                     String::new()
                 } else {
-                    format!("{}, {}. ", card.rarity.name, card.finish.name)
+                    format!("{}, {}. ", tone.name, card.finish.name)
                 },
                 if card.edition.is_empty() {
                     String::new()
@@ -2729,14 +2741,16 @@ pub(super) fn tucked_card(
 
 /// The light a card flips over into, `t` (0 to 1) of the way through: a glow of its
 /// colour, a ring running out from round the card at `middle` (`[width, height]` its
-/// size, frame pixels) and rays turning, gold for Solar and the rainbow for Holo; only for
-/// a Holo, Solar, Legendary or Mythical card.
+/// size, frame pixels) and rays turning, gold for Solar and the rainbow for Holo, else
+/// `tone` (its rank's or rarity's colour); only for a Holo, Solar, Legendary or Mythical
+/// card.
 fn flourish(
     canvas: &mut crate::menu_widgets::MenuCanvas,
     frame: &Frame,
     middle: [f32; 2],
     [width, height]: [f32; 2],
     shown: &Shown,
+    tone: Color,
     t: f32,
 ) {
     let (finish, rarity) = (shown.finish.index, shown.rarity.index);
@@ -2747,7 +2761,7 @@ fn flourish(
     let colour = if finish == 2 {
         color::GOLD_BRIGHT
     } else {
-        shown.rarity.colour
+        tone
     };
     let fade = 1.0 - t;
     glow(

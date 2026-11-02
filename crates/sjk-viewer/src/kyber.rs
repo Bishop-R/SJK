@@ -493,6 +493,9 @@ mod tests {
             goal: 1,
             unlocked: 0,
             reward: reward.map(str::to_owned),
+            name: None,
+            description: None,
+            group: None,
         };
         // The hub says another tier for one, nothing for another, an unknown one (worked
         // out without the shared table, which the other tests read).

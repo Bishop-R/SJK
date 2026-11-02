@@ -4,11 +4,12 @@
 //! on the scene left of the column selects what is under the pointer; Escape (or Aim)
 //! hides it to aim again, with a strip at the top saying how to come back.
 //!
-//! Three pages: Selected (hide it, remap its shader), Place (an MD3 from the game data,
-//! then turn, lift, scale or grab the placed model) and Edits (the map's edits, delete or
-//! undo); under them the scope of new edits, the last command's answer, Publish, Aim and
-//! Editor off. Every button runs the editor's own command ([`super::editor`]), so the
-//! console and the panel stay one editor.
+//! Three pages: Selected (hide it, remap its shader to one found by a search), Place (an
+//! MD3 from the game data, then turn, lift, nudge, scale or grab the placed model) and
+//! Edits (the map's edits; delete one, undo and redo); under them the scope of new edits,
+//! the last command's answer (the hub's to Publish too), Publish, Aim and Editor off.
+//! Every button runs the editor's own command ([`super::editor`]), so the console and the
+//! panel stay one editor. Shift held makes the placed model's steps fine.
 //!
 //! It is a page of the in-game menu ([`crate::ingame_menu::Page::MapEdit`]), which frees
 //! the pointer and keeps clicks from the game; its state lives with the map's edits.
@@ -30,7 +31,7 @@ pub(crate) const TAB_EDITS: u16 = 3;
 pub(crate) const HIDE: u16 = 10;
 pub(crate) const HIDE_GROUP: u16 = 11;
 pub(crate) const COPY: u16 = 12;
-/// Selected: the remap's field and buttons.
+/// Selected: the remap's search field (it narrows the shader list) and buttons.
 pub(crate) const REMAP_FIELD: u16 = 13;
 pub(crate) const REMAP: u16 = 14;
 pub(crate) const UNREMAP: u16 = 15;
@@ -45,13 +46,20 @@ pub(crate) const SMALLER: u16 = 26;
 pub(crate) const BIGGER: u16 = 27;
 pub(crate) const GRAB: u16 = 28;
 pub(crate) const REMOVE: u16 = 29;
+/// Place: the placed model nudged along the world axis nearest the view's left, right,
+/// away and back.
+pub(crate) const MOVE_LEFT: u16 = 34;
+pub(crate) const MOVE_RIGHT: u16 = 35;
+pub(crate) const FARTHER: u16 = 36;
+pub(crate) const NEARER: u16 = 37;
 /// Place, SJK's creator only: a mystery box where you aim, the nearest one removed
 /// (`crate::mystery_box`).
 pub(crate) const BOX_PLACE: u16 = 32;
 pub(crate) const BOX_REMOVE: u16 = 33;
-/// Edits: delete the chosen edit, undo the newest.
+/// Edits: delete the chosen edit, undo the last change, redo it.
 pub(crate) const DELETE: u16 = 30;
 pub(crate) const UNDO: u16 = 31;
+pub(crate) const REDO: u16 = 38;
 /// The foot: the scope's two segments, then the closing buttons.
 pub(crate) const SCOPE_ALL: u16 = 40;
 pub(crate) const SCOPE_SERVER: u16 = 41;
@@ -59,15 +67,18 @@ pub(crate) const PUBLISH: u16 = 42;
 pub(crate) const AIM: u16 = 43;
 pub(crate) const EDITOR_OFF: u16 = 44;
 /// The model list's rows on show are `MODEL_ROW..MODEL_ROW + MODEL_ROWS`, the edits'
-/// `EDIT_ROW..`.
+/// `EDIT_ROW..`, the shaders' `SHADER_ROW..`.
 pub(crate) const MODEL_ROW: u16 = 100;
-pub(crate) const MODEL_ROWS: usize = 7;
+pub(crate) const MODEL_ROWS: usize = 6;
 pub(crate) const EDIT_ROW: u16 = 200;
 pub(crate) const EDIT_ROWS: usize = 12;
+pub(crate) const SHADER_ROW: u16 = 300;
+pub(crate) const SHADER_ROWS: usize = 5;
 
 /// Longest text the fields take.
 const FIELD_MAX: usize = 96;
-/// What Turn, Up and Down, Smaller and Bigger change by.
+/// What Turn, Up and Down (and the nudges), Smaller and Bigger change by; with Shift held
+/// a turn is a degree, a lift or a nudge a unit, a growth a tenth of [`GROW`]'s.
 const TURN: f32 = 15.0;
 const LIFT: f32 = 8.0;
 const GROW: f32 = 1.1;
@@ -102,13 +113,21 @@ pub(crate) enum Action {
     Place,
     Turn(f32),
     Lift(f32),
+    /// Along the floor: to the view's right and away from it, on the nearest world axes.
+    Nudge {
+        right: f32,
+        away: f32,
+    },
     Scale(f32),
     Grab,
     Remove,
     BoxPlace,
     BoxRemove,
+    /// An edit chosen in the list: a placed model becomes the one the controls move.
+    Choose,
     Delete,
     Undo,
+    Redo,
     Scope(Scope),
     Publish,
     Aim,
@@ -138,8 +157,8 @@ pub(crate) struct Selected {
     pub(crate) name: String,
     /// Its detail line: the shader, the class, the distance.
     pub(crate) detail: String,
-    /// Whether it has a shader to remap.
-    pub(crate) remappable: bool,
+    /// The shader it draws, which a remap replaces (none: it cannot be remapped).
+    pub(crate) shader: Option<String>,
 }
 
 /// One edit in the Edits list.
@@ -172,6 +191,11 @@ pub(crate) struct Facts {
     pub(crate) grabbing: bool,
     /// The first key bound to the world note (the editor's select key).
     pub(crate) select_key: String,
+    /// Whether there is a change to undo, and one to redo.
+    pub(crate) can_undo: bool,
+    pub(crate) can_redo: bool,
+    /// Why the last look at the hub's map edits fell short, when it did.
+    pub(crate) hub_problem: Option<String>,
 }
 
 /// The panel's state.
@@ -193,6 +217,19 @@ pub(crate) struct Panel {
     pub(crate) model_first: usize,
     pub(crate) edit_row: usize,
     pub(crate) edit_first: usize,
+    /// Every shader a remap may draw ([`listed_shader`]): defined ones and images, read
+    /// once per game data, with the game data's address.
+    shaders: Vec<String>,
+    shaders_from: usize,
+    /// The indices of [`Self::shaders`] the remap's search keeps.
+    pub(crate) shader_shown: Vec<u32>,
+    pub(crate) shader_row: usize,
+    pub(crate) shader_first: usize,
+    /// The search the panel filled in for the selection (its shader's folder), and the
+    /// shader it was for: a selection of another shader fills it in again unless the
+    /// search was typed since.
+    prefill: String,
+    prefilled_for: Option<String>,
     /// The last command's answer, and whether it was a refusal.
     pub(crate) status: String,
     pub(crate) status_error: bool,
@@ -201,6 +238,7 @@ pub(crate) struct Panel {
     pub(crate) scene_right: f32,
     pub(crate) model_list: Option<Rect>,
     pub(crate) edit_list: Option<Rect>,
+    pub(crate) shader_list: Option<Rect>,
     /// What [`Facts`] were read for: the document's revision, the current placed model,
     /// grabbing, and whether the map's checksum was known.
     seen: Option<(u64, Option<u32>, bool, bool)>,
@@ -217,6 +255,50 @@ fn placeable(path: &str) -> bool {
 fn matches(path: &str, query: &str) -> bool {
     let path = path.to_ascii_lowercase();
     query.split_whitespace().all(|word| path.contains(word))
+}
+
+/// Whether a remap's list offers shader `name` (lower case): the world's and the map
+/// objects' shaders, never the player models' nor the compiler's own (`name:q3map`).
+fn listed_shader(name: &str) -> bool {
+    (name.starts_with("textures/")
+        || (name.starts_with("models/") && !name.starts_with("models/players/")))
+        && !name.contains(':')
+}
+
+/// A shader name without its image extension (`.jpg`, `.tga` or `.png`, any case).
+pub(super) fn without_image_extension(name: &str) -> &str {
+    let cut = name.len().saturating_sub(4);
+    match name.get(cut..) {
+        Some(extension)
+            if [".jpg", ".tga", ".png"]
+                .iter()
+                .any(|image| extension.eq_ignore_ascii_case(image)) =>
+        {
+            &name[..cut]
+        }
+        _ => name,
+    }
+}
+
+/// A shader name as the list holds it: lower case, without its image extension.
+fn shader_stem(name: &str) -> String {
+    without_image_extension(name).to_ascii_lowercase()
+}
+
+/// The shader name an image of the game data stands for, when a remap may draw it: a
+/// listed path without its extension.
+fn texture_shader(path: &str) -> Option<String> {
+    let stem = without_image_extension(path);
+    if stem.len() == path.len() {
+        return None;
+    }
+    let stem = stem.to_ascii_lowercase();
+    listed_shader(&stem).then_some(stem)
+}
+
+/// The folder part of a shader's name: `textures/a/floor` is `textures/a/`.
+fn folder_of(shader: &str) -> &str {
+    shader.rfind('/').map_or("", |slash| &shader[..=slash])
 }
 
 impl Panel {
@@ -246,10 +328,131 @@ impl Panel {
         self.refilter();
     }
 
+    /// The shaders a remap may draw ([`listed_shader`]): read from `vfs` and `catalog` the
+    /// first time the Selected page needs them.
+    fn read_shaders(
+        &mut self,
+        vfs: Option<&sjk_vfs::VirtualFileSystem>,
+        catalog: &sjk_shader::ShaderCatalog,
+    ) {
+        let Some(vfs) = vfs else {
+            return;
+        };
+        let from = std::ptr::from_ref(vfs) as usize;
+        if self.shaders_from == from {
+            return;
+        }
+        self.shaders_from = from;
+        self.shaders = catalog
+            .names()
+            .filter(|name| listed_shader(name))
+            .map(shader_stem)
+            .chain(
+                vfs.paths()
+                    .into_iter()
+                    .filter_map(|path| texture_shader(path.as_str())),
+            )
+            .collect();
+        self.shaders.sort();
+        self.shaders.dedup();
+        self.refilter_shaders();
+    }
+
     #[cfg(test)]
     pub(crate) fn set_models(&mut self, models: &[&str]) {
         self.models = models.iter().map(|model| (*model).to_owned()).collect();
         self.refilter();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_shaders(&mut self, shaders: &[&str]) {
+        self.shaders = shaders.iter().map(|shader| (*shader).to_owned()).collect();
+        self.refilter_shaders();
+    }
+
+    /// Narrow the shaders to the remap's search; the chosen row is the one named exactly,
+    /// else the selection's own shader, else the first.
+    pub(crate) fn refilter_shaders(&mut self) {
+        let query = self.remap.trim().to_ascii_lowercase();
+        self.shader_shown.clear();
+        self.shader_shown.extend(
+            self.shaders
+                .iter()
+                .enumerate()
+                .filter(|(_, shader)| matches(shader, &query))
+                .map(|(index, _)| index as u32),
+        );
+        let own = self
+            .facts
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.shader.as_deref())
+            .map(shader_stem);
+        let named = |name: &str| {
+            self.shader_shown
+                .iter()
+                .position(|&index| self.shaders[index as usize] == name)
+        };
+        self.shader_row = named(&query)
+            .or_else(|| own.as_deref().and_then(named))
+            .unwrap_or(0);
+        self.shader_first = 0;
+        Self::settle(
+            &mut self.shader_row,
+            &mut self.shader_first,
+            self.shader_shown.len(),
+            SHADER_ROWS,
+        );
+    }
+
+    /// Fill the remap's search with the selected shader's folder, so its neighbours show,
+    /// unless the search was typed since the last fill.
+    fn prefill_remap(&mut self) {
+        let shader = self
+            .facts
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.shader.clone());
+        if shader == self.prefilled_for {
+            return;
+        }
+        if self.remap.is_empty() || self.remap == self.prefill {
+            self.prefill = shader
+                .as_deref()
+                .map(|shader| folder_of(&shader.to_ascii_lowercase()).to_owned())
+                .unwrap_or_default();
+            self.remap = self.prefill.clone();
+        }
+        self.prefilled_for = shader;
+        self.refilter_shaders();
+    }
+
+    /// The shader chosen in the remap's list.
+    pub(crate) fn chosen_shader(&self) -> Option<&str> {
+        self.shown_shader(self.shader_row)
+    }
+
+    /// The shader list's row `index` on show, for the view.
+    pub(crate) fn shown_shader(&self, index: usize) -> Option<&str> {
+        self.shader_shown
+            .get(index)
+            .and_then(|&index| self.shaders.get(index as usize))
+            .map(String::as_str)
+    }
+
+    /// What a remap would draw: the shader chosen in the list, else the search as typed
+    /// (a shader the list does not know).
+    pub(crate) fn remap_target(&self) -> Option<String> {
+        self.chosen_shader().map(str::to_owned).or_else(|| {
+            let typed = self.remap.trim();
+            (!typed.is_empty() && !typed.ends_with('/')).then(|| typed.to_owned())
+        })
+    }
+
+    /// Whether there is a [`Panel::remap_target`], without making it (each frame).
+    pub(crate) fn has_remap_target(&self) -> bool {
+        let typed = self.remap.trim();
+        self.chosen_shader().is_some() || (!typed.is_empty() && !typed.ends_with('/'))
     }
 
     fn refilter(&mut self) {
@@ -303,34 +506,47 @@ impl Panel {
         *first = (*first).min(count.saturating_sub(rows));
     }
 
-    /// Move the chosen row of the list the keyboard is on by `by`; whether it moved.
+    /// Move the chosen row of the list the keyboard is on by `by`; whether it moved. In a
+    /// search the keyboard stays there, choosing in the list under it.
     fn move_in_list(&mut self, by: isize) -> bool {
-        let (row, first, count, rows, base) = if self.is_model_row(self.focus) {
-            (
-                &mut self.model_row,
-                &mut self.model_first,
-                self.shown.len(),
-                MODEL_ROWS,
-                MODEL_ROW,
-            )
-        } else if self.is_edit_row(self.focus) {
-            (
-                &mut self.edit_row,
-                &mut self.edit_first,
-                self.facts.rows.len(),
-                EDIT_ROWS,
-                EDIT_ROW,
-            )
-        } else {
-            return false;
-        };
+        let typing = matches!(self.focus, SEARCH | REMAP_FIELD);
+        let (row, first, count, rows, base) =
+            if self.is_model_row(self.focus) || self.focus == SEARCH {
+                (
+                    &mut self.model_row,
+                    &mut self.model_first,
+                    self.shown.len(),
+                    MODEL_ROWS,
+                    MODEL_ROW,
+                )
+            } else if self.is_edit_row(self.focus) {
+                (
+                    &mut self.edit_row,
+                    &mut self.edit_first,
+                    self.facts.rows.len(),
+                    EDIT_ROWS,
+                    EDIT_ROW,
+                )
+            } else if self.is_shader_row(self.focus) || self.focus == REMAP_FIELD {
+                (
+                    &mut self.shader_row,
+                    &mut self.shader_first,
+                    self.shader_shown.len(),
+                    SHADER_ROWS,
+                    SHADER_ROW,
+                )
+            } else {
+                return false;
+            };
         let wanted = row.saturating_add_signed(by);
         if count == 0 || wanted >= count || (by < 0 && *row == 0) {
-            return false;
+            return typing;
         }
         *row = wanted;
         Self::settle(row, first, count, rows);
-        self.focus = base + (*row - *first) as u16;
+        if !typing {
+            self.focus = base + (*row - *first) as u16;
+        }
         true
     }
 
@@ -342,9 +558,18 @@ impl Panel {
         (EDIT_ROW..EDIT_ROW + EDIT_ROWS as u16).contains(&token)
     }
 
+    fn is_shader_row(&self, token: u16) -> bool {
+        (SHADER_ROW..SHADER_ROW + SHADER_ROWS as u16).contains(&token)
+    }
+
     /// Up, Down or Tab: along a list, else the next control in the drawn order.
     pub(crate) fn step(&mut self, canvas: &mut MenuCanvas, forward: bool) {
-        if self.move_in_list(if forward { 1 } else { -1 }) {
+        self.step_by(canvas, forward, true);
+    }
+
+    /// [`Panel::step`]; `along` false (Tab in a search) leaves at once.
+    fn step_by(&mut self, canvas: &mut MenuCanvas, forward: bool, along: bool) {
+        if along && self.move_in_list(if forward { 1 } else { -1 }) {
             return;
         }
         let direction = if forward {
@@ -359,6 +584,9 @@ impl Panel {
                 self.focus = MODEL_ROW + (self.model_row.saturating_sub(self.model_first)) as u16;
             } else if self.is_edit_row(token) {
                 self.focus = EDIT_ROW + (self.edit_row.saturating_sub(self.edit_first)) as u16;
+            } else if self.is_shader_row(token) {
+                self.focus =
+                    SHADER_ROW + (self.shader_row.saturating_sub(self.shader_first)) as u16;
             }
         }
     }
@@ -378,6 +606,8 @@ impl Panel {
             (&mut self.model_first, self.shown.len(), MODEL_ROWS)
         } else if inside(self.edit_list) {
             (&mut self.edit_first, self.facts.rows.len(), EDIT_ROWS)
+        } else if inside(self.shader_list) {
+            (&mut self.shader_first, self.shader_shown.len(), SHADER_ROWS)
         } else {
             return false;
         };
@@ -398,7 +628,7 @@ impl Panel {
         let token = event.token?;
         if matches!(event.kind, UiEventKind::Hover | UiEventKind::HoverEnter) {
             // Hovering a list's row does not choose it; a click does.
-            if !self.is_model_row(token) && !self.is_edit_row(token) {
+            if !self.is_model_row(token) && !self.is_edit_row(token) && !self.is_shader_row(token) {
                 self.focus = token;
             }
             return None;
@@ -426,6 +656,30 @@ impl Panel {
             TURN_RIGHT => return Some(Action::Turn(-TURN)),
             UP => return Some(Action::Lift(LIFT)),
             DOWN => return Some(Action::Lift(-LIFT)),
+            MOVE_LEFT => {
+                return Some(Action::Nudge {
+                    right: -LIFT,
+                    away: 0.0,
+                });
+            }
+            MOVE_RIGHT => {
+                return Some(Action::Nudge {
+                    right: LIFT,
+                    away: 0.0,
+                });
+            }
+            FARTHER => {
+                return Some(Action::Nudge {
+                    right: 0.0,
+                    away: LIFT,
+                });
+            }
+            NEARER => {
+                return Some(Action::Nudge {
+                    right: 0.0,
+                    away: -LIFT,
+                });
+            }
             SMALLER => return Some(Action::Scale(1.0 / GROW)),
             BIGGER => return Some(Action::Scale(GROW)),
             GRAB => return Some(Action::Grab),
@@ -434,6 +688,7 @@ impl Panel {
             BOX_REMOVE => return Some(Action::BoxRemove),
             DELETE => return Some(Action::Delete),
             UNDO => return Some(Action::Undo),
+            REDO => return Some(Action::Redo),
             SCOPE_ALL => return Some(Action::Scope(Scope::AllServers)),
             SCOPE_SERVER => return Some(Action::Scope(Scope::ThisServer)),
             PUBLISH => return Some(Action::Publish),
@@ -453,6 +708,17 @@ impl Panel {
                 let index = self.edit_first + usize::from(row - EDIT_ROW);
                 if index < self.facts.rows.len() {
                     self.edit_row = index;
+                    return Some(Action::Choose);
+                }
+            }
+            row if self.is_shader_row(row) => {
+                let index = self.shader_first + usize::from(row - SHADER_ROW);
+                if index < self.shader_shown.len() {
+                    // A click on the chosen row remaps to it.
+                    if index == self.shader_row {
+                        return Some(Action::Remap);
+                    }
+                    self.shader_row = index;
                 }
             }
             _ => {}
@@ -487,7 +753,10 @@ impl Panel {
             KeyCode::Escape if !event.repeat => return Some(Action::Aim),
             KeyCode::ArrowUp => self.step(canvas, false),
             KeyCode::ArrowDown => self.step(canvas, true),
-            KeyCode::Tab if !event.repeat => self.step(canvas, !shift),
+            KeyCode::Tab if !event.repeat => {
+                let typing = matches!(self.focus, SEARCH | REMAP_FIELD);
+                self.step_by(canvas, !shift, !typing);
+            }
             KeyCode::PageUp => {
                 let _ = self.move_in_list(-(MODEL_ROWS as isize));
             }
@@ -517,7 +786,9 @@ impl Panel {
             KeyCode::Enter | KeyCode::NumpadEnter if !event.repeat => {
                 return self.activate(self.focus);
             }
+            KeyCode::KeyZ if control && shift && !event.repeat => return Some(Action::Redo),
             KeyCode::KeyZ if control && !event.repeat => return Some(Action::Undo),
+            KeyCode::KeyY if control && !event.repeat => return Some(Action::Redo),
             KeyCode::Delete if self.is_edit_row(self.focus) && !event.repeat => {
                 return Some(Action::Delete);
             }
@@ -525,10 +796,12 @@ impl Panel {
                 let search = self.focus == SEARCH;
                 if let Some(field) = self.field() {
                     let text = event.text.as_deref();
-                    if crate::text_entry::edit(field, key, text, shift, control, FIELD_MAX, true)
-                        && search
-                    {
-                        self.refilter();
+                    if crate::text_entry::edit(field, key, text, shift, control, FIELD_MAX, true) {
+                        if search {
+                            self.refilter();
+                        } else {
+                            self.refilter_shaders();
+                        }
                     }
                 } else if key == KeyCode::Space && !event.repeat {
                     return self.activate(self.focus);
@@ -616,10 +889,8 @@ impl GpuState {
         } = event
             && position.x < self.map_edits.panel.scene_right
         {
-            self.map_edit_pick_at([position.x, position.y]);
-            let panel = &mut self.map_edits.panel;
-            panel.show(Tab::Selected);
-            panel.stale();
+            let picked = self.map_edit_pick_at([position.x, position.y]);
+            self.map_edit_picked(picked, "Nothing there to edit");
             return;
         }
         if let Some(action) = self
@@ -634,6 +905,20 @@ impl GpuState {
     /// Run what `action` asks with the editor's commands, and show their answer.
     fn apply_map_edit_action(&mut self, action: Action) {
         let text = |words: &[&str]| words.iter().map(|word| (*word).to_owned()).collect();
+        let fine = self
+            .console
+            .as_ref()
+            .is_some_and(|console| console.shift_held());
+        let action = match action {
+            Action::Turn(degrees) if fine => Action::Turn(degrees.signum()),
+            Action::Lift(units) if fine => Action::Lift(units.signum()),
+            Action::Nudge { right, away } if fine => Action::Nudge {
+                right: right.signum() * f32::from(right != 0.0),
+                away: away.signum() * f32::from(away != 0.0),
+            },
+            Action::Scale(factor) if fine => Action::Scale(factor.powf(0.1)),
+            action => action,
+        };
         let (name, args): (&str, Vec<String>) = match action {
             Action::Aim => {
                 self.close_map_edit_panel();
@@ -655,11 +940,19 @@ impl GpuState {
             Action::HideGroup => ("mapedit_hide", text(&["group"])),
             Action::Copy => ("mapedit_place", vec![]),
             Action::Remap => {
-                let shader = self.map_edits.panel.remap.trim().to_owned();
-                if shader.is_empty() {
-                    let panel = &mut self.map_edits.panel;
-                    panel.answer(Err("Type the shader to draw instead first".into()));
+                let panel = &mut self.map_edits.panel;
+                let Some(shader) = panel.remap_target() else {
+                    panel.answer(Err("Search for the shader to draw instead first".into()));
                     panel.focus = REMAP_FIELD;
+                    return;
+                };
+                let own = panel
+                    .facts
+                    .selection
+                    .as_ref()
+                    .and_then(|selection| selection.shader.as_deref());
+                if own.is_some_and(|own| shader_stem(own) == shader_stem(&shader)) {
+                    panel.answer(Err("It draws that shader already: choose another".into()));
                     return;
                 }
                 ("mapedit_remap", vec![shader])
@@ -675,6 +968,15 @@ impl GpuState {
             }
             Action::Turn(degrees) => ("mapedit_turn", vec![degrees.to_string()]),
             Action::Lift(units) => ("mapedit_move", vec![units.to_string()]),
+            Action::Nudge { right, away } => {
+                let Some(offset) = self.map_edit_nudge(right, away) else {
+                    self.map_edits
+                        .panel
+                        .answer(Err("No view to nudge along".into()));
+                    return;
+                };
+                ("mapedit_move", offset.iter().map(f32::to_string).collect())
+            }
             Action::Scale(factor) => ("mapedit_scale", vec![factor.to_string()]),
             Action::Grab => ("mapedit_grab", vec![]),
             Action::Remove => match self.map_edits.editor.current() {
@@ -686,6 +988,25 @@ impl GpuState {
                     return;
                 }
             },
+            Action::Choose => {
+                let Some(id) = self.map_edits.panel.chosen_edit() else {
+                    return;
+                };
+                let placed = self.map_edits.document.as_ref().and_then(|document| {
+                    document
+                        .edits
+                        .iter()
+                        .find(|edit| edit.id == id && matches!(edit.kind, Kind::Place { .. }))
+                        .map(super::document::Edit::label)
+                });
+                if let Some(label) = placed {
+                    self.map_edits.editor.set_current(id);
+                    let panel = &mut self.map_edits.panel;
+                    panel.answer(Ok(vec![format!("{label}: Place's controls move it now")]));
+                    panel.stale();
+                }
+                return;
+            }
             Action::Delete => match self.map_edits.panel.chosen_edit() {
                 Some(id) => ("mapedit_delete", vec![id.to_string()]),
                 None => {
@@ -696,6 +1017,7 @@ impl GpuState {
                 }
             },
             Action::Undo => ("mapedit_undo", vec![]),
+            Action::Redo => ("mapedit_redo", vec![]),
             Action::Scope(Scope::AllServers) => ("mapedit_scope", text(&["all"])),
             Action::Scope(Scope::ThisServer) => ("mapedit_scope", text(&["server"])),
             Action::Publish => ("mapedit_publish", vec![]),
@@ -733,8 +1055,50 @@ impl GpuState {
         true
     }
 
-    /// Select what is under `point` (physical pixels) for the editor.
-    fn map_edit_pick_at(&mut self, point: [f32; 2]) {
+    /// The world offset of a nudge `right` of the view and `away` from it, along the
+    /// world axes nearest those directions (a map's walls mostly follow them), so steps
+    /// add up straight.
+    fn map_edit_nudge(&self, right: f32, away: f32) -> Option<[f32; 3]> {
+        let (_, forward) = self.world_notes.view()?;
+        // The view's heading on the floor, snapped to an axis.
+        let ahead = if forward.x.abs() >= forward.y.abs() {
+            [forward.x.signum(), 0.0]
+        } else {
+            [0.0, forward.y.signum()]
+        };
+        // Quake axes: x forward, y left, z up; right of (x, y) is (y, -x).
+        let to_right = [ahead[1], -ahead[0]];
+        Some([
+            to_right[0] * right + ahead[0] * away,
+            to_right[1] * right + ahead[1] * away,
+            0.0,
+        ])
+    }
+
+    /// A selection was made (`picked`), or nothing was there (`nothing` says so): placing,
+    /// it chooses where the model goes; else the Selected page shows it.
+    pub(super) fn map_edit_picked(&mut self, picked: bool, nothing: &str) {
+        let panel = &mut self.map_edits.panel;
+        if !picked {
+            panel.answer(Err(nothing.to_owned()));
+        } else if panel.tab == Tab::Place {
+            let line = match panel.chosen_model() {
+                Some(model) => format!(
+                    "Spot chosen: Place puts {} there",
+                    super::editor::short_name(model)
+                ),
+                None => "Spot chosen: choose a model, then Place".to_owned(),
+            };
+            panel.answer(Ok(vec![line]));
+        } else {
+            panel.show(Tab::Selected);
+        }
+        panel.stale();
+    }
+
+    /// Select what is under `point` (physical pixels) for the editor; whether something
+    /// was.
+    fn map_edit_pick_at(&mut self, point: [f32; 2]) -> bool {
         let map = crate::remap_blocked_maps::map_name(&self.world_load_map).to_owned();
         let picked = self.world_notes.select_for_edit_at(
             crate::world_notes::Scene {
@@ -749,11 +1113,7 @@ impl GpuState {
             },
             point,
         );
-        if picked.is_none() {
-            self.map_edits
-                .panel
-                .answer(Err("Nothing there to edit".into()));
-        }
+        picked.is_some()
     }
 
     /// Once a frame while the panel is open: read the facts again when the edits, the
@@ -799,11 +1159,16 @@ impl GpuState {
                 .rev()
                 .map(|edit| EditRow {
                     id: edit.id,
-                    text: edit.describe(),
+                    text: format!("{}: {}", edit.id, edit.label()),
                     here: edit.applies_on(server.as_deref()),
                 })
                 .collect()
         });
+        let (can_undo, can_redo) = state.history.can();
+        let hub_problem = match &state.hub_note {
+            Some(Err(problem)) => Some(problem.clone()),
+            _ => None,
+        };
         let facts = Facts {
             map: state
                 .map()
@@ -821,6 +1186,9 @@ impl GpuState {
             server,
             grabbing: state.editor.grabbing(),
             select_key,
+            can_undo,
+            can_redo,
+            hub_problem,
         };
         let vfs = self.vfs.clone();
         let panel = &mut self.map_edits.panel;
@@ -832,6 +1200,15 @@ impl GpuState {
             EDIT_ROWS,
         );
         panel.read_models(vfs.as_deref());
+        if panel
+            .facts
+            .selection
+            .as_ref()
+            .is_some_and(|s| s.shader.is_some())
+        {
+            panel.read_shaders(vfs.as_deref(), &self.shaders);
+        }
+        panel.prefill_remap();
     }
 
     /// The selection, as the panel shows it.
@@ -866,7 +1243,7 @@ impl GpuState {
                         Some(shader) => format!("{shader}, {class}"),
                         None => class.to_owned(),
                     },
-                    remappable: shader.is_some(),
+                    shader,
                 }
             }
             EditTarget::Surface {
@@ -882,15 +1259,15 @@ impl GpuState {
                         .get(index)
                         .is_some_and(|surface| surface.kind == sjk_bsp::SurfaceKind::TriangleSoup),
                 },
-                name: shader,
+                name: shader.clone(),
                 detail: format!("surface {index}, {kind}"),
-                remappable: true,
+                shader: Some(shader),
             },
             EditTarget::Other => Selected {
                 picked: Picked::Other,
                 name: "Not something edits change".to_owned(),
                 detail: summary,
-                remappable: false,
+                shader: None,
             },
         })
     }
@@ -904,7 +1281,9 @@ impl GpuState {
         self.map_edits.editor.active = true;
         self.world_notes.hold_selection(true);
         match point {
-            Some(point) => self.map_edit_pick_at(point),
+            Some(point) => {
+                self.map_edit_pick_at(point);
+            }
             None => {
                 let _ = self.map_edit_pick();
             }
@@ -971,6 +1350,90 @@ mod tests {
     }
 
     #[test]
+    fn the_shader_search_keeps_the_selections_neighbours_and_chooses_its_own() {
+        let mut panel = Panel::default();
+        panel.facts.selection = Some(Selected {
+            picked: Picked::Surface { soup: false },
+            name: "textures/yavin/floor".to_owned(),
+            detail: String::new(),
+            shader: Some("textures/yavin/Floor".to_owned()),
+        });
+        panel.set_shaders(&[
+            "textures/korriban/wall",
+            "textures/yavin/floor",
+            "textures/yavin/floor2",
+            "textures/yavin/stone",
+        ]);
+        panel.prefill_remap();
+        assert_eq!(panel.remap, "textures/yavin/");
+        assert_eq!(panel.shader_shown.len(), 3);
+        assert_eq!(
+            panel.chosen_shader(),
+            Some("textures/yavin/floor"),
+            "its own shader is chosen first"
+        );
+        // Typed since: another selection leaves the search alone.
+        panel.remap = "stone".to_owned();
+        panel.refilter_shaders();
+        panel.facts.selection.as_mut().unwrap().shader = Some("textures/korriban/wall".into());
+        panel.prefill_remap();
+        assert_eq!(panel.remap, "stone");
+        assert_eq!(
+            panel.remap_target().as_deref(),
+            Some("textures/yavin/stone")
+        );
+        // A name the list does not know is taken as typed; a bare folder is not.
+        panel.remap = "textures/other/thing".to_owned();
+        panel.refilter_shaders();
+        assert_eq!(
+            panel.remap_target().as_deref(),
+            Some("textures/other/thing")
+        );
+        panel.remap = "textures/other/".to_owned();
+        panel.refilter_shaders();
+        assert_eq!(panel.remap_target(), None);
+    }
+
+    #[test]
+    fn in_a_search_up_and_down_choose_and_the_keyboard_stays() {
+        let mut panel = Panel::default();
+        panel.set_models(&["models/a.md3", "models/b.md3", "models/c.md3"]);
+        panel.focus = SEARCH;
+        assert!(panel.move_in_list(1));
+        assert_eq!(
+            (panel.focus, panel.chosen_model()),
+            (SEARCH, Some("models/b.md3"))
+        );
+        assert!(panel.move_in_list(5), "at the end it stays in the search");
+        assert_eq!(panel.chosen_model(), Some("models/b.md3"));
+        assert!(panel.move_in_list(-1));
+        assert_eq!(panel.chosen_model(), Some("models/a.md3"));
+        // On a row, the keyboard follows the row.
+        panel.focus = MODEL_ROW;
+        assert!(panel.move_in_list(1));
+        assert_eq!(panel.focus, MODEL_ROW + 1);
+    }
+
+    #[test]
+    fn textures_stand_for_shaders_by_their_path() {
+        assert_eq!(
+            texture_shader("textures/Yavin/Floor.JPG").as_deref(),
+            Some("textures/yavin/floor")
+        );
+        assert_eq!(texture_shader("textures/yavin/floor.md3"), None);
+        assert_eq!(texture_shader("gfx/2d/crosshaira.tga"), None);
+        assert_eq!(
+            texture_shader("models/map_objects/yavin/fern3_b.tga").as_deref(),
+            Some("models/map_objects/yavin/fern3_b")
+        );
+        assert_eq!(texture_shader("models/players/kyle/body.jpg"), None);
+        assert!(!listed_shader("textures/yavin/floor:q3map"));
+        assert_eq!(shader_stem("models/a/B.TGA"), "models/a/b");
+        assert_eq!(folder_of("textures/a/floor"), "textures/a/");
+        assert_eq!(folder_of("floor"), "");
+    }
+
+    #[test]
     fn buttons_ask_for_their_command() {
         let mut panel = Panel::default();
         assert_eq!(panel.activate(HIDE), Some(Action::Hide));
@@ -981,6 +1444,14 @@ mod tests {
         );
         assert_eq!(panel.activate(TAB_EDITS), None);
         assert_eq!(panel.tab, Tab::Edits);
+        assert_eq!(
+            panel.activate(FARTHER),
+            Some(Action::Nudge {
+                right: 0.0,
+                away: LIFT
+            })
+        );
+        assert_eq!(panel.activate(REDO), Some(Action::Redo));
         // A model row chooses, then a second click places.
         panel.set_models(&["models/a.md3", "models/b.md3"]);
         assert_eq!(panel.activate(MODEL_ROW + 1), None);

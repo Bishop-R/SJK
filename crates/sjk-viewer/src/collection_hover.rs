@@ -42,16 +42,19 @@ impl Panel {
         if self.tab == Tab::Forge {
             return self.forge_card(token, inputs);
         }
+        if token == TOY_MASTER_TOKEN {
+            return Some(toy_master_card(inputs.standings));
+        }
         if let Some(index) = within(MEDAL_BASE, self.medals_shown) {
             let (_, shown) = medals::showing(inputs);
             return shown.get(index).map(medal_card);
         }
-        if let Some(index) = within(ACHIEVEMENT_BASE, crate::achievements::ALL.len()) {
-            let kind = &crate::achievements::ALL[index];
-            let standing = inputs
-                .standings
-                .iter()
-                .find(|standing| standing.kind.id == kind.id);
+        if let Some(index) = within(ACHIEVEMENT_BASE, inputs.standings.len().min(WALL_MAX)) {
+            // The wall's medallions are the standings' in order: the catalogue's, then
+            // the Toy Master's the player found.
+            let standing = &inputs.standings[index];
+            let kind = standing.kind;
+            let standing = Some(standing);
             // A retired one not held has no card (nor a place on the wall).
             if kind.retired && standing.is_none_or(|standing| !standing.listed()) {
                 return None;
@@ -264,6 +267,28 @@ fn medal_card(showing: &medals::Showing) -> Card {
 /// unlocked yet keeps its name, what it asks and the count to itself; a retired one says
 /// it is no longer obtainable; one reached here says it waits for the SJK hub
 /// ([`crate::achievements::Standing::waiting`]).
+/// The Toy Master's "?" (`Panel::toy_master_badge`): what it is, and the toys the player
+/// found, by their achievements' names (the hub names them only to whoever found them).
+fn toy_master_card(standings: &[crate::achievements::Standing]) -> Card {
+    let found: Vec<&str> = super::toys::toy_master_found(standings)
+        .map(|standing| standing.kind.name)
+        .collect();
+    let mut lines = vec![
+        Line::how("The Toy Master hides toys on maps. Find one and press Use on it."),
+        Line::status("Each one found is a secret achievement."),
+    ];
+    if found.is_empty() {
+        lines.push(Line::status("None found yet."));
+    } else {
+        lines.push(Line::held(format!("Found: {}", found.join(", "))));
+    }
+    Card {
+        title: "???".to_owned(),
+        colour: crate::achievements::medallion::tint(crate::achievements::Category::ToyMaster),
+        lines,
+    }
+}
+
 fn achievement_card(
     kind: &'static crate::achievements::Kind,
     standing: Option<&crate::achievements::Standing>,
@@ -482,7 +507,10 @@ pub(super) fn mark_card(
 fn tile_card(tile: &crate::cards::binder::Tile) -> Card {
     use crate::cards::binder::Slot;
     let faces = crate::cards::faces::current();
-    let odds = cards::rarity_odds(tile.rarity, &faces);
+    let odds = match tile.face(&faces) {
+        Some(face) if face.rank.is_some() => cards::card_odds(face, &faces),
+        _ => cards::rarity_odds(tile.rarity, &faces),
+    };
     let mut lines = Vec::with_capacity(4);
     match (&tile.slot, tile.face(&faces)) {
         (_, Some(face)) => {
@@ -494,7 +522,7 @@ fn tile_card(tile: &crate::cards::binder::Tile) -> Card {
             // No number, whatever the kind (Sol, 20/10/2026): it stays the card's id.
             lines.push(Line::status(format!(
                 "{} card. {}, {}.",
-                tile.rarity.name,
+                face.tone().name,
                 face.kind.name(),
                 face.set_name
             )));
@@ -522,7 +550,7 @@ fn tile_card(tile: &crate::cards::binder::Tile) -> Card {
     Card {
         title: tile.name(&faces),
         colour: if tile.owned() {
-            tile.rarity.colour
+            tile.tone(&faces).colour
         } else {
             color::MUTED
         },
@@ -634,6 +662,8 @@ mod tests {
             assert_eq!(card.lines.len(), 4, "no marks");
         }
         let held = [sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: String::new(),

@@ -23,6 +23,18 @@ pub(crate) const SWITCH: &str = "sith.cloud";
 pub(crate) const GROUPS: &str = "sith.cloudGroups";
 /// Single files picked against their group's tick (`+<id>` / `-<id>`).
 pub(crate) const FILES: &str = "sith.cloudFiles";
+/// Keep the chosen groups up to date by themselves (opt in).
+pub(crate) const AUTO: &str = "sith.cloudAuto";
+/// The groups kept up to date ([`sjk_jof_content::AutoGroups`]).
+pub(crate) const AUTO_GROUPS: &str = "sith.cloudAutoGroups";
+/// The Sith cloud's settings, as the generic content code reads them.
+pub(crate) const NAMES: crate::jof_content::card::Names = crate::jof_content::card::Names {
+    switch: SWITCH,
+    groups: GROUPS,
+    files: FILES,
+    auto: AUTO,
+    auto_groups: AUTO_GROUPS,
+};
 /// The server's address, set only to use another server than the one the hub names.
 pub(crate) const URL: &str = "sith.cloudUrl";
 /// The card's console command (all lower case: commands are matched so).
@@ -41,6 +53,7 @@ pub(crate) const WORDS: Words = Words {
     off: "Off by default. Turn it on to download the Sith cloud's files; nothing is fetched until you press Download.",
     folder_note: "shared with the SJK Launcher's Sith cloud tab",
     repository: "the Sith cloud",
+    auto_on: "On: checks at start and every hour, also in a match; new files of the groups marked Auto load from the next map.",
 };
 
 pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarError> {
@@ -62,6 +75,18 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         "",
         archive,
         "Sith cloud files picked one by one against their group: +<id> taken, -<id> left out (the card writes it)",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        AUTO,
+        false,
+        archive,
+        "Update the Sith cloud's files by themselves: at start and every hour, download what changed in the groups marked Auto (sith.cloudAutoGroups); off by default; needs sith.cloud",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        AUTO_GROUPS,
+        sjk_jof_content::plan::AUTO_ALL,
+        archive,
+        "Sith cloud groups updated by themselves: all (every group you take files from), or group ids; empty for none (the card's Auto ticks write it)",
     ))?;
     cvars.register(CvarDefinition::new(
         URL,
@@ -141,6 +166,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
         assert_eq!(console.bool_cvar(SWITCH), Some(false));
+        assert_eq!(console.bool_cvar(AUTO), Some(false), "no automatic updates");
+        assert_eq!(console.text_value(AUTO_GROUPS), Some("all"));
         assert_eq!(console.text_value(GROUPS), Some("default"));
         assert_eq!(console.text_value(URL), Some(""));
     }

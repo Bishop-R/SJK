@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use glam::Vec3;
 use sjk_bsp::{Bsp, TraceScratch};
-use sjk_client::pmove::{MovementConfig, MovementState, Predictor};
+use sjk_client::pmove::{MovementConfig, MovementState, Predictor, predict_legacy};
 use sjk_client::{
     AnimationLengthTable, AnimationLengths, EF_TELEPORT_BIT, PredictionErrorDecay,
     legacy_saber_combat, legacy_saber_hands, legacy_saber_movement,
@@ -427,6 +427,25 @@ impl LocalPrediction {
         }
     }
 
+    /// Update `cg_predictLegacy`: the prediction changes since 2026.1028.1 this player
+    /// turned back off ([`predict_legacy`]).
+    pub(crate) fn set_predict_legacy(&mut self, bits: u32) {
+        let bits = bits & predict_legacy::ALL;
+        if self.movement_config.predict_legacy == bits {
+            return;
+        }
+        self.movement_config.predict_legacy = bits;
+        self.saber_lock_view.off = bits & predict_legacy::SABER_LOCK_FACING != 0;
+        self.entities
+            .set_off(bits & predict_legacy::ACTOR_CONTEXT != 0);
+        if bits & predict_legacy::HISTORY_GAP != 0 {
+            self.history_gap = Default::default();
+        }
+        for predictor in self.predictor.iter_mut().chain(self.preview.iter_mut()) {
+            predictor.set_config(self.movement_config);
+        }
+    }
+
     /// Update whether the JA+ server leaves the view free through knockdowns and get-ups
     /// (`held_view::free_knockdown_view`), which no serverinfo says.
     pub(crate) fn set_free_knockdown_view(&mut self, free: bool) {
@@ -619,6 +638,7 @@ impl LocalPrediction {
     fn remember_command(&mut self, sent: UserCommand) {
         if self.pending.len() == COMMAND_BACKUP
             && let Some(dropped) = self.pending.pop_front()
+            && self.movement_config.predict_legacy & predict_legacy::HISTORY_GAP == 0
         {
             self.history_gap.discarded(
                 self.movement_config.command_time(dropped.server_time),
@@ -689,6 +709,10 @@ pub(crate) fn predicts_local_view(movement_flags: u16) -> bool {
 #[cfg(test)]
 #[path = "prediction_japro_preferences_tests.rs"]
 mod ja_pro_preferences_tests;
+
+#[cfg(test)]
+#[path = "prediction_legacy_tests.rs"]
+mod predict_legacy_tests;
 
 #[cfg(test)]
 mod fake_noclip_tests {

@@ -444,6 +444,7 @@ fn duel6_sjk_kyber_crystals() {
             card: None,
             credits: 0,
             unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: name.to_owned(),
                 count: 1,

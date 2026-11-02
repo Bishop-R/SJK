@@ -42,14 +42,25 @@ impl Measures<'_> {
     }
 }
 
-/// A piece of a wrapped line: plain text, or a chip's text. `x` and `width` are frame
-/// pixels from the text's left edge; a chip's width holds its padding.
+/// A piece of a wrapped line: plain text, a chip's text or a link's label. `x` and
+/// `width` are frame pixels from the text's left edge; a chip's width holds its padding.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Run {
     pub(crate) x: f32,
     pub(crate) width: f32,
     pub(crate) text: String,
     pub(crate) code: bool,
+    /// A link's target (`setting:<cvar>`, `open:<page>`): the run is its label.
+    pub(crate) link: Option<String>,
+}
+
+/// What a clickable run does, in the order [`draw_rows`] gives them tokens.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Action {
+    /// A chip: its text.
+    Chip(String),
+    /// A link: its target.
+    Link(String),
 }
 
 /// The room between a chip and a token glued to it, in frame pixels.
@@ -68,36 +79,68 @@ pub(crate) fn unbalanced(text: &str) -> bool {
     text.matches('`').count() % 2 == 1
 }
 
-/// A word of a sentence, or a code span; `glued` when nothing parts it from the one
-/// before (a full stop after a chip), so a line never breaks between them.
+/// A word of a sentence, a code span or a link's label; `glued` when nothing parts it
+/// from the one before (a full stop after a chip), so a line never breaks between them.
 struct Token<'a> {
     text: &'a str,
     code: bool,
     glued: bool,
+    link: Option<&'a str>,
 }
 
 /// `sentence`'s words and code spans: what backticks enclose is code, kept whole.
 fn tokens(sentence: &str) -> Vec<Token<'_>> {
     let mut tokens = Vec::new();
-    // Whether a space came since the last token.
     let mut spaced = true;
-    for (index, part) in sentence.split('`').enumerate() {
+    words(sentence, &mut tokens, &mut spaced);
+    tokens
+}
+
+/// [`tokens`], with each well-formed link whose target `known` takes as one token, its
+/// label kept whole; a link it does not take reads as its label's words.
+fn link_tokens<'a>(sentence: &'a str, known: &dyn Fn(&str) -> bool) -> Vec<Token<'a>> {
+    use sjk_identity::news_markup::{Span, spans};
+    let mut tokens = Vec::new();
+    let mut spaced = true;
+    for span in spans(sentence) {
+        match span {
+            Span::Text(text) => words(text, &mut tokens, &mut spaced),
+            Span::Link { label, target } if known(target) => {
+                tokens.push(Token {
+                    text: label,
+                    code: false,
+                    glued: !spaced,
+                    link: Some(target),
+                });
+                spaced = false;
+            }
+            Span::Link { label, .. } => words(label, &mut tokens, &mut spaced),
+        }
+    }
+    tokens
+}
+
+/// Push `text`'s words and code spans onto `tokens`; `spaced` says whether a space came
+/// since the last token, across calls.
+fn words<'a>(text: &'a str, tokens: &mut Vec<Token<'a>>, spaced: &mut bool) {
+    for (index, part) in text.split('`').enumerate() {
         if index % 2 == 1 {
             let code = part.trim();
             if !code.is_empty() {
                 tokens.push(Token {
                     text: code,
                     code: true,
-                    glued: !spaced,
+                    glued: !*spaced,
+                    link: None,
                 });
-                spaced = false;
+                *spaced = false;
             }
             continue;
         }
         let mut rest = part;
         loop {
             let word = rest.trim_start();
-            spaced |= word.len() != rest.len();
+            *spaced |= word.len() != rest.len();
             if word.is_empty() {
                 break;
             }
@@ -105,19 +148,35 @@ fn tokens(sentence: &str) -> Vec<Token<'_>> {
             tokens.push(Token {
                 text: &word[..end],
                 code: false,
-                glued: !spaced,
+                glued: !*spaced,
+                link: None,
             });
-            spaced = false;
+            *spaced = false;
             rest = &word[end..];
         }
     }
-    tokens
 }
 
 /// `sentence` wrapped into rows `width` wide (frame pixels) as `measures` draw it: at
 /// spaces, never inside a code span or between glued tokens; a group wider than a row
 /// stands alone. Neighbouring words share one run. Always at least one row.
 pub(crate) fn flow(sentence: &str, width: f32, measures: &Measures<'_>, look: &Look) -> Vec<Row> {
+    lay_tokens(&tokens(sentence), width, measures, look)
+}
+
+/// [`flow`] for text that may hold links (an announcement's): each link whose target
+/// `known` takes is a link run, its label never split across lines.
+pub(crate) fn flow_links(
+    sentence: &str,
+    width: f32,
+    measures: &Measures<'_>,
+    look: &Look,
+    known: &dyn Fn(&str) -> bool,
+) -> Vec<Row> {
+    lay_tokens(&link_tokens(sentence, known), width, measures, look)
+}
+
+fn lay_tokens(tokens: &[Token<'_>], width: f32, measures: &Measures<'_>, look: &Look) -> Vec<Row> {
     let space = measures.body.width(" ", look.size, TextFace::Regular);
     let token_width = |token: &Token<'_>| {
         if token.code {
@@ -125,13 +184,16 @@ pub(crate) fn flow(sentence: &str, width: f32, measures: &Measures<'_>, look: &L
                 .code
                 .width(token.text, look.chip_size, TextFace::Semibold)
                 + look.chip_pad * 2.0
+        } else if token.link.is_some() {
+            measures
+                .body
+                .width(token.text, look.size, TextFace::Semibold)
         } else {
             measures
                 .body
                 .width(token.text, look.size, TextFace::Regular)
         }
     };
-    let tokens = tokens(sentence);
     let mut rows: Vec<Row> = vec![Vec::new()];
     let mut x = 0.0;
     let mut start = 0;
@@ -166,7 +228,9 @@ pub(crate) fn flow(sentence: &str, width: f32, measures: &Measures<'_>, look: &L
             let token_gap = if index == 0 { gap } else { glue(index) };
             let token_width = token_width(token);
             match row.last_mut() {
-                Some(run) if !run.code && !token.code => {
+                Some(run)
+                    if !run.code && !token.code && run.link.is_none() && token.link.is_none() =>
+                {
                     if token_gap > 0.0 {
                         run.text.push(' ');
                     }
@@ -178,6 +242,7 @@ pub(crate) fn flow(sentence: &str, width: f32, measures: &Measures<'_>, look: &L
                     width: token_width,
                     text: token.text.to_owned(),
                     code: token.code,
+                    link: token.link.map(str::to_owned),
                 }),
             }
             x += token_gap + token_width;
@@ -198,9 +263,18 @@ pub(crate) struct Place {
     pub(crate) code_family: TextFamily,
 }
 
-/// Draw wrapped `rows`, plain text in `place.colour` and code in chips. With `chip_token`,
-/// each chip answers to the next token from it (in reading order) and lights while
-/// hovered.
+/// The next token from `next`, counting it.
+fn take_token(next: &mut Option<&mut u16>) -> Option<u16> {
+    next.as_deref_mut().map(|next| {
+        let token = *next;
+        *next += 1;
+        token
+    })
+}
+
+/// Draw wrapped `rows`, plain text in `place.colour`, code in chips and links in the holo
+/// colour, underlined. With `chip_token`, each chip and link answers to the next token
+/// from it (in reading order, [`actions`]) and lights while hovered.
 pub(crate) fn draw_rows(
     ui: &mut MenuCanvas,
     frame: &Frame,
@@ -213,6 +287,39 @@ pub(crate) fn draw_rows(
     for (index, row) in rows.iter().enumerate() {
         let line_y = place.y + index as f32 * look.line;
         for run in row {
+            if run.link.is_some() {
+                let rect = frame.rect(place.x + run.x, line_y, run.width + 8.0, look.line);
+                let token = take_token(&mut chip_token);
+                let hovered = token.is_some_and(|token| ui.token_hovered(token));
+                if let Some(token) = token {
+                    ui.hit_region(token, rect);
+                }
+                let colour = if hovered {
+                    color::GOLD_BRIGHT
+                } else {
+                    color::HOLO
+                };
+                text(
+                    ui,
+                    TextFamily::Body,
+                    format_args!("{}", run.text),
+                    rect,
+                    look.size * s,
+                    colour,
+                    FontWeight::Semibold,
+                    TextAlign::Start,
+                );
+                let _ = ui.draw_list_mut().push(DrawCommand::SolidRect {
+                    rect: frame.rect(
+                        place.x + run.x,
+                        line_y + look.line * 0.5 + look.size * 0.55,
+                        run.width,
+                        1.5,
+                    ),
+                    color: color::alpha(colour, if hovered { 0.95 } else { 0.6 }),
+                });
+                continue;
+            }
             if !run.code {
                 // A little room past the measured end, so no letter is clipped.
                 text(
@@ -233,11 +340,7 @@ pub(crate) fn draw_rows(
                 run.width,
                 look.chip_height,
             );
-            let token = chip_token.as_deref_mut().map(|next| {
-                let token = *next;
-                *next += 1;
-                token
-            });
+            let token = take_token(&mut chip_token);
             let hovered = token.is_some_and(|token| ui.token_hovered(token));
             if let Some(token) = token {
                 ui.hit_region(token, chip);
@@ -271,12 +374,24 @@ pub(crate) fn draw_rows(
     }
 }
 
-/// The chips of `rows`, in the order [`draw_rows`] gives them tokens.
+/// The chips of `rows`, in the order [`draw_rows`] gives them tokens (rows from
+/// [`flow`], which hold no links).
 pub(crate) fn chips(rows: &[Row]) -> impl Iterator<Item = &str> {
     rows.iter()
         .flatten()
         .filter(|run| run.code)
         .map(|run| run.text.as_str())
+}
+
+/// The chips and links of `rows`, in the order [`draw_rows`] gives them tokens.
+pub(crate) fn actions(rows: &[Row]) -> impl Iterator<Item = Action> + '_ {
+    rows.iter()
+        .flatten()
+        .filter_map(|run| match (&run.link, run.code) {
+            (Some(target), _) => Some(Action::Link(target.clone())),
+            (None, true) => Some(Action::Chip(run.text.clone())),
+            (None, false) => None,
+        })
 }
 
 #[cfg(test)]

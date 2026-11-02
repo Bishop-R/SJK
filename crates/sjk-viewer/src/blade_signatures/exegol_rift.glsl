@@ -74,7 +74,7 @@ vec3 sig_orbit(vec3 ro, vec3 rd, float px){
     float a = h11(k*3.1);
     vec3 from = around(3.5, a - t*0.22, yc - 3.0 + 2.0*h11(k*5.3));
     vec3 to = vec3(0.0, yc - 1.0 + 3.0*h11(k*7.7), 0.0);
-    float d = bolt3(ro, rd, from, to, k*1.7 + floor(t*20.0)*0.3, 0.45);
+    float d = bolt3(ro, rd, from, to, k*1.7 + floor(t*20.0)*0.3, 0.45, px);
     fx += boltLight(d, vec3(0.85, 0.45, 1.0), px)*(1.0 - q/0.25)*0.9;
   }
   return fx*uFx;

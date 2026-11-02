@@ -55,6 +55,11 @@ pub(crate) struct State {
     /// The hub copies' revision last read, and when the hub's state was last read.
     hub_revision: u64,
     polled: Option<std::time::Instant>,
+    /// What the identity worker's last look at the hub's map edits did: its summary, or
+    /// why it fell short (logged when it changes; the panel shows a failure).
+    pub(crate) hub_note: Option<Result<String, String>>,
+    /// The editor's changes to this map's edits, to undo and redo ([`editor`]).
+    pub(crate) history: editor::History,
     pub(crate) editor: editor::Editor,
     /// The editor's panel ([`panel`]).
     pub(crate) panel: panel::Panel,
@@ -328,6 +333,7 @@ impl GpuState {
         if moved {
             self.world_notes.cancel_selection();
             self.map_edits.panel.stale();
+            self.map_edits.history.clear();
         }
         let folder = self.map_edits_folder();
         let state = &mut self.map_edits;
@@ -393,8 +399,20 @@ impl GpuState {
         state.revision += 1;
     }
 
-    /// Read the map's document again when the hub brought a newer copy.
+    /// Read the map's document again when the hub brought a newer copy, and log what the
+    /// last look at the hub did when it changed.
     fn follow_hub_map_edits(&mut self) {
+        if let Some(note) = crate::player_identity::map_edits_note(self.map_edits.hub_note.as_ref())
+        {
+            match &note {
+                Ok(summary) => crate::log::progress(format_args!("map edits: {summary}")),
+                Err(problem) => crate::log::progress(format_args!(
+                    "map edits: not in step with the hub: {problem}"
+                )),
+            }
+            self.map_edits.hub_note = Some(note);
+            self.map_edits.panel.stale();
+        }
         let revision = crate::player_identity::map_edits_revision();
         if revision == self.map_edits.hub_revision {
             return;
@@ -420,8 +438,10 @@ impl GpuState {
             .map_edits_folder()
             .and_then(|directory| load(&directory, &map, checksum));
         if fresh != self.map_edits.document {
+            // Another staff member's version: this PC's steps no longer apply to it.
             self.map_edits.document = fresh;
             self.map_edits.revision += 1;
+            self.map_edits.history.clear();
         }
     }
 

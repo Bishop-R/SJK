@@ -334,7 +334,11 @@ on the 16:9 frame, dark behind the form on the left and clear over the model.
   side, Right hand and Left hand, three lines each (four until 23/10/2026). The hilts come in the game's
   load order, as JoF EJK lists them (`legacy_saber_load_order`), the retail game's
   first under a "Jedi Academy" line with their count and the community's after them
-  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). The hilt search
+  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). A hilt
+  with no mesh (a community "empty hilt", only its `*blade1` tag, for a stance with the
+  blade alone) shows its blades and no hilt; a hilt the stage cannot show is logged and the
+  hand holds `single_1`, and one the game closed while loading is left out at the next
+  start (`crashes/stage-hilt.txt`, `menu_stage/hilt_guard.rs`; hub report #214). The hilt search
   (10/10/2026, Sol's request) is a field at the right of the lists' heading line
   (beside Left hand for Dual), drawn as the Character page's Search ("Search
   hilts", then the words typed and "N found"): Enter or a click types in it, and
@@ -586,7 +590,7 @@ overlay routes their text to the UI's families (`console_sjk_pages.rs`).
   each change after a gold dot with its credit under it, scrolled by Page Up
   and Down or the wheel. Lines are wrapped by their measured width, and what a
   change puts in backticks is drawn as a chip, clickable as on the
-  [what's-new card](#whats-new-card) (`inline_code.rs`).
+  [News panel](#news-panel) (`inline_code.rs`).
 - **Update** ([update_panel_sjk.rs](../crates/sjk-viewer/src/update_panel_sjk.rs)):
   a pop-up card (840 wide, as tall as what it says) over the map darkened all
   over, since 08/10/2026 (Sol asked for it with First setup's). Update (gold)
@@ -815,7 +819,8 @@ that mode for the visit and leaves the player's choice as it was.
     aura, away emote and JA+ away emote, since 20/10/2026), HUD (under HUD: HUD look and scale; Crosshair: crosshair, its size,
     damage hitmarker; Over the game: nameplates, FPS readout, speedometer, kill
     feed, chat and its text size) and General (Menus: menu style and text size;
-    From another client: import; JoF content: its card, since 16/10/2026; SJK
+    From another client: import; JoF content: its card, since 16/10/2026, and its
+    auto-update switch, and the same for the Sith cloud, since 31/10/2026; SJK
     online: check for updates, SJK chat, crash reports, settings usage, SJK
     identity key). They are `settings::Group::Simple`.
   - Advanced: First setup, Display, Graphics, Sound, Controls (Mouse until
@@ -973,8 +978,9 @@ input while it is open, and closing it restores the previous console state. See
 
 Mods' JoF content row ("Choose and download"; `jof.downloads` in the console,
 `jof_content_card.rs`) opens the JoF content card the same way, an SJK UI card in
-every menu style: the opt-in switch, JoF's groups with a tick each and what is here
-of them, the download's progress, Check again and Download
+every menu style: the opt-in switch, the automatic updates' switch (since
+31/10/2026), JoF's groups with a tick and an Auto tick each and what is here of them,
+the download's progress, Check again and Download
 ([jof-content.md](jof-content.md#the-card)).
 
 ### First setup
@@ -1246,7 +1252,8 @@ and out as the classic board does, settling into place as it opens.
   `cg_scoreboardFps`), the time left in a timed match ("12:12 left", else "3:12
   played") and your place,
   the screen's one memorable thing, in gold ("3rd", "of 14" after it, "of 14,
-  tied" on a tie; "Spectating" when you watch). Team games say "Your team leads
+  tied" on a tie, the server's place; with `cg_scoreboardDeathsRank` the place the #
+  column gives your row, never tied; "Spectating" when you watch). Team games say "Your team leads
   by 2", "trails by", "Tied at 5" (or which team leads, for a spectator). Siege,
   which scores no team, says nothing there, and its team heads carry no score
   (the zeros meant nothing); once a round is over "Red team won" or "Blue team
@@ -1270,8 +1277,14 @@ and out as the classic board does, settling into place as it opens.
   pixels of a 1080-line window), and end at 1824. A compact board is narrower
   and centred (below).
 - **Rows:** under muted column labels and a thin holo rule, one row each,
-  52 tall at most, with a hairline under it: the place (Rajdhani; ties share
-  it), the name with its colours (Exo 2), SJK's emblem right after it for a
+  52 tall at most, with a hairline under it: the place (Rajdhani; labelled "#";
+  ties share it, 1, 2, 2, 4, as the server ranks them; with `cg_scoreboardDeathsRank` one
+  number a row in the listed order, ties too, as JoF EJK lists its rows, away and joining
+  rows taking none), with `cg_scoreboardIDs` (archived, off by default as stock JKA's
+  scoreboard shows none; Settings > HUD > Scoreboard, "SJK scoreboard IDs") the
+  client number as a small tag on a faint plate in a slot of its own just
+  before the name, labelled "ID" (40 frame pixels, 26 in compact rows; gold on your
+  row), the name with its colours (Exo 2), SJK's emblem right after it for a
   player the hub knows (gold when vouched for, as elsewhere), at intermission a
   gold "Ready", then the score (as `score/deaths` when `cg_scoreDeaths` provides
   deaths), the minutes played, and the ping as the browser's signal bars and the number.
@@ -1404,13 +1417,15 @@ entry of its own under Profile, making seven.
   Camera control (the settings `camera` icon; F8 opens it too), What's new (the
   wheel's `whats_new`), Credits (`credits`), Report a bug (`other_controls`, the
   tools), SJK chat (`text`, the quill) and, only for a staff key (the hub's `staff`
-  flag, `profile_card::Summary::staff`), Staff tools (`identity`), dimmer than the
-  others. Each is drawn at 78 % (Staff at 50 %) and, hovered or focused, whole with
+  flag, `profile_card::Summary::staff`), Map editor (`maps_own`, the globe) and Staff
+  tools (`identity`), dimmer than the others. Each is drawn at 78 % (those two at 50 %)
+  and, hovered or focused, whole with
   a gold ring (bright gold when focused); the one hovered or focused is named over
   the row in gold (Rajdhani 24) with its key cap (F8 for Camera control) and what it
   opens. Only on the main page. What's new, Credits, SJK chat and Staff tools open
   their console pages over the menu, which shows again when they close; Report a
-  bug opens the report card; Camera control its panel.
+  bug opens the report card; Camera control its panel; Map editor turns the editor on
+  and opens its panel ([Map editor](#map-editor)).
 - **SJK chat:** the main page's docked chat ([Main page](#main-page),
   [hub-chat.md](hub-chat.md#in-the-menus)), on the main page only and while
   `cl_sjkChat` is on: in the match card's column under its last control (x 1360, the
@@ -1546,7 +1561,13 @@ the Forge (the shop, crafting and breaking shaders down) and, since 12/10/2026, 
 (what opening holocrons brings, [cards.md](cards.md)), and since 27/10/2026 Tags after Toys
 (the tags `toy_tag` sticks, [client.md](client.md#tag): a wall of tiles, the ones not held
 dimmed, the chosen one on a card with Choose, which sets `cg_tag`; with nine tabs the row
-shrinks its names when even its narrowest gaps leave them too wide). Sol picked the
+shrinks its names when even its narrowest gaps leave them too wide; since 31/10/2026 the
+wall scrolls, a line a wheel notch, the arrows (and Page Up, Page Down, Home, End) keeping
+the choice in view with its heading, a bar at its side; the credits cards a hub lets be tags
+follow the tags under "Credits cards"; a tile badges its Holo and Solar copies, and the card
+offers Normal, Holo and Solar chips, the finishes held, shown over the picture, Choose then
+setting `cg_tagFinish` too), and since 31/10/2026
+History last (what came, was opened, spent and traded, [cards.md](cards.md#history)). Sol picked the
 direction from a design canvas (`the vault`): every thing has its place from the
 start, the ones the player lacks dimmed; each tab shows its things on the left and
 the one chosen up close on the right.
@@ -1632,8 +1653,8 @@ for the run.
     pack has not come), the name without "blade" on two lines at most, its state (Worn,
     Yours, "Yours x3", Not owned: "Locked" until 29/10/2026, when the padlock became the
     player's own lock) and the chroma's wheel; its marks: the New sticker on its top edge,
-    the star and the padlock on a dark pill over the blade's right end; the chosen tile
-    lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
+    the star and the padlock on a dark pill over the blade's right end, a New one outlined
+    in gold; the chosen tile lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
     and Down a line of tiles, to the same column or the nearest, past the headings.
   - **The list** (from y 400): column heads (Shader, Tier and Yours sort it; "#", the
     blade's number, only while `debug_collectibles` shows numbers; Look, Smith and,
@@ -1712,13 +1733,17 @@ for the run.
   Frame (round the plate), Trail (under the plate). Over the model's head (projected
   from the stage model's head with the last frame's view, `GpuState::frame_view`; over
   the preview's head without a stage) the player's nameplate as a match draws it near
-  (since 28/10/2026 the holo frame, [client.md](client.md#nameplates), drawn with the
-  match's layout at twice its size): their picture (or their initial on their colour) in
-  the hexagon, the name in its colours and, while See & share nameplates is on, the gold
-  corner and the shield, health and Force bars (else the dotted line), with
-  dashed marks at the three places (the crest's between the picture and the name).
+  (in the style chosen, `cg_nameplateStyle`, [client.md](client.md#nameplates), drawn
+  with the match's layout at twice its size). The holo frame: their picture (or their
+  initial on their colour) in the hexagon, the name in its colours and, while See &
+  share nameplates is on, the gold corner and the shield, health and Force bars (else the
+  dotted line). The capsule: the picture and the name in the pill, gold-edged with the
+  tray of bars under it while sharing. The classic plate: the name over the framed plate
+  of bars while sharing, alone otherwise. Dashed marks stand at the three places (the
+  crest's before the name).
   Its words stand on a dark card beside the model (x 1360 to 1824, its foot at y 990,
-  as tall as they need, since 25/10/2026). Under them, **See & share nameplates** (a switch; a click or Enter flips
+  as tall as they need, since 25/10/2026). Under them, **Style** (31/10/2026: Holo,
+  Capsule, Classic, segments whose click sets `cg_nameplateStyle`) and **See & share nameplates** (a switch; a click or Enter flips
   it, its row pulsing gold every 1.2 s, a ring round it and a glow behind the switch)
   puts `cg_nameplate` in plain view: the one setting for seeing other players'
   nameplates and sharing your health, shield and Force
@@ -1854,6 +1879,20 @@ for the run.
   closer: the card 660 wide over the darkened tab with its words at its right, the
   arrows or the wheel to the previous or next tile, Escape or a click to put it back. The row's count is the copies held. World shots: `world_shot::cards_shots`
   (`duel6_sjk_card_binder` with the hub's card pack).
+- **History** ([collection_history.rs](../crates/sjk-viewer/src/collection_history.rs),
+  [collection_history_view.rs](../crates/sjk-viewer/src/collection_history_view.rs),
+  [cards.md](cards.md#history), 31/10/2026): "History" and its line, the filter's chips
+  at y 320 (All, Drops, Opened, Credits, Shards, Trades, Boxes) with what the read is
+  doing at their right (or why it failed, in ember), then a list of 15 rows 41 high from y
+  352, full width with a bar at the right when it scrolls: each row a chip of its kind in
+  its tier's colour, the sentence, the credits and shards it moved (gains green, spends
+  red) and the date on the right; an Open all is one row with a gold + (- once open) whose
+  lines stand indented under it, each with a bar of its tier's colour. Load older ends the
+  list while the hub has more. An empty list says "Nothing yet", a read under way
+  "Reading your history...", a failure "History unavailable" and why. Left and Right
+  filter, Up, Down, Page Up, Page Down, Home and End choose, Enter (or a click) opens a
+  row or loads older, R reads again, the wheel scrolls three rows; hovering chooses. It
+  reads the newest page each time it is shown. Ctrl+Tab goes on to Medals.
 - **The model:** behind Shaders, Toys and Nameplates the page darkens only the left
   and the bottom. From the main page the backdrop camera goes to the player's shot
   (`ClientMenu::set_collection_stage`, which first reads the model, sabers and
@@ -1893,15 +1932,17 @@ saber shader the Shaders tab, the Forge and the trade window list carries its ma
   whose economy says `marks` (`sjk_identity::MARKS_ABILITY`), detected as `shatter_last`
   is, so against an older hub nothing of them shows and nothing is asked.
 - **New:** a shader the player holds and has not looked at since they got it
-  (holocrons, gifts, trades, crafts): a gold "New" sticker, and the Shaders tab's "2 new"
+  (holocrons, gifts, trades, crafts): a gold "New" sticker, outlined in gold on the wall
+  (a gold edge down its row in the list) while it is not the one chosen (Creyon,
+  31/10/2026), and the Shaders tab's "2 new"
   after the headline. Local, on this PC: `shader-seen.txt` beside `config.cfg`, one shader
   id a line (`shader_marks::FILE`), read at start and written at each change. With no file
   yet, everything held the first time the hub says what the player holds is seen, so a
   player never finds every shader New; a shader no longer held leaves the list (New again
-  when it comes back). A New one chosen on Shaders or in the Forge, by the pointer or the
-  keys, is seen once it has stayed chosen a second (`shader_marks::Look`, `LOOK_MS`):
-  hovering chooses, so a sweep of the pointer across the wall passes over shaders without
-  seeing them (Sol's decision, 29/10/2026). Turning to another tab or closing the page
+  when it comes back). A New one clicked on Shaders or in the Forge is seen at once, its
+  sticker gone (Creyon, 31/10/2026); one reached with the keys is seen once it has stayed
+  chosen a second (`shader_marks::Look`, `LOOK_MS`; Sol's decision, 29/10/2026). Resting the pointer never chooses a shader (31/10/2026;
+  hovering chose one before), so it never sees one either. Turning to another tab or closing the page
   sees the shader chosen only if it had already stayed its second; Mark all seen (N) sees
   them all. Nothing is New
   while the debug collectibles show.
@@ -1993,7 +2034,8 @@ panel was removed on 10/10/2026).
 
 [panel_view.rs](../crates/sjk-viewer/src/map_edits/panel_view.rs): the staff map editor's
 panel ([map-edits.md](map-edits.md#the-panel) has what it does), opened by the world-note
-key while `mapedit` is on, in every menu style (19/10/2026, Sol's request). It is Camera
+key while `mapedit` is on, or the in-game menu's Map editor icon, in every menu style
+(19/10/2026, Sol's request; made easier 28/10/2026, Sol's request). It is Camera
 control's column: the 1080-line frame on the window's right edge, the column at x 1440,
 416 wide, over the same navy fade, the scene left of x 1400 undimmed, where a click
 selects (the selection's green outline is the screen's one memorable thing).
@@ -2002,25 +2044,64 @@ selects (the selection's green outline is the screen's one memorable thing).
   published, or published with the hub's revision), then the pages as tabs: Selected,
   Place, Edits (Camera control's tabs).
 - **Selected:** what it is (Rajdhani 26), its model or shader and its detail (Exo 2 16,
-  muted, two lines), a row of two kit buttons, then Draw another shader: a kit field and
-  Remap and Remove remap. With nothing selected, how to select.
-- **Place:** the kit's search pill, a list of seven rows (34 each, the chosen one gold with
+  muted, two lines), a row of two kit buttons, then Draw another shader: the kit's search
+  pill (with its count), a list of five rows as Place's (names without `textures/` or
+  `models/`, the selection's own shader in quiet print unless chosen), and Remap and
+  Remove remap. With nothing selected, how to select.
+- **Place:** the kit's search pill, a list of six rows (34 each, the chosen one gold with
   a gold tick at its left, paths without `models/`), Place where you aimed across the
-  column, then Placed model: its line and two rows of four buttons.
-- **Edits:** a list of twelve rows, an edit for another server in quiet print; Delete and
-  Undo newest.
+  column, then Placed model: its line and three rows of four buttons (turn and lift,
+  the nudges, scale with Grab and Remove).
+- **Edits:** a list of twelve rows, an edit for another server in quiet print; Delete,
+  Undo and Redo (each dimmed with nothing to do).
 - **Foot:** New edits for and the kit's segments (All servers, This server) at y 800, the
-  last answer (ember when refused) at 840, Publish (gold), Aim and Editor off at 898, and
-  two lines of keys from 964 as Camera control's. A page's controls end above it (a test
-  checks every page at four window shapes).
+  last answer (ember when refused, or a failed look at the hub) at 840, Publish (gold),
+  Aim and Editor off at 898, and two lines of keys from 964 as Camera control's (Enter,
+  Ctrl+Z, Ctrl+Y; then Click, Esc, with Shift's fine steps on Place). A page's controls
+  end above it (a test checks every page at four window shapes).
 - **Strip:** while the editor is on and the panel hidden, a navy card 600 wide at the top
   centre of the 16:9 frame: "Map editor" in gold, what to aim at (or that the grabbed model
-  follows the aim), and the world-note key's cap with "edit" (or "put it down").
+  follows the aim), and the world-note key's cap with "edit" (or "put it down", with the
+  Wheel's "turn" under it).
 
 It is a page of the in-game menu (`Page::MapEdit`), drawn by `InGameMenu::append_own_page`
 from the panel's state, which lives with the map's edits; its keys come before the game
 menu's (`GpuState::map_edit_key`), its pointer through `map_edit_pointer`. World shot:
 `duel6_map_editor_panel` (`world_shot_map_edits.rs`).
+
+## Ghost editor
+
+[editor_view.rs](../crates/sjk-viewer/src/ghost_replay/editor_view.rs): the staff ghost
+editor's column ([client.md](client.md#ghost-editor) has what it does), opened by
+`ghost edit` (01/11/2026, Sol's request), in every menu style. It is the map editor's
+column: the 1080-line frame on the window's right edge, the column at x 1440, 416 wide,
+over the same navy fade, the scene left of x 1400 undimmed, where the run's path is the
+screen's one memorable thing (holo blue, the new start a gold ring with its facing line).
+
+- **Top:** "Ghost editor" (Rajdhani 42) and how many ghosts, how many on this map.
+- **Ghosts** (heading at 166): a list of six rows from 182 (34 each), the name left and its
+  map and length right (Exo 2 14), another map's quiet, the open one gold with the list's
+  gold tick. Under it at 412 the copy's name (the kit's field, 260 wide) and Duplicate.
+- **Cut** (heading at 494, "keeps N s of M s" right of it): the timeline at 510 (36 high)
+  on the list's ground, the slices standing (holo 14 %), moving (50 %), in the air (85 %),
+  the bubble (ember, faint while it is to be cleared), the cut parts under navy at 70 %,
+  the handles as gold bars (the start ember when it is not clean); the clean starts as a
+  green line at 550. Start and End rows of 56 at 566 and 626 as Camera control's sliders
+  (name Exo 2 19, value Rajdhani 21), then First move, Last move and Reset at 694, and
+  at 744 "Starts mid-move" in ember, or the map a run of another map shows its path on.
+- **Foot:** "Clear the chat bubble" with how many times and the kit's switch at 800, the
+  last answer (ember when refused) or "Not saved" at 840, Save (gold), Play, Look and Close
+  at 898, two lines of keys from 964 (Left Right snap, Shift free, Page Up Page Down on a
+  handle; Enter, Ctrl+S, Up Down elsewhere; Esc look).
+- **Strip:** while looking about, the map editor's strip: "Ghost editor" in gold, which
+  path is drawn, and Esc "back to the editor".
+
+It is a page of the in-game menu (`Page::GhostEdit`), drawn by
+`InGameMenu::append_own_page` from the editor's state on `Ghost`; its keys come before the
+game menu's (`GpuState::ghost_edit_key`), its pointer through `ghost_edit_pointer` (a press
+on the timeline or a track starts a drag that keeps to it). The path and the strip are the
+editor's own canvas, a layer under the in-game menu's. World shot: `duel6_ghost_editor`
+(`world_shot_ghost_editor.rs`).
 
 ## Report a bug and its dialogs
 
@@ -2272,19 +2353,14 @@ play too; a command closes the console first, while a line clicked on the chat p
 its window over the page, which is back once the window closes. While a window shows the
 cursor is free and the window takes every key and click (held keys are let go); the claim
 window opens on the main menu or over the game menu, after the medal,
-holocron, reload, FPS and log request cards and before the what's-new card, never in the
+holocron, reload, FPS and log request cards and before the News panel, never in the
 middle of play. Every card is 920 wide from x 500, as tall as what it holds, centred; its
 head is the mark (SJK's logo, or the gift box U+E028 in gold for rewards, 52), a kicker in
 gold (Rajdhani 19) and on the right the date (`dd/mm/yyyy HH:MM`, UTC) or the round; then
 the title (Rajdhani 32, two lines at most). A click outside the card closes the
 announcement and the round list.
 
-- **Announcement:** "FROM THE SJK TEAM" (or "SJK RELEASE"), the title, then the text in
-  Exo 2 18: paragraphs with a gap between them, `- ` lines as gold bullets whose wrapped
-  lines stay indented; 16 lines at once, Up, Down and the wheel scroll the rest. Close
-  (gold for news; Esc, Enter, Space). A release adds Update (gold, U) while this build is
-  older than its version (the main menu's update action: install a release waiting, else
-  the Update page), else See what's new (W, the what's-new card's newest recap).
+- **Announcement:** read on the [News panel](#news-panel) since 31/10/2026.
 - **Round list:** "REWARD ROUND 1 OF 3", the round's title and note, then each person
   rewarded on a row of 34, alternate rows banded: the clan emblem for a known tag, the
   name with its colour codes ("Someone" when the hub has none) and the verified seal in a
@@ -2358,7 +2434,14 @@ every menu style, on the 16:9 frame:
   in a gold ring, their name in its colours, "Nib wants to trade" (Rajdhani 24) with the request's seconds in gold, a muted
   line, a thin gold bar running down smoothly (to the fraction of a second, not in steps),
   and the key: Esc answer (or Esc open), 40 above the card's foot, clear of the bar. It also tells
-  for six seconds how a trade ended, or why a request was refused. What the window and
+  for six seconds how a trade ended, or why a request was refused. A finished trade says
+  "Your new items are in your collection" (or "item is", for one) only when the other
+  side gave something; one they put nothing into says "You gave your offer to <name> and
+  received nothing" (hub report #208, `PlayerTrade::ending`), the name with its clan marks
+  (`« » •`, as the window's headline shows it). The toast keeps its words on one line and
+  never cuts them: it is 660 wide, and wider, still centred, when the headline (measured in
+  the display font, with room for the clock, key hint or Open trade beside it) or the line
+  needs it, up to 1800. What the window and
   the toast already said goes on to the next map's world with the shell: a world that
   began without it took the hub's last refusal for a new one and showed it again at every
   map change (Creyon's screenshot, 26/10/2026: "Two accounts on one connection cannot
@@ -2379,6 +2462,14 @@ every menu style, on the 16:9 frame:
 - **From the main menu:** no game is needed: the toast and the window show over the main
   menu too (the pointer is free there, so the toast is always a button), and Close keeps
   the window closed until the toast's Open trade.
+- **Chatting while trading** (hub report #215): the window keeps the keyboard (Enter
+  for its gold button, Esc to close it) but lets the chat keys through: a key bound to
+  `messagemode` to `messagemode6` (Chat, Team chat, the whispers, SJK chat, Admin chat)
+  opens the composer, the window staying open under it. In a game the chat draws after
+  the window, over its shade, its recent lines too, so the other player's answers show;
+  the composer has the keys until it sends (Enter) or closes (Esc), and the window's
+  buttons still take clicks. Over the main menu the SJK chat key opens the SJK chat page,
+  and the window comes back when the page closes.
 - **Blocked players** (Sol's decision, 24/10/2026): a request from a player blocked on
   this PC is declined without a word (no toast, no window), and no card offers Trade
   with them (the Players page says "You blocked this player"); `trade <player>` and a
@@ -2453,76 +2544,78 @@ every menu style, on the 16:9 frame:
   restart (Sol's review, 25/10/2026); registering again or the feed's word of a trade
   reads it at once.
 
-## What's new card
+## News panel
 
-[whats_new_card.rs](../crates/sjk-viewer/src/whats_new_card.rs): the pop-up a player
-gets the first time they reach the menu after an update (Sol, 12/10/2026: "a popup
-for updates that would show short recaps"). It tells what the update brought in a few
-short lines, the release's recap in [CHANGELOG.md](../CHANGELOG.md)
-([sjk.md](sjk.md#changelog)). It shows on the main page or over the game menu, never in
-the middle of play, after the medal, holocron, reload, FPS and log-request cards and
-not while the window is away; the menus under it are not drawn and take no input. The
-same look in every menu style, on the 16:9 frame:
+[news_panel.rs](../crates/sjk-viewer/src/news_panel.rs) with
+[news_panel_frame.rs](../crates/sjk-viewer/src/news_panel_frame.rs), 31/10/2026 (Sol:
+the what's-new card and the announcements "are kinda the same", so one panel for both,
+with working switches, pictures, and links into the UI that only the SJK team writes).
+It replaced the what's-new card (12/10/2026) and the announcement card (25/10/2026). One
+SJK pop-up over the darkened screen, the same look in every menu style, on the 16:9
+frame; the menus under it are not drawn and take no input, and while it shows the cursor
+is free and it takes every key and click.
 
-- **When:** `cl_whatsNewSeen` holds the version whose card the player closed. The card
-  shows when the installed version differs and the changelog lists it: the recaps of
-  every release since the seen one, newest first, at most five, a page each; with no
-  marker only the installed release's. A new installation (no marker, and First setup
-  not yet ticked away) writes the marker and shows nothing, and a local build no
-  release lists shows nothing. Closing writes the marker; quitting with the card up
-  shows it again next time. `whatsnew` shows the newest recap again, "Unreleased"
-  included, as a preview that writes nothing.
-- **Settings to review** (17/10/2026): when the releases since the seen one name
-  settings to choose again (`= <cvar>[ reset]: <sentence>` in the changelog,
-  [sjk.md](sjk.md#changelog); `changelog::reviews`, every release since the seen one,
-  past the five recap pages), the card opens on a page of them before the recaps:
-  "Settings to review" as its headline, "Changed by this update: choose again" on the
-  right, and a row each with the heading's icon, "1." and the setting's Settings name
-  (`settings::switch_label`) in gold, its switch at the right and the sentence under
-  them. A click on the switch or the row's number key (1 to 9) flips the setting and
-  leaves the card up; the switches read the console each frame. A `reset` setting is
-  put back to its default when the card is offered, not in a preview (`whatsnew` shows
-  "Unreleased"'s with working switches), once per version: `cl_whatsNewReset` records
-  the version whose resets were applied as soon as they are, so a player who joins with
-  `+connect` or quits with the card up, then turns the setting on in game, keeps it at
-  the next start, while the card is still offered (`changelog::resets`; an update past
-  it resets only the newer releases' settings). That one generic marker serves every
-  release; no setting has a migration cvar of its own, and `cl_whatsNewSeen` still says
-  what the player has not seen.
-- **Card:** the kit's card over its scrim, 920 wide from x 500, centred vertically, as
-  tall as its tallest page, so the buttons stay put while the pages turn.
-- **Words:** "SJK updated" (or "Preview") in gold (Rajdhani 22) and, right-aligned on
-  the same line, the release's date (with "Release 2 of 3" when there are pages; muted
-  Rajdhani 19); "What's new in <release>" ("What's coming next" for the unreleased
-  preview; Rajdhani 36); then one block per recap line: its heading's icon (26, a
-  settings or quick wheel icon, chosen by the words of the heading from
-  `HEADING_ICONS`, the changelog icon when none match), its heading in bright gold
-  (Rajdhani 21, semibold) beside the icon, and under the heading its sentence (Exo 2
-  18, 28 a line, 16 between blocks; Sol, 12/10/2026: "the titles shouldn't be on the
-  left but on the top"). The sentences are wrapped by their measured width when the
-  card is drawn, again whenever the menu text size or spacing changes. A release
-  without a recap shows its introduction (six lines at most, "..." when cut) in muted
-  text; once a page's recap would pass 640 pixels it says "More in the full
-  changelog." Under the recap, in gold Exo 2 16, who made the release's changes and
-  the clients they follow, from the changes' credits, most credited first: "By Creyon
-  and Sol, after OpenJK and JoF EJK".
-- **Chips:** what a recap sentence puts in backticks (a command or cvar: `` `whatsnew` ``)
-  is drawn as a chip, as messaging apps draw inline code (Sol, 12/10/2026;
-  [inline_code.rs](../crates/sjk-viewer/src/inline_code.rs), shared with the changelog
-  page): JetBrains Mono 17 on a faint holo fill with a holo edge, 25 high, rounded 6, 7
-  of room each side. A chip is never split across lines; a full stop or comma written
-  against it stays with it, 3 apart. The changelog's parser keeps the backticks (it
-  drops them in introductions and headings, and the classic+ page drops them) and
-  rejects a line that leaves one open. A chip lights gold under the pointer; a click
-  closes the card and follows it: a cvar Settings has a row for (`settings::has_row`)
-  opens Settings with it searched (the SJK UI's Settings, or the classic Setup panel
-  under the classic style), anything else (a command, a cvar with a value) is typed on
-  the console's input line, not run (`ViewerConsole::follow_chip`).
-- **Pages:** with several releases, the foot's left holds a previous arrow, a dot per
-  release (the one on show gold) and a next arrow; Left and Right turn the pages too.
-- **Buttons:** Full changelog (outlined, 230) opens the changelog page, Close (gold, 150)
-  puts the card away; focus starts on Close. Keys bottom right: Left and Right turn the
-  pages (with several), Enter, Space, Esc or Backspace close, C opens the changelog.
+- **When it opens on its own:** on the main menu or over the game menu, never in the
+  middle of play, after the medal, holocron, reload, FPS, log-request and claim cards and
+  not while the window is away. After an update, on its "Settings to review" (when the
+  releases since the one seen name any) or its recap: `cl_whatsNewSeen` holds the
+  version whose panel the player closed, as the card's did; a new installation (no
+  marker, First setup not yet ticked away) writes the marker and shows nothing, and a
+  local build no release lists shows nothing. And when an announcement came that the
+  player has not read, once a run for each: `announcements_seen.txt` keeps `read`, the
+  highest announcement number seen on the panel ([official/seen.rs](../crates/sjk-viewer/src/official/seen.rs));
+  a file from before counts what the chat showed as read, and a new key counts what the
+  hub lists first as read, so a fresh install opens nothing. Closing the panel counts
+  every announcement it listed as read and writes the update's marker.
+- **Asked for**, it shows at once, over play and over the console: `news` (its newest
+  entry), `whatsnew` (the newest recap, "Unreleased" included, as a preview that writes
+  nothing; its settings to review switch), `announcement [n]` and a click on an
+  announcement's line in the SJK chat ("Read more").
+- **Settings to review** (17/10/2026): `= <cvar>[ reset]: <sentence>` in the changelog
+  ([sjk.md](sjk.md#changelog)), every release since the seen one. A `reset` setting is put
+  back to its default when the update's panel is offered, once per version
+  (`cl_whatsNewReset`, written as soon as it is applied).
+- **Left, the entries,** ten at a time (the wheel scrolls; Up and Down change the entry):
+  "Settings to review" first, then the hub's announcements and the six newest releases'
+  recaps, newest first by date. Each row: its kicker ("SETTINGS TO REVIEW" in gold, "SJK
+  RELEASE", "FROM THE SJK TEAM", "PREVIEW"; Rajdhani 14), its date on the right, its name
+  (Rajdhani 21), a gold dot while unread. A release's announcement (kind `release`, its
+  version a release the changelog lists) goes on that release's entry, its text above the
+  recap; one for a release this build does not list is an entry of its own with Update.
+- **Right, the entry:** its kicker in gold and its date (dd/mm/yyyy, with HH:MM for an
+  announcement), its title (Rajdhani 34), then its text 1124 wide, by lines that scroll
+  (the wheel, Page Up and Down; a gold thumb on the right shows where). Recap lines are
+  a heading with its icon (`HEADING_ICONS`) over its sentence; a release without a recap
+  shows its introduction (six lines, "...") or says its changes are in the full
+  changelog; "By ..., after ..." closes a release in gold. Announcement lines are
+  paragraphs, `- ` bullets (a gold dot, wrapped lines indented) and three kinds of
+  markup ([sjk_identity::news_markup](../crates/sjk-identity/src/news_markup.rs)):
+  - **Links**, `[Label](target)`, drawn semibold in the holo colour and underlined, gold
+    under the pointer. `setting:<cvar>` opens Settings searched for it (the SJK UI's,
+    or the classic Setup panel); `open:<page>` opens a place of
+    [ui_links.rs](../crates/sjk-viewer/src/ui_links.rs)'s `PAGES` table (Settings,
+    Collection, Achievements, Holocrons, Profile, SJK identity, SJK chat, Emotes, Toys,
+    Model viewer, Contributor rewards, Changelog, Credits, Update, and with `mod-jof` JoF
+    content and Sith cloud), each by a command of this client. A link names a place,
+    never a command, and one this build does not know reads as its label.
+  - **Pictures**, `[[image:<id>]]` on a line of their own: drawn at their size within the
+    pane (at most 470 high), a framed "Picture loading..." until they arrive
+    ([news_images.rs](../crates/sjk-viewer/src/news_images.rs): a worker reads them from
+    `news/<id>` beside the settings, else downloads them from the hub and keeps them
+    there; three textures of their own, given back as 1x1 after 600 frames unused, and
+    at most four kept decoded). A picture the hub took down is left out.
+  - **Switches**, `[[switch:<cvar>]]` on a line of their own: the setting's Settings
+    name in gold and its switch, as a setting to review (a cvar Settings has no plain
+    on/off row for is left out).
+  Commands and cvars in backticks are chips (`inline_code`), as in the changelog.
+- **Switches** read the console each frame as the Settings rows do (a number cvar is on
+  when nonzero; Sol's report, 31/10/2026: one held in a number cvar did nothing and always
+  showed Off). A click or the row's number key (1 to 9) flips it and the panel stays.
+- **Foot:** Full changelog (outlined), Update (gold, on a release newer than this build:
+  install a release waiting, else the Update page) and Close (gold otherwise); keys
+  bottom right: 1-9 switch, Up and Down entry, PgUp and PgDn scroll, U update, C full
+  changelog, Esc (also Enter, Space, Backspace) close. A chip or a link closes the panel
+  and follows it.
 
 ## Symbols
 
@@ -2760,6 +2853,17 @@ The Profile header, own profile card and chat sender cards share the same native
 with central cropping and a readability veil. These SJK controls work in every menu
 style. See [profile banners](profile-banners.md) for rewards and compatibility.
 
+## Chat reactions
+
+The SJK chat page shows emoji reaction counts beside a message's time. Selecting
+a public message exposes six reaction buttons under its sender in Chosen message.
+The player's own reactions are highlighted; a second activation removes one. These
+SJK controls are used in every menu style.
+
+Shared chat reactions (offline fixture; heart selected by the reader):
+
+![SJK chat reactions](images/sjk-chat-reactions.png)
+
 ## Incoming chat colour
 
 Settings > Chat includes **Incoming chat colour**, a named choice shared with
@@ -2770,6 +2874,28 @@ Team/admin chat, whispers and the separate SJK channel keep their own colours.
 Incoming chat colour, cyan selected (offline fixture):
 
 ![Incoming chat colour](images/incoming-chat-colour.png)
+
+## Away chat bubble
+
+Settings > Chat in Advanced mode offers **Chat bubble while away**, shared with
+the classic HUD settings. `cl_unfocusedChatbox` controls both unfocused and
+minimized windows; there is no separate minimized switch. The default remains
+on, saved unfocused choices are kept, and the update's what's-new card offers
+the same switch. Actual chat, console and menu key catchers retain their normal
+bubble. See [talk balloons](client.md#talk-balloons).
+
+![One away bubble switch in SJK Settings](images/away-chat-settings.png)
+## Game chat logs
+
+Settings > Chat in Advanced mode includes **Save game chat logs**, an on/off row
+shared with the classic HUD settings. It is off by default, as in stock clients,
+and keeps saved choices. Its help names the profile's `chatlogs/chat.log` and explains that
+received game-server public, team and private chat is saved before display filters.
+The release's what's-new card offers the same switch; console value 2 retains
+synchronized writes. See [chat logs](client.md#chat-logs).
+
+![Save game chat logs in SJK Settings](images/chat-logs-settings.png)
+
 
 ## Plan
 

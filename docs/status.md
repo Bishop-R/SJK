@@ -23,6 +23,355 @@ broadcasts. Deployment, live interoperability, other platforms and performance
 remain unverified; Sol's remaining design decisions and rollout are still pending.
 See [profile-banners.md](profile-banners.md).
 
+## Ghost editor
+
+01/11/2026, `personal/ghost-editor`, based on `main` `1f2c6c2f` (Sol's request: duplicate a
+ghost from a list, cut part of its start, and take out the commands where the chat bubble
+shows; Sol's choices: clear the bubble rather than delete commands, a timeline plus the
+path drawn in the world, the start snapping to standstills with Shift to override).
+`ghost edit [name]` opens a staff column like the map editor's
+([client.md](client.md#ghost-editor), [sjk-ui.md](sjk-ui.md#ghost-editor)). The bubble on
+a replay came from the recording itself: the console was open while `ghost record` and
+`ghost stop` were typed, so the first and last commands carried `BUTTON_TALK`, which a
+replay sends again. Verified on Windows 11: fmt, build, Clippy on `sjk-viewer` (no new
+warnings) and the workspace's tests, with new ones (clean starts, the timeline's slices,
+the path's thinning, first and last move, an edited run's start and clock, the list's
+summary, copy names, key steps and drags, Save asking twice, Duplicate, the column's
+layout at four window shapes, the overlay), and on the real Pmove pillar course: a run
+behind a second of console-open standing, cut at First move, is command for command the
+run alone and replays to within 0.01 unit of its end. GPU world shots with the game data:
+`duel6_ghost_editor` (the whole run, the cut, Look with the path, 4:3). Not verified: in a
+game (the column's keys and drags by hand, Play from the editor on a server, the path
+over a real recording).
+
+## Spawn beam lightning back to retail's
+
+01/11/2026, `personal/fxrunner-count`, based on `main` `529dc04f` (Sol's report: the green
+spawn/teleport beam throws a lot of lightning, like a bug). The beam's `env/beam_lights`
+runs `env/beam_bolts` through an `FxRunner` with `count 0 0.6`, which retail rounds to one
+run about one time in six; SJK ignored a runner's count and played all its `playFx`
+entries every time, so the beam threw about six times the bolts. Runners now roll their
+rounded count and play one random entry per run, as `CFxScheduler` does
+([rendering.md](rendering.md)). Verified on Windows 11: fmt, Clippy on `sjk-viewer`, the
+effect tests with a new one (a `count 0 0.6` runner with two entries fires about 1/6 of the
+time, one entry per run). Not verified in game: other retail effects with runners now fire
+less often or pick one entry, which is what retail does.
+
+## Prop gun toy
+
+01/11/2026, `personal/prop-guns`, based on `main` `57f60dde` (Sol's idea): `toy_propgun`
+(opt-in, `cl_toyPropGun`) holds a fake weapon a pk3 defines (`propguns/<id>.gun`, SJK ships
+none; `propgun` chooses, `cl_propGun`) instead of the real weapon or saber, in first person
+(placed from the bobbing view, not a hand rig) and third person (on `*r_hand`); attack
+never reaches the server while it is held and fires a bolt instead, flown alike by every
+client from the relay's `fire_...` event; a bolt that reaches a player who has the toy on
+knocks them down through the Ragdoll ([client.md](client.md#prop-gun)). A gun may add a muzzle effect, a
+trail and a looped flight sound (`fireEffect`, `boltEffect`, `boltSound`); in first person
+the bolt leaves from the drawn gun's `tag_flash`; in third person the world model is turned
+onto the hand as the game's own world guns are. No hub change (the
+relay checks no toy ids). Not in the look, the Collection's Toys tab, the quick wheel or
+the settings (`cg_toyPropGunShow`, `s_toyPropGunSound` are console cvars). Verified: fmt,
+workspace build and tests (gun files read and refused, events read back, the bolt's line
+and life, a standing body struck or missed, the blow, attack kept from the server only
+while held, the first-person placing), Clippy on the new code, and world shots of two
+private test guns held in first and third person on a demo, with bolts in flight. Not
+verified: anything in a game, two clients seeing each other's guns and shots, a hit
+landing on a live server.
+## Shaders chosen by a click only, New ones outlined in gold
+
+31/10/2026, `fix/collection-click-to-preview` (Creyon), based on `main` `e4447394`: on
+the Collection's Shaders tab, resting the pointer on a blade chose and previewed it (from
+21/10 only over its blade strip), so moving to Equip across other blades changed the
+choice and the preview, and resting a second on a New one saw it. Now only a click (or
+the keys) chooses a shader there and on the Forge's tiles; the pointer shows the hover card
+alone (`Panel::hover_chooses`, `forge::Panel::token`). A New shader clicked is seen at
+once, its sticker gone (with the keys, after its second as before). A New shader not chosen is
+outlined in gold on the wall and has a gold edge down its row in the list, besides its
+sticker ([sjk-ui.md](sjk-ui.md), [unlockables.md](unlockables.md)). Verified: the unit
+tests `resting_on_a_shader_never_chooses_it`, `resting_on_a_tile_never_chooses_it` and
+`a_new_shader_is_outlined_in_gold`, fmt, the workspace's build, tests and Clippy; in game
+on Windows (Creyon, 31/10/2026): a shader stays chosen while the pointer crosses others
+to Equip, and a New one shows its sticker and gold outline until clicked. Not verified: the
+Forge's tiles in game.
+## One automatic away chat bubble switch
+
+01/11/2026, `fix/minimized-chat-bubble`, based on `main` `57f60dde`: one archived
+switch, `cl_unfocusedChatbox` (default 1), controls the automatic bubble whenever
+the window is unfocused or minimized. The separate `cl_minimizedChatbox`
+registration, cache and consumer are removed; a documented retirement table
+removes old saved entries after profile load. The saved unfocused choice is kept.
+Chat bubble while away is available in SJK Settings > Chat and the classic HUD
+settings, and the update's what's-new card offers that same switch. Actual open
+chat/console/menu key catchers retain their normal talk flag. Protocol-26 encoding
+and the window frame caps are unchanged.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy. Focused tests cover all focus/minimize combinations, disabled and nonzero
+values, live callbacks, minimized events before focus loss, and old profiles with
+opposite saved choices, including removal of the obsolete entry from the next
+saved config. The offline GPU fixture `duel6_settings_away_chat` was inspected:
+the single SJK switch, default, console name and help fit at 1080p. Actual native
+window events and another client's view of the bubble on an isolated server
+remain unverified. See [talk balloons](client.md#talk-balloons).
+## Received game-chat logs (opt in)
+
+01/11/2026, `feat/chat-logs`, based on `main` `57f60dde` (requested default):
+`cl_logChat` stays 0 by default (stock; at merge on 02/11/2026 the PR's default-on was set back to off under the stock-defaults rule); saved choices stay.
+Save game chat logs is an on/off row in SJK Settings > Chat and the classic HUD
+settings, offered on the update's what's-new card too. Received game-server
+public, team and private chat appends to the profile's `chatlogs/chat.log` before
+display filters, with Unix timestamps and bounded UTF-8-safe numeric-colour/control
+cleanup. Mode 2 still synchronizes entries. Disabling then enabling clears a
+write-failure latch even without a message while disabled. The separate SJK hub
+chat and encrypted whispers remain outside this game-chat log. I/O is on incoming
+chat events, with no new work on HUD frames.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy. Focused temporary-file tests cover default-on receive filtering, append
+across restart, saved opt-outs and switch persistence, synchronized mode, real
+Unicode truncation and retry after a directory-write error. The offline GPU
+fixture `duel6_settings_chat_logs` was inspected: the SJK Chat row, On default,
+console name and help fit at 1080p. Actual live-session logging and non-Windows
+runtime behavior remain unverified; no public-server chat was automated. See
+[chat logs](client.md#chat-logs).
+
+## Sharp tags, Holo and Solar tags, credits cards as tags
+
+31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`
+branch (Sol's requests: tags less blurry in the game; the credits cards held usable as
+tags, in the finish chosen, Holo and Solar tags as rare drops; the Tags page scrollable;
+Sol's choices: a card shows as its picture sticker, a finish needs a copy in it, 4 % Holo
+and 0.5 % Solar flat). The blur: tags were impact-mark decals whose pictures the effects'
+atlas squeezes into 128-pixel tiles. They now have a pass of their own (`tag_render.rs`,
+[rendering.md](rendering.md#tags)): each picture at its full size (a tag enlarged to 512,
+a card's sticker 1024), mipmapped, anisotropic, with Holo's foil and Solar's corona shaded
+per pixel. The hub rolls a dropped tag's finish, counts Holo and Solar copies, takes a
+finish and a credits card in a look's tag and lists `tag_cards` in profiles; the client
+offers both only on such a hub ([client.md](client.md#tag)). Collection > Tags scrolls,
+lists the credits cards and offers the finishes; the opening and the chat name a finished
+tag. Verified on Windows 11: fmt, build, Clippy and the workspace's tests, with new tests
+(the held copies by finish, card ids, the outline's distances, picture sizes and edges, the
+sticker, the wall's lines, scrolling and Up/Down, the finish odds, the find's words; the
+hub's: finish odds, drops, looks with finishes and cards, merges, the take-down); GPU world
+shots with the game data and the hub's packs: `duel6_tags_on_walls_and_floor` (a Normal
+and a Holo tag, a Holo and a Solar credits card, a Solar tag on the floor) and
+`duel6_sjk_collection_tags` (the wall with badges and chips, scrolled to the cards). Not
+verified: in a game against a hub running `tag-cards` (finishes and cards end to end, a
+second client seeing them), frame time with many finished tags, and the art at 512 (the
+pack's pictures are 256).
+## Loading graphics with the day tint cannot close the game (hub report #219)
+
+31/10/2026, `fix/day-clock-load-crash`, based on `main` `e4447394`. A player's game closed
+without a message while loading graphics on a JoF server three times after turning on
+`r_dayClock`, which in the SJK and Vanilla presets builds the sky's day tint
+(`sky_stage::day`), until then built only with Sun and sky on. The exact crash was not
+reproduced: offline, T1_Fatal in the SJK and Vanilla presets with the clock on and off
+loads and draws on Vulkan, also built on a worker with no console and adopted as a map
+change. What the fix covers: the tint's pipelines are built inside `gpu_guard::capture` (`day_sky_guard.rs`),
+so one wgpu rejects leaves the map's own sky; `crashes/day-sky.txt`, written before the
+compile and removed after, makes the start after a session that closed while compiling
+leave the tint out once, with a console line, then try again (as `crashes/stage-hilt.txt`
+does for #214); and on DX12 without `dxcompiler.dll` (FXC) maps load again: `hud.wgsl`
+ended its fragment program with `discard`, which FXC refused (X3507, not all control paths
+return a value), failing every load before the world, and with Sun and sky
+`gi_probes.wgsl`'s `update` returned on a probe's state (a storage read) before its
+workgroup barriers, which FXC refused (X4026); a dead probe now skips the work and returns
+after them. Verified: the unit test
+`a_compile_left_running_is_found_once_and_a_finished_one_not_at_all`, the GPU test
+`a_rejected_compile_falls_back_and_leaves_no_marker` (Vulkan and DX12), the ignored world
+shot `pc_clock_every_preset` (`PC_CLOCK_CASES` narrows it): on DX12 with FXC, T1_Fatal in
+Vanilla and SJK with the clock on and duel6 in Experimental with the clock on; with DXC
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in Experimental; on Vulkan
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in SJK and Experimental, clock on.
+Limits: T1_Fatal in Experimental on DX12 stopped at the lamp light cache's page buffer
+(`SJK lamp cache pages` invalid), not a compile, so that case was checked on duel6. fmt,
+the sjk-viewer tests and Clippy.
+
+## Map editor made easier
+
+28/10/2026, `personal/map-editor-ux`, based on `main` `db63b4f5` (Sol's request: the
+editor easier to use, and why syncing with the hub did not work). The sync: the live hub
+answers 404 on `/v1/map-edits` and `/v1/staff/map-edits` (checked with unsigned requests
+against `sjk.dfox.app`, which answers 401 on routes it has), because the hub's
+`map-edits` branch (19/10/2026) was never merged; Publish ended in a chat line the open
+panel hid ("unexpected answer from the hub: status 404, not JSON") and the worker's
+failed looks were never logged. That branch now carries the hub's `main` merged in
+(conflicts resolved, its `cargo test` and `cargo clippy --all-targets` clean); the live
+hub runs it only once Sol merges and deploys it. The client: refusals worded
+(`map_edits::refusal`), the publish's answer in the panel and the log, each look's
+summary or failure logged and a failure shown in the panel; the world-note key opens the
+panel and puts a grabbed model down (it only selected, though the docs and the strip
+said otherwise); a Map editor icon in the in-game menu for staff keys; undo and redo of
+every change (`History`, 100 steps); a shader search for remaps (shaders and images
+under `textures/` and `models/`, the selection's folder first); nudges along the nearest
+world axes, Shift for fine steps, the wheel turning a grabbed model; a placed model chosen
+in the Edits list becomes the one Place moves; short edit names. Verified on Windows 11:
+unit tests (refusals, the refresh's summary, labels, the shader search, buttons, the
+layout at four window shapes, the icon row) and the world shot `duel6_map_editor_panel`
+(the Selected page's shader list on a surface and a prop, Place's nudge row, Edits'
+Undo and Redo). Not verified: in a game (keys, wheel and clicks live), and Publish
+against the deployed hub.
+
+## Cloud content updates itself (opt in)
+
+31/10/2026, `personal/cloud-auto-update`, based on `main` `7ce876c0` (Sol's request: JoF
+content and the Sith cloud updated automatically, opt in, choosing what): `jof.contentAuto`
+and `sith.cloudAuto` (off by default) and `jof.contentAutoGroups` /
+`sith.cloudAutoGroups` (`all`, the default, or group ids) make each collection check 30 s
+after the start and every hour, also during a match, and fetch what changed in its Auto
+groups only, removing only files SJK downloaded for an Auto group that the server dropped
+(`Plan::auto`, `Job::auto`; the record notes each file's group). The card gains Update
+automatically, an Auto tick per group (A), and "Next automatic check HH:MM"; Settings
+gains a row for each auto switch; a run that changed files shows a small card
+([jof-content.md](jof-content.md#automatic-updates), [sith-cloud.md](sith-cloud.md#automatic-updates)).
+Verified: fmt, build, Clippy and the workspace's tests, with new tests for the restricted
+plan, a whole automatic run against a local HTTP server, the schedule, the card's keys
+and the small card's words; off screen at 1080p with Sol's `GameData`, the JoF content
+card with automatic updates on and a group's files with them off
+(`jof_content_card::tests::the_jof_content_card_renders_on_a_gpu`). Not verified in game:
+an hourly run in a real session or a match, its small card on screen, or the Sith cloud
+live.
+
+## Nameplate styles
+
+31/10/2026, `personal/nameplate-styles`, based on `main` `1475cb58` (Sol's decision: bring
+back the earlier nameplate designs and let players choose): `cg_nameplateStyle` picks the
+plates' look, 0 the holo frame (the default, unchanged), 1 the capsule of 28/10/2026 morning
+(`hud/nameplate/capsule.rs`, its layout and drawing as of `abdc506a`), 2 the classic plate
+from before 28/10/2026 (`hud/nameplate/classic.rs`, as of `2f6aecb3^`, grey bars on players
+who do not share, without the weapon icon) ([client.md](client.md#nameplates)). Settings has a
+Nameplate style row; the Collection's Nameplates tab draws the chosen style and offers a
+Style row ([sjk-ui.md](sjk-ui.md#collection)). What a plate shows and the sharing and duel
+rules are shared by the three. No hub change.
+Verified: fmt, build, Clippy, the workspace's tests, the capsule's and the classic plate's
+layout tests (restored), each style drawing a sharer's bars and only the classic greying a
+non-sharer's, the Style row's clicks and fit; off screen with the game data: the nameplate
+snapshots in each style (`menu_snapshot::nameplate_snapshot`: `nameplates.png`,
+`nameplates-capsule.png`, `nameplates-classic.png`) and, on the GPU, the Collection's
+Nameplates tab in the capsule and classic styles
+(`world_shot::collection::duel6_sjk_collection`). Not verified: in a match (live pictures,
+teams and duels in the capsule and classic styles), or at 4K.
+
+## Inventory history
+
+31/10/2026, `personal/history`, based on `main` `1475cb58` (Sol: "a general inventory
+history for players"): the Collection's tenth tab, History, reads the hub's new signed
+`GET /v1/history` (`sjk_identity::history`, `Service::read_history`,
+`Snapshot::history` behind an `Arc` so the per-frame snapshot copy stays cheap) and lists
+what came, what was opened and held, credits and shards gained and spent, mystery boxes
+and finished trades, newest first, a page at a time (Load older), with Open alls
+gathered into one row and a client-side filter ([cards.md](cards.md#history)). Verified:
+unit tests (every kind read, unknown kinds and unreadable lines skipped, missing and null
+fields, pages following on and a refresh starting again, the refusals' words, the dates,
+the service's page-by-page reads, the sentences, the grouping, the filter, the reads on
+showing and Load older), fmt, the touched crates' tests and Clippy (no new warning), and
+one offline world shot of the tab on made-up lines. Not verified: against the hub's real
+answers (its `history` branch was written alongside), in game, the hover and wheel by
+hand, and in the classic menus' style.
+
+## Scoreboard: client numbers on the SJK board, rank by score minus deaths
+
+30/10/2026, `feat/scoreboard-ids`, based on `main` `7be59908` (Sol's #ideas recap of
+29/10): new `cg_scoreboardIDs` (archived, off: stock JKA's scoreboard shows no numbers,
+Sol's review of 30/10/2026) puts each client number before the name on the SJK board, as
+a small tag on a faint plate under an "ID" label, full and compact (`sjk::Columns::id`,
+`ID_COLUMN`) ([sjk-ui.md](sjk-ui.md)), with a `=` line for the what's-new card;
+`cg_showClientIDs` keeps the classic board's Id column alone, on as before. The place
+column is labelled "#"; its places stay the server's, ties sharing one (1, 2, 2, 4). New
+`cg_scoreboardDeathsRank` (off) sorts both boards by score minus deaths where deaths are
+counted, fewer deaths first on a tie, joining rows last ([client.md](client.md),
+`style::rank_value`); with it the SJK board numbers the rows in that order, one number
+each, as JoF EJK lists its rows, and its header gives your place in that order. `cg_scoreDeaths` keeps EJK's default 1 (Sol's defaults
+rule of 30/10/2026); with 2 the local count stands in where the server sends no deaths.
+Neither EJK nor JoF EJK has the numbers on this look or the ranking. A compact
+capture-the-flag board of 6 a side with the numbers, 1142 of the full 1144 pixels without,
+fills it (the width test allows equal). Verified: unit tests (the ranking, both switches
+off by default and the classic Id column's own, the numbers before every name in full and
+compact, free-for-all and teams, the ID and # labels, shared places off and places in the
+listed order with the ranking, a joining row last and unnumbered, the frame rate left of
+the clock), fmt, the workspace's build, tests and Clippy; in game on Windows (a local
+server with bots, before the review's changes): the labels and ID tags, the # column 1 to
+20, and with `cg_scoreDeaths 2` the ranking by score minus deaths; (31/10/2026, after the
+review) the SJK board with `cg_scoreboardIDs 1` and `cg_scoreboardDeathsRank 1`, compact,
+20 bots: an ID before every name, rows by score minus deaths with fewer deaths first on a
+tie, numbered 1 to 20, the joining row last and unnumbered; the classic board's Id column
+and its rows in the same order. Not verified: the header's place with the ranking in game
+(it gave the server's before this change), team games, the what's-new card's switch.
+
+## Finished trade: what was received
+
+30/10/2026, `fix/trade-done-message`, based on `main` `487f296f` (hub report #208): a
+finished trade always said "Trade complete. Your new items are in your collection.",
+even when the other side gave nothing. `PlayerTrade::ending` now words it from what the
+reader received: "Your new items are in your collection" (or "item is" for one), "You
+gave your offer to <name> and received nothing", or "Nothing changed hands". The ended
+trade's card and the toast over play both read it ([sjk-ui.md](sjk-ui.md#trading)).
+The endings took the name through the message alphabet, which dropped clan marks such as
+`»` and `«`; they now take it through `name_for_display`, as the window's headline does.
+The toast's 660-wide card cut the longer endings off ("...and rec..."); it now measures
+its words and grows wider, centred, so they stay whole on one line (up to 1800); over
+play its key hint stays at the card's right edge, however wide. Every ending that names
+the other player stops the name's colours after it ("<name>^7 declined the trade.",
+"... is trading with someone else."). Verified: unit tests (the four cases, a marked name,
+a declined trade's name, the toast fitting its words on one line, the key hint at the
+right edge of a usual and a wide card), the toast's picture, fmt, the workspace's build,
+tests and Clippy; in game on Windows, the words and the names with their marks. Not
+verified in game: the key hint and the declined trade's colours after Sol's review.
+
+## JoF hats as in JoF EJK
+
+28/10/2026, `fix/pumpkin-hat` (Creyon), based on `main` `8f73ab73`: JoF's pumpkin hat drew
+grey on the JoF public server (oldsGhoul's hub report #192, 2026.1028.1); Creyon found six
+more grey in game and in the profile preview (cap, cringe, fedora, santahat, sombrero,
+tophat) and McFox and McSnowFox see-through, all fine in JoF EJK. The seven moved to
+`models/cosmetics/hats/` but their models still name `models/players/hats/<name>`, where
+SJK had nothing: JoF EJK finds jaPRO's own copies of their pictures and
+`japro_hats.shader` in `japro-assets.pk3`. SJK now takes those files alone from the
+EternalJK folder (`asset_search_paths::Options::eternaljk_old_hats`), and without that pack copies
+the same picture from the new folder under the old name
+(`cosmetics::old_folder_pictures`), so they draw with their pictures as in JoF EJK (not
+with JoF's unused `jof_hats.shader`, whose pumpkin glows: the first take of this branch
+did that, and Creyon's video showed a yellow pumpkin). McFox's and McSnowFox's models are
+wound inside out (82 of 120 triangles), so culling drew their insides: hats built so get
+a two-sided shader of their picture (`cosmetics::inside_out_shaders`), unless a script
+defines them ([client.md](client.md#hats-and-capes)). Verified on Linux x86_64: the new
+tests `a_hat_naming_the_old_folder_gets_its_picture_there`,
+`only_a_shader_file_of_old_piece_folders_is_taken` and
+`an_inside_out_hat_is_drawn_two_sided`; Creyon's `JoF_AssetsExtra.pk3` and
+`japro-assets.pk3` mounted as SJK mounts them, with and without the EternalJK folder,
+where the seven names resolve as in JoF EJK (jaPRO's scripts for cap and cringe, the
+pictures for the rest) and only McFox and McSnowFox are drawn two-sided; fmt, workspace
+build, tests and Clippy. Seen in game by Creyon on Windows (28/10/2026): every hat as in
+JoF EJK, in game and in the profile preview, McFox and McSnowFox solid.
+Startup cost (Sol's review, 29/10/2026; Windows 11, release, Creyon's install with five PK3s
+in `EternalJK`, 34 MB): with `main` `9e48ff6d` merged in, the first version took 64 ms
+between reading jaPRO's files and the two-sided shaders in SJK's timestamped log, and
+reached the main menu about 73 ms later than `main` (median of 7 starts, 1,488 against
+1,561 ms). Reading jaPRO's files took about 5 ms; the rest was listing and parsing the hats'
+models twice and reading every shader script at each mount. The models are now listed and
+parsed once (`cosmetics::piece_models`) and no script is read: the two-sided file is named
+to sort before every other (`shaders/!sjk_cosmetics_two_sided.shader`), and the catalogue
+keeps the last definition of a name in path order, so a script defining the same name still
+wins. That step now takes 22 ms. The whole start is too noisy to show it (medians of 7
+starts: `main` 1,507 ms, first version 1,624, now 1,566).
+
+## Shared SJK chat reactions
+
+31/10/2026, `feat/sjk-chat-reactions`, code `4f081b30` (including `main`
+`677a6073`): the SJK chat page shows shared emoji counts and registered players
+can toggle their own reactions with pointer or keyboard. Failed reaction notices
+expire after five seconds, returning to the reader count or connection status;
+a later failure starts a fresh timeout. A monotonic-clock test covers expiry,
+success and repeated failures. Feed tests cover validation, replacement updates,
+deletion, reconnect and old JSON; immutable reaction lists share storage across
+snapshots. No protocol-26 or game-server chat changes.
+
+Windows x64 formatting, locked workspace build/tests and all-target clippy passed.
+The offline GPU fixture was refreshed after the main merge and inspected: all six
+controls, shared counts and the reader's selected heart are visible. Live hub
+rollout, released-client interoperability and other operating systems remain
+unverified. The matching hub PR #5 still needs Sol's deployment before release.
+
 ## Local incoming chat colour
 
 30/10/2026, `feat/chat-color`, based on `main` `82c8c185`: archived `cg_chatColor`
@@ -36,6 +385,7 @@ workspace recheck is left to CI.
 An offline GPU screenshot with cyan selected confirms body colours and preserved
 identified sender names. Live-server chat and other operating systems remain unverified. Formatting strips only display escapes without new
 per-frame strings, retaining wrapping offsets and emoji markers.
+
 ## Hidden GIFs
 
 30/10/2026, `feat/hide-gifs`, based on `main` `487f296f` (Sol's #ideas recap of 29/10): the
@@ -456,7 +806,9 @@ x64. Live respawn behavior against an OpenJK server remains unverified.
 
 ## Dual jump-attack collision hull
 
-PR #266's timed dual-attack hull resizing was rolled back in #307. An original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull and acquired downward velocity (about 254 units/s in the captured case). The fixed -24-unit foot minimum is restored. Timed hull resizing remains unsupported.
+PR #266 added timed hull resizing for the dual sabers' forward jump attack and #307 rolled it back, because an original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull. On JA+ servers ([pmove_dual_jump_hull.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull.rs)) the feet are raised to 0 in the stock windows only when a box trace 70 units along the view hits another player; with `dmflags` 256 (`old_collision`) they are raised in every window, as stock does. The rule comes from VisionJK's port of the JA+ 2.4 B7 server module. All other servers, SJK's dedicated server included, keep the fixed -24-unit foot minimum. Not verified against a running JA+ server.
+
+Verification, 01/11/2026, branch `fix/japlus-dual-jump-hull` on top of `main` `90f1d7d8`, Linux x86_64 (Arch, LXC), Rust 1.99.1: tests in [pmove_dual_jump_hull_tests.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull_tests.rs) at 8/7/4/3 ms command steps cover feet raised only over a player ahead (not over the attacker or an NPC), every window with `dmflags` 256, the stock fixed hull, the #307 landing case on JA+ without a player, and feet put back or a crouch under a ceiling; `dmflags_256_keeps_the_old_collision_on_ja_plus_only` covers the flag. Not verified: a running JA+ server (no capture or live run yet); stock servers are unchanged.
 
 ## Equipped saber definitions in client prediction
 
@@ -985,6 +1337,27 @@ hunt toy (`toy_boxhunt`, look toy `box_hunt`) makes a random player with it on t
 every 3 minutes; another with it on who kills the mark wins a free roll (the mark's client
 tells the hub who killed it). Needs the hub's `box-hunt` branch (not deployed). Verified:
 unit tests on both sides. Not verified: in a game.
+
+## The Toy Master
+
+30/10/2026, `personal/toy-master`, based on `main` `dbfb7e9a` (Sol's idea): secret toys
+SJK's creator hides on maps (`toymaster_place <kind>`), found with `+use`
+([toy-master.md](toy-master.md)). The client knows a generic prop only; the hub (its
+branch `toy-master`, not deployed) keeps what each toy is, counts every player's presses
+towards a number it rolls per map load, starts the toy's show once for that map load and
+unlocks a hidden achievement, named only to whoever found it, on a player's first press.
+Collection > Toys has the Toy Master's "?". Verified: unit tests on both sides, the
+workspace checks, world shots of the "?", the wall and a hub toy in each phase. Not
+verified: in a game with a hub.
+
+02/11/2026, `personal/toy-master-steps` (hub branch `toy-show-steps`): shows in steps
+(the players dance, a ring shows the reach, everyone there floats in looks only) and
+drops that give real credits, kyber shards and holocrons, first come first served.
+Verified: unit tests of the steps' timing, the drops' and the floating bodies' physics
+against a flat world (the same seed lands the same way), the hub's roll and take; world
+shots on duel6 of the ring (`duel6-toy-master-ring`) and of the landed drops
+(`duel6-toy-master-drops`). Not verified: in a game with a hub, with other players
+dancing and floating, nor that two clients land a drop in the same spot on a real map.
 
 Slash's test the same day: `give all` showed no jetpack. It did hold one, but the server
 never set `EF_JETPACK` on a player (only on NPCs), so no pack hung on the back; the
@@ -3695,7 +4068,7 @@ profiles from before, with no migration cvar of its own. A nameplate's Force bar
 the value the player shares: the Force estimate (`force_estimate.rs`) and
 `cg_nameplateForce` are removed. In a duel (private, Duel, Power Duel) the opponent's
 plate shows no bars and the duellist sends no values. See
-[client](client.md#sharing-and-estimates), [sjk-ui](sjk-ui.md#whats-new-card) and
+[client](client.md#sharing-and-estimates), [sjk-ui](sjk-ui.md#news-panel) and
 [sjk](sjk.md#changelog).
 
 Workspace `cargo fmt --check`, build, test and clippy (no new warnings) passed on
@@ -11289,10 +11662,11 @@ now keeps 256 slots that only those billboards use (`particle_types.rs`); effect
 stop at their own cap (4,096 since the rocket-trail change below). Unit tests replay that frame. No game was started: the busy
 scene Sol saw is not reproduced on screen.
 
-The same branch raises your balloon while the window is unfocused or minimised, as
-EternalJK's `cl_unfocusedChatbox` / `cl_minimizedChatbox` do in `CL_CmdButtons`
-(both 1). A unit test covers the settings; whether commands keep flowing while
-Windows has the window minimised (which the minimised case needs) is unverified.
+At that revision the branch also raised your balloon while unfocused or minimized,
+using EternalJK's two-switch policy in `CL_CmdButtons`. The controls have since
+been consolidated into `cl_unfocusedChatbox` ([talk balloons](client.md#talk-balloons)).
+Whether commands keep flowing while Windows has the window minimized remains
+unverified.
 
 ## Force power presentation
 

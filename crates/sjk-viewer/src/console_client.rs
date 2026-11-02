@@ -58,6 +58,10 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
         "pmonly",
         "Toggle private-only game chat for this map: pmonly [on|off]",
     ),
+    (
+        crate::chat::quiet::COMMAND,
+        "Toggle quiet mode until the map changes (only your duel partner and whispers): quiet [on|off]",
+    ),
     ("messagemode", "Compose global chat"),
     ("messagemode2", "Compose team chat"),
     (
@@ -121,6 +125,10 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     (
         crate::cards::rehearsal::COMMAND,
         crate::cards::rehearsal::HELP,
+    ),
+    (
+        crate::chat::find_blade::COMMAND,
+        crate::chat::find_blade::HELP,
     ),
     (
         crate::unlock_toast::UPDATE_COMMAND,
@@ -200,6 +208,7 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     ),
     (crate::emotes::COMMAND, crate::emotes::HELP),
     (crate::boombox::TRACK_COMMAND, crate::boombox::HELP),
+    (crate::propgun::PICK_COMMAND, crate::propgun::PICK_HELP),
     (
         crate::toy_switch_words::COMMAND,
         crate::toy_switch_words::HELP,
@@ -272,9 +281,14 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     ("colorstring", "Configure outgoing chat colors"),
     ("vid_restart", "Reapply video settings (device is retained)"),
     (crate::fps_help::COMMAND, crate::fps_help::HELP),
+    (crate::hud_edit::COMMAND, crate::hud_edit::HELP),
     (crate::emote_help::COMMAND, crate::emote_help::HELP),
     (crate::emote_picker::COMMAND, crate::emote_picker::HELP),
-    (crate::whats_new_card::COMMAND, crate::whats_new_card::HELP),
+    (crate::news_panel::COMMAND, crate::news_panel::HELP),
+    (
+        crate::news_panel::NEWS_COMMAND,
+        crate::news_panel::NEWS_HELP,
+    ),
     (crate::gameplay_fps::COMMAND, crate::gameplay_fps::HELP),
     (
         "snd_restart",
@@ -337,6 +351,7 @@ fn all_commands() -> impl Iterator<Item = &'static (&'static str, &'static str)>
         .chain(crate::saber_hilt_command::COMMANDS)
         .chain(crate::map_edits::editor::COMMANDS)
         .chain(crate::mystery_box::COMMANDS)
+        .chain(crate::toy_master::COMMANDS)
         .chain(jof_commands())
 }
 
@@ -858,7 +873,7 @@ impl crate::GpuState {
             .chat
             .reply_target()
             .map_err(|why| why.line().to_owned())?;
-        let Some(command) = sjk_client::chat_command(
+        let Some(command) = sjk_client::chat_command_full(
             sjk_client::ChatDestination::Player(target.slot()),
             &args.join(" "),
         ) else {
@@ -973,6 +988,9 @@ impl crate::GpuState {
             name if crate::mystery_box::is_command(name) => {
                 return self.mystery_box_command(name, args);
             }
+            name if crate::toy_master::is_command(name) => {
+                return self.toy_master_command(name, args);
+            }
             "speedometer" | "strafehelper" => {
                 return hud_commands::execute(
                     self.console.as_mut().ok_or("Console unavailable")?,
@@ -1012,6 +1030,12 @@ impl crate::GpuState {
             crate::chat_sounds::PREVIEW_COMMAND => return crate::chat_sounds::command(args),
             "pmonly" => {
                 return crate::chat::pm_only::command(
+                    self.console.as_mut().ok_or("Console unavailable")?,
+                    args,
+                );
+            }
+            crate::chat::quiet::COMMAND => {
+                return crate::chat::quiet::command(
                     self.console.as_mut().ok_or("Console unavailable")?,
                     args,
                 );
@@ -1131,12 +1155,14 @@ impl crate::GpuState {
             }
             crate::emotes::COMMAND => return self.emote_command(args),
             crate::boombox::TRACK_COMMAND => return self.boombox_command(args),
+            crate::propgun::PICK_COMMAND => return self.propgun_command(args),
             crate::toy_switch_words::COMMAND => return Ok(crate::toy_switch_words::help_lines()),
             crate::block_command::COMMAND => return self.block_command(args),
             crate::block_command::UNBLOCK_COMMAND => return self.unblock_command(args),
             crate::medal_popup::rehearsal::COMMAND => return self.debug_medal_command(args),
             crate::holocrons::rehearsal::COMMAND => return self.debug_holocron_command(args),
             crate::cards::rehearsal::COMMAND => return self.debug_open_command(args),
+            crate::chat::find_blade::COMMAND => return self.debug_find_command(args),
             crate::unlock_toast::UPDATE_COMMAND => return self.debug_update_command(args),
             crate::official::ANNOUNCEMENT_COMMAND => return self.announcement_command(args),
             crate::official::REWARDS_COMMAND => return self.rewards_command(),
@@ -1270,12 +1296,14 @@ impl crate::GpuState {
             crate::ghost_replay::COMMAND => return self.ghost_command(args),
             crate::mimic::COMMAND => return self.mimic_command(args),
             crate::fps_help::COMMAND => return self.fps_help_command(),
+            crate::hud_edit::COMMAND => return self.hud_edit_command(args),
             crate::emote_help::COMMAND => return self.emote_help_command(),
             crate::emote_picker::COMMAND => return self.emote_picker_command(),
-            crate::whats_new_card::COMMAND => {
+            crate::news_panel::COMMAND => {
                 self.preview_whats_new();
                 return Ok(Vec::new());
             }
+            crate::news_panel::NEWS_COMMAND => return self.news_command(),
             crate::gameplay_fps::COMMAND => return self.gameplay_fps_command(args),
             crate::fs_restart::COMMAND => return self.fs_restart_command(),
             crate::chat_gifs::hidden::UNHIDE_ALL => {

@@ -173,6 +173,18 @@ pub trait Hub: Send {
             "this hub client does not send chat".to_owned(),
         ))
     }
+    /// Set the signed identity's reaction on an existing chat message.
+    fn react(
+        &mut self,
+        _identity: &Identity,
+        _message: u64,
+        _emoji: &str,
+        _active: bool,
+    ) -> Result<(), HubError> {
+        Err(HubError::Protocol(
+            "This hub client does not support chat reactions".into(),
+        ))
+    }
     /// Ban the player of `key_id` from the SJK chat for 24 hours (`POST /v1/chat/ban`):
     /// only a verified or staff identity may, and only a player the hub does not vouch
     /// for ([`crate::ban`]).
@@ -344,7 +356,8 @@ pub trait Hub: Send {
             "this hub client does not claim rewards".to_owned(),
         ))
     }
-    /// The creator's announcement (`POST /v1/creator/announce`, 25/10/2026), checked by
+    /// The SJK team's announcement (`POST /v1/staff/announce`, 31/10/2026; the
+    /// creator's `POST /v1/creator/announce` on an older hub), checked by
     /// [`crate::news::check`] first; the hub answers it as stored.
     fn announce(
         &mut self,
@@ -353,6 +366,24 @@ pub trait Hub: Send {
     ) -> Result<crate::news::Announcement, HubError> {
         Err(HubError::Protocol(
             "this hub client does not announce".to_owned(),
+        ))
+    }
+    /// Store a news picture for an announcement (`PUT /v1/staff/news-image`): `bytes`,
+    /// a PNG or a JPEG as `mime` says.
+    fn upload_news_image(
+        &mut self,
+        _identity: &Identity,
+        _bytes: &[u8],
+        _mime: &str,
+    ) -> Result<crate::news::NewsImage, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not upload news pictures".to_owned(),
+        ))
+    }
+    /// News picture `id` as the hub serves it (`GET /v1/news-image/<id>`).
+    fn news_image(&mut self, _id: &str) -> Result<Vec<u8>, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not read news pictures".to_owned(),
         ))
     }
     /// Make `png` (already cropped and scaled, `crate::avatar`) the identity's picture;
@@ -537,11 +568,13 @@ pub trait Hub: Send {
         ))
     }
 
-    /// The box hunt on `server` as the player reads it (`POST /v1/box-hunt`).
+    /// The box hunt on `server` as the player reads it (`POST /v1/box-hunt`), saying whether the player is
+    /// `away` (in the chat, a menu, idle: the hub picks no mark among them).
     fn box_hunt(
         &mut self,
         _identity: &Identity,
         _server: &str,
+        _away: bool,
     ) -> Result<crate::mystery_box::HuntState, HubError> {
         Err(HubError::Protocol(
             "this hub client does not read the box hunt".to_owned(),
@@ -579,6 +612,61 @@ pub trait Hub: Send {
         ))
     }
 
+    /// Every toy the Toy Master hid (`GET /v1/secrets`, 30/10/2026).
+    fn secrets(&mut self, _identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not read the Toy Master's toys".to_owned(),
+        ))
+    }
+
+    /// The player pressed Use `presses` times on toy `id` on `server` in map load `round`
+    /// (`POST /v1/secrets/use`).
+    fn use_secret(
+        &mut self,
+        _identity: &Identity,
+        _id: i64,
+        _server: &str,
+        _round: i32,
+        _presses: u32,
+    ) -> Result<crate::toy_master::Used, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not use the Toy Master's toys".to_owned(),
+        ))
+    }
+
+    /// Take drop `drop` of toy `id`'s show on `server` in map load `round`
+    /// (`POST /v1/secrets/take`).
+    fn take_secret_drop(
+        &mut self,
+        _identity: &Identity,
+        _id: i64,
+        _server: &str,
+        _round: i32,
+        _drop: u32,
+    ) -> Result<crate::toy_master::Took, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not take the Toy Master's drops".to_owned(),
+        ))
+    }
+
+    /// SJK's creator: hide a toy (`POST /v1/creator/secret`); answers its id.
+    fn place_secret(
+        &mut self,
+        _identity: &Identity,
+        _placing: &crate::toy_master::Placing,
+    ) -> Result<i64, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not hide toys".to_owned(),
+        ))
+    }
+
+    /// SJK's creator: take toy `id` away (`POST /v1/creator/secret/remove`).
+    fn remove_secret(&mut self, _identity: &Identity, _id: i64) -> Result<(), HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not remove toys".to_owned(),
+        ))
+    }
+
     /// Buy a holocron of tier `tier` with credits (`POST /v1/holocrons/buy`, 17/10/2026).
     fn buy_holocron(
         &mut self,
@@ -587,6 +675,18 @@ pub trait Hub: Send {
     ) -> Result<crate::wire::HolocronBuyAnswer, HubError> {
         Err(HubError::Protocol(
             "this hub client does not buy holocrons".to_owned(),
+        ))
+    }
+
+    /// A page of the player's history (`GET /v1/history`, 31/10/2026): the newest, or
+    /// the one before `before` (unix seconds, [`crate::HistoryPage::before`]).
+    fn history(
+        &mut self,
+        _identity: &Identity,
+        _before: Option<i64>,
+    ) -> Result<crate::history::HistoryPage, HubError> {
+        Err(HubError::Protocol(
+            "status 404: this hub client does not read the history".to_owned(),
         ))
     }
 
@@ -1681,12 +1781,42 @@ impl Hub for HttpHub {
         identity: &Identity,
         request: &crate::news::AnnounceRequest,
     ) -> Result<crate::news::Announcement, HubError> {
-        parse(self.send(
+        match self.send(
             Some(identity),
             "POST",
-            "/v1/creator/announce",
+            "/v1/staff/announce",
             Some(announce_body(request)),
-        )?)
+        ) {
+            // A hub before 31/10/2026 takes announcements from the creator only.
+            Err(HubError::Rejected { status: 404, .. }) => parse(self.send(
+                Some(identity),
+                "POST",
+                "/v1/creator/announce",
+                Some(announce_body(request)),
+            )?),
+            answer => parse(answer?),
+        }
+    }
+
+    fn upload_news_image(
+        &mut self,
+        identity: &Identity,
+        bytes: &[u8],
+        mime: &str,
+    ) -> Result<crate::news::NewsImage, HubError> {
+        parse(self.send_bytes(Some(identity), "PUT", "/v1/staff/news-image", bytes, mime)?)
+    }
+
+    fn news_image(&mut self, id: &str) -> Result<Vec<u8>, HubError> {
+        if !crate::news_markup::image_id_ok(id) {
+            return Err(HubError::Protocol(
+                "a news picture is named by 16 hex digits".to_owned(),
+            ));
+        }
+        self.fetch(
+            &crate::news::news_image_path(id),
+            crate::news::NEWS_IMAGE_MAX,
+        )
     }
 
     fn buy_offer(
@@ -1727,12 +1857,13 @@ impl Hub for HttpHub {
         &mut self,
         identity: &Identity,
         server: &str,
+        away: bool,
     ) -> Result<crate::mystery_box::HuntState, HubError> {
         parse(self.send(
             Some(identity),
             "POST",
             "/v1/box-hunt",
-            Some(json!({ "server": server })),
+            Some(json!({ "server": server, "away": away })),
         )?)
     }
 
@@ -1786,6 +1917,75 @@ impl Hub for HttpHub {
         .map(|_| ())
     }
 
+    fn secrets(&mut self, identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
+        parse(self.send(Some(identity), "GET", "/v1/secrets", None)?)
+    }
+
+    fn use_secret(
+        &mut self,
+        identity: &Identity,
+        id: i64,
+        server: &str,
+        round: i32,
+        presses: u32,
+    ) -> Result<crate::toy_master::Used, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/secrets/use",
+            Some(json!({ "secret": id, "server": server, "round": round, "presses": presses })),
+        )?)
+    }
+
+    fn take_secret_drop(
+        &mut self,
+        identity: &Identity,
+        id: i64,
+        server: &str,
+        round: i32,
+        drop: u32,
+    ) -> Result<crate::toy_master::Took, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/secrets/take",
+            Some(json!({ "secret": id, "server": server, "round": round, "drop": drop })),
+        )?)
+    }
+
+    fn place_secret(
+        &mut self,
+        identity: &Identity,
+        placing: &crate::toy_master::Placing,
+    ) -> Result<i64, HubError> {
+        let answer = self.send(
+            Some(identity),
+            "POST",
+            "/v1/creator/secret",
+            Some(json!({
+                "kind": placing.kind,
+                "map": placing.map,
+                "checksum": placing.checksum,
+                "server": placing.server,
+                "origin": placing.origin,
+                "yaw": placing.yaw,
+            })),
+        )?;
+        answer["id"]
+            .as_i64()
+            .ok_or_else(|| HubError::Protocol("a hidden toy without its id".to_owned()))
+    }
+
+    fn remove_secret(&mut self, identity: &Identity, id: i64) -> Result<(), HubError> {
+        self.send(
+            Some(identity),
+            "POST",
+            "/v1/creator/secret/remove",
+            Some(json!({ "id": id })),
+        )
+        .map(|_| ())
+    }
+
     fn buy_holocron(
         &mut self,
         identity: &Identity,
@@ -1801,6 +2001,15 @@ impl Hub for HttpHub {
 
     fn trades(&mut self, identity: &Identity) -> Result<crate::trades::TradesAnswer, HubError> {
         parse(self.send(Some(identity), "GET", "/v1/trades", None)?)
+    }
+
+    fn history(
+        &mut self,
+        identity: &Identity,
+        before: Option<i64>,
+    ) -> Result<crate::history::HistoryPage, HubError> {
+        let path = crate::history::path(before);
+        parse(self.send(Some(identity), "GET", &path, None)?)
     }
 
     fn trade_ask(
@@ -1890,6 +2099,36 @@ impl Hub for HttpHub {
         answer["id"]
             .as_u64()
             .ok_or_else(|| HubError::Protocol("the chat answer has no id".to_owned()))
+    }
+
+    fn react(
+        &mut self,
+        identity: &Identity,
+        message: u64,
+        emoji: &str,
+        active: bool,
+    ) -> Result<(), HubError> {
+        let answer = self
+            .send(
+                Some(identity),
+                "POST",
+                "/v1/chat/reaction",
+                Some(json!({"message":message,"emoji":emoji,"active":active})),
+            )
+            .map_err(|error| match error {
+                HubError::Rejected {
+                    status: 404,
+                    ref code,
+                    ..
+                } if code != "not_found" => {
+                    HubError::Protocol("Chat reactions need an updated hub".into())
+                }
+                other => other,
+            })?;
+        answer["changed"]
+            .as_bool()
+            .ok_or_else(|| HubError::Protocol("Reaction answer has no changed flag".into()))?;
+        Ok(())
     }
 
     fn chat_ban(&mut self, identity: &Identity, key_id: &str) -> Result<ChatBan, HubError> {
@@ -2432,6 +2671,7 @@ mod tests {
         // A stuck tag goes whole, only while there is one.
         let tagged = Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: "tag_gg".to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [120.5, -64.0, 24.0],

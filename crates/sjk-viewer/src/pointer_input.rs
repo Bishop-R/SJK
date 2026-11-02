@@ -171,6 +171,18 @@ impl GpuState {
                 .scrolled(delta.y, std::time::Instant::now());
             return;
         }
+        // A model the map editor grabbed turns with the wheel instead of changing weapon.
+        if let Some(up) = wheel_binding_direction(delta.y)
+            && !self.map_edit_panel_open()
+        {
+            let fine = self
+                .console
+                .as_ref()
+                .is_some_and(|console| console.shift_held());
+            if self.map_edit_wheel(up, fine) {
+                return;
+            }
+        }
         if let Some(up) = wheel_binding_direction(delta.y)
             && self
                 .client_menu
@@ -238,9 +250,11 @@ impl GpuState {
     /// Keyboard catchers also advertise BUTTON_TALK, as CL_CmdButtons does.
     pub(crate) fn key_catcher_active(&self) -> bool {
         self.game_menu
+            || self.hud_edit.is_open()
             || self.text_dialog.is_open()
             // The SJK team's window, which may show in the middle of play.
             || self.official.window.is_open()
+            || self.news.is_open()
             || self.chat.is_typing()
             || self
                 .console
@@ -310,6 +324,11 @@ impl GpuState {
             self.official_pointer(event);
             return true;
         }
+        // And the News panel.
+        if self.news.is_open() {
+            self.news_pointer(event);
+            return true;
+        }
         if self
             .console
             .as_ref()
@@ -318,6 +337,11 @@ impl GpuState {
             if let Some(console) = &mut self.console {
                 console.handle_pointer(event);
             }
+            return true;
+        }
+        // The HUD edit mode takes the pointer over the game it edits.
+        if self.hud_edit.is_open() && !self.text_dialog.is_open() {
+            self.hud_edit_pointer(event);
             return true;
         }
         // The dialog is drawn over everything and takes the keys first; the pointer too.
@@ -388,11 +412,6 @@ impl GpuState {
             self.log_request_card_choice(choice);
             return true;
         }
-        if self.whats_new_card.is_open() {
-            let choice = self.whats_new_card.handle_pointer(event);
-            self.whats_new_card_choice(choice);
-            return true;
-        }
         // The update card, over the menus: a click on it installs the update.
         if self.update_card_pointer(event) {
             return true;
@@ -413,7 +432,7 @@ impl GpuState {
             // The SJK UI has no Report a bug button: it is on its SJK page.
             if !matches!(
                 self.game_menu_page,
-                GameMenuPage::Shot | GameMenuPage::MapEdit
+                GameMenuPage::Shot | GameMenuPage::MapEdit | GameMenuPage::GhostEdit
             ) && !self.in_game_menu.is_sjk()
                 && self.text_dialog.launcher_pointer(event)
             {
@@ -426,6 +445,10 @@ impl GpuState {
             }
             if self.game_menu_page == GameMenuPage::MapEdit {
                 self.map_edit_pointer(event);
+                return true;
+            }
+            if self.game_menu_page == GameMenuPage::GhostEdit {
+                self.ghost_edit_pointer(event);
                 return true;
             }
             if let Some((kind, row)) = self.in_game_menu.pointer(event) {

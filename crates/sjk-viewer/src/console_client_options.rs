@@ -102,7 +102,7 @@ pub(super) fn native_console(requirement: i64, caret: bool, shift: bool, open: b
     }
 }
 
-/// Apply affixes only to global composer messages, then reuse the safe quoting/byte budget.
+/// Apply affixes only to global composer messages; the send boundary applies the budget.
 pub(super) fn style_chat(command: &str, prefix: &str, suffix: &str) -> String {
     if prefix.is_empty() && suffix.is_empty() {
         return command.to_owned();
@@ -118,7 +118,7 @@ pub(super) fn style_chat(command: &str, prefix: &str, suffix: &str) -> String {
     if body.contains('"') {
         return command.to_owned();
     }
-    sjk_client::chat_command(
+    sjk_client::chat_command_full(
         sjk_client::ChatDestination::Global,
         &format!("{prefix}{body}{suffix}"),
     )

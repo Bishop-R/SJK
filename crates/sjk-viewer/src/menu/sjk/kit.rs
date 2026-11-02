@@ -720,7 +720,9 @@ pub(crate) fn pips(
 
 /// A list of `labels` over `rect` (frame pixels), each row `row` tall: the
 /// `highlighted` one on a band, the one in use (`current`) in gold with a dot;
-/// choice `i` answers to `token_base + i`.
+/// choice `i` answers to `token_base + i`. `scroll` is the first label's place
+/// in the whole list and the list's length: a list longer than `labels` shows
+/// a thumb on its right edge.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn list(
     canvas: &mut MenuCanvas,
@@ -731,6 +733,7 @@ pub(crate) fn list(
     highlighted: usize,
     current: usize,
     token_base: u16,
+    scroll: (usize, usize),
 ) {
     let [x, y, width, height] = rect;
     let s = frame.s;
@@ -797,6 +800,18 @@ pub(crate) fn list(
             TextAlign::Start,
         );
         canvas.hit_region(token, frame.rect(x + 6.0, top, width - 12.0, row));
+    }
+    let (first, total) = scroll;
+    if total > labels.len() {
+        let track = height - 24.0;
+        let thumb = (track * labels.len() as f32 / total as f32).max(16.0);
+        let along = (track - thumb) * first as f32 / (total - labels.len()) as f32;
+        pill(
+            canvas,
+            frame,
+            [x + width - 9.0, y + 12.0 + along, 4.0, thumb],
+            color::alpha(color::HOLO, 0.5),
+        );
     }
 }
 

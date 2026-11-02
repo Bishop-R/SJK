@@ -18,6 +18,11 @@
 //! A hidden achievement ([`Kind::hidden`]) shows as a secret until it is unlocked; a
 //! retired one ([`Kind::retired`]) can no longer be earned and shows only to those who
 //! hold it ([`Standing::listed`]).
+//!
+//! The Toy Master's achievements (since 30/10/2026, `docs/toy-master.md`) are not in
+//! [`ALL`]: a public catalogue cannot keep a secret. The hub alone knows them and sends
+//! one, with its name and words, only to whoever unlocked it ([`secret_kind`]); boards
+//! show them after the catalogue's, in their own category.
 
 pub(crate) mod medallion;
 pub(crate) mod tracker;
@@ -121,8 +126,9 @@ pub(crate) enum Counter {
 }
 
 /// How far a monitor must fly to its hit for Long Distance Call (game units, from where
-/// it was thrown: about 40 metres, [`tracker::BOX_NEAR`]'s scale).
-pub(crate) const MONITOR_FAR: f32 = 1_500.0;
+/// it was thrown to its centre where it met the body): 40 metres as the world ping shows
+/// them (39.37 units a metre, `world_ping`); 1500 (38 metres) until 31/10/2026.
+pub(crate) const MONITOR_FAR: f32 = 1_575.0;
 
 impl Counter {
     const COUNT: usize = 40;
@@ -257,6 +263,8 @@ pub(crate) enum Category {
     Boombox,
     Monitor,
     BoxHunt,
+    /// The Toy Master's secrets, which the hub alone names ([`secret_kind`]).
+    ToyMaster,
 }
 
 /// A page of the achievements board.
@@ -283,7 +291,7 @@ impl Page {
 
 impl Category {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::Combat,
         Self::Duels,
         Self::Journeys,
@@ -296,6 +304,7 @@ impl Category {
         Self::Boombox,
         Self::Monitor,
         Self::BoxHunt,
+        Self::ToyMaster,
     ];
 
     /// The name a board reads.
@@ -313,6 +322,7 @@ impl Category {
             Self::Boombox => "Boombox",
             Self::Monitor => "Monitor",
             Self::BoxHunt => "Box hunt",
+            Self::ToyMaster => "Toy Master",
         }
     }
 
@@ -989,6 +999,60 @@ pub(crate) fn find(id: &str) -> Option<&'static Kind> {
     ALL.iter().find(|kind| kind.id == id)
 }
 
+/// Most Toy Master's achievements kept named in one session ([`secret_kind`]).
+const SECRET_KINDS_MAX: usize = 64;
+/// The Toy Master's achievements the hub named, each kept once for the session.
+static SECRET_KINDS: Mutex<Vec<&'static Kind>> = Mutex::new(Vec::new());
+
+/// `held`, an achievement the hub sent, as a board shows it: one of [`ALL`], or one of
+/// the Toy Master's that the hub named ([`sjk_identity::wire::TOY_MASTER`]), a secret
+/// kept apart from the catalogue.
+pub(crate) fn held_kind(held: &sjk_identity::Achievement) -> Option<&'static Kind> {
+    find(&held.id).or_else(|| secret_kind(held))
+}
+
+/// A Toy Master's achievement the hub named in `held`: an achievement the client's
+/// catalogue does not hold, of the Toy Master's group, with its name. Kept for the
+/// session, so the same one is the same [`Kind`] every time (a new name or description,
+/// rare, is another).
+pub(crate) fn secret_kind(held: &sjk_identity::Achievement) -> Option<&'static Kind> {
+    if held.group.as_deref() != Some(sjk_identity::wire::TOY_MASTER) || find(&held.id).is_some() {
+        return None;
+    }
+    let name = held
+        .name
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())?;
+    let description = held.description.as_deref().unwrap_or_default();
+    let mut kinds = SECRET_KINDS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(kind) = kinds
+        .iter()
+        .find(|kind| kind.id == held.id && kind.name == name && kind.description == description)
+    {
+        return Some(kind);
+    }
+    if kinds.len() >= SECRET_KINDS_MAX {
+        return None;
+    }
+    let text = |text: &str| -> &'static str { Box::leak(text.to_owned().into_boxed_str()) };
+    let kind: &'static Kind = Box::leak(Box::new(Kind {
+        hidden: true,
+        category: Category::ToyMaster,
+        ..kind(
+            text(&held.id),
+            text(name),
+            text(description),
+            1,
+            Category::ToyMaster,
+            Hub,
+        )
+    }));
+    kinds.push(kind);
+    Some(kind)
+}
+
 impl Kind {
     /// `count` as the board writes it: hours for time played, a plain number otherwise.
     pub(crate) fn amount(&self, count: u64) -> String {
@@ -1351,6 +1415,20 @@ impl Record {
                     waiting,
                 }
             })
+            // The Toy Master's the hub named, after the catalogue's: only unlocked ones
+            // ever come.
+            .chain(
+                held.iter()
+                    .filter(|held| held.unlocked > 0)
+                    .filter_map(|held| {
+                        secret_kind(held).map(|kind| Standing {
+                            kind,
+                            progress: 1,
+                            unlocked: Some(held.unlocked),
+                            waiting: false,
+                        })
+                    }),
+            )
             .collect()
     }
 
@@ -1696,6 +1774,9 @@ mod tests {
             goal: find(id).map_or(1, |kind| kind.goal),
             unlocked,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         }
     }
 
@@ -1714,9 +1795,59 @@ mod tests {
             assert_eq!(find(kind.id), Some(kind));
         }
         assert!(find("nope").is_none());
+        // Every category has the catalogue's, but the Toy Master's: only the hub names
+        // those (`secret_kind`).
         for category in Category::ALL {
-            assert!(ALL.iter().any(|kind| kind.category == category));
+            let held = ALL.iter().any(|kind| kind.category == category);
+            assert_eq!(held, category != Category::ToyMaster, "{category:?}");
         }
+    }
+
+    /// A Toy Master's achievement the hub named shows after the catalogue's once
+    /// unlocked, the same kind every time; anything else is not taken for one.
+    #[test]
+    fn the_toy_masters_achievements_come_named_by_the_hub() {
+        let secret =
+            |id: &str, name: Option<&str>, group: &str, unlocked: i64| sjk_identity::Achievement {
+                id: id.to_owned(),
+                progress: 1,
+                goal: 1,
+                unlocked,
+                reward: Some("kyber_rare".to_owned()),
+                name: name.map(str::to_owned),
+                description: Some("Found it.".to_owned()),
+                group: Some(group.to_owned()),
+            };
+        let found = secret("secret_test", Some("Test toy"), "toy_master", 1_000);
+        let kind = secret_kind(&found).expect("named");
+        assert_eq!((kind.name, kind.description), ("Test toy", "Found it."));
+        assert_eq!(kind.category, Category::ToyMaster);
+        assert!(std::ptr::eq(kind, secret_kind(&found).unwrap()));
+        assert!(std::ptr::eq(kind, held_kind(&found).unwrap()));
+        assert_eq!(
+            secret_kind(&secret("secret_x", None, "toy_master", 1)),
+            None
+        );
+        assert_eq!(
+            secret_kind(&secret("secret_x", Some("X"), "other", 1)),
+            None
+        );
+        // A catalogue id is never taken for a secret.
+        assert_eq!(
+            secret_kind(&secret("first_blood", Some("X"), "toy_master", 1)),
+            None
+        );
+        let standings = Record::default().standings(&[
+            found.clone(),
+            secret("secret_later", Some("Later"), "toy_master", 0),
+        ]);
+        assert_eq!(standings.len(), ALL.len() + 1);
+        let last = standings.last().unwrap();
+        assert_eq!((last.kind.id, last.unlocked), ("secret_test", Some(1_000)));
+        assert!(!last.secret() && last.listed());
+        let (unlocked, total) = tally(&standings);
+        assert_eq!(total, tally(&standings[..ALL.len()]).1 + 1);
+        assert_eq!(unlocked, tally(&standings[..ALL.len()]).0 + 1);
     }
 
     /// The fourteen of 26/10/2026 and those since follow Decorated in the hub's order,

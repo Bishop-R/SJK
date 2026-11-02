@@ -773,6 +773,29 @@ impl crate::GpuState {
             )
     }
 
+    /// A key while the window shows: a chat key (`messagemode` to `messagemode6`) opens
+    /// its chat, the window staying open under the composer (#215). True when it did.
+    pub(crate) fn trade_window_chat_key(&mut self, event: &winit::event::KeyEvent) -> bool {
+        if event.state != winit::event::ElementState::Pressed || event.repeat {
+            return false;
+        }
+        let Some(action) = self
+            .console
+            .as_ref()
+            .and_then(|console| console.bound_chat_action(event))
+        else {
+            return false;
+        };
+        self.apply_input_action(Some(action));
+        true
+    }
+
+    /// Whether the chat draws over the trade window this frame (after it, so the window's
+    /// shade does not drop its text): in a game, with the window shown (#215).
+    pub(crate) fn chat_over_trade_window(&self, trade_shown: bool) -> bool {
+        trade_shown && self.live_session.is_some()
+    }
+
     /// Act on what the player chose in the window.
     pub(crate) fn trade_window_choice(&mut self, choice: Option<Choice>) {
         match choice {

@@ -99,6 +99,44 @@ impl Rarity {
     pub(crate) fn colour_alpha(&self, alpha: f32) -> Color {
         Color::new(self.colour.r, self.colour.g, self.colour.b, alpha)
     }
+
+    /// How a card of it reads: its name, colour and mark.
+    pub(crate) fn tone(&'static self) -> Tone<'static> {
+        Tone {
+            name: self.name,
+            colour: self.colour,
+            mark: Some(crate::symbols::card_rarity(self.index)),
+        }
+    }
+}
+
+/// How a card reads and is coloured wherever players see it: its face's rank when it has
+/// one ([`faces::Rank`], 31/10/2026), else its rarity. A ranked card never shows its
+/// rarity, which only sets its odds; a sealed copy, not a card yet, shows its rarity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Tone<'a> {
+    /// What players read ("Mythical", "Leader").
+    pub(crate) name: &'a str,
+    pub(crate) colour: Color,
+    /// The rarity's SJK Symbols mark; a rank has none.
+    pub(crate) mark: Option<char>,
+}
+
+impl Tone<'_> {
+    /// The tone of `face` when one is given, else of `rarity`.
+    pub(crate) fn of<'a>(rarity: &'static Rarity, face: Option<&'a faces::Face>) -> Tone<'a> {
+        face.map_or_else(|| rarity.tone(), faces::Face::tone)
+    }
+}
+
+/// Its mark, a space and its name, or its name alone when it has no mark ("Leader").
+impl std::fmt::Display for Tone<'_> {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.mark {
+            Some(mark) => write!(out, "{mark} {}", self.name),
+            None => out.write_str(self.name),
+        }
+    }
 }
 
 /// A copy's finish, in the hub's order (the plainest first).
@@ -282,6 +320,24 @@ impl Stack {
             ),
         }
     }
+
+    /// How it reads and is coloured: its face's rank or rarity once revealed and in the
+    /// packs, else its rarity's ([`Tone`]).
+    pub(crate) fn tone_in<'a>(&self, faces: &'a faces::Faces) -> Tone<'a> {
+        tone_in(faces, self.rarity, self.card.as_deref())
+    }
+}
+
+/// The tone of a copy of `rarity` that is card `card` (`None` while sealed) ([`Tone`]).
+pub(crate) fn tone_in<'a>(
+    faces: &'a faces::Faces,
+    rarity: &'static Rarity,
+    card: Option<&str>,
+) -> Tone<'a> {
+    Tone::of(
+        rarity,
+        card.and_then(|id| faces.find(id)).map(|(_, face)| face),
+    )
 }
 
 /// How a card `card` (its id, `None` while sealed) shows its face, when the packs have it.

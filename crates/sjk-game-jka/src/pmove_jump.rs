@@ -141,7 +141,9 @@ impl Predictor {
         }
         // `PM_CheckJump`, before Force-jump upkeep: attack/use must first release
         // PmoveSingle's respawn latch, even if jump itself has already been released.
-        if state.movement_flags & PMF_RESPAWNED != 0 {
+        if state.movement_flags & PMF_RESPAWNED != 0
+            && !self.legacy_prediction(crate::pmove::predict_legacy::RESPAWN_JUMP)
+        {
             return false;
         }
         // Knocked down, getting up or rolling, there is no jumping (`bg_pmove.c:1790-1793`).

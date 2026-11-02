@@ -43,6 +43,10 @@ mod cards;
 pub(crate) mod forge;
 #[path = "collection_forge_view.rs"]
 mod forge_view;
+#[path = "collection_history.rs"]
+pub(crate) mod history;
+#[path = "collection_history_view.rs"]
+mod history_view;
 #[path = "collection_hover.rs"]
 mod hover;
 #[path = "collection_marks_view.rs"]
@@ -78,9 +82,10 @@ const MEDAL_BASE: u16 = 1_200;
 /// toys' tokens past 60) and the board's pages' switch.
 const ACHIEVEMENT_BASE: u16 = 6_000;
 const ACHIEVEMENT_PAGE_BASE: u16 = 6_200;
-const _: () = assert!(
-    ACHIEVEMENT_BASE as usize + crate::achievements::ALL.len() <= ACHIEVEMENT_PAGE_BASE as usize
-);
+/// Most medallions the wall shows: the catalogue's, then the Toy Master's the player
+/// found (`achievements::secret_kind`), up to the pages' switch after them.
+const WALL_MAX: usize = (ACHIEVEMENT_PAGE_BASE - ACHIEVEMENT_BASE) as usize;
+const _: () = assert!(crate::achievements::ALL.len() + 8 <= WALL_MAX);
 /// The shaders' rows have a range of their own, 7000 to 7299, for a catalogue of up
 /// to 299 skins (the stock blade is row 0).
 const SHADER_BASE: u16 = 7_000;
@@ -113,6 +118,9 @@ const MONITOR_TOKEN: u16 = 1_303;
 const BOX_HUNT_TOKEN: u16 = 1_304;
 /// The Banana peel's niche on Toys.
 const BANANA_TOKEN: u16 = 1_375;
+/// The Toys tab's "?", the Toy Master's (`collection_toys::Panel::toy_master_badge`): its
+/// hover card tells of the toys hidden on maps and names those the player found.
+const TOY_MASTER_TOKEN: u16 = 1_376;
 /// The Shaders tab's lone saber, where the pointer takes hold of it to turn it.
 const SABER_TOKEN: u16 = 1_316;
 /// The shader card's way to the Forge: Craft in the Forge (one not held) or Break down
@@ -120,6 +128,8 @@ const SABER_TOKEN: u16 = 1_316;
 const FORGE_LINK_TOKEN: u16 = 1_317;
 /// The Nameplates tab's See and share nameplates switch.
 const SHARE_TOKEN: u16 = 1_319;
+/// The Nameplates tab's style choices, one per [`crate::hud::nameplate::Style`].
+const STYLE_BASE: u16 = 1_380;
 /// The target switch over the lone saber: the first saber (or half), the second (1_303,
 /// 1_304, 1_307 and 1_308 are the Monitor's, Box hunt's, the Boombox's and the Drone's).
 const TARGET_FIRST_TOKEN: u16 = 1_301;
@@ -180,6 +190,9 @@ const CARD_CLOSE_UP_TOKEN: u16 = 8_007;
 /// the player lacks it (21/10/2026, where its copy crafts the shader for less), else on
 /// the Shaders tab.
 const CARD_SHADER_TOKEN: u16 = 8_008;
+/// Under the card up close and looked at closely, when more than one finish is held: a
+/// chip each for Normal, Holo and Solar, showing the card in it (01/11/2026).
+const CARD_LOOK_BASE: u16 = 8_010;
 const _: () = assert!(CARD_BASE as usize + CARD_TILES_MAX <= CARD_SHOW_BASE as usize);
 /// The Tags tab's tiles, one to each tag of `tags::CATALOGUE` (27/10/2026), and its card's
 /// Choose button.
@@ -187,7 +200,8 @@ const BANNER_BASE: u16 = 8_200;
 const BANNER_WEAR: u16 = 8_299;
 const TAG_BASE: u16 = 8_100;
 const TAG_CHOOSE_TOKEN: u16 = 8_099;
-const _: () = assert!(TAG_BASE as usize + crate::tags::CATALOGUE.len() <= 8_200);
+/// The Tags tab's finish chips, Normal, Holo and Solar (31/10/2026).
+const TAG_FINISH_BASE: u16 = 8_090;
 const OPTION_TOKENS: usize =
     crate::blade_skin_file::extras::MAX_OPTIONS + crate::blade_extras::MAX_EXTRAS;
 /// The Shaders tab's rows: the stock blade, then every blade skin, the rarest first
@@ -382,7 +396,8 @@ pub(crate) enum PanelAction {
     /// toggled.
     Banana(bool),
     /// Set `cg_tag` to this tag's id: the one `toy_tag` sticks.
-    ChooseTag(&'static str),
+    /// Pick a tag (or a card) for `toy_tag`, in a finish (`cg_tag`, `cg_tagFinish`).
+    ChooseTag(String, &'static str),
     /// Ask the hub to equip an owned banner, empty to unequip.
     Banner(&'static str),
     /// Show a tab another page draws: the Holocrons page.
@@ -412,6 +427,8 @@ pub(crate) enum PanelAction {
     /// See and share nameplates on (`true`) or off: `cg_nameplate`
     /// ([`crate::hud::nameplate::see_and_share`]).
     SeeAndShare(bool),
+    /// The nameplates' look: `cg_nameplateStyle` ([`crate::hud::nameplate::Style`]).
+    NameplateStyle(crate::hud::nameplate::Style),
     /// Other players' toy seen (`true`) or hidden on this PC: set the toy's `cvar`
     /// ([`crate::toy_sight`]).
     ToySight {
@@ -559,6 +576,9 @@ pub(crate) struct Inputs<'a> {
     /// See and share nameplates (`cg_nameplate`): the player sees nameplates and shares
     /// their health, shield and Force.
     pub(crate) share: bool,
+    /// The nameplates' look (`cg_nameplateStyle`), which the Nameplates tab draws and
+    /// offers to change.
+    pub(crate) nameplate_style: crate::hud::nameplate::Style,
     /// The keys bound to the toys' commands, as players read them ("F5", "F5 / K"), in
     /// the order of [`toys::COMMANDS`]; empty for none (or none known).
     pub(crate) toy_keys: &'a [String],
@@ -567,6 +587,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) toys_unseen: u16,
     /// `cg_tag`: the tag `toy_tag` sticks.
     pub(crate) tag: &'a str,
+    /// `cg_tagFinish`: the finish it sticks it in, when held.
+    pub(crate) tag_finish: &'a str,
 }
 
 /// What the last frame showed of a shader's row, for keys and clicks.
@@ -608,13 +630,26 @@ pub(crate) struct Panel {
     /// 4 the Ragdoll, 5 the Drone, 6 the Boombox, 7 the Monitor, 8 Box hunt, 9 the Banana
     /// peel.
     toy: usize,
-    /// The tag chosen on Tags, in `tags::CATALOGUE`'s order, and which tags the last
-    /// frame showed as held (Enter picks only one of those).
+    /// The banner chosen on Banners, which banners the profile holds and the one worn.
     banner: usize,
     banner_owned: [bool; crate::profile_card::banner::ALL.len()],
     banner_current: &'static str,
+    /// The tag chosen on Tags, in the wall's order (the catalogue's tags, then the
+    /// cards), the things the last frame listed and what the player held of each (Enter
+    /// picks only one held).
     tag: usize,
-    tag_held: Vec<bool>,
+    tag_entries: Vec<tags::Entry>,
+    tag_held: Vec<crate::tags::Held>,
+    /// The wall's lines as the last frame laid them out, the first shown, and whether the
+    /// next frame brings the choice into view (an arrow moved it).
+    tag_lines: Vec<tags::Line>,
+    tag_first: usize,
+    tag_follow: bool,
+    /// The finish shown on the card (a place in `cards::FINISHES`), the entry it was set
+    /// for, and the tag in use (`cg_tag`) as the last frame read it.
+    tag_finish: usize,
+    tag_finish_for: Option<String>,
+    tag_in_use: Option<String>,
     /// The player was in the cardboard box, as the last frame's inputs said.
     box_on: bool,
     /// Order 66 was on, as the last frame's inputs said.
@@ -647,6 +682,9 @@ pub(crate) struct Panel {
     /// Whether the chosen tile is looked at closely, large over the darkened tab
     /// (`collection_cards.rs`, `card_inspect_view`).
     card_inspect: bool,
+    /// The finish (its index) the chosen tile is shown in, for the tile it was chosen on
+    /// (`self.card` then): its best held otherwise.
+    card_look: Option<(usize, usize)>,
     /// The Cards tab's filter, and the tiles it showed last frame (for the hover cards).
     card_filter: crate::cards::binder::Filter,
     card_tiles: Vec<crate::cards::binder::Tile>,
@@ -716,11 +754,6 @@ pub(crate) struct Panel {
     hover: crate::menu::sjk::hover::Hover,
     /// Where the pointer is (window pixels), while it is over the window.
     pointer: Option<[f32; 2]>,
-    /// The Shaders tab's swatches (row, window rectangle) last frame: resting the pointer
-    /// chooses (and previews) a shader only over its blade, not over its name or state
-    /// (Creyon, 21/10/2026: going to Equip, the pointer crossed other rows' words and
-    /// changed the preview).
-    shader_swatches: Vec<(usize, sjk_ui::Rect)>,
     /// The cards answering the pointer on Cards, each eased in and out.
     tilt: crate::tile_shine::HoverEase,
     /// The Shaders tab's lone saber's turn, and the window pixels to a frame pixel the
@@ -741,6 +774,9 @@ pub(crate) struct Panel {
     /// The shader chosen on Shaders or in the Forge while it was New: seen once it has
     /// stayed chosen a second (`shader_marks::Look`), not when a sweep passes over it.
     viewing: crate::shader_marks::Look,
+    /// A click just chose a shader (on Shaders or a Forge tile): a New one is seen at once,
+    /// its sticker gone, without waiting its second (Creyon, 31/10/2026).
+    clicked_shader: bool,
     /// The count of the last refused change of a mark the console was told of.
     mark_refusal_seen: u64,
     /// The marks a world shot or a test shows in place of the live ones.
@@ -752,6 +788,8 @@ pub(crate) struct Panel {
     /// The blade skins the hub's packs brought, the swatches' looks (`sjk_packs.rs`);
     /// taken again only when they change ([`Panel::follow_skins`]).
     pub(super) skins: std::sync::Arc<crate::saber_skins::LoadedSkins>,
+    /// The History tab: its filter, rows and reads ([`history`]).
+    history: history::History,
     /// What a world shot shows in place of the own profile's unlocks.
     #[cfg(test)]
     pub(crate) preview: Option<Vec<sjk_identity::Unlock>>,
@@ -802,7 +840,14 @@ impl Panel {
             banner_owned: [false; crate::profile_card::banner::ALL.len()],
             banner_current: "",
             tag: 0,
+            tag_entries: Vec::new(),
             tag_held: Vec::new(),
+            tag_lines: Vec::new(),
+            tag_first: 0,
+            tag_follow: false,
+            tag_finish: 0,
+            tag_finish_for: None,
+            tag_in_use: None,
             box_on: false,
             order66_on: false,
             hax_on: false,
@@ -818,6 +863,7 @@ impl Panel {
             cards_shown: 0,
             card_first: 0,
             card_inspect: false,
+            card_look: None,
             card_filter: Default::default(),
             card_tiles: Vec::new(),
             card_blade: None,
@@ -850,7 +896,6 @@ impl Panel {
             backstage: Backstage::None,
             hover: Default::default(),
             pointer: None,
-            shader_swatches: Vec::new(),
             tilt: crate::tile_shine::HoverEase::default(),
             spin: spin::Spin::default(),
             scale: 1.0,
@@ -860,12 +905,14 @@ impl Panel {
             marks: Default::default(),
             marks_from: None,
             viewing: crate::shader_marks::Look::default(),
+            clicked_shader: false,
             mark_refusal_seen: 0,
             #[cfg(test)]
             preview_marks: None,
             widen: 1.0,
             epoch: Instant::now(),
             skins: Default::default(),
+            history: Default::default(),
             #[cfg(test)]
             preview: None,
             #[cfg(test)]
@@ -942,6 +989,8 @@ impl Panel {
     pub(crate) fn close(&mut self) -> bool {
         self.leave_viewing();
         let owned = self.open && self.owns_console;
+        // Shown again, the History tab reads the newest lines.
+        self.history.shown = false;
         self.open = false;
         self.owns_console = false;
         self.backstage = Backstage::None;
@@ -1117,7 +1166,7 @@ impl Panel {
             Tab::Shaders => self.shader_count,
             Tab::Cards => self.cards_shown,
             Tab::Toys => TOY_COUNT,
-            Tab::Tags => crate::tags::CATALOGUE.len(),
+            Tab::Tags => self.tag_entries.len().max(1),
             Tab::Banners => crate::profile_card::banner::ALL.len(),
             _ => 0,
         }
@@ -1201,6 +1250,12 @@ impl Panel {
             }
             return action;
         }
+        if self.tab == Tab::History
+            && !control
+            && let Some(action) = self.history_key(key, shift)
+        {
+            return action;
+        }
         if self.tab == Tab::Cards && self.card_inspect {
             return self.key(key, shift, illuminate);
         }
@@ -1212,6 +1267,10 @@ impl Panel {
                 KeyCode::KeyT => filter.cycle_rarity(shift),
                 KeyCode::KeyK => filter.cycle_kind(&faces, shift),
                 KeyCode::KeyF => filter.cycle_finish(shift),
+                KeyCode::KeyV => {
+                    self.cycle_card_look(shift);
+                    return PanelAction::None;
+                }
                 KeyCode::KeyI => return self.activate(illuminate),
                 _ => return self.key(key, shift, illuminate),
             }
@@ -1311,6 +1370,41 @@ impl Panel {
     fn inspect_step(&mut self, by: isize) {
         let last = self.cards_shown.saturating_sub(1) as isize;
         self.card = (self.card as isize + by).clamp(0, last) as usize;
+    }
+
+    /// How many finishes the chosen tile holds copies in.
+    pub(super) fn chosen_finishes_held(&self) -> usize {
+        self.card_tiles
+            .get(self.card)
+            .map_or(0, |tile| tile.finishes_held().len())
+    }
+
+    /// The finish the chosen tile is shown in, when one was chosen for it.
+    fn card_look_for(&self) -> Option<usize> {
+        self.card_look
+            .filter(|(card, _)| *card == self.card)
+            .map(|(_, finish)| finish)
+    }
+
+    /// Show the chosen tile in the next finish held (the previous with `back`), round.
+    fn cycle_card_look(&mut self, back: bool) {
+        let Some(tile) = self.card_tiles.get(self.card) else {
+            return;
+        };
+        let held = tile.finishes_held();
+        if held.len() < 2 {
+            return;
+        }
+        let now = tile
+            .in_finish(self.card_look_for())
+            .map_or(0, |stack| stack.finish.index);
+        let at = held.iter().position(|finish| *finish == now).unwrap_or(0);
+        let next = if back {
+            (at + held.len() - 1) % held.len()
+        } else {
+            (at + 1) % held.len()
+        };
+        self.card_look = Some((self.card, held[next]));
     }
 
     fn card_filter_changed(&mut self) -> PanelAction {
@@ -1449,6 +1543,12 @@ impl Panel {
     /// is seen once it has stayed chosen a second.
     fn view(&mut self, chosen: Option<&'static str>) {
         let new = chosen.is_some_and(|id| self.marks.is_new(id));
+        if std::mem::take(&mut self.clicked_shader)
+            && let Some(id) = chosen.filter(|_| new)
+        {
+            crate::shader_marks::see(id);
+            return;
+        }
         if let Some(id) = self.viewing.observe(chosen, new, self.look_clock()) {
             crate::shader_marks::see(id);
         }
@@ -1532,6 +1632,9 @@ impl Panel {
     /// A pressed key, by its code.
     fn key(&mut self, key: KeyCode, shift: bool, illuminate: bool) -> PanelAction {
         let vertical = self.tab == Tab::Shaders;
+        if self.tab == Tab::Tags && self.tag_key(key) {
+            return PanelAction::None;
+        }
         if self.tab == Tab::Cards && self.card_inspect {
             // Looking at a card closely: the arrows go to the previous or next tile,
             // Escape, Enter, Space and I put it back.
@@ -1542,6 +1645,7 @@ impl Panel {
                 }
                 KeyCode::Home => self.card = 0,
                 KeyCode::End => self.card = self.cards_shown.saturating_sub(1),
+                KeyCode::KeyV => self.cycle_card_look(shift),
                 KeyCode::Escape
                 | KeyCode::Enter
                 | KeyCode::NumpadEnter
@@ -1766,6 +1870,15 @@ impl Panel {
             return PanelAction::None;
         }
         if let InputEvent::PointerWheel { delta, .. } = event
+            && self.tab == Tab::History
+        {
+            // The wheel scrolls the list three rows a notch.
+            if delta.y != 0.0 {
+                self.history.scroll(if delta.y > 0.0 { -3 } else { 3 });
+            }
+            return PanelAction::None;
+        }
+        if let InputEvent::PointerWheel { delta, .. } = event
             && self.tab == Tab::Cards
         {
             if self.card_inspect {
@@ -1776,6 +1889,15 @@ impl Panel {
                 return PanelAction::None;
             }
             self.scroll_cards(delta.y);
+            return PanelAction::None;
+        }
+        if let InputEvent::PointerWheel { delta, .. } = event
+            && self.tab == Tab::Tags
+        {
+            // The wheel scrolls the wall a line a notch.
+            if delta.y != 0.0 {
+                self.scroll_tags(delta.y > 0.0);
+            }
             return PanelAction::None;
         }
         if let InputEvent::PointerWheel { delta, .. } = event
@@ -1803,9 +1925,21 @@ impl Panel {
         let Some(token) = event.token else {
             return PanelAction::None;
         };
+        if self.tab == Tab::History
+            && let Some(action) = self.history_token(
+                token,
+                event.kind == UiEventKind::Activate,
+                matches!(event.kind, UiEventKind::HoverEnter | UiEventKind::Hover),
+            )
+        {
+            return action;
+        }
         if self.tab == Tab::Forge && (forge::forge_token(token) || self.forge.ask.is_some()) {
             let activate = event.kind == UiEventKind::Activate;
             let resting = matches!(event.kind, UiEventKind::HoverEnter | UiEventKind::Hover);
+            // A click on a shader tile sees a New one at once, as on Shaders.
+            self.clicked_shader |= activate
+                && (forge::TILE_BASE..forge::TILE_BASE + forge::TILES_MAX as u16).contains(&token);
             if !(activate || resting) {
                 return PanelAction::None;
             }
@@ -1835,7 +1969,9 @@ impl Panel {
         {
             // A click chooses (and previews) a shader; Equip, Unequip or Enter wear it
             // (Creyon, 21/10/2026: a click that wore it was too easy to do by mistake).
+            // A New one is seen by the click (its sticker goes).
             self.shader = index;
+            self.clicked_shader = true;
             return PanelAction::None;
         }
         if event.kind == UiEventKind::Activate {
@@ -1866,7 +2002,7 @@ impl Panel {
             if let Some(tag) = token
                 .checked_sub(TAG_BASE)
                 .map(usize::from)
-                .filter(|tag| *tag < crate::tags::CATALOGUE.len())
+                .filter(|tag| *tag < self.tag_entries.len())
             {
                 // A click chooses (and shows) a tag; Choose or Enter picks it for toy_tag.
                 self.tag = tag;
@@ -1884,6 +2020,13 @@ impl Panel {
                     self.banner = index;
                     return PanelAction::None;
                 }
+            }
+            if let Some(finish) = token
+                .checked_sub(TAG_FINISH_BASE)
+                .map(usize::from)
+                .filter(|finish| *finish < crate::cards::FINISHES.len())
+            {
+                return self.choose_tag_finish(finish);
             }
             if token == TAG_CHOOSE_TOKEN {
                 return self.choose_tag();
@@ -1933,6 +2076,14 @@ impl Panel {
             }
             // Looking at a card closely: a click anywhere puts it back; a click on the
             // card up close or on a tile looks at it.
+            if let Some(finish) = token
+                .checked_sub(CARD_LOOK_BASE)
+                .map(usize::from)
+                .filter(|finish| *finish < crate::cards::FINISHES.len())
+            {
+                self.card_look = Some((self.card, finish));
+                return PanelAction::None;
+            }
             if token == CARD_INSPECT_TOKEN {
                 self.card_inspect = false;
                 return PanelAction::None;
@@ -1959,6 +2110,12 @@ impl Panel {
         }
         if event.kind != UiEventKind::Activate {
             return PanelAction::None;
+        }
+        if let Some(style) = token
+            .checked_sub(STYLE_BASE)
+            .and_then(|index| crate::hud::nameplate::Style::ALL.get(usize::from(index)))
+        {
+            return PanelAction::NameplateStyle(*style);
         }
         if let Some(index) = token
             .checked_sub(OPTION_BASE)
@@ -2038,23 +2195,15 @@ impl Panel {
         PanelAction::RevealCards
     }
 
-    /// Whether resting the pointer on `token` chooses it: a shader's row only while the
-    /// pointer is over its blade (its swatch); everything else always.
+    /// Whether resting the pointer on `token` chooses it: never a shader, which only a
+    /// click chooses and previews (Creyon, 31/10/2026: going to Equip, the pointer
+    /// crossed other blades and changed the choice; before, from 21/10, resting on a
+    /// row's blade chose it); everything else always.
     fn hover_chooses(&self, token: u16) -> bool {
-        let Some(index) = token
+        token
             .checked_sub(SHADER_BASE)
             .map(usize::from)
-            .filter(|index| *index < self.shader_count)
-        else {
-            return true;
-        };
-        let Some([x, y]) = self.pointer else {
-            return false;
-        };
-        let at = sjk_ui::Vec2::new(x, y);
-        self.shader_swatches
-            .iter()
-            .any(|(row, rect)| *row == index && rect.contains(at))
+            .is_none_or(|index| index >= self.shader_count)
     }
 
     /// Choose the thing `token` stands for; whether it is one.
@@ -2067,7 +2216,7 @@ impl Panel {
         };
         if let Some(index) = within(MEDAL_BASE, self.medals_shown) {
             self.medal = index;
-        } else if let Some(index) = within(ACHIEVEMENT_BASE, crate::achievements::ALL.len()) {
+        } else if let Some(index) = within(ACHIEVEMENT_BASE, WALL_MAX) {
             self.achievement = index;
         } else if let Some(index) = within(SHADER_BASE, self.shader_count) {
             self.shader = index;
@@ -2117,10 +2266,14 @@ impl Panel {
             Tab::Cards => CARD_BASE,
             // The Forge's shots name the token itself.
             Tab::Forge => 0,
-            // A toy's row, by its place in the tab.
+            // A toy's row, by its place in the tab; past the last, the Toy Master's "?".
             _ => {
-                self.hover
-                    .pin(index.and_then(|index| TOY_TOKENS.get(index).copied()));
+                self.hover.pin(index.and_then(|index| {
+                    TOY_TOKENS
+                        .get(index)
+                        .copied()
+                        .or((index == TOY_COUNT).then_some(TOY_MASTER_TOKEN))
+                }));
                 return;
             }
         };
@@ -2159,15 +2312,14 @@ impl Panel {
     fn focus_token(&self) -> u16 {
         match self.tab {
             Tab::Medals => MEDAL_BASE + self.medal as u16,
-            Tab::Achievements => {
-                ACHIEVEMENT_BASE + self.achievement.min(crate::achievements::ALL.len() - 1) as u16
-            }
+            Tab::Achievements => ACHIEVEMENT_BASE + self.achievement.min(WALL_MAX - 1) as u16,
             Tab::Shaders => SHADER_BASE + self.shader as u16,
             Tab::Toys => TOY_TOKENS[self.toy.min(TOY_COUNT - 1)],
-            Tab::Tags => TAG_BASE + self.tag.min(crate::tags::CATALOGUE.len() - 1) as u16,
+            Tab::Tags => TAG_BASE + self.tag.min(self.tag_entries.len().saturating_sub(1)) as u16,
             Tab::Banners => BANNER_BASE + self.banner as u16,
             Tab::Cards if self.cards_shown > 0 => CARD_BASE + self.card as u16,
             Tab::Nameplates => SHARE_TOKEN,
+            Tab::History => self.history_focus(),
             Tab::Forge => match self.forge.ask {
                 Some(ask) => {
                     if matches!(
@@ -2193,6 +2345,8 @@ mod tests {
 
     fn sun() -> Unlock {
         Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: "Thanks for testing the blade".into(),
@@ -2226,9 +2380,11 @@ mod tests {
             second: "",
             pair: crate::saber_skins::Pair::None,
             share: true,
+            nameplate_style: crate::hud::nameplate::Style::Holo,
             toy_keys: &[],
             toys_unseen: 0,
             tag: "",
+            tag_finish: "",
         }
     }
 
@@ -2771,6 +2927,49 @@ mod tests {
         );
     }
 
+    /// The Nameplates tab's Style row offers every nameplate style, the one in use
+    /// lit, and a click on another asks for it; each style's plate fits the page.
+    #[test]
+    fn the_style_row_chooses_the_nameplates_look() {
+        use crate::hud::nameplate::Style;
+        for style in Style::ALL {
+            let shown = Inputs {
+                nameplate_style: style,
+                ..inputs(Holdings::Known(&[]), "")
+            };
+            let mut panel = drawn(Tab::Nameplates, &shown);
+            assert!(!panel.ui.overflowed(), "{style:?}");
+            for (index, other) in Style::ALL.into_iter().enumerate() {
+                let rect = panel
+                    .ui
+                    .rect_for(STYLE_BASE + index as u16)
+                    .expect("a style's segment");
+                let at = sjk_ui::Vec2::new(rect.x + rect.width * 0.5, rect.y + rect.height * 0.5);
+                let button = sjk_ui::PointerButton::Primary;
+                let action = [
+                    InputEvent::PointerMove(at),
+                    InputEvent::PointerPress {
+                        position: at,
+                        button,
+                    },
+                    InputEvent::PointerRelease {
+                        position: at,
+                        button,
+                    },
+                ]
+                .into_iter()
+                .map(|event| panel.pointer_at(event, true, Instant::now()))
+                .find(|action| *action != PanelAction::None);
+                assert_eq!(action, Some(PanelAction::NameplateStyle(other)));
+            }
+            let all = panel.ui.text_runs().collect::<Vec<_>>().join(
+                "
+",
+            );
+            assert!(all.contains("Capsule") && all.contains("Classic"), "{all}");
+        }
+    }
+
     /// The Nameplates tab's See and share nameplates switch, clicked or with Enter, flips the
     /// state the page was told, and says what off means.
     #[test]
@@ -2870,8 +3069,60 @@ mod tests {
         );
     }
 
+    /// Creyon, 31/10/2026: a New shader not seen yet stands out in gold, on the wall and in
+    /// the list, besides its sticker; chosen, it wears the white outline instead.
     #[test]
-    fn resting_on_a_row_chooses_it_only_over_its_blade() {
+    fn a_new_shader_is_outlined_in_gold() {
+        let owned = [sun()];
+        let shown = inputs(Holdings::Known(&owned), "");
+        let gold = |panel: &Panel| {
+            panel
+                .ui
+                .draw_list()
+                .commands()
+                .iter()
+                .filter(|command| match command {
+                    sjk_ui::DrawCommand::Border { color: paint, .. }
+                    | sjk_ui::DrawCommand::RoundedRect { color: paint, .. } => {
+                        use crate::menu::sjk::color;
+                        *paint == color::alpha(color::GOLD_BRIGHT, 0.85)
+                            || *paint == color::alpha(color::GOLD_BRIGHT, 0.9)
+                    }
+                    _ => false,
+                })
+                .count()
+        };
+        for grid in [true, false] {
+            let mut panel = Panel::new();
+            panel.open(Tab::Shaders, true, true, ReturnTarget::MainMenu);
+            let _ = panel.set_grid(grid);
+            redraw(&mut panel, &shown);
+            let plain = gold(&panel);
+            panel.preview_marks = Some(crate::shader_marks::Marks::of(
+                None,
+                false,
+                &owned,
+                Some(&crate::shader_marks::Seen::default()),
+                false,
+                [None, None],
+            ));
+            redraw(&mut panel, &shown);
+            assert_eq!(gold(&panel), plain + 1, "grid {grid}: one New, outlined");
+            assert!(panel.ui.text_runs().any(|run| run == "New"), "grid {grid}");
+            panel.shader = row_of("saber_sun");
+            redraw(&mut panel, &shown);
+            assert_eq!(
+                gold(&panel),
+                plain,
+                "grid {grid}: chosen, the white outline"
+            );
+        }
+    }
+
+    /// Creyon, 31/10/2026: only a click chooses (and previews) a shader; the pointer
+    /// resting on another blade, on the way to Equip, leaves the choice alone.
+    #[test]
+    fn resting_on_a_shader_never_chooses_it() {
         let owned = [sun()];
         let mut panel = drawn(Tab::Shaders, &inputs(Holdings::Known(&owned), ""));
         let index = row_of("saber_sun");
@@ -2879,25 +3130,33 @@ mod tests {
             .ui
             .rect_for(SHADER_BASE + index as u16)
             .expect("the row's pointer area");
-        let swatch = panel
-            .shader_swatches
-            .iter()
-            .find(|(at, _)| *at == index)
-            .map(|(_, rect)| *rect)
-            .expect("the row's swatch");
+        let at = sjk_ui::Vec2::new(row.x + row.width * 0.5, row.y + row.height * 0.5);
         let now = Instant::now();
-        // Over the row's name, right of its blade: nothing changes.
-        let words = sjk_ui::Vec2::new(swatch.right() + 40.0, row.y + row.height * 0.5);
-        assert!(row.contains(words) && !swatch.contains(words));
-        let _ = panel.pointer_at(InputEvent::PointerMove(words), true, now);
         assert_ne!(panel.shader, index);
-        // Over its blade: chosen and previewed.
-        let blade = sjk_ui::Vec2::new(
-            swatch.x + swatch.width * 0.5,
-            swatch.y + swatch.height * 0.5,
+        let _ = panel.pointer_at(InputEvent::PointerMove(at), true, now);
+        let _ = panel.pointer_at(
+            InputEvent::PointerMove(at),
+            true,
+            now + std::time::Duration::from_secs(2),
         );
-        let _ = panel.pointer_at(InputEvent::PointerMove(blade), true, now);
-        assert_eq!(panel.shader, index);
+        assert_ne!(panel.shader, index, "resting chose it");
+        for event in [
+            InputEvent::PointerPress {
+                position: at,
+                button: sjk_ui::PointerButton::Primary,
+            },
+            InputEvent::PointerRelease {
+                position: at,
+                button: sjk_ui::PointerButton::Primary,
+            },
+        ] {
+            let _ = panel.pointer_at(event, true, now);
+        }
+        assert_eq!(panel.shader, index, "a click chooses it");
+        assert!(panel.clicked_shader, "a New one is seen at the click");
+        // The next frame takes the click: a New one chosen is seen then, not a second later.
+        panel.view(Some("saber_sun"));
+        assert!(!panel.clicked_shader);
     }
 
     #[test]

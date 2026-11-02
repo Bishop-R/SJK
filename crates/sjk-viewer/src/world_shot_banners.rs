@@ -38,6 +38,8 @@ fn duel6_profile_banners() {
                 },
                 medal: None,
                 card: None,
+                holo: 0,
+                solar: 0,
             })
             .collect();
         let me = preview.snapshot.me.as_mut().unwrap();

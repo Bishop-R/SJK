@@ -40,7 +40,7 @@ vec3 base_vol(vec3 ro, vec3 rd, float px){
     if (h11(k*2.7 + fi) > 0.25 + 0.5*un) continue;
     float y0 = (0.1 + 0.8*h11(k*1.3 + fi))*top;
     float a = h11(k*4.1 + fi);
-    float bd = bolt3(ro, rd, around(0.4, a, y0), around(0.4 + 1.2*h11(k + fi), a + 0.15, y0 + 1.5 + 1.5*h11(k*5.0)), k + fi*9.0, 0.45);
+    float bd = bolt3(ro, rd, around(0.4, a, y0), around(0.4 + 1.2*h11(k + fi), a + 0.15, y0 + 1.5 + 1.5*h11(k*5.0)), k + fi*9.0, 0.45, px);
     col += boltLight(bd, hot, px)*0.9;
   }
   // vapour boiling off it

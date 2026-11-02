@@ -13,6 +13,20 @@ models/sjk/mystery_box
 	}
 }
 
+// The faint halo of light rising over the chest, so a box is found from afar (SJK; see
+// README.md): added, seen from inside and out, its rays drifting slowly round, breathing.
+models/sjk/mystery_box_halo
+{
+	cull none
+	nopicmip
+	{
+		map models/sjk/mystery_box_halo
+		blendFunc add
+		rgbGen wave sin 0.85 0.15 0 0.35
+		tcMod scroll 0.02 0
+	}
+}
+
 // The teddy bear a box stops on when it blows up (SJK; see README.md): plush, lit as a
 // player model is.
 models/sjk/teddy_bear

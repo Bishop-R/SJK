@@ -259,6 +259,8 @@ mod tests {
             count: 2,
             medal: None,
             card: None,
+            holo: 0,
+            solar: 0,
         });
         assert_eq!(equipped(Some(&profile)), ALL[1].id);
         assert!(std::sync::Arc::ptr_eq(

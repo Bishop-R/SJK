@@ -60,7 +60,7 @@ pub(crate) fn icon_of(token: u16) -> Option<Icon> {
 }
 
 /// The row of small icon buttons under the emblem: each icon's picture, ringed gold
-/// and lit while hovered or focused, Staff quieter; the one hovered or focused named
+/// and lit while hovered or focused, the staff keys' quieter; the one hovered or focused named
 /// over the row with its key and what it opens.
 pub(super) fn icon_row(canvas: &mut MenuCanvas, frame: &Frame, extras: &Extras<'_>) {
     let s = frame.s;
@@ -74,10 +74,10 @@ pub(super) fn icon_row(canvas: &mut MenuCanvas, frame: &Frame, extras: &Extras<'
             named = Some(*icon);
         }
         let rect = frame.rect(x, ROW_TOP, ICON, ICON);
-        let alpha = match (lit, *icon) {
+        let alpha = match (lit, icon.staff_only()) {
             (true, _) => 1.0,
-            (false, Icon::Staff) => 0.5,
-            (false, _) => 0.78,
+            (false, true) => 0.5,
+            (false, false) => 0.78,
         };
         if let Some(texture) = crate::settings_icons::texture(icon.picture()) {
             let _ = canvas.draw_list_mut().push(DrawCommand::TexturedQuad {

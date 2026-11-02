@@ -25,6 +25,8 @@ use crate::profile_hub::Tab;
 /// A made-up copy of `id`, held `count` times.
 fn held(id: &str, count: u32) -> sjk_identity::Unlock {
     sjk_identity::Unlock {
+        holo: 0,
+        solar: 0,
         id: id.to_owned(),
         granted: 1_791_336_225,
         note: String::new(),
@@ -164,6 +166,7 @@ fn blade_card_shader() -> (&'static crate::unlockables::Unlockable, String) {
         grants: None,
         blade: Some(skin.id.to_owned()),
         scene: None,
+        rank: None,
     });
     let real = faces.list.len();
     crate::cards::faces::install_for_shot(list, |index| index.min(real.saturating_sub(1)));

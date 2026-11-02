@@ -109,7 +109,7 @@ impl ChatOverlay {
     /// Whether the feed shows `line` now: the PM-only switch (`chat/pm_only.rs`), then
     /// the open composer's tab.
     pub(super) fn shown(&self, line: &ChatLine) -> bool {
-        if !self.pm_visible(line) {
+        if !self.pm_visible(line) || !self.quiet_visible(line) {
             return false;
         }
         let Some(input) = self.input.as_ref().filter(|_| self.options.tabs.filter) else {

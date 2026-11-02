@@ -78,6 +78,23 @@ impl Rect {
         }
     }
 
+    /// The same rectangle moved `dx`, `dy`.
+    pub fn translated(self, dx: f32, dy: f32) -> Self {
+        Self::new(self.x + dx, self.y + dy, self.width, self.height)
+    }
+
+    /// The smallest rectangle holding both.
+    pub fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        Self::new(
+            x,
+            y,
+            self.right().max(other.right()) - x,
+            self.bottom().max(other.bottom()) - y,
+        )
+    }
+
     /// Convert all components from logical to physical pixels.
     pub fn scaled(self, scale: f32) -> Self {
         Self::new(

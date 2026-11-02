@@ -1407,6 +1407,46 @@ mod tests {
         assert!(menu.wheel.picker.is_some(), "the catalogue stays open");
     }
 
+    /// Hub report #218: a custom command with arguments, typed key by key
+    /// (Space included), is kept whole on the page and in the files.
+    #[test]
+    fn a_custom_command_keeps_its_arguments_typed_saved_and_reloaded() {
+        let (directory, mut console) = console();
+        let mut menu = SettingsMenu::new();
+        menu.open_wheel_editor(&console, WheelMode::Overlay);
+        // General: Add a choice, the new custom command last in the catalogue.
+        press(&mut menu, &mut console, KeyCode::ArrowDown);
+        press(&mut menu, &mut console, KeyCode::ArrowRight);
+        for _ in 0..8 {
+            press(&mut menu, &mut console, KeyCode::ArrowDown);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        press(&mut menu, &mut console, KeyCode::End);
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "Tele 300");
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "japlus.guntele");
+        menu.wheel_key(KeyCode::Space, Some(" "), &mut console);
+        for (key, digit) in [
+            (KeyCode::Digit3, "3"),
+            (KeyCode::Digit0, "0"),
+            (KeyCode::Digit0, "0"),
+        ] {
+            menu.wheel_key(key, Some(digit), &mut console);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        let tele = Slot::Custom {
+            label: "Tele 300".into(),
+            command: "japlus.guntele 300".into(),
+        };
+        assert_eq!(console.wheel_pages.pages()[1].choices[8], tele);
+        assert_eq!(console.wheel_pages.saved()[0].command, "japlus.guntele 300");
+        // Both files give it back whole.
+        let saved = crate::quick_wheel::pages::WheelPages::load(directory.path());
+        assert_eq!(saved.pages()[1].choices[8], tele);
+        assert_eq!(saved.saved()[0].command, "japlus.guntele 300");
+    }
+
     #[test]
     fn removing_a_page_and_restoring_the_defaults_ask_twice() {
         let (_directory, mut console) = console();

@@ -36,6 +36,11 @@ fn base_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let fi = f32(i);
         let y0 = (0.08 + 0.85 * h11(fi * 2.9)) * top;
         let a = h11(fi * 6.1);
+        // 31/10/2026: a filament keeps within 2 of the axis between y0 - 0.4 and y0 + 1.2; its widest
+        // glow is 0.18 (and a pixel's): a ray further off than three of them skips its five pieces
+        if fxNear(ro, rd, y0 - 0.4, y0 + 1.2) - 2.0 > 0.6 + 3.0 * px {
+            continue;
+        }
         var prev = around(0.4, a, y0);
         var best: f32 = 1.0e3;
         var bu: f32 = 0.0;
@@ -130,6 +135,11 @@ fn fs_spores(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let rest3 = around(rest, ar, yr);
         let p = mix(rest3, fly, e);
         let p0 = mix(rest3, fly0, e);
+        // 31/10/2026: its widest glow is 0.55 (its ring 0.04 round less than 0.4): a ray further than
+        // three of them from the spore and its trail draws nothing of it
+        if rayPtRaw(ro, rd, p, &ta) - length(p - p0) > 1.7 + 3.0 * px {
+            continue;
+        }
         let d = raySeg(ro, rd, p0, p, &s);
         let dp = rayPt(ro, rd, p, &ta);
         let tw = 0.7 + 0.3 * sin(t * (1.5 + 1.5 * h11(fi)) + fi * 2.0);

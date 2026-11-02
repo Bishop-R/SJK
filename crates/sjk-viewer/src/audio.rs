@@ -110,6 +110,8 @@ pub(crate) struct GameAudio {
     /// The chat sound settings (`chat_sounds.rs`), read once a frame.
     pub(crate) chat_sounds: crate::chat_sounds::Options,
     pm_only_chat: bool,
+    /// Quiet mode (`chat/quiet.rs`): the sound adapter keeps its chat beeps to its rule.
+    quiet_chat: bool,
     deferred_starts: u64,
     maximum_deferred_start_ms: f64,
     /// `cg_footsteps`: whether the footstep event family is voiced.
@@ -138,6 +140,8 @@ pub(crate) struct GameAudio {
     /// The Hax toy's hacking sound this frame (`hax.rs`): the hacker's slot, and where
     /// they stand (`None`: the player's own, in both ears).
     hax_loop: Option<(SourceId, Option<[f32; 3]>)>,
+    /// The Prop gun's flying bolts' loops this frame (source, sound, where).
+    propgun_loops: Vec<(SourceId, String, [f32; 3])>,
     /// The toys' volume and per-toy switches (`toy_sounds.rs`), read each frame.
     toy_sounds: crate::toy_sounds::Options,
     /// `cg_fleshSparks` ([`crate::impacts::flesh_sparks`]): below 2 the special saber
@@ -263,6 +267,7 @@ impl GameAudio {
             saber_sets_generation: None,
             box_music: Vec::with_capacity(8),
             hax_loop: None,
+            propgun_loops: Vec::with_capacity(8),
             toy_sounds: Default::default(),
             flesh_sparks: crate::impacts::FLESH_SPARKS_ALL,
             map_music: None,
@@ -279,6 +284,7 @@ impl GameAudio {
             last_server_time: None,
             chat_sounds: crate::chat_sounds::Options::default(),
             pm_only_chat: false,
+            quiet_chat: false,
             deferred_starts: 0,
             maximum_deferred_start_ms: 0.0,
             footsteps: true,
@@ -570,6 +576,12 @@ impl GameAudio {
         self.hax_loop = hacking.map(|(slot, origin)| (SourceId(u32::from(slot)), origin));
     }
 
+    /// The Prop gun's flying bolts' loops this frame, played with the frame's loops.
+    pub(crate) fn set_propgun_loops(&mut self, loops: &[(SourceId, String, [f32; 3])]) {
+        self.propgun_loops.clear();
+        self.propgun_loops.extend_from_slice(loops);
+    }
+
     /// Rebuild all codemp loops at rendered cadence from interpolated origins.
     ///
     /// The set is bracketed by `ClearLoops`/`CommitLoops` because the audio
@@ -607,6 +619,12 @@ impl GameAudio {
             (self.find_handle(crate::hax::HACK_SOUND), self.hax_loop)
         {
             self.send_toy_loop(Toy::Hax, handle, source, origin);
+        }
+        for index in 0..self.propgun_loops.len() {
+            let (source, origin) = (self.propgun_loops[index].0, self.propgun_loops[index].2);
+            if let Some(handle) = self.find_handle(&self.propgun_loops[index].1) {
+                self.send_toy_loop(Toy::PropGun, handle, source, Some(origin));
+            }
         }
     }
 

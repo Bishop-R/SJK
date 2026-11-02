@@ -298,8 +298,8 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
             if live <= 0.0 {
                 continue;
             }
-            var d = bolt3(ro, rd, a, c, seed, 0.3);
-            d = min(d, bolt3(ro, rd, m, e, seed + 3.0, 0.35));
+            var d = bolt3(ro, rd, a, c, seed, 0.3, px);
+            d = min(d, bolt3(ro, rd, m, e, seed + 3.0, 0.35, px));
             let nr = 0.5 + 0.9 * halo(abs(a.y - gazeY), 5.0) * o;
             let cc = vec3<f32>(1.0, 0.55, 0.4) * halo(d, max(px, 0.03)) * 1.2 + red * halo(d, 0.2) * 1.2 + vec3<f32>(0.6, 0.0, 0.05) * halo(d, 0.9) * 0.45;
             fx += cc * live * beat * nr;

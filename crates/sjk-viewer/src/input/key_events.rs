@@ -63,6 +63,11 @@ impl GpuState {
             self.official_key(&event);
             return;
         }
+        // And the News panel, over the console too when it was asked for.
+        if self.news.is_open() {
+            self.news_key(&event);
+            return;
+        }
         if !console_open && self.text_dialog.is_open() {
             let action = self.text_dialog.handle_key(&event);
             self.apply_dialog_action(action);
@@ -119,10 +124,29 @@ impl GpuState {
             self.mod_notice_choice(choice);
             return;
         }
-        // And the trade window.
-        if !console_open && self.trades.window.is_open() {
+        // And the trade window, but for the chat: its keys open the composer over the
+        // window, which then has the typing (Enter sends, Escape closes it) so the
+        // players can talk while they trade (#215).
+        if !console_open && self.trades.window.is_open() && !self.chat.is_typing() {
+            if self.trade_window_chat_key(&event) {
+                return;
+            }
             let choice = self.trades.window.handle_key(&event);
             self.trade_window_choice(choice);
+            return;
+        }
+        // The HUD edit mode takes every key but the console's.
+        if !console_open && self.hud_edit.is_open() && !self.text_dialog.is_open() {
+            if self
+                .console
+                .as_ref()
+                .is_some_and(|console| console.leaves_chat_for_console(&event))
+            {
+                self.route_console_key(&event);
+                self.sync_cursor_policy();
+            } else {
+                self.hud_edit_key(&event);
+            }
             return;
         }
         // And the low-FPS card.
@@ -135,12 +159,6 @@ impl GpuState {
         if !console_open && self.log_request_card.is_open() {
             let choice = self.log_request_card.handle_key(&event);
             self.log_request_card_choice(choice);
-            return;
-        }
-        // And the what's-new card.
-        if !console_open && self.whats_new_card.is_open() {
-            let choice = self.whats_new_card.handle_key(&event);
-            self.whats_new_card_choice(choice);
             return;
         }
         // Ctrl+Tab changes the Profile screen's tab, whichever screen shows it.
@@ -189,7 +207,7 @@ impl GpuState {
             self.chat_key(&event);
             return;
         }
-        if self.shot_key(&event) || self.map_edit_key(&event) {
+        if self.shot_key(&event) || self.map_edit_key(&event) || self.ghost_edit_key(&event) {
             return;
         }
         if self.game_menu {
@@ -263,6 +281,11 @@ impl GpuState {
                 .as_ref()
                 .is_some_and(|c| c.has_key_binding("ESCAPE"))
         {
+            // While the ghost editor is on, Escape brings its column back.
+            if self.ghost_editor_looking() {
+                self.open_ghost_panel();
+                return;
+            }
             self.release_pointer();
             if self.live_session.is_some() || self.resident.exploring() {
                 self.game_menu = true;

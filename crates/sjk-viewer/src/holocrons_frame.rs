@@ -14,6 +14,12 @@ impl GpuState {
     /// game of someone else's, in their own view, mid-match, out of the menus, and with
     /// input in the last two minutes.
     pub(crate) fn update_holocron_activity(&mut self) {
+        let active = self.actively_playing(Instant::now());
+        let _ = player_identity::set_active(active);
+    }
+
+    /// Whether the player is actively playing at `now`, as [`Play::active`] says.
+    pub(crate) fn actively_playing(&self, now: Instant) -> bool {
         let play = self
             .live_session
             .as_ref()
@@ -25,8 +31,7 @@ impl GpuState {
                     self.menu_has_the_player(),
                 )
             });
-        let active = play.active(activity::since_input(Instant::now()));
-        let _ = player_identity::set_active(active);
+        play.active(activity::since_input(now))
     }
 
     /// A menu, the console, a dialog or a pop-up has the player's attention rather than

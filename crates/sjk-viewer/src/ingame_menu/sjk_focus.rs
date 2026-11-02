@@ -29,28 +29,36 @@ pub(crate) enum Icon {
     Credits,
     ReportBug,
     Chat,
+    /// The map editor's panel on this map (`docs/map-edits.md`), for staff keys only.
+    MapEditor,
     /// Staff tools, for staff keys only.
     Staff,
 }
 
 impl Icon {
-    /// Every icon, Staff last.
-    pub(crate) const ALL: [Self; 6] = [
+    /// Every icon, the staff keys' two last (Staff the very last).
+    pub(crate) const ALL: [Self; 7] = [
         Self::Camera,
         Self::WhatsNew,
         Self::Credits,
         Self::ReportBug,
         Self::Chat,
+        Self::MapEditor,
         Self::Staff,
     ];
 
-    /// The icons the row shows: Staff only for a staff key.
+    /// The icons the row shows: Map editor and Staff only for a staff key.
     pub(crate) fn shown(staff: bool) -> &'static [Self] {
         if staff {
             &Self::ALL
         } else {
-            &Self::ALL[..Self::ALL.len() - 1]
+            &Self::ALL[..Self::ALL.len() - 2]
         }
+    }
+
+    /// Whether only staff keys see it (drawn quieter).
+    pub(crate) fn staff_only(self) -> bool {
+        matches!(self, Self::MapEditor | Self::Staff)
     }
 
     /// Its name, shown over the row while it is hovered or has the keyboard.
@@ -61,6 +69,7 @@ impl Icon {
             Self::Credits => "Credits",
             Self::ReportBug => "Report a bug",
             Self::Chat => "SJK chat",
+            Self::MapEditor => "Map editor",
             Self::Staff => "Staff tools",
         }
     }
@@ -73,6 +82,7 @@ impl Icon {
             Self::Credits => "The people who make SJK",
             Self::ReportBug => "Tell the SJK team what went wrong",
             Self::Chat => "Talk with every SJK player",
+            Self::MapEditor => "Hide, place and remap on this map, for every SJK player",
             Self::Staff => "Medals, unlockables and players, for the SJK team",
         }
     }
@@ -90,6 +100,7 @@ impl Icon {
             Self::Credits => "credits",
             Self::ReportBug => "other_controls",
             Self::Chat => "text",
+            Self::MapEditor => "maps_own",
             Self::Staff => "identity",
         }
     }
@@ -557,6 +568,8 @@ mod tests {
     #[test]
     fn the_staff_icon_shows_only_for_staff() {
         assert!(!Icon::shown(false).contains(&Icon::Staff));
+        assert!(!Icon::shown(false).contains(&Icon::MapEditor));
+        assert!(Icon::shown(false).iter().all(|icon| !icon.staff_only()));
         assert_eq!(Icon::shown(false).len(), 5);
         assert_eq!(Icon::shown(true).last(), Some(&Icon::Staff));
         // A staff icon focused when the key is no longer staff falls back to the list.

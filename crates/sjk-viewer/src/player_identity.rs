@@ -353,6 +353,29 @@ pub(crate) fn map_edits_revision() -> u64 {
     })
 }
 
+/// What the service's last look at the hub's map edits did (its summary, or why it fell
+/// short), when it is not `seen`: read twice a second, it allocates only on a change.
+pub(crate) fn map_edits_note(
+    seen: Option<&Result<String, String>>,
+) -> Option<Result<String, String>> {
+    lock().service.as_ref().and_then(|service| {
+        service.with_snapshot(|snapshot| {
+            snapshot
+                .map_edits_note
+                .as_ref()
+                .filter(|note| Some(*note) != seen)
+                .cloned()
+        })
+    })
+}
+
+/// Have the service look at the hub's map edits now (the editor turned on).
+pub(crate) fn refresh_map_edits() {
+    if let Some(service) = lock().service.as_ref() {
+        service.refresh_map_edits();
+    }
+}
+
 /// Staff: send a map's edits to the hub; the answer comes from
 /// [`map_edits_published`].
 pub(crate) fn publish_map_edits(
@@ -367,7 +390,7 @@ pub(crate) fn publish_map_edits(
     let service = runtime
         .service
         .as_ref()
-        .ok_or("Not connected to the SJK hub")?;
+        .ok_or("Not connected to the SJK hub: the SJK identity is off (cl_identity 1)")?;
     service.publish_map_edits(map, checksum, edits);
     Ok(())
 }
@@ -1037,8 +1060,17 @@ pub(crate) fn can_ban() -> bool {
     })
 }
 
-/// Ban the player of `key_id` from the SJK chat for 24 hours; false when the service
-/// has not started. What became of it arrives in the chat's `ban`.
+/// Request the desired reaction state; false when the service has not started.
+/// The result arrives in the chat snapshot's separate reaction outcome.
+pub(crate) fn react(message: u64, emoji: String, active: bool) -> bool {
+    lock()
+        .service
+        .as_ref()
+        .map(|service| service.react(message, emoji, active))
+        .is_some()
+}
+
+/// Request a chat ban for another key.
 pub(crate) fn chat_ban(key_id: String) -> bool {
     lock()
         .service
@@ -1128,6 +1160,13 @@ pub(crate) fn buy(id: &str) -> bool {
 /// started. They arrive in the snapshot's `shop`.
 pub(crate) fn read_shop() -> bool {
     with_service(Service::read_shop).is_some()
+}
+
+/// Ask the hub for a page of the player's history: the newest (`None`) or the one before
+/// `before`; false when the service has not started. It arrives in the snapshot's
+/// `history`.
+pub(crate) fn read_history(before: Option<i64>) -> bool {
+    with_service(|service| service.read_history(before)).is_some()
 }
 
 /// What became of the last reveal of sealed cards, if the service has started.
@@ -1473,6 +1512,20 @@ pub(crate) fn owns_unlock(id: &str) -> bool {
                 .is_some_and(|me| me.unlocks.iter().any(|unlock| unlock.id == id))
         })
     })
+}
+
+/// What the player's own hub profile holds of tag or card `id`, by finish
+/// ([`crate::tags::Held::of`]), by the same rule as [`owns_unlock`]: only the free tags
+/// with the identity off, no hub or before the hub answered.
+pub(crate) fn tag_held(id: &str) -> crate::tags::Held {
+    with_snapshot(|snapshot| {
+        let known = !matches!(
+            snapshot.status,
+            sjk_identity::Status::Disabled | sjk_identity::Status::NoHub
+        );
+        crate::tags::Held::of(id, snapshot.me.as_ref().filter(|_| known))
+    })
+    .unwrap_or_else(|| crate::tags::Held::of(id, None))
 }
 
 /// Whether the player's own hub profile lists a revealed copy of `gate`'s card in its

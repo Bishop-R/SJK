@@ -224,6 +224,9 @@ pub struct MovementConfig {
     /// (`g_fixSaberMoveData`, `g_fixWeaponAttackAnim`, `g_fixRunWalkAnims`, bits 0-2).
     /// A retail server publishes none and runs none.
     pub legacy_fixes: u32,
+    /// `cg_predictLegacy`: the client prediction changes since 2026.1028.1 that this
+    /// player turned back off ([`predict_legacy`] bits). Never read by a server's move.
+    pub predict_legacy: u32,
     /// `CS_SERVERINFO` `g_debugMelee` as the server's dialect reads it. SJK's own server
     /// does not simulate it and keeps the default (off).
     pub debug_melee: crate::pmove_debug_melee::DebugMelee,
@@ -250,11 +253,44 @@ impl Default for MovementConfig {
             authoritative: false,
             // The reference server's cvar defaults: every fix on.
             legacy_fixes: 0b111,
+            predict_legacy: 0,
             debug_melee: crate::pmove_debug_melee::DebugMelee::default(),
             grapple: None,
             ja_plus: crate::pmove_japlus::JaPlusRules::default(),
             ja_pro: crate::pmove_japro::JaProRules::default(),
         }
+    }
+}
+
+/// `cg_predictLegacy` bits: each turns one client prediction change made since
+/// 2026.1028.1 back off, for players who preferred how that release moved. The
+/// default (none) follows the server; every bit predicts some moves the server
+/// then corrects.
+pub mod predict_legacy {
+    /// #267: the equipped sabers' `.sab` move overrides and restrictions.
+    pub const SABER_DEFINITIONS: u32 = 1;
+    /// #253: a saber lock turns the view to face the opponent.
+    pub const SABER_LOCK_FACING: u32 = 2;
+    /// #260: no jump after respawning until attack and use are released.
+    pub const RESPAWN_JUMP: u32 = 4;
+    /// #254: triggers touched with the last move's box, not one from the posture.
+    pub const TRIGGER_HULL: u32 = 8;
+    /// #262: the gesture button starts its taunt.
+    pub const GESTURE: u32 = 16;
+    /// #261: movement held still while another client holds the player.
+    pub const HELD_PLAYER: u32 = 32;
+    /// #250: other players' and NPCs' animations and kinds read for bounces and kicks.
+    pub const ACTOR_CONTEXT: u32 = 64;
+    /// #252: prediction freezes when the command history overflowed.
+    pub const HISTORY_GAP: u32 = 128;
+    /// Every change: prediction as in 2026.1028.1.
+    pub const ALL: u32 = 255;
+}
+
+impl Predictor {
+    /// Whether this client prediction turned a [`predict_legacy`] change back off.
+    fn legacy_prediction(&self, bit: u32) -> bool {
+        !self.config.authoritative && self.config.predict_legacy & bit != 0
     }
 }
 
@@ -1185,7 +1221,9 @@ impl Predictor {
             } else {
                 i32::from(self.config.roll_rules.gametype)
             },
-            sabers: if self.config.authoritative {
+            sabers: if self.config.authoritative
+                || self.legacy_prediction(predict_legacy::SABER_DEFINITIONS)
+            {
                 context.sabers
             } else {
                 self.config.saber_definitions.unwrap_or(context.sabers)
@@ -1345,6 +1383,9 @@ impl Predictor {
         // A fake noclip flies a camera, not the body: the animations that hold the body
         // still (a taunt or a JA+ emote, a kick, a saber lock) must not hold it, and
         // the server is sent a standing still command in any case.
+        if self.legacy_prediction(predict_legacy::HELD_PLAYER) {
+            self.state.held_by_client = 0;
+        }
         if !(self.fake_noclip && !self.config.authoritative) {
             crate::pmove_input_freeze::apply(
                 &mut self.state,
@@ -1586,7 +1627,10 @@ impl Predictor {
                 context,
             );
         }
-        if !self.riding_move() && !self.npc_aboard() {
+        if !self.riding_move()
+            && !self.npc_aboard()
+            && !self.legacy_prediction(predict_legacy::GESTURE)
+        {
             gesture::animate(&mut self.state, &command, &mut self.events);
         }
         self.vehicle_impacts(&command, game.as_deref_mut());
@@ -1779,7 +1823,7 @@ impl Predictor {
         if let Some(npc) = self.npc {
             return self.npc_check_duck(npc, command, collision);
         }
-        let minimums = [-15.0, -15.0, -24.0];
+        let minimums = [-15.0, -15.0, self.dual_jump_minimum(collision)];
         if self.state.movement_type == PM_DEAD {
             // `bg_pmove.c:4484-4489`: a corpse is a low box with a dead view.
             self.state.view_height = DEAD_VIEW_HEIGHT;
@@ -2491,6 +2535,13 @@ mod jump;
 
 #[path = "pmove_gesture.rs"]
 mod gesture;
+
+#[cfg(test)]
+#[path = "pmove_predict_legacy_tests.rs"]
+mod predict_legacy_tests;
+
+#[path = "pmove_dual_jump_hull.rs"]
+mod dual_jump_hull;
 
 #[cfg(test)]
 #[path = "pmove_dual_jump_hull_tests.rs"]

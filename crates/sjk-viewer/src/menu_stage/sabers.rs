@@ -6,6 +6,7 @@
 //! lightsaber creation's preview the hilts leave the hands for the
 //! [`showcase`](super::showcase).
 
+use super::hilt_guard;
 use super::lone;
 use super::showcase::{self, Line, View};
 use super::throw::{Pose, Throw};
@@ -86,8 +87,8 @@ impl StageSaber {
 
 impl GpuState {
     /// Reload the hands for a changed request. Sockets and blade parameters
-    /// come from the `.sab` definitions; a hilt that fails to load leaves
-    /// its hand empty.
+    /// come from the `.sab` definitions; a hilt that fails to load is logged and
+    /// the hand holds the default hilt instead (empty only when that fails too).
     pub(super) fn sync_stage_sabers(&mut self, request: Request) {
         for hand in 0..2 {
             let color = if request.black[hand] {
@@ -95,16 +96,63 @@ impl GpuState {
             } else {
                 BladeColor::from_rgb(request.colors[hand])
             };
-            self.menu_stage.sabers[hand] = request.hilts[hand].as_deref().and_then(|name| {
-                self.build_stage_saber(name, color)
-                    .inspect_err(|error| {
-                        eprintln!("player stage could not load saber {name}: {error}");
-                    })
-                    .ok()
-            });
+            self.menu_stage.sabers[hand] = request.hilts[hand]
+                .as_deref()
+                .and_then(|name| self.stage_saber_or_default(name, color));
         }
         self.menu_stage.request = request;
         self.menu_stage.sabers_dirty = true;
+    }
+
+    /// `name`'s hilt, or [`hilt_guard::DEFAULT_HILT`]'s when it cannot be shown.
+    fn stage_saber_or_default(&mut self, name: &str, color: BladeColor) -> Option<StageSaber> {
+        let error = match self.guarded_stage_saber(name, color) {
+            Ok(saber) => return Some(saber),
+            Err(error) => error,
+        };
+        if name.eq_ignore_ascii_case(hilt_guard::DEFAULT_HILT) {
+            crate::log::progress(format_args!(
+                "player stage could not load saber {name}: {error}"
+            ));
+            return None;
+        }
+        crate::log::progress(format_args!(
+            "player stage could not load saber {name}: {error}; showing {} instead",
+            hilt_guard::DEFAULT_HILT
+        ));
+        self.guarded_stage_saber(hilt_guard::DEFAULT_HILT, color)
+            .inspect_err(|error| {
+                crate::log::progress(format_args!(
+                    "player stage could not load saber {}: {error}",
+                    hilt_guard::DEFAULT_HILT
+                ));
+            })
+            .ok()
+    }
+
+    /// [`Self::build_stage_saber`] with wgpu's errors captured (an uncaptured one
+    /// ends the game), and not tried again for a hilt the game closed while loading
+    /// the last time ([`hilt_guard`]): a hilt saved in the profile must not take
+    /// every later start down with it (#214).
+    fn guarded_stage_saber(
+        &mut self,
+        name: &str,
+        color: BladeColor,
+    ) -> Result<StageSaber, Box<dyn Error>> {
+        let directory = crate::crash_report::directory();
+        if hilt_guard::crashed_on(directory.as_deref(), name) {
+            return Err("the game closed while loading it last time".into());
+        }
+        hilt_guard::begin(directory.as_deref(), name);
+        let kept = self.world_materials.texture_keys();
+        let device = self.device.clone();
+        let built = crate::gpu_guard::capture(&device, || self.build_stage_saber(name, color))
+            .unwrap_or_else(|error| {
+                self.world_materials.forget_textures_since(&kept);
+                Err(format!("the graphics card: {error}").into())
+            });
+        hilt_guard::end(directory.as_deref());
+        built
     }
 
     fn build_stage_saber(
@@ -129,9 +177,10 @@ impl GpuState {
         let model = Glm::parse(&asset.bytes)?;
         let sockets = hilt_sockets(&model)?;
         let mut flattened = FlattenedScene::default();
-        let draws = append_static_glm_mesh(&mut flattened, &model)?;
+        let mut draws = append_static_glm_mesh(&mut flattened, &model)?;
         let blades = hilt_blades(&definition, &sockets);
         let line = showcase_line(&blades, definition.num_blades, &flattened.vertices);
+        pad_empty_mesh(&mut flattened, &mut draws);
         let materials = self.world_materials.compile_detached(
             &self.device,
             &self.queue,
@@ -449,6 +498,24 @@ impl GpuState {
     }
 }
 
+/// Give a hilt with nothing to draw one unused vertex and triangle, and no draws.
+/// A community "empty hilt" (a model of only its `*blade1` tag, so the player holds
+/// a blade with no hilt in a stance) flattens to no vertices; a zero-sized buffer bound
+/// for storage fails wgpu's validation, and the uncaptured error closed the game, at
+/// every start once the hilt was saved (#214). Its blades stay.
+fn pad_empty_mesh(flattened: &mut FlattenedScene, draws: &mut Vec<ActorDraw>) {
+    if !flattened.vertices.is_empty() && !flattened.indices.is_empty() {
+        return;
+    }
+    draws.clear();
+    if flattened.vertices.is_empty() {
+        flattened
+            .vertices
+            .push(<GpuVertex as bytemuck::Zeroable>::zeroed());
+    }
+    flattened.indices = vec![0; 3];
+}
+
 /// Sideways distance between two floating hilts.
 const FLOAT_SPACING: f32 = 17.0;
 /// Height of a floating hilt's blade root above the focus point. Hilts
@@ -504,4 +571,80 @@ pub(super) fn hand_attachments_at(
     matrices: &[[[f32; 4]; 3]],
 ) -> [Option<Attachment>; 2] {
     [HAND_BOLT, LEFT_HAND_BOLT].map(|bolt| saber::attachment_from_matrices(preview, matrices, bolt))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_hilt_uploads_no_empty_buffer_and_draws_nothing() {
+        let mut flattened = FlattenedScene::default();
+        let mut draws = Vec::new();
+        pad_empty_mesh(&mut flattened, &mut draws);
+        assert_eq!(flattened.vertices.len(), 1);
+        assert_eq!(flattened.indices, [0; 3]);
+        assert!(draws.is_empty());
+
+        // A surface with vertices but no triangles draws nothing either.
+        let mut flattened = FlattenedScene::default();
+        flattened
+            .vertices
+            .push(<GpuVertex as bytemuck::Zeroable>::zeroed());
+        let mut draws = vec![ActorDraw {
+            indices: 0..0,
+            material: 0,
+        }];
+        pad_empty_mesh(&mut flattened, &mut draws);
+        assert_eq!(flattened.vertices.len(), 1);
+        assert_eq!(flattened.indices, [0; 3]);
+        assert!(draws.is_empty());
+    }
+
+    #[test]
+    fn a_hilt_with_a_mesh_is_left_as_it_is() {
+        let mut flattened = FlattenedScene::default();
+        flattened
+            .vertices
+            .extend([<GpuVertex as bytemuck::Zeroable>::zeroed(); 3]);
+        flattened.indices = vec![0, 1, 2];
+        let mut draws = vec![ActorDraw {
+            indices: 0..3,
+            material: 0,
+        }];
+        pad_empty_mesh(&mut flattened, &mut draws);
+        assert_eq!(flattened.vertices.len(), 3);
+        assert_eq!(draws.len(), 1);
+    }
+
+    /// The stage's hilt buffers and geometry binding, as `build_stage_saber` makes them.
+    fn bind_hilt(device: &wgpu::Device, flattened: &FlattenedScene) -> wgpu::BindGroup {
+        let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("hilt test vertices"),
+            contents: bytemuck::cast_slice(&flattened.vertices),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
+        });
+        let quads = crate::shared_geometry::quads::upload(
+            device,
+            flattened.vertices.len(),
+            &flattened.indices,
+            0,
+        );
+        crate::shared_geometry::quads::bind(device, &vertices, &quads)
+    }
+
+    #[test]
+    #[ignore = "requires an available GPU; uses no installed game assets"]
+    fn an_empty_hilt_binds_without_a_wgpu_error_once_padded() {
+        let gpu = pollster::block_on(crate::gpu_context::Context::new(None, None)).unwrap();
+        let device = &gpu.device;
+        let empty = FlattenedScene::default();
+        assert!(
+            crate::gpu_guard::capture(device, || bind_hilt(device, &empty)).is_err(),
+            "an empty hilt's zero-sized storage binding is what closed the game (#214)"
+        );
+        let mut padded = FlattenedScene::default();
+        pad_empty_mesh(&mut padded, &mut Vec::new());
+        assert!(crate::gpu_guard::capture(device, || bind_hilt(device, &padded)).is_ok());
+    }
 }

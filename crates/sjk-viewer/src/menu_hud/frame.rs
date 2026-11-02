@@ -135,6 +135,18 @@ pub(crate) struct Frame {
     pub(crate) picture_count: usize,
     pub(crate) texts: [TextRun; MAX_TEXTS],
     pub(crate) text_count: usize,
+    /// The pictures and text runs the status HUD's left block (health and armour) and
+    /// right block (Force, ammo and score) drew, which the player can move apart
+    /// ([`Self::place`]).
+    pub(crate) blocks: [Block; 2],
+}
+
+/// What one of the status HUD's blocks drew: a range of [`Frame::pictures`] and one
+/// of [`Frame::texts`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Block {
+    pub(crate) pictures: std::ops::Range<usize>,
+    pub(crate) texts: std::ops::Range<usize>,
 }
 
 impl Default for Frame {
@@ -152,6 +164,7 @@ impl Default for Frame {
                 ..TextRun::default()
             }),
             text_count: 0,
+            blocks: Default::default(),
         }
     }
 }
@@ -168,6 +181,34 @@ impl Frame {
     pub(crate) fn clear(&mut self) {
         self.picture_count = 0;
         self.text_count = 0;
+        self.blocks = Default::default();
+    }
+
+    /// Move block `block`'s pictures and text by `units` (640x480 units, right and
+    /// down).
+    pub(crate) fn place(&mut self, block: usize, units: [f32; 2]) {
+        if units == [0.0; 2] {
+            return;
+        }
+        let Some(Block { pictures, texts }) = self.blocks.get(block).cloned() else {
+            return;
+        };
+        for picture in &mut self.pictures[pictures] {
+            picture.rect[0] += units[0];
+            picture.rect[1] += units[1];
+        }
+        for run in &mut self.texts[texts] {
+            run.x += units[0];
+            run.y += units[1];
+        }
+    }
+
+    /// Record that the pictures and texts from `start` on are block `block`'s.
+    fn end_block(&mut self, block: usize, start: (usize, usize)) {
+        self.blocks[block] = Block {
+            pictures: start.0..self.picture_count,
+            texts: start.1..self.text_count,
+        };
     }
 
     fn picture(&mut self, piece: &Piece, color: [f32; 4]) {
@@ -375,6 +416,7 @@ impl Frame {
         score_label: &str,
     ) {
         if let Some(left) = &layout.left {
+            let start = (self.picture_count, self.text_count);
             for piece in &left.painted {
                 self.picture(piece, piece.color);
             }
@@ -383,8 +425,10 @@ impl Frame {
             }
             self.armor(layout, readout, timers, digits);
             self.health(layout, readout, digits);
+            self.end_block(0, start);
         }
         if let Some(right) = &layout.right {
+            let start = (self.picture_count, self.text_count);
             for piece in &right.painted {
                 self.picture(piece, piece.color);
             }
@@ -421,6 +465,7 @@ impl Frame {
             } else {
                 self.ammo(layout, readout, timers, digits);
             }
+            self.end_block(1, start);
         }
     }
 
@@ -777,6 +822,45 @@ menuDef { name righthud rect 640 368 -112 112
         assert_eq!(six.rect, [59.0 + 2.0 + 6.0, 466.0, 6.0, 12.0]);
         assert_eq!(frame.pictures[5].rect[0], 59.0 + 2.0 + 6.0 + 7.0);
         assert_eq!(six.color, [1.0, 0.0, 0.0, 1.0]);
+    }
+
+    /// The left and right blocks keep what each drew, and placing one moves only its
+    /// pictures and text (the HUD edit mode's `vitals` and `force`).
+    #[test]
+    fn placing_a_block_moves_only_its_pictures_and_text() {
+        let layout = layout();
+        let mut frame = Frame::default();
+        let mut timers = Timers::default();
+        frame.menu_hud(&layout, &readout(), &mut timers, DIGITS, "Score");
+        let [left, right] = frame.blocks.clone();
+        assert_eq!(left.pictures.start, 0);
+        assert!(!left.pictures.is_empty());
+        assert_eq!(right.pictures.start, left.pictures.end);
+        assert_eq!(right.pictures.end, frame.picture_count);
+        assert_eq!(right.texts.end, frame.text_count);
+        assert!(!right.texts.is_empty(), "the score line");
+        let before: Vec<_> = frame.pictures[..frame.picture_count].to_vec();
+        let score_before = (
+            frame.texts[right.texts.start].x,
+            frame.texts[right.texts.start].y,
+        );
+        frame.place(1, [-10.0, 5.0]);
+        for (index, (old, new)) in before.iter().zip(&frame.pictures).enumerate() {
+            let shift = if right.pictures.contains(&index) {
+                [-10.0, 5.0]
+            } else {
+                [0.0; 2]
+            };
+            assert_eq!(new.rect[0], old.rect[0] + shift[0], "{index}");
+            assert_eq!(new.rect[1], old.rect[1] + shift[1], "{index}");
+        }
+        let score = &frame.texts[right.texts.start];
+        assert_eq!(
+            (score.x, score.y),
+            (score_before.0 - 10.0, score_before.1 + 5.0)
+        );
+        frame.clear();
+        assert_eq!(frame.blocks, <[Block; 2]>::default());
     }
 
     #[test]

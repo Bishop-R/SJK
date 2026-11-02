@@ -89,6 +89,9 @@ const LOOK_EVERY: Duration = Duration::from_secs(1);
 /// How long a look waits after the hub said too many (429: `look_quota`, or the
 /// address's `rate_limited`), refused the signature (401) or failed.
 const LOOK_AGAIN: Duration = Duration::from_secs(10);
+/// How long a look waits after the hub said the key's looks came too fast (429
+/// `look_quota`): the hub counts whole seconds, so a second more is enough.
+const LOOK_QUOTA_AGAIN: Duration = Duration::from_secs(1);
 /// The hub's answer to a map edits publication: the map, the checksum and the new
 /// revision, or why it was refused.
 pub type MapEditsPublished = Result<(String, i32, u64), String>;
@@ -97,6 +100,43 @@ pub type MapEditsPublished = Result<(String, i32, u64), String>;
 const MAP_EDITS_EVERY: Duration = Duration::from_secs(600);
 /// How often the hub's mystery boxes are read while registered.
 const MYSTERY_BOXES_EVERY: Duration = Duration::from_secs(600);
+/// How often the Toy Master's toys are read while registered.
+const SECRETS_EVERY: Duration = Duration::from_secs(600);
+
+/// What a request about the Toy Master's toys did ([`Snapshot::secret`]).
+#[derive(Clone, Debug, PartialEq)]
+pub enum SecretDone {
+    /// The player's presses on toy `id` were counted: whether they started its show,
+    /// whether it played one on this map load already, and whether they found it.
+    Used {
+        /// The toy.
+        id: i64,
+        /// The presses started its show.
+        show: bool,
+        /// It played its show on this map load (now or before).
+        done: bool,
+        /// The player found it with these presses (its achievement unlocked).
+        found: bool,
+    },
+    /// The player took drop `drop` of toy `id`'s show: what it gave (`credits`,
+    /// `shards` or `holocron`), how many, and a holocron's tier.
+    Took {
+        /// The toy.
+        id: i64,
+        /// The drop.
+        drop: u32,
+        /// What it gave.
+        kind: String,
+        /// How many credits or shards.
+        amount: i64,
+        /// A holocron's tier.
+        tier: Option<String>,
+    },
+    /// SJK's creator hid a toy: its id.
+    Placed(i64),
+    /// SJK's creator took toy `id` away.
+    Removed(i64),
+}
 
 /// What a mystery box request did ([`Snapshot::mystery_box`]).
 #[derive(Clone, Debug, PartialEq)]
@@ -246,6 +286,10 @@ pub struct Snapshot {
     /// Counts the map edit documents written or removed in the folder given to
     /// [`Service::keep_map_edits`], so the viewer reads the loaded map's again.
     pub map_edits_revision: u64,
+    /// What the last look at the hub's map edits did: its summary
+    /// ([`crate::map_edits::Refresh::summary`]), or why it fell short, for the log and the
+    /// editor. Map edits are cosmetic: a failure shows here, never in [`Snapshot::status`].
+    pub map_edits_note: Option<Result<String, String>>,
     /// The hub's answer to the last [`Service::publish_map_edits`], by serial: the map,
     /// the checksum and the new revision, or why it was refused.
     pub map_edits_published: Option<(u64, MapEditsPublished)>,
@@ -259,6 +303,13 @@ pub struct Snapshot {
     /// The box hunt as last read, by serial, for the server named
     /// ([`Service::read_box_hunt`]).
     pub box_hunt: Option<(u64, String, crate::mystery_box::HuntState)>,
+    /// The Toy Master's toys, once read ([`Service::use_secret`]).
+    pub secrets: Option<crate::toy_master::Secrets>,
+    /// Counts the times [`Snapshot::secrets`] changed.
+    pub secrets_revision: u64,
+    /// The answer to the last request about the Toy Master's toys, by serial, or why it
+    /// was refused (in the player's words).
+    pub secret: Option<(u64, Result<SecretDone, String>)>,
     /// Counts crash reports the hub took ([`Service::send_crashes`]).
     pub crashes_sent: u64,
     /// What the last round of crash reports did, for the log, once a round sent,
@@ -311,6 +362,10 @@ pub struct Snapshot {
     /// The player's trades with other players, as the hub last listed them
     /// ([`Service::trade_with`], 22/10/2026); `None` before the first read.
     pub trades: Option<TradesState>,
+    /// The player's inventory history as read so far ([`Service::read_history`],
+    /// 31/10/2026), shared so a copy of the snapshot costs nothing more; `None` before
+    /// the first read.
+    pub history: Option<Arc<crate::history::HistoryState>>,
     /// The SJK team's announcements as the hub last listed them and the feed relayed
     /// since, newest first (`GET /v1/announcements`, 25/10/2026): read at the
     /// registration and every 30 minutes. Empty before, or from a hub without them.
@@ -325,8 +380,11 @@ pub struct Snapshot {
     pub rewards_revision: u64,
     /// What became of the last claim ([`Service::claim_reward`]).
     pub claim: Option<ClaimOutcome>,
-    /// What became of the creator's last announcement ([`Service::announce`]).
+    /// What became of the SJK team's last announcement ([`Service::announce`]).
     pub announce: Option<ReportOutcome>,
+    /// What became of the last news picture uploaded ([`Service::upload_news_image`]):
+    /// its serial, and the picture or why it was refused.
+    pub news_image: Option<(u64, Result<crate::news::NewsImage, String>)>,
 }
 
 /// The player's trades with other players, as last read (`crate::trades`).
@@ -606,11 +664,15 @@ impl Snapshot {
             packs_revision: 0,
             assets_note: None,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             crashes_sent: 0,
             crash_note: None,
             holocrons: None,
@@ -628,12 +690,14 @@ impl Snapshot {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
         }
     }
 
@@ -702,6 +766,11 @@ enum Command {
     NoteImage(u64, Vec<u8>),
     /// An SJK chat message.
     Chat(String),
+    React {
+        message: u64,
+        emoji: String,
+        active: bool,
+    },
     /// Ban the player of this key from the SJK chat for 24 hours.
     ChatBan(String),
     /// An emote, for the slot the player claims, in step with another slot's or not.
@@ -716,14 +785,20 @@ enum Command {
     SetAvatar(Vec<u8>),
     /// Take the picture down.
     RemoveAvatar,
-    /// The look the player wears.
+    /// The look the player wears (the tests' way; [`Service::set_look`] leaves it in
+    /// [`Worker::latest_look`]).
+    #[cfg_attr(not(test), allow(dead_code))]
     Look(Look),
+    /// A new look waits in [`Worker::latest_look`] (what [`Service::set_look`] sends).
+    LookWaiting,
     /// The feed relayed a look event of the player's own key: its id and blade skin.
     OwnLook(u64, String),
     /// The folder to keep the hub's asset packs in.
     AssetsDir(PathBuf),
     /// The folder map edits are kept in ([`crate::map_edits`]).
     MapEditsDir(PathBuf),
+    /// Look at the hub's map edits now.
+    RefreshMapEdits,
     /// Open mystery box `id` on `server`.
     OpenMysteryBox {
         id: i64,
@@ -733,12 +808,35 @@ enum Command {
     PlaceMysteryBox(crate::mystery_box::MysteryBox),
     /// SJK's creator: remove mystery box `id`.
     RemoveMysteryBox(i64),
-    /// Read the box hunt on `server`.
-    BoxHunt(String),
+    /// Read the box hunt on `server`, the player away or not.
+    BoxHunt {
+        server: String,
+        away: bool,
+    },
+    /// The player pressed Use `presses` times on the Toy Master's toy `id` on `server`,
+    /// in map load `round`.
+    UseSecret {
+        id: i64,
+        server: String,
+        round: i32,
+        presses: u32,
+    },
+    /// The player takes drop `drop` of toy `id`'s show on `server`, in map load `round`.
+    TakeSecretDrop {
+        id: i64,
+        server: String,
+        round: i32,
+        drop: u32,
+    },
+    /// SJK's creator: hide a toy.
+    PlaceSecret(crate::toy_master::Placing),
+    /// SJK's creator: take toy `id` away.
+    RemoveSecret(i64),
     /// The player, the box hunt's mark on `server`, was killed by slot `by`.
     BoxHuntKilled {
         server: String,
         by: u8,
+        away: bool,
     },
     /// Staff: publish a map's edits.
     PublishMapEdits {
@@ -778,6 +876,8 @@ enum Command {
     BuyHolocron(String),
     /// Read the player's trades again (the feed told of a change, or the viewer asks).
     ReadTrades,
+    /// Read the player's history: the newest page, or the one before this time.
+    ReadHistory(Option<i64>),
     /// Ask the player with this hub id to trade.
     TradeAsk(String),
     /// Take a step in this trade.
@@ -788,8 +888,10 @@ enum Command {
     RefreshRewards,
     /// Claim this reward.
     ClaimReward(u64),
-    /// The creator's announcement.
+    /// The SJK team's announcement.
     Announce(AnnounceRequest),
+    /// A news picture for an announcement: its bytes and type.
+    UploadNewsImage(Vec<u8>, &'static str),
     Stop,
 }
 
@@ -859,6 +961,12 @@ struct Worker {
     ping_outcome: Arc<Mutex<Option<ReportOutcome>>>,
     /// The look the viewer last gave.
     look: Look,
+    /// The newest look [`Service::set_look`] gave, not yet taken: the worker reads it
+    /// between its other hub calls too, so a slow one does not hold a toy back for a
+    /// whole round (the cardboard box's slow sync, 31/10/2026).
+    latest_look: Arc<Mutex<Option<Look>>>,
+    /// Since when the look waits to reach the hub (logged with its outcome).
+    look_since: Option<Instant>,
     /// The claim (server, slot and name) the hub accepted last, while it holds it: a
     /// look lives on it.
     look_claim: Option<(String, u8, String)>,
@@ -899,6 +1007,9 @@ struct Worker {
     due_mystery_boxes: Instant,
     mystery_box_serial: u64,
     box_hunt_serial: u64,
+    /// When the Toy Master's toys are next read, and the last request's serial.
+    due_secrets: Instant,
+    secret_serial: u64,
     /// The folder crash reports wait in; without one none is sent.
     crash_dir: Option<PathBuf>,
     /// When the crash folder is next looked at.
@@ -1177,6 +1288,8 @@ impl Worker {
             chat: Arc::default(),
             ping_outcome: Arc::default(),
             look: Look::default(),
+            latest_look: Arc::default(),
+            look_since: None,
             look_claim: None,
             look_held: Held::Unknown,
             due_look: now,
@@ -1195,6 +1308,8 @@ impl Worker {
             due_mystery_boxes: now,
             mystery_box_serial: 0,
             box_hunt_serial: 0,
+            due_secrets: now,
+            secret_serial: 0,
             crash_dir: None,
             due_crashes: now,
             due_assets: now,
@@ -1335,6 +1450,22 @@ impl Worker {
     /// Send an SJK chat message under the rules, once registered. A key the hub neither
     /// verifies nor made staff sends no links (GIFs are links) and one message every
     /// [`UNVERIFIED_CHAT_GAP`]: both are refused here, before the hub refuses them too.
+    fn send_reaction(&mut self, message: u64, emoji: &str, active: bool) {
+        let outcome = if !crate::reactions::valid(emoji) {
+            Err(HubError::Protocol("Unknown chat reaction".into()))
+        } else {
+            match (self.hub.as_mut(), self.registered) {
+                (Some(hub), true) => hub
+                    .react(&self.identity, message, emoji, active)
+                    .map(|_| String::new()),
+                _ => Err(self.not_connected()),
+            }
+        };
+        let mut chat = lock_chat(&self.chat);
+        let serial = chat.reaction.as_ref().map_or(1, |last| last.serial + 1);
+        chat.reaction = Some(outcome_of(serial, outcome));
+    }
+
     fn send_chat(&mut self, text: &str, now: Instant) {
         let vouched = lock(&self.snapshot)
             .me
@@ -1582,6 +1713,11 @@ impl Worker {
                 }
             }
             Command::Chat(text) => self.send_chat(&text, now),
+            Command::React {
+                message,
+                emoji,
+                active,
+            } => self.send_reaction(message, &emoji, active),
             Command::ChatBan(key_id) => self.send_chat_ban(key_id),
             Command::Emote(emote, sync, quiet) => self.send_emote(&emote, sync, quiet),
             Command::Ping(pos, scope) => self.send_ping(pos, &scope),
@@ -1589,7 +1725,8 @@ impl Worker {
             Command::SetChat(on) => self.chat_on = on,
             Command::SetAvatar(png) => self.change_avatar(Some(&png)),
             Command::RemoveAvatar => self.change_avatar(None),
-            Command::Look(look) => self.look = look,
+            Command::Look(look) => self.wear(look, now),
+            Command::LookWaiting => self.take_latest_look(now),
             Command::OwnLook(id, saber) => self.own_look_seen(id, &saber, now),
             Command::AssetsDir(dir) => {
                 if self.assets_dir.as_ref() != Some(&dir) {
@@ -1604,6 +1741,7 @@ impl Worker {
                     self.due_map_edits = now;
                 }
             }
+            Command::RefreshMapEdits => self.due_map_edits = now,
             Command::PublishMapEdits {
                 map,
                 checksum,
@@ -1617,11 +1755,56 @@ impl Worker {
                 hub.place_mystery_box(identity, &placed)
                     .map(|id| (BoxDone::Placed(id), None))
             }),
-            Command::BoxHunt(server) => self.box_hunt(&server, None),
-            Command::BoxHuntKilled { server, by } => self.box_hunt(&server, Some(by)),
+            Command::BoxHunt { server, away } => self.box_hunt(&server, None, away),
+            Command::BoxHuntKilled { server, by, away } => {
+                self.box_hunt(&server, Some(by), away);
+            }
             Command::RemoveMysteryBox(id) => self.mystery_box(now, |hub, identity| {
                 hub.remove_mystery_box(identity, id)
                     .map(|_| (BoxDone::Removed(id), None))
+            }),
+            Command::UseSecret {
+                id,
+                server,
+                round,
+                presses,
+            } => self.secret(now, |hub, identity| {
+                hub.use_secret(identity, id, &server, round, presses)
+                    .map(|used| {
+                        let done = SecretDone::Used {
+                            id,
+                            show: used.show,
+                            done: used.done,
+                            found: used.profile.is_some(),
+                        };
+                        (done, used.profile)
+                    })
+            }),
+            Command::TakeSecretDrop {
+                id,
+                server,
+                round,
+                drop,
+            } => self.secret(now, |hub, identity| {
+                hub.take_secret_drop(identity, id, &server, round, drop)
+                    .map(|took| {
+                        let done = SecretDone::Took {
+                            id,
+                            drop,
+                            kind: took.kind,
+                            amount: took.amount,
+                            tier: took.tier,
+                        };
+                        (done, took.profile)
+                    })
+            }),
+            Command::PlaceSecret(placing) => self.secret(now, |hub, identity| {
+                hub.place_secret(identity, &placing)
+                    .map(|id| (SecretDone::Placed(id), None))
+            }),
+            Command::RemoveSecret(id) => self.secret(now, |hub, identity| {
+                hub.remove_secret(identity, id)
+                    .map(|_| (SecretDone::Removed(id), None))
             }),
             Command::Crashes(dir) => {
                 if self.crash_dir != dir {
@@ -1644,6 +1827,7 @@ impl Worker {
             Command::Buy(id) => self.trade(Trade::Buy, &id),
             Command::BuyHolocron(tier) => self.trade(Trade::Holocron, &tier),
             Command::ReadTrades => self.due_trades = now,
+            Command::ReadHistory(before) => self.read_history(before),
             Command::TradeAsk(to) => self.trade_with(None, Some(&to), now),
             Command::TradeStep(id, step) => self.trade_with(Some((id, step)), None, now),
             Command::News(crate::feed::FeedNews::Announcements(list)) => {
@@ -1654,6 +1838,7 @@ impl Worker {
             }
             Command::ClaimReward(id) => self.claim_reward(id, now),
             Command::Announce(request) => self.announce(&request),
+            Command::UploadNewsImage(bytes, mime) => self.upload_news_image(&bytes, mime),
             Command::Stop => self.release(),
         }
         self.publish_feed();
@@ -1686,6 +1871,14 @@ impl Worker {
             }
             if snapshot.rewards.take().is_some() {
                 snapshot.rewards_revision += 1;
+            }
+            // Another key's or hub's history; its count goes on, for the readers waiting.
+            if let Some(history) = snapshot.history.as_mut() {
+                let serial = history.serial;
+                *history = Arc::new(crate::history::HistoryState {
+                    serial,
+                    ..Default::default()
+                });
             }
         });
         if settings.enabled && !settings.hub_url.trim().is_empty() {
@@ -1997,6 +2190,19 @@ impl Worker {
                 self.holocrons_soon(now);
             }
         }
+    }
+
+    /// Read a page of the history (the newest, or the one before `before`) into
+    /// [`Snapshot::history`], or why it could not be read.
+    fn read_history(&mut self, before: Option<i64>) {
+        let answer = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => hub.history(&self.identity, before),
+            _ => Err(self.not_connected()),
+        };
+        self.update(|snapshot| {
+            Arc::make_mut(snapshot.history.get_or_insert_with(Default::default))
+                .take(before, answer);
+        });
     }
 
     /// Read the shop's day: it goes in [`Snapshot::shop`], or why not.
@@ -2334,14 +2540,22 @@ impl Worker {
         }
         self.run_due(now);
         self.keep_holocrons(now);
+        self.look_between(now);
         self.keep_trades(now);
+        self.look_between(now);
         self.keep_log_requests(now);
+        self.look_between(now);
         self.keep_announcements(now);
         self.keep_rewards(now);
+        self.look_between(now);
         self.keep_assets(now);
+        self.look_between(now);
         self.keep_map_edits(now);
         self.keep_mystery_boxes(now);
+        self.look_between(now);
+        self.keep_secrets(now);
         self.send_crashes(now);
+        self.look_between(now);
         let mut wait = IDLE_MAX;
         if self.location.is_some() {
             wait = wait
@@ -2370,11 +2584,12 @@ impl Worker {
         if self.assets_dir.is_some() {
             wait = wait.min(self.due_assets.saturating_duration_since(now));
         }
-        if self.map_edits_dir.is_some() {
+        if self.map_edits_dir.is_some() && self.registered {
             wait = wait.min(self.due_map_edits.saturating_duration_since(now));
         }
         if self.registered {
             wait = wait.min(self.due_mystery_boxes.saturating_duration_since(now));
+            wait = wait.min(self.due_secrets.saturating_duration_since(now));
         }
         if self.crash_dir.is_some() {
             wait = wait.min(self.due_crashes.saturating_duration_since(now));
@@ -2499,6 +2714,32 @@ impl Worker {
         self.update(|snapshot| {
             let serial = snapshot.announce.as_ref().map_or(1, |last| last.serial + 1);
             snapshot.announce = Some(outcome_of(serial, outcome.map_err(announce_refusal)));
+        });
+    }
+
+    fn upload_news_image(&mut self, bytes: &[u8], mime: &str) {
+        let outcome = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => {
+                hub.upload_news_image(&self.identity, bytes, mime)
+                    .map_err(|error| match error {
+                        HubError::Rejected { code, message, .. } => match code.as_str() {
+                            "not_staff" | "not_registered" => {
+                                "Only the SJK team can upload news pictures".to_owned()
+                            }
+                            "image_quota" => {
+                                "Thirty pictures an hour at most: wait a while".to_owned()
+                            }
+                            _ if message.is_empty() => format!("the hub refused it ({code})"),
+                            _ => message,
+                        },
+                        other => other.to_string(),
+                    })
+            }
+            _ => Err(self.not_connected().to_string()),
+        };
+        self.update(|snapshot| {
+            let serial = snapshot.news_image.as_ref().map_or(1, |(last, _)| last + 1);
+            snapshot.news_image = Some((serial, outcome));
         });
     }
 
@@ -2715,10 +2956,15 @@ impl Worker {
         });
     }
 
-    /// Bring the map edits' folder up to the hub's list if a folder was given and it is
-    /// time: next time [`MAP_EDITS_EVERY`] later. Cosmetic: the status stays.
+    /// Bring the map edits' folder up to the hub's list once registered, if a folder was
+    /// given and it is time: next time [`MAP_EDITS_EVERY`] later. Cosmetic: the status
+    /// stays; what it did goes in [`Snapshot::map_edits_note`].
     fn keep_map_edits(&mut self, now: Instant) {
-        let (Some(dir), Some(hub)) = (self.map_edits_dir.as_ref(), self.hub.as_mut()) else {
+        let (Some(dir), Some(hub), true) = (
+            self.map_edits_dir.as_ref(),
+            self.hub.as_mut(),
+            self.registered,
+        ) else {
             return;
         };
         if now < self.due_map_edits {
@@ -2726,9 +2972,14 @@ impl Worker {
         }
         self.due_map_edits = now + MAP_EDITS_EVERY;
         let refresh = crate::map_edits::refresh(hub.as_mut(), &self.identity, dir);
-        if refresh.changed > 0 {
-            self.update(|snapshot| snapshot.map_edits_revision += refresh.changed as u64);
-        }
+        let note = match &refresh.problem {
+            Some(problem) => Err(problem.clone()),
+            None => Ok(refresh.summary()),
+        };
+        self.update(|snapshot| {
+            snapshot.map_edits_revision += refresh.changed as u64;
+            snapshot.map_edits_note = Some(note);
+        });
     }
 
     /// Read the hub's mystery boxes once registered, if it is time: next time
@@ -2790,17 +3041,76 @@ impl Worker {
         });
     }
 
+    /// Read the Toy Master's toys once registered, if it is time: next time
+    /// [`SECRETS_EVERY`] later. Cosmetic: a failure keeps the last list.
+    fn keep_secrets(&mut self, now: Instant) {
+        if !self.registered || now < self.due_secrets {
+            return;
+        }
+        let Some(hub) = self.hub.as_mut() else {
+            return;
+        };
+        self.due_secrets = now + SECRETS_EVERY;
+        if let Ok(secrets) = hub.secrets(&self.identity) {
+            self.update(|snapshot| {
+                if snapshot.secrets.as_ref() != Some(&secrets) {
+                    snapshot.secrets = Some(secrets);
+                    snapshot.secrets_revision += 1;
+                }
+            });
+        }
+    }
+
+    /// Send a request about the Toy Master's toys: its outcome goes in
+    /// [`Snapshot::secret`], the profile after a find in [`Snapshot::me`]. The toys are
+    /// read again at once after a placing or a removal, and after a toy that is gone.
+    fn secret(
+        &mut self,
+        now: Instant,
+        request: impl FnOnce(&mut dyn Hub, &Identity) -> Result<(SecretDone, Option<Profile>), HubError>,
+    ) {
+        self.secret_serial += 1;
+        let serial = self.secret_serial;
+        let outcome = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => request(hub.as_mut(), &self.identity),
+            _ => Err(self.not_connected()),
+        };
+        let reread = match &outcome {
+            Ok((SecretDone::Placed(_) | SecretDone::Removed(_), _)) => true,
+            Err(HubError::Rejected { code, .. }) => code == "no_such_secret",
+            _ => false,
+        };
+        if reread {
+            self.due_secrets = now;
+        }
+        self.update(|snapshot| {
+            let outcome = match outcome {
+                Ok((done, profile)) => {
+                    if let Some(profile) = profile {
+                        snapshot.set_me(profile);
+                    }
+                    Ok(done)
+                }
+                Err(error) => Err(crate::toy_master::refusal(&error)),
+            };
+            snapshot.secret = Some((serial, outcome));
+        });
+    }
+
     /// Read the box hunt on `server` into [`Snapshot::box_hunt`], first saying the
-    /// player (the mark) was killed by slot `killed_by` when given. A failed read leaves
-    /// the last one.
-    fn box_hunt(&mut self, server: &str, killed_by: Option<u8>) {
+    /// player (the mark) was killed by slot `killed_by` when given (tried twice: a kill
+    /// lost is a hunter's free roll lost), and whether the player is `away`. A failed
+    /// read leaves the last one.
+    fn box_hunt(&mut self, server: &str, killed_by: Option<u8>, away: bool) {
         let (Some(hub), true) = (self.hub.as_mut(), self.registered) else {
             return;
         };
-        if let Some(by) = killed_by {
+        if let Some(by) = killed_by
+            && hub.box_hunt_killed(&self.identity, server, by).is_err()
+        {
             let _ = hub.box_hunt_killed(&self.identity, server, by);
         }
-        let Ok(state) = hub.box_hunt(&self.identity, server) else {
+        let Ok(state) = hub.box_hunt(&self.identity, server, away) else {
             return;
         };
         self.box_hunt_serial += 1;
@@ -2814,11 +3124,11 @@ impl Worker {
         self.map_edits_serial += 1;
         let serial = self.map_edits_serial;
         let outcome = match self.hub.as_mut() {
-            None => Err("not connected to the hub".to_owned()),
+            None => Err("Not connected to the SJK hub.".to_owned()),
             Some(hub) => hub
                 .publish_map_edits(&self.identity, map, checksum, edits)
                 .map(|revision| (map.to_owned(), checksum, revision))
-                .map_err(|error| error.to_string()),
+                .map_err(|error| crate::map_edits::refusal(&error)),
         };
         if outcome.is_ok() {
             self.due_map_edits = now;
@@ -2924,7 +3234,15 @@ impl Worker {
         let (Some((server, _, _)), Some(hub)) = (self.look_claim.clone(), self.hub.as_mut()) else {
             return;
         };
+        let started = Instant::now();
         let outcome = hub.look(&self.identity, &server, &look);
+        // The next look leaves a second after this one's answer, not its start: it then
+        // reaches the hub more than a second after this one, in another of the whole
+        // seconds the hub counts (a `look_quota` refusal otherwise).
+        // In whole milliseconds, which keeps the worker's timing exact under test.
+        let took =
+            Duration::from_millis(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX));
+        let now = now + took;
         self.due_look = now + LOOK_EVERY;
         match &outcome {
             Ok(id) => {
@@ -3010,10 +3328,18 @@ impl Worker {
                 self.look_sounds_unsupported = true;
                 self.due_look = now;
             }
-            // The claim lapsed at the hub: the next accepted claim sends the look again.
+            // The claim lapsed at the hub: the next accepted claim sends the look again,
+            // and it is asked for at once rather than at the next renewal.
             Err(HubError::Rejected { code, .. }) if code == "not_on_server" => {
                 self.look_claim = None;
                 self.look_held = Held::none();
+                self.due_claim = now;
+            }
+            // The key's looks came too fast: the hub counts whole seconds.
+            Err(HubError::Rejected {
+                status: 429, code, ..
+            }) if code == "look_quota" => {
+                self.due_look = now + LOOK_QUOTA_AGAIN;
             }
             // Too many: the key's look quota, or the address's allowance (429
             // `rate_limited`) shared with the chat and emotes. A signature refused
@@ -3030,13 +3356,57 @@ impl Worker {
             }
             Err(_) => self.due_look = now + LOOK_AGAIN,
         }
+        let waited = self
+            .look_since
+            .map_or(Duration::ZERO, |since| now.saturating_duration_since(since));
+        if outcome.is_ok() && !self.look_waiting() {
+            self.look_since = None;
+        }
+        let note = format!(
+            "{} ms after the change, the hub answered in {} ms",
+            waited.as_millis(),
+            took.as_millis()
+        );
         self.update(|snapshot| {
             let serial = snapshot
                 .look_outcome
                 .as_ref()
                 .map_or(1, |last| last.serial + 1);
-            snapshot.look_outcome = Some(outcome_of(serial, outcome.map(|_| String::new())));
+            let mut reported = outcome_of(serial, outcome.map(|_| String::new()));
+            reported.message = if reported.sent {
+                note
+            } else {
+                format!("{} ({note})", reported.message)
+            };
+            snapshot.look_outcome = Some(reported);
         });
+    }
+
+    /// Wear `look` from now on, noting when it starts waiting for the hub.
+    fn wear(&mut self, look: Look, now: Instant) {
+        if look != self.look && self.look_since.is_none() {
+            self.look_since = Some(now);
+        }
+        self.look = look;
+    }
+
+    /// Take the newest look [`Service::set_look`] left, if any.
+    fn take_latest_look(&mut self, now: Instant) {
+        let latest = self
+            .latest_look
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(look) = latest {
+            self.wear(look, now);
+        }
+    }
+
+    /// Between two of a round's other hub calls: a look given meanwhile goes now if it
+    /// may, rather than after the rest of the round.
+    fn look_between(&mut self, now: Instant) {
+        self.take_latest_look(now);
+        self.send_look(now);
     }
 
     /// Whether the hub should hear the achievement counts at `now`: they changed since
@@ -3335,7 +3705,7 @@ fn announce_refusal(error: HubError) -> HubError {
             status,
             message: match code.as_str() {
                 "creator_only" | "not_staff" | "staff" | "not_registered" => {
-                    "Only SJK's creator can announce".to_owned()
+                    "Only the SJK team can announce".to_owned()
                 }
                 "announce_quota" => "Ten announcements an hour at most: wait a while".to_owned(),
                 _ => format!("the hub refused it ({code})"),
@@ -3370,6 +3740,8 @@ fn set_achievements(snapshot: &mut Snapshot, achievements: Vec<Achievement>) {
 /// The running service: commands go in, a [`Snapshot`] comes out.
 pub struct Service {
     commands: Sender<Command>,
+    /// The worker's [`Worker::latest_look`].
+    latest_look: Arc<Mutex<Option<Look>>>,
     snapshot: Arc<Mutex<Snapshot>>,
     staff: Arc<Mutex<StaffState>>,
     chat: Arc<Mutex<ChatState>>,
@@ -3437,6 +3809,7 @@ impl Service {
             Instant::now(),
         );
         let chat = Arc::clone(&worker.chat);
+        let latest_look = Arc::clone(&worker.latest_look);
         let ping_outcome = Arc::clone(&worker.ping_outcome);
         let feed = Arc::clone(&worker.feed);
         let own_drops = commands.clone();
@@ -3546,6 +3919,7 @@ impl Service {
         }
         Self {
             commands,
+            latest_look,
             snapshot,
             staff,
             chat,
@@ -3586,6 +3960,12 @@ impl Service {
         let _ = self.commands.send(Command::MapEditsDir(directory));
     }
 
+    /// Look at the hub's map edits now rather than at the next 10 minutes (the editor
+    /// turned on), once registered.
+    pub fn refresh_map_edits(&self) {
+        let _ = self.commands.send(Command::RefreshMapEdits);
+    }
+
     /// Open mystery box `id`, which the player stands at on `server`: what came of it
     /// arrives in [`Snapshot::mystery_box`], the credits after in the profile.
     pub fn open_mystery_box(&self, id: i64, server: String) {
@@ -3603,15 +3983,53 @@ impl Service {
         let _ = self.commands.send(Command::RemoveMysteryBox(id));
     }
 
-    /// Read the box hunt on `server`: it arrives in [`Snapshot::box_hunt`].
-    pub fn read_box_hunt(&self, server: String) {
-        let _ = self.commands.send(Command::BoxHunt(server));
+    /// The player pressed Use `presses` times on the Toy Master's toy `id` on `server` in
+    /// map load `round` (the game's `sv_serverid`): what came of it arrives in
+    /// [`Snapshot::secret`], a find's profile in [`Snapshot::me`].
+    pub fn use_secret(&self, id: i64, server: String, round: i32, presses: u32) {
+        let _ = self.commands.send(Command::UseSecret {
+            id,
+            server,
+            round,
+            presses,
+        });
+    }
+
+    /// Take drop `drop` of toy `id`'s show on `server` in map load `round`: what it gave
+    /// arrives in [`Snapshot::secret`], the profile after in [`Snapshot::me`].
+    pub fn take_secret_drop(&self, id: i64, server: String, round: i32, drop: u32) {
+        let _ = self.commands.send(Command::TakeSecretDrop {
+            id,
+            server,
+            round,
+            drop,
+        });
+    }
+
+    /// SJK's creator: hide a toy; the answer arrives in [`Snapshot::secret`] and the list
+    /// is read again.
+    pub fn place_secret(&self, placing: crate::toy_master::Placing) {
+        let _ = self.commands.send(Command::PlaceSecret(placing));
+    }
+
+    /// SJK's creator: take the Toy Master's toy `id` away.
+    pub fn remove_secret(&self, id: i64) {
+        let _ = self.commands.send(Command::RemoveSecret(id));
+    }
+
+    /// Read the box hunt on `server`, saying whether the player is `away` (in the chat,
+    /// a menu, idle: the hub picks no mark among them): it arrives in
+    /// [`Snapshot::box_hunt`].
+    pub fn read_box_hunt(&self, server: String, away: bool) {
+        let _ = self.commands.send(Command::BoxHunt { server, away });
     }
 
     /// The player, the box hunt's mark on `server`, was killed by the player on slot
-    /// `by`; the hunt is read again after.
-    pub fn box_hunt_killed(&self, server: String, by: u8) {
-        let _ = self.commands.send(Command::BoxHuntKilled { server, by });
+    /// `by`; the hunt is read again after, the player `away` or not.
+    pub fn box_hunt_killed(&self, server: String, by: u8, away: bool) {
+        let _ = self
+            .commands
+            .send(Command::BoxHuntKilled { server, by, away });
     }
 
     /// Staff: publish `edits` for `map` and `checksum`; the answer lands in
@@ -3720,12 +4138,26 @@ impl Service {
         let _ = self.commands.send(Command::Announce(request));
     }
 
+    /// Upload a news picture (a PNG or JPEG, `mime`) for an announcement: the hub's id
+    /// and size, or why it refused, arrive in [`Snapshot::news_image`]. The hub refuses
+    /// anyone but the SJK team.
+    pub fn upload_news_image(&self, bytes: Vec<u8>, mime: &'static str) {
+        let _ = self.commands.send(Command::UploadNewsImage(bytes, mime));
+    }
+
     /// Put `announcements` (oldest first, read from the hub: made while the player was
     /// away) at the end of the SJK chat, each once ([`crate::feed::post_announcements`]).
     /// Returns the ids of those the chat now holds; empty while it cannot take them (the
     /// chat off, or its first answer still to come), so they wait for a later call.
     pub fn post_announcements(&self, announcements: &[Announcement]) -> Vec<u64> {
         crate::feed::post_announcements(&self.chat, announcements)
+    }
+
+    /// Read a page of the player's history into [`Snapshot::history`]: the newest
+    /// (`None`, which starts the list again), or the one before `before`
+    /// ([`crate::HistoryState::before`], added to the list).
+    pub fn read_history(&self, before: Option<i64>) {
+        let _ = self.commands.send(Command::ReadHistory(before));
     }
 
     /// Read the shop's offers of the day into [`Snapshot::shop`].
@@ -3923,6 +4355,16 @@ impl Service {
     }
 
     /// Send an SJK chat message; what became of it arrives in [`ChatState::outcome`].
+    /// Add or remove this identity's reaction; the authoritative feed updates counts.
+    pub fn react(&self, message: u64, emoji: String, active: bool) {
+        let _ = self.commands.send(Command::React {
+            message,
+            emoji,
+            active,
+        });
+    }
+
+    /// Send a checked SJK chat message through the identity worker.
     pub fn chat(&self, text: String) {
         let _ = self.commands.send(Command::Chat(text));
     }
@@ -4042,7 +4484,11 @@ impl Service {
     /// second; a blade skin the hub says the key does not hold is left out until the
     /// profile changes. What became of it arrives in [`Snapshot::look_outcome`].
     pub fn set_look(&self, look: Look) {
-        let _ = self.commands.send(Command::Look(look));
+        *self
+            .latest_look
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(look);
+        let _ = self.commands.send(Command::LookWaiting);
     }
 
     /// The looks the feed received since the last call, oldest first: those it read
@@ -4168,6 +4614,8 @@ mod tests {
                 .unwrap()
                 .iter()
                 .map(|id| Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: id.clone(),
                     granted: 1,
                     note: String::new(),
@@ -4212,6 +4660,7 @@ mod tests {
 
     fn profile(name: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: name.to_owned(),
@@ -4446,6 +4895,31 @@ mod tests {
                 profile,
             })
         }
+        fn history(
+            &mut self,
+            _: &Identity,
+            before: Option<i64>,
+        ) -> Result<crate::history::HistoryPage, HubError> {
+            self.record(format!("history {before:?}"))?;
+            let line = |at| {
+                crate::history::HistoryLine::Credits(crate::history::Ledger {
+                    at,
+                    ..Default::default()
+                })
+            };
+            Ok(match before {
+                None => crate::history::HistoryPage {
+                    lines: vec![line(30), line(20)],
+                    more: true,
+                    before: 20,
+                },
+                Some(_) => crate::history::HistoryPage {
+                    lines: vec![line(10)],
+                    more: false,
+                    before: 10,
+                },
+            })
+        }
         fn shop(&mut self, _: &Identity) -> Result<crate::wire::ShopDay, HubError> {
             self.record("shop".to_owned())?;
             Ok(crate::wire::ShopDay {
@@ -4611,6 +5085,7 @@ mod tests {
                 title: request.title.clone(),
                 text: request.text.clone(),
                 version: request.version.clone(),
+                images: std::collections::BTreeMap::new(),
             })
         }
         fn log_requests(&mut self, _: &Identity) -> Result<Vec<LogRequest>, HubError> {
@@ -4713,6 +5188,15 @@ mod tests {
         }
         fn chat(&mut self, _: &Identity, text: &str, name: &str) -> Result<u64, HubError> {
             Fake::record(self, format!("chat {text} as {name}")).map(|()| 12)
+        }
+        fn react(
+            &mut self,
+            _: &Identity,
+            message: u64,
+            emoji: &str,
+            active: bool,
+        ) -> Result<(), HubError> {
+            Fake::record(self, format!("react {message} {emoji} {active}"))
         }
         fn chat_ban(&mut self, _: &Identity, key_id: &str) -> Result<ChatBan, HubError> {
             Fake::record(self, format!("ban {key_id}")).map(|()| ChatBan {
@@ -4849,6 +5333,9 @@ mod tests {
                     goal: 100,
                     unlocked: i64::from(cap.map_or(count, |cap| count.min(cap)) >= 100),
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect();
             *self.held.lock().unwrap() = held.clone();
@@ -5689,6 +6176,39 @@ mod tests {
         assert!(!marks.locked("saber_void") && marks.locked("saber_frost"));
     }
 
+    /// The history (31/10/2026) waits for the registration, its pages follow on, and a
+    /// read of the newest starts the list again.
+    #[test]
+    fn the_history_is_read_page_by_page() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, snapshot) = worker(&fake, t0);
+        worker.handle(Command::ReadHistory(None), t0);
+        let first = lock(&snapshot).history.clone().unwrap();
+        assert_eq!(first.serial, 1);
+        assert!(first.message.contains("cl_identity 1"));
+        assert!(
+            fake.log().is_empty(),
+            "nothing goes before the registration"
+        );
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.tick(t0);
+        worker.handle(Command::ReadHistory(None), t0);
+        worker.handle(Command::ReadHistory(Some(20)), t0);
+        let read = lock(&snapshot).history.clone().unwrap();
+        assert_eq!((read.serial, read.lines.len(), read.more), (3, 3, false));
+        assert!(read.message.is_empty());
+        worker.handle(Command::ReadHistory(None), t0);
+        let again = lock(&snapshot).history.clone().unwrap();
+        assert_eq!((again.serial, again.lines.len(), again.more), (4, 2, true));
+        assert!(
+            fake.log()
+                .iter()
+                .filter(|line| line.starts_with("history"))
+                .eq(["history None", "history Some(20)", "history None"].iter())
+        );
+    }
+
     #[test]
     fn trades_wait_for_the_registration_and_the_shop_follows_them() {
         let fake = Fake::default();
@@ -5959,6 +6479,37 @@ mod tests {
         worker.handle(Command::Chat("again".into()), t0 + Duration::from_secs(30));
         assert!(chat_outcome(&worker).sent);
         assert_eq!(fake.log().last().unwrap(), "chat again as ^2Sol");
+    }
+
+    #[test]
+    fn reactions_use_the_worker_but_not_text_sending_or_its_outcome() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, _) = worker(&fake, t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.tick(t0);
+        worker.handle(
+            Command::React {
+                message: 7,
+                emoji: "heart".into(),
+                active: true,
+            },
+            t0,
+        );
+        assert_eq!(fake.log().last().unwrap(), "react 7 heart true");
+        assert!(lock_chat(&worker.chat).reaction.as_ref().unwrap().sent);
+        assert!(lock_chat(&worker.chat).outcome.is_none());
+        let before = fake.log().len();
+        worker.handle(
+            Command::React {
+                message: 7,
+                emoji: "invalid".into(),
+                active: true,
+            },
+            t0,
+        );
+        assert_eq!(fake.log().len(), before);
+        assert!(!lock_chat(&worker.chat).reaction.as_ref().unwrap().sent);
     }
 
     #[test]
@@ -6408,6 +6959,7 @@ mod tests {
             title: format!("News {id}"),
             text: "Text".to_owned(),
             version: String::new(),
+            images: std::collections::BTreeMap::new(),
         }
     }
 
@@ -6536,7 +7088,7 @@ mod tests {
         worker.handle(Command::Announce(request("refused")), t0);
         assert_eq!(
             lock(&snapshot).announce.clone().unwrap().message,
-            "Only SJK's creator can announce"
+            "Only the SJK team can announce"
         );
         worker.handle(Command::Announce(request("SJK 2026.1025.1")), t0);
         let sent = lock(&snapshot).clone();
@@ -6569,14 +7121,20 @@ mod tests {
         }
         let mut at = t0 + LOOK_EVERY;
         worker.handle(Command::Look(lit("")), at);
-        for (n, code) in ["rate_limited", "look_quota", "clock"].iter().enumerate() {
+        // The key's own quota counts whole seconds: a second more is enough.
+        let waits = [
+            ("rate_limited", LOOK_AGAIN),
+            ("look_quota", LOOK_QUOTA_AGAIN),
+            ("clock", LOOK_AGAIN),
+        ];
+        for (n, (code, wait)) in waits.into_iter().enumerate() {
             worker.tick(at);
             assert_eq!(fake.looks().len(), sent + n + 1, "{code}");
             assert!(!lock(&snapshot).look_outcome.clone().unwrap().sent);
             // Not again within the wait, then again.
-            worker.tick(at + LOOK_AGAIN - Duration::from_millis(1));
+            worker.tick(at + wait - Duration::from_millis(1));
             assert_eq!(fake.looks().len(), sent + n + 1, "{code}");
-            at += LOOK_AGAIN;
+            at += wait + Duration::from_millis(5);
         }
         worker.tick(at);
         assert_eq!(fake.looks().len(), sent + 4);
@@ -6590,6 +7148,48 @@ mod tests {
         worker.tick(at + LOOK_AGAIN);
         worker.tick(at + LOOK_AGAIN * 3);
         assert_eq!(fake.looks().len(), sent + 5);
+    }
+
+    /// A look [`Service::set_look`] leaves in the shared slot is taken between the
+    /// round's hub calls and goes at once; its outcome says how long it waited.
+    #[test]
+    fn a_look_left_in_the_slot_goes_at_the_next_tick_and_reports_its_wait() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, snapshot) = worker(&fake, t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.handle(Command::Enter(here(3, "Sol")), t0);
+        worker.tick(t0);
+        let sent = fake.looks().len();
+        *worker.latest_look.lock().unwrap() = Some(lit(""));
+        worker.handle(Command::LookWaiting, t0 + Duration::from_millis(300));
+        worker.tick(t0 + LOOK_EVERY);
+        assert_eq!(fake.looks().len(), sent + 1);
+        assert!(worker.latest_look.lock().unwrap().is_none());
+        let outcome = lock(&snapshot).look_outcome.clone().unwrap();
+        assert!(outcome.sent);
+        assert!(outcome.message.starts_with("70"), "{}", outcome.message);
+    }
+
+    /// A look refused because the claim lapsed at the hub asks for the claim again at
+    /// once, rather than at the next renewal 45 seconds later.
+    #[test]
+    fn a_lapsed_claim_is_asked_again_at_once() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, _snapshot) = worker(&fake, t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.handle(Command::Enter(here(3, "Sol")), t0);
+        worker.tick(t0);
+        fake.look_refusals
+            .lock()
+            .unwrap()
+            .push_back(refused(403, "not_on_server"));
+        let at = t0 + LOOK_EVERY;
+        worker.handle(Command::Look(lit("saber_sun")), at);
+        worker.tick(at);
+        assert!(worker.look_claim.is_none());
+        assert!(worker.due_claim <= at + Duration::from_millis(50));
     }
 
     /// A hub from before the sounds choice refuses `saber_sounds` as an unknown field:
@@ -6674,6 +7274,7 @@ mod tests {
     fn tagged(id: &str) -> Look {
         Look {
             tag: Some(crate::PlacedTag {
+                finish: None,
                 id: id.to_owned(),
                 map: "mp/ffa3".to_owned(),
                 at: [1.0, 2.0, 3.0],

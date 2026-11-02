@@ -58,6 +58,11 @@ impl Hilt {
     pub(crate) fn is_other_half(self, index: usize) -> bool {
         other_half(&self.blades, self.num_blades, index)
     }
+
+    /// Whether this hilt has another half ([`has_other_half`]): a staff's second blade.
+    pub(crate) fn has_other_half(self) -> bool {
+        has_other_half(&self.blades, self.num_blades)
+    }
 }
 
 /// Whether blade `index` of the first `used` of `blades` is a staff's other half: it points
@@ -404,6 +409,14 @@ mod lookup_tests {
         // One blade, or a blade past the ones in use.
         assert!(!has_other_half(&staff, 1));
         assert!(!other_half(&staff, 1, 1));
+        // The hilt says so too, for the player card.
+        let held = |blades, num_blades| Hilt {
+            blades,
+            num_blades,
+            ..hilt(0, sjk_client::LegacySaberColor::Random)
+        };
+        assert!(held(staff, 2).has_other_half());
+        assert!(!held(crossguard, 3).has_other_half());
     }
 
     fn hilt(mesh_index: usize, default_color: sjk_client::LegacySaberColor) -> Hilt {

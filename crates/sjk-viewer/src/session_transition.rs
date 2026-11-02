@@ -532,7 +532,7 @@ impl GpuState {
         to.log_request_card = std::mem::take(&mut self.log_request_card);
         to.e2e_whispers = std::mem::take(&mut self.e2e_whispers);
         to.mod_notice = std::mem::take(&mut self.mod_notice);
-        to.whats_new_card = std::mem::take(&mut self.whats_new_card);
+        to.news = std::mem::take(&mut self.news);
         to.load_event_gap = self.load_event_gap.clone();
         to.hitches = std::mem::take(&mut self.hitches);
         // The trades go on across the map (the toast and what it already said): a world
@@ -555,6 +555,7 @@ impl GpuState {
         self.hand_shell_to(&mut loaded);
         if let Some(console) = &mut loaded.console {
             crate::chat::pm_only::reset(console);
+            crate::chat::quiet::reset(console);
         }
         // The world was built at the window's size when its install began; the window
         // may have been resized in the seconds since. Its depth and scene targets would

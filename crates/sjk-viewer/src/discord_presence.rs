@@ -201,6 +201,7 @@ fn tab_words(tab: Tab) -> &'static str {
         Tab::Holocrons => "Opening holocrons",
         Tab::Forge => "In the Forge",
         Tab::Cards => "Looking at cards",
+        Tab::History => "Looking at their history",
     }
 }
 

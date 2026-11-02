@@ -1163,6 +1163,7 @@ pub(crate) mod tests {
 
     pub(crate) fn me(bio: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1216,11 +1217,15 @@ pub(crate) mod tests {
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -1235,12 +1240,14 @@ pub(crate) mod tests {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         }
     }

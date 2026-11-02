@@ -17,7 +17,8 @@
 //! (`installed_models.rs`), tells the hub's service when the game menu opens, so its
 //! pages read the hub again, puts the pictures that finished loading into the UI's atlas and
 //! gives the UI the frames of the SJK chat's GIFs on screen (`chat_gifs.rs`), and
-//! carries the encrypted whispers (`e2e_whispers.rs`).
+//! carries the encrypted whispers (`e2e_whispers.rs`) and runs the content
+//! collections' automatic updates when due (`console_jof_content.rs`).
 
 use super::*;
 use sjk_identity::Settings;
@@ -95,11 +96,15 @@ impl GpuState {
         self.update_ragdoll(&relay_events);
         self.update_monitor(&relay_events, &toy_events);
         self.update_banana(&relay_events);
+        self.update_propgun(&relay_events);
         self.update_drone(&relay_events);
         self.update_boombox(&relay_events);
         self.update_mystery_boxes(&toy_events, &relay_events);
+        self.update_toy_master(&toy_events);
         self.update_e2e_whispers();
         self.update_player_trades();
+        #[cfg(feature = "mod-jof")]
+        self.update_content_auto();
         if !due {
             return;
         }
@@ -135,6 +140,7 @@ impl GpuState {
             ""
         };
         avatars::configure(Some(console.config_directory()), pictures_from);
+        crate::news_images::configure(Some(console.config_directory()), pictures_from);
         player_identity::apply(console.config_directory(), settings, name, location, chat);
         self.offer_installed_models();
         let (packs_revision, assets_note) = player_identity::packs();
@@ -144,6 +150,7 @@ impl GpuState {
         self.offer_holocrons();
         self.follow_official();
         let _ = player_identity::with_snapshot(|snapshot| {
+            log_look_outcome(snapshot.look_outcome.as_ref());
             crate::loot_odds::follow(&snapshot.loot);
             crate::economy::follow(snapshot.economy.as_ref());
             crate::kyber::follow(snapshot.kyber.as_ref());
@@ -204,4 +211,16 @@ impl GpuState {
             .filter(|folder| !models.retail.contains(folder));
         player_identity::set_own_model(own);
     }
+}
+
+/// Log each look the hub was sent (it carries the toys others see), once: how long it
+/// waited after the change and whether the hub took it, for slow toy sync reports.
+fn log_look_outcome(outcome: Option<&sjk_identity::ReportOutcome>) {
+    static LOGGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let Some(outcome) = outcome else { return };
+    if LOGGED.swap(outcome.serial, std::sync::atomic::Ordering::AcqRel) == outcome.serial {
+        return;
+    }
+    let verdict = if outcome.sent { "sent" } else { "refused" };
+    crate::log::progress(format_args!("SJK look {verdict}: {}", outcome.message));
 }

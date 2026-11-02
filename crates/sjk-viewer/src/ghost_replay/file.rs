@@ -122,6 +122,32 @@ impl Run {
     }
 }
 
+/// A file's map and length in milliseconds, read from its header and its last command
+/// only (the editor's list; [`Run::from_text`] checks the rest when it is opened).
+pub(super) fn summary(text: &str) -> Result<(String, i32), String> {
+    let mut lines = text.lines();
+    if lines.next().map(str::trim) != Some(MAGIC) {
+        return Err("not a ghost file".into());
+    }
+    let map = lines
+        .next()
+        .and_then(|line| line.strip_prefix("map "))
+        .map(|map| map.trim().to_owned())
+        .ok_or("missing map line")?;
+    let last = text
+        .lines()
+        .skip(3)
+        .filter(|line| !line.trim().is_empty())
+        .last()
+        .ok_or("no commands recorded")?;
+    let time = last
+        .split_ascii_whitespace()
+        .next()
+        .and_then(|time| time.parse::<i32>().ok())
+        .ok_or("a broken command")?;
+    Ok((map, time))
+}
+
 fn fields(line: &str, count: usize) -> Result<Vec<&str>, String> {
     let fields: Vec<&str> = line.split_ascii_whitespace().collect();
     if fields.len() == count {
@@ -241,6 +267,15 @@ mod tests {
                 .unwrap_err()
                 .contains("backwards")
         );
+    }
+
+    #[test]
+    fn the_summary_reads_the_map_and_the_length_alone() {
+        let text = run().to_text();
+        assert_eq!(summary(&text), Ok(("mp/ffa3".to_owned(), 8)));
+        assert!(summary("hello").is_err());
+        let header: String = text.lines().take(3).collect::<Vec<_>>().join("\n");
+        assert_eq!(summary(&header), Err("no commands recorded".to_owned()));
     }
 
     #[test]

@@ -122,6 +122,7 @@ mod tests {
 
     pub(crate) fn line(official: Official) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id: 1,
             at: 0,
             key_id: String::new(),
@@ -147,6 +148,7 @@ mod tests {
             title: "Big ^1news".to_owned(),
             text: text.to_owned(),
             version: String::new(),
+            images: Default::default(),
         })
     }
 

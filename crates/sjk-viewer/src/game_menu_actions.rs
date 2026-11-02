@@ -39,7 +39,10 @@ impl GpuState {
             self.back_to_players();
         } else if matches!(
             self.game_menu_page,
-            GameMenuPage::Main | GameMenuPage::Shot | GameMenuPage::MapEdit
+            GameMenuPage::Main
+                | GameMenuPage::Shot
+                | GameMenuPage::MapEdit
+                | GameMenuPage::GhostEdit
         ) {
             self.game_menu = false;
             self.capture_pointer();

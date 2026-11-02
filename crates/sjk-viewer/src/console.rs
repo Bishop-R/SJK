@@ -9,7 +9,7 @@ pub(crate) mod browser;
 #[path = "changelog.rs"]
 pub(crate) mod changelog;
 #[path = "console_chat_log.rs"]
-mod chat_log;
+pub(crate) mod chat_log;
 #[path = "console_client_options.rs"]
 mod client_options;
 #[path = "clipboard.rs"]
@@ -661,6 +661,14 @@ impl ViewerConsole {
     /// Add text to the scrollback without showing it among the notify lines.
     pub(crate) fn push_log_quiet(&mut self, text: impl Into<String>) {
         self.shell.push_log_quiet(text);
+    }
+
+    /// Whether `cmdlist` lists command `name` (any case).
+    #[cfg(test)]
+    pub(crate) fn has_command(&self, name: &str) -> bool {
+        self.shell
+            .command_help()
+            .any(|(known, _, _)| known.eq_ignore_ascii_case(name))
     }
 
     /// Queue `text` to run as if typed, on the next command frame.

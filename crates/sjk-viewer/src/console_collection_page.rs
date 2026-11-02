@@ -132,6 +132,12 @@ impl ViewerConsole {
             PanelAction::SeeAndShare(on) => {
                 self.set_cvar("cg_nameplate", if on { "1" } else { "0" });
             }
+            PanelAction::NameplateStyle(style) => {
+                self.set_cvar(
+                    crate::hud::nameplate::STYLE_CVAR,
+                    &style.value().to_string(),
+                );
+            }
             PanelAction::ToySight { cvar, seen } => {
                 self.set_cvar(cvar, if seen { "1" } else { "0" });
             }
@@ -195,8 +201,9 @@ impl ViewerConsole {
                     service.set_banner(id.to_owned())
                 });
             }
-            PanelAction::ChooseTag(id) => {
-                self.set_cvar(crate::tags::CVAR, id);
+            PanelAction::ChooseTag(id, finish) => {
+                self.set_cvar(crate::tags::CVAR, &id);
+                self.set_cvar(crate::tags::FINISH_CVAR, finish);
             }
             PanelAction::Hub(tab) => {
                 // A tab of another page: the Holocrons page.
@@ -385,6 +392,10 @@ impl ViewerConsole {
             .text_cvar(crate::tags::CVAR)
             .unwrap_or_default()
             .to_owned();
+        let tag_finish = self
+            .text_cvar(crate::tags::FINISH_CVAR)
+            .unwrap_or_default()
+            .to_owned();
         let illuminate = self.illuminate_lit();
         let cardboard_box = self.cardboard_box_on;
         let order66 = self.order66_on;
@@ -427,6 +438,10 @@ impl ViewerConsole {
         };
         let enabled = self.bool_cvar("cl_identity") == Some(true);
         let share = crate::hud::nameplate::see_and_share(self);
+        let nameplate_style = crate::hud::nameplate::Style::of(
+            self.integer_cvar(crate::hud::nameplate::STYLE_CVAR)
+                .unwrap_or(0),
+        );
         let snapshot =
             crate::player_identity::collection_snapshot(crate::debug_collectibles::wanted(self));
         let held = snapshot
@@ -463,9 +478,11 @@ impl ViewerConsole {
                 second: &second,
                 pair,
                 share,
+                nameplate_style,
                 toy_keys: &toy_keys,
                 toys_unseen,
                 tag: &tag,
+                tag_finish: &tag_finish,
             };
             self.collection_panel.append_sjk(&inputs, target, viewport);
             self.collection_panel.preview = Some(unlocks);
@@ -495,9 +512,11 @@ impl ViewerConsole {
             second: &second,
             pair,
             share,
+            nameplate_style,
             toy_keys: &toy_keys,
             toys_unseen,
             tag: &tag,
+            tag_finish: &tag_finish,
         };
         self.collection_panel.append_sjk(&inputs, target, viewport);
     }
@@ -539,6 +558,12 @@ impl ViewerConsole {
         {
             let _ = crate::player_identity::read_shop();
         }
+        // The History tab's read (31/10/2026), asked by its last frame.
+        if let Some(before) = self.collection_panel.take_history_ask()
+            && !crate::player_identity::read_history(before)
+        {
+            self.collection_panel.history_not_sent();
+        }
         // A star or a padlock the hub refused (29/10/2026): said once; the hub's marks
         // come back with its next answer.
         if let Some(words) = self.collection_panel.take_mark_refusal(snapshot) {
@@ -575,6 +600,22 @@ impl ViewerConsole {
         data: Option<super::collection_panel::forge::ForgeData>,
     ) {
         self.collection_panel.preview_forge(data);
+    }
+
+    /// Show `state` on the History tab in place of the identity's (`None` lets go), for
+    /// a world shot.
+    #[cfg(test)]
+    pub(crate) fn preview_history(
+        &mut self,
+        state: Option<std::sync::Arc<sjk_identity::HistoryState>>,
+    ) {
+        self.collection_panel.preview_history(state);
+    }
+
+    /// Open or close the History tab's row `index` and choose it, for a world shot.
+    #[cfg(test)]
+    pub(crate) fn history_activate_for_shot(&mut self, index: usize) {
+        self.collection_panel.history_activate_for_shot(index);
     }
 
     /// Show the Forge's `section`, for a world shot.
@@ -653,6 +694,13 @@ impl ViewerConsole {
         shards: u64,
     ) {
         self.collection_panel.preview_cards = Some((cards, credits, shards));
+    }
+
+    /// Choose the Tags tab's tag or card `id` with finish `finish` shown (a place in
+    /// `cards::FINISHES`), the wall brought to it, for a world shot.
+    #[cfg(test)]
+    pub(crate) fn collection_tag_for_shot(&mut self, id: &str, finish: usize) {
+        self.collection_panel.choose_tag_for_shot(id, finish);
     }
 
     /// Choose the Cards tab's tile `index` (in the list its filter shows), for a world

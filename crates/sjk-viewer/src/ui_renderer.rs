@@ -39,6 +39,23 @@ pub(crate) const HUD_PREVIEW_TEXTURE: sjk_ui::TextureId = sjk_ui::TextureId(u32:
 /// ([`crate::blade_pictures`]), bound by [`ShapeRenderer::set_blade_pictures`] and added
 /// over what is below (the blades' light, in display values).
 pub(crate) const BLADE_PICTURES_TEXTURE: sjk_ui::TextureId = sjk_ui::TextureId(u32::MAX - 4);
+/// Pictures the News panel shows at once, each its own texture ([`news_image_texture`]).
+pub(crate) const NEWS_IMAGE_SLOTS: usize = 3;
+/// The first News picture's texture id; the others follow it.
+const NEWS_IMAGE_FIRST: u32 = u32::MAX - 4 - NEWS_IMAGE_SLOTS as u32;
+
+/// `TexturedQuad` texture naming News picture slot `slot` ([`crate::news_images`]),
+/// uploaded by [`ShapeRenderer::upload_news_image`].
+pub(crate) fn news_image_texture(slot: usize) -> sjk_ui::TextureId {
+    sjk_ui::TextureId(NEWS_IMAGE_FIRST + slot.min(NEWS_IMAGE_SLOTS - 1) as u32)
+}
+
+/// The News picture slot `texture` names.
+fn news_slot_of(texture: sjk_ui::TextureId) -> Option<u8> {
+    (NEWS_IMAGE_FIRST..NEWS_IMAGE_FIRST + NEWS_IMAGE_SLOTS as u32)
+        .contains(&texture.0)
+        .then(|| (texture.0 - NEWS_IMAGE_FIRST) as u8)
+}
 /// `TexturedQuad` texture naming SJK's emblem, uploaded once at start.
 pub(crate) const LOGO_TEXTURE: sjk_ui::TextureId = sjk_ui::TextureId(LOGO_ICON);
 /// `TexturedQuad` texture naming JoF EternalJK's icon, which SJK chat messages sent from
@@ -290,6 +307,9 @@ pub(crate) fn texture_switches(lists: &[&DrawList]) -> usize {
             Some(piece) => Source::Art(piece),
             None if texture == LEVELSHOT_TEXTURE => Source::Levelshot,
             None if texture == HUD_PREVIEW_TEXTURE => Source::HudPreview,
+            None if news_slot_of(texture).is_some() => {
+                Source::News(news_slot_of(texture).unwrap_or_default())
+            }
             None if texture == PREVIEW_TEXTURE => Source::Preview,
             None if texture == BLADE_PICTURES_TEXTURE => Source::BladePictures,
             None if crate::chat_gifs::slot_of(texture).is_some() => {
@@ -344,6 +364,8 @@ pub(crate) struct ShapeRenderer {
     levelshot: LevelshotTexture,
     /// The HUD picker's preview of the highlighted HUD.
     hud_preview: LevelshotTexture,
+    /// The News panel's pictures on show.
+    news: Vec<LevelshotTexture>,
     /// The model preview's display texture, once one exists.
     preview: Option<wgpu::BindGroup>,
     blade_pictures: Option<wgpu::BindGroup>,
@@ -435,6 +457,9 @@ impl ShapeRenderer {
         let icons = IconAtlas::new(device, &texture_layout);
         let levelshot = LevelshotTexture::new(device, &texture_layout);
         let hud_preview = LevelshotTexture::new(device, &texture_layout);
+        let news = (0..NEWS_IMAGE_SLOTS)
+            .map(|_| LevelshotTexture::new(device, &texture_layout))
+            .collect();
         for (name, bytes, texture) in [
             ("SJK emblem", SJK_EMBLEM, LOGO_TEXTURE),
             ("JoF EternalJK icon", EJK_ICON, EJK_TEXTURE),
@@ -550,6 +575,7 @@ impl ShapeRenderer {
             gifs: GifTextures::new(),
             levelshot,
             hud_preview,
+            news,
             preview: None,
             blade_pictures: None,
             preview_sampler: device.create_sampler(&wgpu::SamplerDescriptor {
@@ -807,6 +833,7 @@ impl ShapeRenderer {
                         | Source::Gif(_)
                         | Source::Levelshot
                         | Source::HudPreview
+                        | Source::News(_)
                         | Source::BladePictures
                         | Source::Preview => ([0.0, 0.0], [1.0, 1.0]),
                         Source::Atlas => icons::uv_range(animated(texture, now)),
@@ -866,6 +893,7 @@ impl ShapeRenderer {
                         | Source::Gif(_)
                         | Source::Levelshot
                         | Source::HudPreview
+                        | Source::News(_)
                         | Source::Preview => uv,
                         // A blade picture is clipped as other shapes are (it scrolls in
                         // the Collection's list): its coordinates are an upright
@@ -1056,6 +1084,9 @@ impl ShapeRenderer {
             Some(_) => return None,
             None if texture == LEVELSHOT_TEXTURE => Source::Levelshot,
             None if texture == HUD_PREVIEW_TEXTURE => Source::HudPreview,
+            None if news_slot_of(texture).is_some() => {
+                Source::News(news_slot_of(texture).unwrap_or_default())
+            }
             None if texture == PREVIEW_TEXTURE => match self.preview {
                 Some(_) => Source::Preview,
                 None => return None,
@@ -1129,6 +1160,10 @@ impl ShapeRenderer {
                 Source::Gif(slot) => self.gifs.group(usize::from(slot)),
                 Source::Levelshot => Some(self.levelshot.bind_group()),
                 Source::HudPreview => Some(self.hud_preview.bind_group()),
+                Source::News(slot) => self
+                    .news
+                    .get(usize::from(slot))
+                    .map(LevelshotTexture::bind_group),
                 Source::Preview => self.preview.as_ref(),
                 Source::BladePictures => self.blade_pictures.as_ref(),
                 Source::Atlas => None,
@@ -1590,6 +1625,19 @@ impl ShapeRenderer {
     ) {
         self.levelshot
             .upload(device, queue, &self.texture_layout, image);
+    }
+
+    /// Replace News picture slot `slot` ([`news_image_texture`]) with `image`.
+    pub(crate) fn upload_news_image(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &crate::frame_queue::FrameQueue,
+        slot: usize,
+        image: &crate::menu::levelshot::LevelshotImage,
+    ) {
+        if let Some(texture) = self.news.get_mut(slot) {
+            texture.upload(device, queue, &self.texture_layout, image);
+        }
     }
 
     /// Replace the HUD picker's preview sampled by `TexturedQuad` commands

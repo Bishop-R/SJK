@@ -11,6 +11,14 @@ const CS_PLAYERS: usize = 1_131;
 const MAX_CLIENTS: usize = 32;
 /// Conservative compose budget, in UTF-8 bytes, below codemp's MAX_SAY_TEXT.
 pub const CHAT_INPUT_BYTES: usize = 149;
+/// Bounded in-memory draft; submission divides it into server-safe messages.
+pub const CHAT_DRAFT_CHARS: usize = 1_200;
+/// Most server messages one submitted draft may occupy.
+pub const MAX_CHAT_PIECES: usize = 4;
+
+/// A draft would keep the reliable channel occupied for too long.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChatDraftTooLong;
 
 /// Stock reliable-command destination; private messages address a numeric slot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -261,7 +269,106 @@ pub fn chat_command(destination: ChatDestination, text: &str) -> Option<String> 
             break;
         }
     }
+    command_from_payload(destination, payload.trim())
+}
+
+/// Construct one safe quoted command without applying the stock per-message bound.
+/// The viewer uses this while editing and applies [`chat_commands`] immediately
+/// before a command enters the reliable channel.
+pub fn chat_command_full(destination: ChatDestination, text: &str) -> Option<String> {
+    if matches!(destination, ChatDestination::Player(slot) if usize::from(slot) >= MAX_CLIENTS) {
+        return None;
+    }
+    command_from_payload(destination, &escaped_payload(text)?)
+}
+
+/// Divide a chat message at word boundaries into safe quoted commands. A single
+/// word longer than the compatibility budget is divided only at character
+/// boundaries; EternalJK escapes are never cut in half.
+pub fn chat_commands(
+    destination: ChatDestination,
+    text: &str,
+) -> Result<Vec<String>, ChatDraftTooLong> {
+    if matches!(destination, ChatDestination::Player(slot) if usize::from(slot) >= MAX_CLIENTS) {
+        return Ok(Vec::new());
+    }
+    let mut commands = Vec::new();
+    let mut rest = text.trim();
+    let mut colour = None;
+    while !rest.is_empty() {
+        if commands.len() == MAX_CHAT_PIECES {
+            return Err(ChatDraftTooLong);
+        }
+        let carry = colour.map(|digit| format!("^{digit}")).unwrap_or_default();
+        let mut end = rest.len();
+        let mut last_space = None;
+        let mut overflow = false;
+        for (index, c) in rest.char_indices() {
+            let next = index + c.len_utf8();
+            let candidate = format!("{carry}{}", &rest[..next]);
+            if escaped_payload(&candidate)
+                .is_some_and(|payload| sent_bytes(&payload) > CHAT_INPUT_BYTES)
+            {
+                end = last_space.filter(|space| *space > 0).unwrap_or(index);
+                overflow = true;
+                break;
+            }
+            if c.is_whitespace() {
+                last_space = Some(index);
+            }
+        }
+        if end == 0 {
+            end = rest.chars().next().map_or(rest.len(), char::len_utf8);
+        }
+        // Do not strand the introducer of a Quake colour escape at a hard split.
+        if overflow
+            && rest[..end].ends_with('^')
+            && rest[end..].starts_with(|c: char| c.is_ascii_digit())
+            && end > 1
+        {
+            end -= 1;
+        }
+        let original_piece = rest[..end].trim();
+        let piece = format!("{carry}{original_piece}");
+        if let Some(payload) = escaped_payload(&piece)
+            && let Some(command) = command_from_payload(destination, &payload)
+        {
+            commands.push(command);
+        }
+        colour = last_colour(original_piece, colour);
+        rest = rest[end..].trim_start();
+    }
+    Ok(commands)
+}
+
+/// The last Quake colour selected by `text`, or the colour carried into it.
+fn last_colour(text: &str, mut colour: Option<char>) -> Option<char> {
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c == '^'
+            && let Some(digit) = chars.next()
+            && digit.is_ascii_digit()
+        {
+            colour = Some(digit);
+        }
+    }
+    colour
+}
+
+fn escaped_payload(text: &str) -> Option<String> {
+    let mut payload = String::with_capacity(text.len() + 8);
+    let mut buffer = [0; 4];
+    for c in text.chars() {
+        payload.push_str(chat_piece(c, &mut buffer));
+    }
     let payload = payload.trim();
+    if payload.is_empty() {
+        return None;
+    }
+    Some(payload.to_owned())
+}
+
+fn command_from_payload(destination: ChatDestination, payload: &str) -> Option<String> {
     if payload.is_empty() {
         return None;
     }
@@ -295,12 +402,7 @@ fn sent_bytes(payload: &str) -> usize {
 /// line counts, since it picks the encoding: Russian takes a byte a letter when the
 /// line leaves in Windows-1251, two in UTF-8, and a kanji three.
 pub fn chat_input_fits(text: &str) -> bool {
-    let mut payload = String::with_capacity(text.len() + 8);
-    let mut buffer = [0; 4];
-    for c in text.chars() {
-        payload.push_str(chat_piece(c, &mut buffer));
-    }
-    sent_bytes(&payload) <= CHAT_INPUT_BYTES
+    escaped_payload(text).is_none_or(|payload| sent_bytes(&payload) <= CHAT_INPUT_BYTES)
 }
 
 /// Show EternalJK's chat escapes as what was typed: `°/.` as `%` and `''` as
@@ -568,6 +670,54 @@ mod escape_tests {
         let text = "\u{65e5}".repeat(60);
         let command = chat_command(ChatDestination::Global, &text).unwrap();
         assert_eq!(command, format!("say \"{}\"", "\u{65e5}".repeat(49)));
+    }
+
+    #[test]
+    fn long_chat_becomes_complete_server_safe_messages() {
+        let text = format!("{}100% \"done\" {}", "word ".repeat(50), "雪".repeat(50));
+        let commands = chat_commands(ChatDestination::Player(7), &text).expect("four pieces");
+        assert!(commands.len() >= 3);
+        let mut recovered = Vec::new();
+        for command in commands {
+            let payload = command
+                .strip_prefix("tell 7 \"")
+                .and_then(|body| body.strip_suffix('"'))
+                .expect("safe tell command");
+            assert!(sent_bytes(payload) <= CHAT_INPUT_BYTES);
+            recovered.push(chat_unescape(payload).into_owned());
+        }
+        assert_eq!(recovered.concat().replace(' ', ""), text.replace(' ', ""));
+        assert!(recovered.concat().contains("100% \"done\""));
+    }
+
+    #[test]
+    fn a_draft_is_at_most_four_messages() {
+        assert_eq!(
+            chat_commands(ChatDestination::Global, &"%".repeat(1_200)),
+            Err(ChatDraftTooLong)
+        );
+        let commands = chat_commands(ChatDestination::Global, &"%".repeat(190))
+            .expect("four messages are accepted");
+        assert_eq!(commands.len(), MAX_CHAT_PIECES);
+    }
+
+    #[test]
+    fn a_split_message_carries_its_last_colour() {
+        let text = format!("^1{}", "red words ".repeat(40));
+        let commands = chat_commands(ChatDestination::Global, &text).expect("four pieces");
+        assert!(commands.len() > 1);
+        assert!(
+            commands
+                .iter()
+                .all(|command| command.starts_with("say \"^1"))
+        );
+        assert!(commands.iter().all(|command| {
+            let payload = command
+                .strip_prefix("say \"")
+                .and_then(|body| body.strip_suffix('"'))
+                .expect("safe say command");
+            sent_bytes(payload) <= CHAT_INPUT_BYTES
+        }));
     }
 
     /// What arrives back at a client when `text` is typed in SJK's chat: the

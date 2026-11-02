@@ -6,6 +6,7 @@ mod editing;
 mod editor;
 pub(crate) mod emoji;
 mod feed_gif;
+pub(crate) mod find_blade;
 pub(crate) mod incoming_color;
 
 pub(crate) mod client_icons;
@@ -14,6 +15,7 @@ mod layout;
 pub(crate) mod marks;
 pub(crate) mod options;
 pub(crate) mod pm_only;
+pub(crate) mod quiet;
 pub(crate) mod reply;
 pub(crate) mod server_copy;
 pub(crate) mod sjk;
@@ -84,6 +86,8 @@ struct ChatLine {
     /// The slot the player's own encrypted whisper went to: its line wears the
     /// recipient's marks (emblem, verified tick or trust mark, name emoji).
     recipient: Option<u16>,
+    /// The line passes quiet mode (`chat/quiet.rs`), decided when it arrived.
+    loud: bool,
 }
 
 /// An SJK chat line's id at the hub and its sender.
@@ -109,6 +113,9 @@ struct HubLine {
     /// The line is a holocron drop of this tier (`holocrons/line.rs`): in the tier's
     /// colour, a gem before it instead of the verified tick.
     tier: Option<&'static crate::holocrons::Tier>,
+    /// A grand find's prize (`holocrons/line.rs`): its words in its own colour, and its
+    /// blade drawn small after the holocron's picture (`chat/find_blade.rs`).
+    prize: Option<crate::holocrons::line::Prize>,
     /// The line is the SJK team's (an announcement or a reward round, `official.rs`):
     /// "SJK" in the SJK UI's accent gold, no label.
     official: bool,
@@ -127,6 +134,10 @@ pub(crate) struct ChatOverlay {
     chat_text: [(u32, u32); 2],
     combat: combat::Combat,
     input: Option<Editor>,
+    /// The draft just submitted to the game server, put back by
+    /// [`Self::settle_submitted`] when sending refuses it (too many pieces once
+    /// `%W%` and the chat prefix and suffix are expanded), so the text is not lost.
+    submitted: Option<Editor>,
     modifiers: winit::keyboard::ModifiersState,
     roster: ChatRoster,
     scroll: usize,
@@ -141,6 +152,9 @@ pub(crate) struct ChatOverlay {
     pressed_who: Option<card::Who>,
     /// Whose name each feed token is, for the profile card (`chat/card.rs`).
     visible_people: [Option<card::Who>; MAX_VISIBLE],
+    /// The finds' blades the feed shows, by line token, while the pointer is free: the
+    /// skin, where it is drawn and its prize's colour (`chat/find_blade.rs`).
+    visible_blades: [Option<find_blade::Shown>; MAX_VISIBLE],
     /// The profile card on show while the composer is open.
     card: Option<card::Card>,
     /// Mute or Unmute asked from the card, until the frame takes it.
@@ -214,6 +228,11 @@ pub(crate) struct ChatOverlay {
     report_request: Option<u16>,
     /// The slot whose card asked to trade, for the frame (`crate::player_trades`).
     trade_request: Option<u16>,
+    /// The private duel partner, kept a while after the duel, for quiet mode
+    /// (`chat/quiet.rs`).
+    duel_partner: sjk_client::DuelPartner,
+    /// The player's own SJK identity key, for quiet mode's SJK lines.
+    sjk_own_key: Option<String>,
     /// The feed draws during a world shot, which has no session.
     #[cfg(test)]
     pub(crate) for_shot: bool,
@@ -264,6 +283,7 @@ impl ChatOverlay {
             chat_text: [(0, 0); 2],
             combat: combat::Combat::default(),
             input: None,
+            submitted: None,
             modifiers: winit::keyboard::ModifiersState::empty(),
             roster: ChatRoster::default(),
             scroll: 0,
@@ -275,6 +295,7 @@ impl ChatOverlay {
             pressed_action: None,
             pressed_who: None,
             visible_people: [None; MAX_VISIBLE],
+            visible_blades: [None; MAX_VISIBLE],
             card: None,
             mute_request: None,
             map_block_request: None,
@@ -308,6 +329,8 @@ impl ChatOverlay {
             reportable_slots: 0,
             report_request: None,
             trade_request: None,
+            duel_partner: sjk_client::DuelPartner::default(),
+            sjk_own_key: None,
             #[cfg(test)]
             for_shot: false,
         }
@@ -470,6 +493,9 @@ impl ChatOverlay {
                 return;
             }
         }
+        // A public line of a player whose name starts with the tell marker is no tell.
+        let server_private =
+            server_private && !sjk_client::forged_tell(&text, sender, &self.roster);
         // EternalJK's escapes for `%` and `"` show as what was typed, in the
         // chat box only, as in EternalJK.
         let display = chat_display_text(&chat_unescape(&text));
@@ -546,6 +572,12 @@ impl ChatOverlay {
             encrypted: false,
             verified: false,
             recipient: None,
+            loud: sjk_client::quiet_passes(
+                private || server_private,
+                sjk_client::line_sender(&display, sender, &self.roster),
+                self.own_slot,
+                self.duel_partner.target(),
+            ),
         };
         self.push_line(line, server_private);
     }
@@ -562,8 +594,9 @@ impl ChatOverlay {
         if self.lines.len() == HISTORY_LIMIT {
             self.lines.pop_front();
         }
+        let shown = self.quiet_visible(&line);
         self.lines.push_back(line);
-        if self.is_typing() && self.scroll > 0 && (!self.options.pm_only || private) {
+        if self.is_typing() && self.scroll > 0 && (!self.options.pm_only || private) && shown {
             self.scroll = (self.scroll + 1).min(self.lines.len().saturating_sub(1));
             self.unread = (self.unread + 1).min(HISTORY_LIMIT);
         }
@@ -618,6 +651,7 @@ impl ChatOverlay {
             encrypted: true,
             verified,
             recipient,
+            loud: true,
         };
         self.push_line(line, true);
         true
@@ -647,6 +681,15 @@ impl ChatOverlay {
 
     pub(crate) fn is_typing(&self) -> bool {
         self.input.is_some()
+    }
+
+    /// After a submitted draft went to the sender: dropped when it was sent, the
+    /// composer reopened on it when it was refused.
+    pub(crate) fn settle_submitted(&mut self, sent: bool) {
+        let draft = self.submitted.take();
+        if !sent && self.input.is_none() {
+            self.input = draft;
+        }
     }
 
     /// Hand the open composer, its channel and draft, to the next world's chat, so a
@@ -736,7 +779,7 @@ impl ChatOverlay {
         let ms = self.millis(Instant::now());
         self.build(
             draw_feed,
-            fonts.font(RetailFont::Small).unwrap_or(font),
+            fonts.font(chat_font(fonts)).unwrap_or(font),
             viewport,
             ms,
         );
@@ -753,13 +796,14 @@ impl ChatOverlay {
     ) {
         let (start, end) = self.center_text;
         let palette_of = self.palette_of();
+        let chat = chat_font(fonts);
         self.ui.append_text_routed(
             fonts,
             |id, _| {
                 Some(if (start..end).contains(&id.0) {
                     RetailFont::Headline
                 } else {
-                    RetailFont::Small
+                    chat
                 })
             },
             |id| palette_of(id.0),
@@ -782,6 +826,16 @@ impl ChatOverlay {
                 crate::text::CodePalette::Game
             }
         }
+    }
+}
+
+/// The font the chat box draws in: the player's own (`cg_chatFont`) once it is
+/// loaded, else the small game font (`FONT_SMALL`), which falls back to Inter.
+fn chat_font(fonts: &GameFonts) -> RetailFont {
+    if fonts.active(RetailFont::Chat) {
+        RetailFont::Chat
+    } else {
+        RetailFont::Small
     }
 }
 

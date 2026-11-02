@@ -161,7 +161,7 @@ impl ViewerConsole {
         let ssao = crate::world_materials::ssao::settings::Settings::bind(&mut cvars)?;
         crate::world_materials::shadows::settings::register(&mut cvars)?;
         let window_options = window_options::Options::register(&mut cvars)?;
-        chat_log::register(&mut cvars)?;
+        let chat_log = chat_log::register(&mut cvars)?;
         let qcommon = qcommon::Settings::register(&mut cvars)?;
         crate::hud::targeting::register(&mut cvars)?;
         crate::input::settings::register(&mut cvars)?;
@@ -332,6 +332,7 @@ impl ViewerConsole {
                 "could not load config: {error}; settings will NOT be saved until it loads cleanly"
             ));
         }
+        window_options::discard_retired(&mut shell.cvars);
         // Sensitivity used to be counts-to-radians at 0.001; it is now stock's
         // degrees-per-count through `m_yaw`/`m_pitch`. Rescale a value saved
         // under the old units once, so an existing profile keeps the aim it
@@ -706,7 +707,7 @@ impl ViewerConsole {
             saber_change: sjk_client::SaberChangeNotifier::default(),
             movement_policy_log: None,
             window_options,
-            chat_log: chat_log::ChatLog::default(),
+            chat_log,
             qcommon,
             control: false,
             edit: super::line_edit::LineEdit::default(),

@@ -167,7 +167,7 @@ fn hc_bolts(ro: vec3<f32>, rd: vec3<f32>, px: f32, front: f32) -> vec3<f32> {
         if front > 0.5 && facing < 0.5 {
             continue;
         }
-        let d = bolt3(ro, rd, a, c, k + fi * 11.0, 0.38);
+        let d = bolt3(ro, rd, a, c, k + fi * 11.0, 0.38, px);
         light += (boltLight(d, vec3<f32>(1.0, 0.1, 0.05), px) * 0.5 + vec3<f32>(1.0, 0.1, 0.05) * halo(d, 0.35) * 0.5) * (0.4 + 0.9 * act);
     }
     return light;

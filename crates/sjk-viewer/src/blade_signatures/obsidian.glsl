@@ -165,7 +165,7 @@ vec3 base_orbit(vec3 ro, vec3 rd, float px){
     col += hot*halo(rayPt(ro, rd, p, ta), 1.0)*0.12;
     float k = floor(t*1.3 + h11(fi*3.3)*7.0), q = fract(t*1.3 + h11(fi*3.3)*7.0);
     if (h11(k*2.7 + fi) > 0.35 + 0.4*sw) continue;
-    float d = bolt3(ro, rd, vec3(0.0, p.y + (h11(k + fi) - 0.5)*3.0, 0.0), p, k + fi*1.7, 0.45);
+    float d = bolt3(ro, rd, vec3(0.0, p.y + (h11(k + fi) - 0.5)*3.0, 0.0), p, k + fi*1.7, 0.45, px);
     col += boltLight(d, hot, px)*(1.0 - q)*(1.0 - q);
   }
   return col*uFx;

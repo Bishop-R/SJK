@@ -942,11 +942,15 @@ mod tests {
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -961,18 +965,21 @@ mod tests {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         }
     }
 
     fn profile(holocrons: Vec<sjk_identity::Holocron>) -> sjk_identity::Profile {
         sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1175,6 +1182,7 @@ mod tests {
             card: None,
             credits: 0,
             unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: name.to_owned(),
                 count: 1,
@@ -1207,6 +1215,7 @@ mod tests {
     #[test]
     fn a_solar_blade_card_shows_with_its_blade() {
         let sun = |count: u32| sjk_identity::OpenedUnlock {
+            finish: None,
             id: "saber_sun".to_owned(),
             name: "Sun blade".to_owned(),
             count,
@@ -1478,6 +1487,7 @@ mod tests {
             card: None,
             credits: 0,
             unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: "A blade".to_owned(),
                 count: 2,
@@ -1495,6 +1505,7 @@ mod tests {
                 // The third a blade card with its blade beside its shards (20/10/2026).
                 let blade = sjk_identity::Opened {
                     unlock: Some(sjk_identity::OpenedUnlock {
+                        finish: None,
                         id: "saber_sun".to_owned(),
                         name: "Sun blade".to_owned(),
                         count: 1,
@@ -1523,6 +1534,7 @@ mod tests {
                         2 => opened(tier, "holo"),
                         3 => sjk_identity::Opened {
                             unlock: Some(sjk_identity::OpenedUnlock {
+                                finish: None,
                                 id: "saber_sun".to_owned(),
                                 name: "Sun blade".to_owned(),
                                 count: 1,

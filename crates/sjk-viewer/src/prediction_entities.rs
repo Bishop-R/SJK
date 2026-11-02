@@ -15,6 +15,9 @@ struct Body {
 #[derive(Default)]
 pub(super) struct Entities {
     bodies: Vec<Body>,
+    /// `cg_predictLegacy` [`ACTOR_CONTEXT`](sjk_game_jka::pmove::predict_legacy): no
+    /// actor is known, as in 2026.1028.1.
+    pub(super) off: bool,
 }
 
 impl Entities {
@@ -28,6 +31,9 @@ impl Entities {
 
     pub(super) fn update(&mut self, entities: &[EntityState]) {
         self.bodies.clear();
+        if self.off {
+            return;
+        }
         self.bodies.extend(entities.iter().filter_map(|entity| {
             matches!(entity.entity_type(), 1 | 13).then(|| Body {
                 number: entity.number(),
@@ -37,6 +43,15 @@ impl Entities {
             })
         }));
         self.bodies.sort_unstable_by_key(|body| body.number);
+    }
+
+    /// Turn the actor context off (clearing what is known) or back on from the next
+    /// snapshot.
+    pub(super) fn set_off(&mut self, off: bool) {
+        self.off = off;
+        if off {
+            self.bodies.clear();
+        }
     }
 
     fn body(&self, number: u16) -> Option<&Body> {

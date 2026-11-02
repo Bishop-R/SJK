@@ -721,7 +721,10 @@ impl PanelPlace {
     /// `labels` over a soft shadow, the `highlighted` one on the row band and
     /// the value in use (`current`) in gold with a dot, each answering to
     /// `token_base` plus its index. It opens upward when the panel's box has
-    /// no room under the row.
+    /// no room under the row. `scroll` is the first label's place in the
+    /// whole list and the list's length: a list longer than `labels` shows a
+    /// thumb on its right edge.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn dropdown(
         &self,
         canvas: &mut MenuCanvas,
@@ -730,6 +733,7 @@ impl PanelPlace {
         highlighted: usize,
         current: usize,
         token_base: u16,
+        scroll: (usize, usize),
     ) {
         let geometry = self.geometry();
         let row_height = geometry.row_height;
@@ -807,6 +811,19 @@ impl PanelPlace {
                 });
             }
             canvas.hit_region(token_base + index as u16, target);
+        }
+        let (first, total) = scroll;
+        if total > labels.len() {
+            let track = height - 8.0;
+            let thumb = (track * labels.len() as f32 / total as f32).max(6.0);
+            let along = (track - thumb) * first as f32 / (total - labels.len()) as f32;
+            let _ = canvas.draw_list_mut().push(DrawCommand::RoundedRect {
+                rect: self
+                    .place
+                    .rect([x + width - 3.0, top + 4.0 + along, 1.6, thumb]),
+                radius: 0.8 * s,
+                color: FOCUS_EDGE,
+            });
         }
     }
 

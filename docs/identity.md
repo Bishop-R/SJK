@@ -488,6 +488,12 @@ Tester and Contributor were called Early Tester and Early Contributor until 27/1
 team keeps giving them. Only the names players read changed; the ids stay
 `early_tester` and `early_contributor`, as the hub stores and sends them.
 
+Since 31/10/2026 (Sol's decision) the hub gives Tester by itself, by date, to every
+player it sees on SJK who does not hold it yet: rank IV until Sunday 01/11/2026
+included, then a week each of rank III (to 08/11), II (to 15/11) and I (to 22/11/2026).
+From 23/11/2026 it is only given by hand again, and rank V is no longer earned. The
+client needs no change: the medal arrives in the player's profile like any award.
+
 ### Medal ranks
 
 Since 27/10/2026 (Sol's decision) every medal a player holds has a rank from I to V,
@@ -713,10 +719,17 @@ blade-skin unlock id or `""`, and whether the Illuminate holocron is lit.
   it is none. A `not_unlocked` or `bad_look` answer leaves that skin out (the look
   goes with `saber:""`, so Illuminate still syncs) until the profile's unlocks change,
   and a `not_unlocked` has the own profile read again soon (at most once every 30
-  seconds); too many (429: `look_quota`, or the address's `rate_limited`), a refused
-  signature (401, the clock still off after the one retry) and failures wait 10
-  seconds and go again; another refusal (an older hub) is not repeated until the look
-  or the claim changes. Leaving sends nothing: the release drops the look. `Snapshot::look_outcome` says what became of the last one.
+  seconds); the key's `look_quota` (429) waits 1 second, the address's `rate_limited`
+  (429), a refused signature (401, the clock still off after the one retry) and
+  failures wait 10 seconds and go again; `not_on_server` asks for the claim again at
+  once; another refusal (an older hub) is not repeated until the look or the claim
+  changes. The second between two looks counts from the earlier one's answer, so they
+  reach the hub in different whole seconds (the hub's quota counts whole seconds).
+  `Service::set_look` leaves the look in a slot the worker reads between its other hub
+  calls (`Worker::look_between`), so a slow call does not hold a toy back for a whole
+  round of the worker's calls (the cardboard box's slow sync, 31/10/2026); the viewer
+  logs each outcome as `SJK look sent: <n> ms after the change, the hub answered in
+  <m> ms`. Leaving sends nothing: the release drops the look. `Snapshot::look_outcome` says what became of the last one.
 - Receiving: presence entries carry `look` (`Presence::look`) and the feed carries look
   events (`Feed::looks`, `LookEvent`), queued for the viewer (`Service::take_looks`, the
   newest 64, handing over only those read for the viewer's server under the feed's
@@ -737,10 +750,13 @@ Looks are public to every SJK player on the server, as badges are.
 ## Map edits
 
 Staff publish a map's edits to the hub, and the worker keeps every SJK player's copies
-in `map_edits` beside the key: the hub's list every 10 minutes once registered, each
-document newer than its copy downloaded, a copy the hub stopped listing removed, and a
-copy with unpublished changes left alone. What the edits do is in
-[map-edits.md](map-edits.md).
+in `map_edits` beside the key: the hub's list every 10 minutes once registered (at once
+on `Service::refresh_map_edits`, which the editor sends when it turns on, and after a
+publish), each document newer than its copy downloaded, a copy the hub stopped listing
+removed, and a copy with unpublished changes left alone. What the last look did lands in
+`Snapshot::map_edits_note` (a summary, or why it fell short), the publish's answer in
+`Snapshot::map_edits_published`, both worded by `map_edits::refusal` when the hub said
+no. What the edits do is in [map-edits.md](map-edits.md).
 
 ## Mystery boxes
 
@@ -1030,7 +1046,7 @@ and in the hub (same ids):
 | Tough Crowd (hidden) | `boombox_tough_crowd` | a player within the boombox's range dead by their own hand or the world's while it plays | client |
 | Tech Support | `monitor_victims_25` | 25 different players struck with the player's monitors | client |
 | Two for One, Strike! (hidden) | `monitor_double`, `monitor_triple` | 2, 3 players struck with one monitor | client |
-| Long Distance Call | `monitor_far` | a player struck with a monitor 1500 units (about 40 metres) or more from where it was thrown (`achievements::MONITOR_FAR`) | client |
+| Long Distance Call | `monitor_far` | a player struck with a monitor 1575 units (40 metres, as the world ping measures) or more from where it was thrown, measured where it met the body (`achievements::MONITOR_FAR`) | client |
 | Bounty Hunter, Big Game Hunter | `box_hunt_mark`, `box_hunt_marks_10` | 1, 10 box hunt marks killed (a free roll won or not) | hub |
 | Still Standing, Most Wanted | `box_hunt_survive`, `box_hunt_survive_5` | 1, 5 marks stayed to the end without a hunter's kill, still in the hunt | hub |
 
@@ -1049,6 +1065,12 @@ hub's `"retired": true` on Surveyor's entry is not needed by the client.
 Totals ("12 of 39 unlocked", the player card's "Achievements 12 / 39", the profile
 card) count every obtainable achievement and the retired ones the player holds, so a
 holder of Surveyor reads "of 40".
+
+The Toy Master's achievements (since 30/10/2026, [toy-master.md](toy-master.md)) are not
+in the client's catalogue: the hub sends one only once it is unlocked, with its `name`,
+`description` and `group` (`toy_master`), fields no other achievement carries. The board
+shows them in a "Toy Master" category, and totals count them like retired ones held:
+in both numbers, only for whoever holds them.
 
 What the client counts comes from its live matches on servers, never a demo, a game
 it hosts or a server on the player's own machine (a loopback address: Create game and

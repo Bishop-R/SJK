@@ -1,5 +1,6 @@
 //! World shots of the SJK team's windows ([`crate::official`]) over duel6 under the SJK
-//! UI: an announcement (news, a release, a long one), the round list, the claim window
+//! UI: an announcement on the News panel (news, a release, a long one), the round list,
+//! the claim window
 //! and the creator's composer. Off-screen renders (no game window), ignored like the
 //! other world shots: they need a GPU adapter and the installed game data named by
 //! `JKA_GAME_DATA`.
@@ -46,10 +47,11 @@ fn official_windows_shot() {
                 "the command closes the console"
             );
             shoot(&mut gpu, 3, name);
-            assert!(gpu.official.window.is_open(), "{kind} shows");
+            // Announcements are read on the News panel.
+            assert!(gpu.news.is_open(), "{kind} shows");
             assert!(gpu.key_catcher_active(), "the cursor is free over {kind}");
-            gpu.official_choice(Some(crate::official::window::Choice::Close));
-            assert!(!gpu.official.window.is_open(), "Close puts it away at once");
+            gpu.news_choice(Some(crate::news_panel::Choice::Close));
+            assert!(!gpu.news.is_open(), "Close puts it away at once");
         }
         gpu.debug_reward_command(&["list".to_owned()])
             .expect("a rehearsal");

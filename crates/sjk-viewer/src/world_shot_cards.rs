@@ -673,6 +673,7 @@ fn made_up_faces(
                 grants: None,
                 blade: None,
                 scene: None,
+                rank: None,
             });
         }
     }
@@ -1004,6 +1005,7 @@ fn duel6_sjk_blade_card() {
             grants: None,
             blade: Some("saber_sun".to_owned()),
             scene: None,
+            rank: None,
         });
         let real = packs.len();
         crate::cards::faces::install_for_shot(
@@ -1088,5 +1090,95 @@ fn duel6_sjk_blade_card() {
         assert!(!overflowed(&gpu), "binder");
         moments.push(image::open(path).expect("the shot").to_rgba8());
         println!("{}", sheet(&moments, 3, 640, "duel6-blade-card").display());
+    });
+}
+
+/// A ranked card (31/10/2026, the JoF collection): a made-up "Leader" card (Mythical
+/// odds, cyan rank; its picture borrowed from SJK Alpha's) opening from a Mythical
+/// holocron, its words naming the rank, then up close on the Cards tab with its hover
+/// card. No rarity's name, mark or colour shows on it.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn duel6_sjk_ranked_card() {
+    on_big_stack(|| {
+        if !faces_ready() {
+            return;
+        }
+        let packs = crate::cards::faces::current().list.clone();
+        let borrowed = packs
+            .iter()
+            .position(|face| face.id == "sjk_alpha_000")
+            .unwrap_or(0);
+        let mut list = packs.clone();
+        list.push(crate::cards::faces::Face {
+            id: "ranked_001".to_owned(),
+            name: "A Leader".to_owned(),
+            set: "ranked".to_owned(),
+            set_name: "Ranked".to_owned(),
+            number: 1,
+            kind: crate::cards::faces::Kind::Community,
+            rarity: &RARITIES[4],
+            lore: "A made-up ranked card for a world shot.".to_owned(),
+            artist: "Sol".to_owned(),
+            art: String::new(),
+            grants: None,
+            blade: None,
+            scene: None,
+            rank: Some(crate::cards::faces::Rank {
+                name: "Leader".to_owned(),
+                colour: sjk_ui::Color::new(
+                    0x22 as f32 / 255.0,
+                    0xD3 as f32 / 255.0,
+                    0xEE as f32 / 255.0,
+                    1.0,
+                ),
+            }),
+        });
+        let real = packs.len();
+        crate::cards::faces::install_for_shot(
+            list,
+            |index| {
+                if index < real { index } else { borrowed }
+            },
+        );
+        let leader = Shown {
+            holocron: 62,
+            card: Some("ranked_001".to_owned()),
+            ..shown(3, 4, 0, 312)
+        };
+        let mut moments = Vec::new();
+        let Some(mut gpu) = open_holocrons([1920, 1080]) else {
+            return;
+        };
+        ceremony(&mut gpu, vec![leader], 3.1);
+        let path = shoot(&mut gpu, 40, "duel6-ranked-card-words");
+        println!("{}", path.display());
+        assert!(!overflowed(&gpu), "words");
+        moments.push(image::open(path).expect("the shot").to_rgba8());
+        drop(gpu);
+        let Some(mut gpu) = open_binder([1920, 1080]) else {
+            return;
+        };
+        let mut holdings = binder_holdings();
+        holdings.push(copy_of("ranked_001", "mythical", "normal", 2));
+        let chosen = binder_index(&holdings, "ranked_001");
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_cards(holdings, 1_340, 85);
+            console.preview_collection(Some(Vec::new()), 2.3);
+        }
+        let _ = frame(&mut gpu, 30);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_card_filter_for_shot(Filter::default());
+            console.collection_card_for_shot(chosen);
+        }
+        let _ = frame(&mut gpu, 4);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_hover_for_shot(Some(chosen));
+        }
+        let path = shoot(&mut gpu, 4, "duel6-ranked-card-binder");
+        println!("{} (tile {chosen})", path.display());
+        assert!(!overflowed(&gpu), "binder");
+        moments.push(image::open(path).expect("the shot").to_rgba8());
+        println!("{}", sheet(&moments, 2, 960, "duel6-ranked-card").display());
     });
 }

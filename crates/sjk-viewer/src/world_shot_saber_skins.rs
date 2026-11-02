@@ -149,6 +149,8 @@ fn duel6_sjk_saber_page() {
         let unlocks = || {
             crate::unlockables::blade_skins()
                 .map(|skin| sjk_identity::Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: skin.id.to_owned(),
                     granted: 1_791_336_225,
                     note: String::new(),

@@ -332,10 +332,21 @@ rarity). Since the same day no card shows its number in the game, whatever its k
 close-up, its hover card or an opening, which name its kind and collection instead ("Meme,
 SJK Alpha"). The number still makes the card's id and orders the cards in the binder.
 
+**Credits cards as tags (31/10/2026, Sol's decision):** a revealed copy of a credits card
+lets the player stick the card on walls with the Tag toy ([client.md](client.md#tag)): its
+picture as a sticker, in the finish of a copy held (Normal from any copy, Holo or Solar
+from a copy in it). The hub names the card kinds it lets be tags in every profile
+(`tag_cards`, its `tags::CARD_KINDS`: `credits`) and checks the copy when a look places
+the card; Collection > Tags lists them under the tags. The card is kept, as crafting for
+less keeps it: sticking spends nothing.
+
 A card's kind says what it is about and reads on its strip: `community` (Community),
 `place` (Place), `personality` (Personality), `game` (Jedi Academy), since
 19/10/2026 `credits` (Credits: the people the project owes) and `meme` (Meme), and since
-20/10/2026 `blade` (Blade: a saber shader, [SJK Blades](#sjk-blades)). Its
+20/10/2026 `blade` (Blade: a saber shader, [SJK Blades](#sjk-blades)), and since
+01/11/2026 `clan` (Clan, Sol's decision: a clan's cards, the clan being the card's
+collection, so JoF's cards read "Clan · JoF" and each further clan gets a set of its own;
+the JoF cards were `community` before). Its
 rarity is one of `common`, `uncommon`, `rare`, `legendary` and `mythical`. A face whose
 kind or rarity a client does not know is left out on its own (named in the log) while the
 pack's other faces still read: a client from before 19/10/2026 shows no Bishop face, and
@@ -444,6 +455,24 @@ not know is kept but named nowhere; `Face::blade` in
 - **Each card has one rarity** (Bishop is Mythical, the Toxiee card Legendary): the
   first set needs cards of every rarity before every copy can be revealed.
 
+### Ranks
+
+Since 31/10/2026 (Sol's decision, for the JoF collection) a card may show a rank in
+place of its rarity: its file carries `rank` (the name players read, 1 to 24
+characters, "Leader") and `rank_colour` (`#RRGGBB`), always together. Its `rarity`
+stays and only sets its odds (JoF's Leaders are Mythical, its Council Legendary): a
+ranked card never shows a rarity's name, mark or colour. Its rank's name stands at its
+foot and on its tile, "Rank card" in its hover (no mark), its rank's colour edges its
+plate, tile and badges, its drawn scene's backdrop, the opening's title and flourish and
+the grand find's chat line ("a Leader card"; the hub's `finds` carry the card's id).
+A rarity chip leaves ranked cards out of the binder, and their hover gives the card's
+own odds ("about 1 in N holocrons found holds this card": the rarity's share, split
+among the sets that have cards of it, then the set's cards of it). A sealed copy is not a
+card yet and still shows its rolled rarity, as does the crate's spin. Ranks are data on
+the card, so a new rank needs no client release (`cards::Tone`, `cards::faces::Rank`).
+A rank without its colour, or a bad one, is left out (logged) and the card shows its
+rarity. Older clients read past the two keys and show the rarity.
+
 ### Scenes
 
 Since 30/10/2026 (Sol's idea) a card's file may name a `scene`: the client then draws
@@ -500,6 +529,7 @@ contact sheets of twelve).
 | Kyber shards, shattering, crafting and the tables | [economy.rs](../crates/sjk-viewer/src/economy.rs); wire and requests in [wire.rs](../crates/sjk-identity/src/wire.rs), [hub.rs](../crates/sjk-identity/src/hub.rs), [service.rs](../crates/sjk-identity/src/service.rs) (`Service::shatter`, `craft`, `read_shop`, `buy`, `Snapshot::shop`, `Snapshot::trade`) |
 | The kyber shard's mark | [cards/shard.rs](../crates/sjk-viewer/src/cards/shard.rs) |
 | The Forge: the shop, crafting and breaking down (the shop was the Holocrons tab's overlay, `holocrons_panel_shop.rs`, until 21/10/2026) | [collection_forge.rs](../crates/sjk-viewer/src/collection_forge.rs), [collection_forge_view.rs](../crates/sjk-viewer/src/collection_forge_view.rs) |
+| The Collection's History tab (31/10/2026): what came, was opened, spent and traded, `GET /v1/history` ([History](#history)) | [history.rs](../crates/sjk-identity/src/history.rs), [service.rs](../crates/sjk-identity/src/service.rs) (`Service::read_history`, `Snapshot::history`); [collection_history.rs](../crates/sjk-viewer/src/collection_history.rs), [collection_history_view.rs](../crates/sjk-viewer/src/collection_history_view.rs) |
 | The Collection's Cards tab | [collection_cards.rs](../crates/sjk-viewer/src/collection_cards.rs); its tiles, filter and sets' progress in [cards/binder.rs](../crates/sjk-viewer/src/cards/binder.rs) |
 | `debug_open` | [cards/rehearsal.rs](../crates/sjk-viewer/src/cards/rehearsal.rs) |
 | The faces from the packs, their pictures decoded on a worker when drawn | [cards/faces.rs](../crates/sjk-viewer/src/cards/faces.rs), mounted by [sjk_packs.rs](../crates/sjk-viewer/src/sjk_packs.rs) |
@@ -766,6 +796,12 @@ contact sheets of twelve).
     is picked for each when it is revealed), then when the first was found, or for a card
     not found yet how it is obtained with its odds. A card not found yet shows greyed.
     A click on it looks at it closely.
+  - **Every finish held** (01/11/2026, Sol's request: not only the best): when the
+    copies of the tile chosen are in more than one finish, chips Normal, Holo and Solar
+    ("Solar  x1", one not held dimmed and inert) stand for the copies' line up close and
+    under it looked at closely, the finish shown ringed gold; a click on one, or V
+    (Shift+V back), shows the card in that finish (and that copy's edition). Choosing
+    another tile shows its best again; the tiles keep their best finish.
   - **Looking closer** (20/10/2026, Sol's request: the cards should be easier to see):
     Enter, Space or I, a click on a tile or on the card up close shows the chosen tile's
     card large over the darkened tab (660 frame pixels wide, nearly the frame's height,
@@ -777,7 +813,7 @@ contact sheets of twelve).
     wheel) go to the previous or next tile, stopping at the ends, Home and End to the
     first and last; Escape, Enter, Space, I or a click anywhere put it back, on the tile
     it was left on (the grid scrolls to it). The keys' hint then reads "Left Right
-    previous, next" and "Esc put back".
+    previous, next", "V finish" when more than one is held, and "Esc put back".
   - **Hovering** a tile shows its hover card ([sjk-ui.md](sjk-ui.md#hover-cards)): how a
     card of its rarity comes ("From holocrons: about 1 in 136 holocrons found holds a
     Legendary card (0.734%), one of the 9 Legendary cards."), what it is ("Legendary
@@ -798,6 +834,48 @@ contact sheets of twelve).
   with made-up cards (or shaders, or piles of kyber shards) on the Holocrons tab; nothing is
   sent or kept. A card comes as a pack, with made-up shards from the tier's card shards. A rarity the packs have
   faces of shows one of them, as the hub would pick.
+
+## History
+
+Since 31/10/2026 (Sol: "a general inventory history: what they got, opened, what they
+spent credits and shards on, and the drops"), the Collection's last tab, History, lists
+the player's economy as the hub keeps it, newest first.
+
+The hub answers `GET /v1/history` (signed as `GET /v1/holocrons` is; its `PROTOCOL.md`,
+"History") with `{"lines":[...],"more":bool,"before":<unix s>}`: a page is 100 lines
+plus the rest of its oldest second (one second's lines are never split), and while
+`more` is true `GET /v1/history?before=<before>` brings the older ones. A line has `at`
+and `kind`:
+
+| Kind | What it is | Its fields |
+| --- | --- | --- |
+| `came` | a holocron or kyber crystal came (not through a trade: the trade's line says it; one found then traded away stays) | `holocron`, `tier`, `source` (`play`, `staff`, `achievement`, `bought`, `box`, `reward`), `note`, `price` (what a bought one cost, its row's amount), `traded` |
+| `opened` | the player opened one | `holocron`, `tier`, `credits`, `shards`, `card` (`card`, null while sealed; `rarity`, `finish`; or null), `unlock` ("" for none) |
+| `credits` | a credits ledger line no other kind covers | `delta` (signed), `reason` (`staff`, `reward`, `mystery_box` with `note` `explode_gift`), `note` |
+| `shards` | a kyber shard ledger line no other kind covers | `delta`, `reason` (`shatter`, `craft`, `shop` with the shader's id as `note`, `staff`, `reward`), `note` |
+| `box` | a mystery box opened | `outcome` ([mystery-boxes.md](mystery-boxes.md)), `price` (0 a free roll), `won`, `shards` |
+| `trade` | a finished trade | `trade`, `with` (`name` with colour codes, `verified`), `gave` and `got` (the trade items of `GET /v1/trades`, `value` included) |
+
+The client skips a line of a kind it does not know, or one it cannot read, and takes a
+missing field as empty, so the hub can add kinds. No key id comes ([No keys in
+game](identity.md)). An unknown key gets 403 `not_registered`; a hub from before the
+history answers 404, and the tab says "This SJK hub keeps no history yet."
+
+The tab reads the newest page each time it is shown (and on R), and Load older, the
+list's last row while the hub has more, the next page (`HistoryState::take` adds a page
+only when it follows what was read, so a second press adds nothing twice). A row is one
+line: a chip of its kind (Drop, Opened, Credits, Shards, Box, Trade) in the tier's colour
+(holocrons, crystals) or the kind's, a sentence ("Opened a Rare Holocron: card Sol
+(Holo), Sun blade", "Bought a holocron", "Shattered Sun blade", "Mystery box: double,
+paid 100, won 200", "Traded with Nib: gave a Rare Holocron, got Sun blade"), what it moved
+("+120 credits", "-400 credits", "+15 shards", gains green and spends red) and when, in
+this PC's time (`dd/mm/yyyy HH:MM`). Consecutive openings of one second (Open all) are one
+row, "Opened 37 Holocrons (5 Rare, 32 Uncommon): 30 cards, 7 unlocks" with their totals,
+and so are holocrons that came in one second the same way; Enter or a click opens it on
+its lines. The filter (All, Drops, Opened, Credits, Shards, Trades, Boxes; Left and Right)
+works on what was read: Credits and Shards keep every line that moved them, openings and
+boxes included. The rows' words are made once for what was read, the filter and the rows
+opened, not each frame. World shot: `world_shot::collection::duel6_sjk_collection_history`.
 
 ## Planned, not built
 

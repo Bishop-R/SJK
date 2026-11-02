@@ -17,7 +17,11 @@ long sides, and a lid hinged at the back that swings open while it rolls and clo
 what came out is taken. Since 30/10/2026 (Sol: "not just that rectangle") it stands on
 four iron feet under a plinth, its three iron bands and four corner posts stand out of the
 planks, an iron rim runs round its top, a lock plate hangs on its front and a handle on
-each end, and its lid arches, banded too.
+each end, and its lid arches, banded too. Since 31/10/2026 it is open under its lid, dark
+walls and a floor inside (Sol: the top looked sealed with wood; it was closed with
+planks and the bands' tops crossed it), and a faint halo of warm light rises 52 units
+round its top, its rays drifting slowly, so a box is found from afar (Sol's idea; a second
+surface of the chest's model, `models/sjk/mystery_box_halo`, added and two-sided).
 
 Words stand in the world over every box, in the headline font (Fira Sans Condensed, as
 centre prints), for every SJK player who sees it (hidden behind
@@ -172,14 +176,28 @@ roll, closing and laugh of the extras pack are Sol's.
 
 Players opt in with the Box hunt toy (`toy_boxhunt`, Collection > Toys, the quick wheel;
 look toy `box_hunt`); with it off a player is never the mark and is told nothing of the
-hunt. Among the players of a server with it on (at least 2), the hub picks a mark at
-random for 3 minutes, one mark at most every 10 minutes (Sol, 29/10/2026: from one pick
-to the next; the hunt rests in between, also when the mark is killed or leaves). The
-mark is told in the centre of the screen ("You are the mark!"),
+hunt. Among the players of a server with it on and in play (at least 3), the hub picks a
+mark at random for 3 minutes, one mark at most every 10 minutes (Sol, 29/10/2026: from
+one pick to the next; the hunt rests in between, also when the mark is killed or leaves).
+
+**In play** (Sol, 31/10/2026; before, 2 players with the toy on, away or not): every read
+of the hunt says whether the player is away: typing in the chat, in a menu, the console
+or a dialog, spectating or following someone, at the intermission, or idle two minutes
+(what holocrons count as playing, [holocrons.md](holocrons.md), and the chat besides). A
+change is read at once (2 seconds apart at least). The hub picks nobody away, and needs 3
+hunters in play; a hunter whose reads stopped for a minute counts as away. A mark away for
+a minute since being picked hands it on: another hunter in play becomes the mark at once,
+for a whole 3 minutes, told as any new mark is, when 3 others are in play; else they stay
+the mark.
+
+The mark is told in the centre of the screen ("You are the mark!"),
 the other hunters by a chat line, and they see "MARK" in red over the mark's head
 (hidden behind walls) and the mark's body ringed in red where they see it, the team
 outlines' enemy ring (`hud::team_outline`, 29/10/2026), in every game type and whatever
-`cg_teamOutline` says. Every hunter, the mark too, hears the game's alarm
+`cg_teamOutline` says. While the game server sends the mark (they are in this player's
+snapshot), a red arrow points at them through walls (Sol, 31/10/2026): over their head,
+under the label, when they are in view, else on a ring round the crosshair pointing
+their way. Every hunter, the mark too, hears the game's alarm
 (`sound/effects/mpalarm.wav`, Sol's pick, 28/10/2026; with "Mystery box sounds") as a new
 mark is picked, and a small card at the top centre of the screen names the mark (in
 the headline font, "BOX HUNT · THE MARK" over the name) or, red, tells the player "YOU
@@ -192,11 +210,19 @@ mark is hunted or the hub has no mark or another one. The card and the alarm are
 in the world, so it is hidden with them (menus, console, scoreboard, intermission). A hunter who kills the mark wins a free mystery box roll: the
 next box they open costs nothing (the centre says "press Use for your free roll" at a
 box). The hunt then rests until 10 minutes after that mark was picked (a minute at
-least).
+least). A hunter who wins nothing (they hold 3 unspent or won 5 that day) reads why in
+the centre too (31/10/2026; before, in the chat only, so it looked like a kill that won
+nothing).
 
 The hub never sees kills, so the mark's own client says who killed it
 (`POST /v1/box-hunt/killed`, from the game's obituary): a hunter cannot claim a kill it
-did not make, only the mark could fail to tell. A hunter keeps at most 3 free rolls and
+did not make, only the mark could fail to tell. It tells it once its player is the mark
+by the hub's event, before its next read (31/10/2026; a kill in those first seconds went
+untold), and tries twice. The hub counts a kill only before the mark's end, so a client
+stops showing the mark a second before it, by the seconds left the hub's read says
+(`left`; by the end time and its own clock for an older hub), and reads again then: it
+showed the mark up to 20 seconds after their end before 31/10/2026, and a hunter who
+killed them then won nothing (a player's report). A hunter keeps at most 3 free rolls and
 wins at most 5 a day. The client reads the hunt (`POST /v1/box-hunt`) every 20 seconds
 while the toy is on or a box stands on the map, and at once after the hub's toy events
 (`box_hunt`: `mark_<slot>`, `hunted_<slot>_<won>`). All the numbers are the hub's,
@@ -210,12 +236,19 @@ PROVISIONAL.
 - The explosion is SJK's only: no game server knows of it, so it hurts nobody else, and
   players on other clients see the opener die (the server's `kill`) with no box or
   explosion. A server that refuses `kill`, or counts it against the score, does so.
-- Two friends with the toy on could take turns being killed for free rolls; the 3-minute
-  mark, the pause and the 5 a day cap how much that pays.
+- Three friends with the toy on could take turns being killed for free rolls; the
+  3-minute mark, the pause and the 5 a day cap how much that pays.
+- Away is what the player's own client says: a modified client could say it is in play.
+  The client of 31/10/2026 sends `away`, which a hub before that day refuses (its read
+  takes no other field): the hub goes first.
+- The arrow shows the mark only while the game server sends them, which it does by what
+  the player could see (the PVS), not across the whole map.
 - Verified: unit tests (the pick of the faced box, which boxes stand on a map file and
   server, the roll slowing to its prize, the stop, the take and the take after 10
-  seconds, the lid, the words over a box, the hunt's words and reads, the result lines;
-  on the hub, the mark picked among hunters only, the kill counted only from the mark
-  and for a hunter, the pause, the free roll spent; on the hub, the odds, placing and
+  seconds, the lid, the words over a box, the hunt's words and reads, the result lines,
+  the mark by the event before a read, the mark's end by the hub's seconds left or its
+  clock; on the hub, the mark picked among hunters in play only and 3 of them, the away
+  mark handed on after a minute (or kept with too few others), the kill counted only
+  from the mark and for a hunter, the pause, the free roll spent; on the hub, the odds, placing and
   removing as the creator only, the price, the roll, the cooldown and another server's
   box). Not tried in a game; the hub side is deployed (27/10/2026).

@@ -291,6 +291,9 @@ mod cardboard_box;
 #[path = "world_shot_map_edits.rs"]
 mod map_edit_shots;
 
+#[path = "world_shot_ghost_editor.rs"]
+mod ghost_editor_shots;
+
 #[path = "world_shot_banana.rs"]
 mod banana_shots;
 #[path = "world_shot_body_fade.rs"]
@@ -309,8 +312,12 @@ mod mystery_box_shots;
 mod order66_shots;
 #[path = "world_shot_petals.rs"]
 mod petals;
+#[path = "world_shot_propgun.rs"]
+mod propgun_shots;
 #[path = "world_shot_ragdoll.rs"]
 mod ragdoll_shots;
+#[path = "world_shot_toy_master.rs"]
+mod toy_master_shots;
 
 #[path = "world_shot_blade_cards.rs"]
 mod blade_cards;
@@ -331,6 +338,8 @@ mod lagometer_shots;
 mod rig_model_shots;
 #[path = "world_shot_team_outline.rs"]
 mod team_outline_shots;
+#[path = "world_shot_toon.rs"]
+mod toon_shots;
 
 #[path = "world_shot_collection.rs"]
 mod collection;
@@ -376,9 +385,14 @@ mod chat_gifs_shots;
 #[path = "world_shot_jof_sjk_chat.rs"]
 mod jof_sjk_chat_shots;
 
+#[path = "world_shot_find_blades.rs"]
+mod find_blades_shots;
+
 #[path = "world_shot_text_sizes.rs"]
 mod text_sizes_shots;
 
+#[path = "world_shot_chat_reactions.rs"]
+mod chat_reactions_shots;
 #[path = "world_shot_chat_readability.rs"]
 mod chat_readability_shots;
 
@@ -401,8 +415,13 @@ mod log_requests;
 #[path = "world_shot_whats_new.rs"]
 mod whats_new;
 
+#[path = "world_shot_away_chat.rs"]
+mod away_chat_shots;
 #[path = "world_shot_card_scenes.rs"]
 mod card_scenes_shots;
+#[path = "world_shot_chat_logs.rs"]
+mod chat_logs_shots;
+
 #[path = "world_shot_chat_sounds.rs"]
 mod chat_sounds_shots;
 #[cfg(test)]
@@ -1234,6 +1253,7 @@ mod tests {
             rank: 1,
         };
         let me = sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1272,6 +1292,8 @@ Found the fog bug, ask me about it!"
             achievements: Vec::new(),
             avatar: String::new(),
             unlocks: vec![sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 1_791_336_225,
                 note: String::new(),
@@ -1308,11 +1330,15 @@ Found the fog bug, ask me about it!"
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -1327,12 +1353,14 @@ Found the fog bug, ask me about it!"
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         };
         let standings = crate::achievements::ALL
@@ -1442,6 +1470,7 @@ like this one.",
     #[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
     fn duel6_sjk_staff() {
         let profile = |key: &str, name: &str| sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
@@ -1494,6 +1523,9 @@ like this one.",
                     goal: kind.goal,
                     unlocked: 1_791_336_225,
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect(),
             names: vec![
@@ -1569,6 +1601,8 @@ like this one.",
                 verified: true,
                 medals: vec![medal("early_contributor", 1, "")],
                 unlocks: vec![sjk_identity::Unlock {
+                    holo: 0,
+                    solar: 0,
                     id: "saber_sun".to_owned(),
                     granted: 1_791_336_225,
                     note: String::new(),
@@ -2327,6 +2361,8 @@ like this one.",
                 ("name", "^1Sol^7Vulpes"),
             ];
             let sun = || sjk_identity::Unlock {
+                holo: 0,
+                solar: 0,
                 id: "saber_sun".to_owned(),
                 granted: 1_791_336_225,
                 note: "Thanks for testing the blades with us".to_owned(),
@@ -3603,6 +3639,7 @@ like this one.",
             .enumerate()
             .map(
                 |(index, (key, name, text, verified))| sjk_identity::ChatMessage {
+                    reactions: Default::default(),
                     id: index as u64 + 1,
                     at: now - (lines.len() - index) as i64 * 140,
                     key_id: (*key).to_owned(),
@@ -3670,6 +3707,8 @@ like this one.",
             person
         };
         let mut listed = sjk_identity::ChatState {
+            reaction: None,
+            own_key: None,
             messages,
             revision: 1,
             online: 7,

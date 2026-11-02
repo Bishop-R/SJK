@@ -1034,7 +1034,7 @@ impl Forge {
                 _ => PanelAction::None,
             });
         }
-        // Resting on a thing chooses it, as on every tab.
+        // Resting on a shop offer chooses it, as on every tab; a shader tile waits for a click.
         let offers = self.offers().len().min(4);
         if let Some(index) = within(OFFER_BASE, offers)
             .or_else(|| within(HOLOCRON_BASE, 2).map(|index| index + offers))
@@ -1046,8 +1046,10 @@ impl Forge {
             self.shop_selected = index.min(self.shop_choices().saturating_sub(1));
             return Some(PanelAction::None);
         }
+        // A shader tile is chosen (and previewed) by a click only, as on Shaders: resting
+        // the pointer on the way to Break down never changes it (Creyon, 31/10/2026).
         if let Some(index) =
-            within(TILE_BASE, self.listed()).filter(|_| self.section != Section::Shop)
+            within(TILE_BASE, self.listed()).filter(|_| self.section != Section::Shop && activate)
         {
             if *self.chosen_mut() != index {
                 self.armed = None;
@@ -1356,6 +1358,8 @@ mod tests {
 
     fn copy(id: &str, count: u32) -> sjk_identity::Unlock {
         sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.to_owned(),
             granted: 1,
             note: String::new(),
@@ -1389,6 +1393,21 @@ mod tests {
 
     fn key(panel: &mut Panel, key: KeyCode) -> PanelAction {
         panel.forge.key(None, key, false, false, false)
+    }
+
+    /// Creyon, 31/10/2026: a shader tile is chosen by a click only; the pointer resting
+    /// on another tile on the way to Break down leaves the choice alone.
+    #[test]
+    fn resting_on_a_tile_never_chooses_it() {
+        let held = [copy("saber_aurora", 2), copy("saber_tidal", 3)];
+        let mut panel = forge(Section::Break, &held, ForgeData::default());
+        assert!(panel.forge.listed() >= 2);
+        let now = Instant::now();
+        assert_eq!(panel.forge.breaks, 0);
+        let _ = panel.forge.token(TILE_BASE + 1, false, now);
+        assert_eq!(panel.forge.breaks, 0, "resting chose it");
+        let _ = panel.forge.token(TILE_BASE + 1, true, now);
+        assert_eq!(panel.forge.breaks, 1, "a click chooses it");
     }
 
     #[test]

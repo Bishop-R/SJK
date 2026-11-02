@@ -1979,6 +1979,7 @@ fn skin_glow_at(input: VertexOutput, pixel: f32, x: f32) -> vec3<f32> {
             return sig_coloured(input, glow * sig_edge(input)) * persona_fade(input);
         }
         let ray = sig_ray(input);
+        labRayPrepare(ray.o, ray.d);
         let shown = sig_full(input);
         glow += (max(sig_vol(ray.o, ray.d, pixel), vec3(0.0))
             + max(sig_orbit(ray.o, ray.d, pixel), vec3(0.0))) * shown;
@@ -2491,6 +2492,7 @@ fn fragment_solid(input: VertexOutput) -> @location(0) vec4<f32> {
             return vec4(sig_coloured(input, out.rgb), out.a * sig_edge(input) * persona_fade(input));
         }
         let ray = sig_ray(input);
+        labRayPrepare(ray.o, ray.d);
         let shown = sig_full(input);
         let near = clamp(sig_vol_solid(ray.o, ray.d, pixel), vec4(0.0), vec4(1.0));
         let round = clamp(sig_orbit_solid(ray.o, ray.d, pixel), vec4(0.0), vec4(1.0));
@@ -4331,6 +4333,11 @@ fn sig_edge(input: VertexOutput) -> f32 {
 }
 
 // @signature begin
+fn labRayPrepare(ro: vec3<f32>, rd: vec3<f32>) {
+    // The lab keeps what of its blade hiding depends on the view ray alone (`lab.glsl`,
+    // behindBlade); a module with no signature has nothing to keep.
+}
+
 fn sig_glow(g: vec3<f32>, b: vec2<f32>, r: f32, px: f32) -> vec3<f32> {
     return g;
 }

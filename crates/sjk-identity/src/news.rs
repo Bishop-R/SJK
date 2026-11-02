@@ -38,6 +38,11 @@ pub struct Announcement {
     /// A release's version (`2026.1025.1`); empty for news.
     #[serde(default)]
     pub version: String,
+    /// The news pictures the text names (`[[image:<id>]]`, [`crate::news_markup`]):
+    /// each id's width and height, so a page lays them out before they arrive. Hubs
+    /// before 31/10/2026 leave it out.
+    #[serde(default)]
+    pub images: BTreeMap<String, [u32; 2]>,
 }
 
 impl Announcement {
@@ -46,9 +51,10 @@ impl Announcement {
         self.kind == "release"
     }
 
-    /// The text's first line that holds something, as shown ([`plain_line`]).
+    /// The text's first line that holds something, as shown ([`plain_line`]), links as
+    /// their labels and pictures left out ([`crate::news_markup::plain`]).
     pub fn first_line(&self) -> String {
-        plain_text(&self.text)
+        plain_text(&crate::news_markup::plain(&self.text))
             .lines()
             .map(str::trim)
             .find(|line| !line.is_empty())
@@ -58,7 +64,10 @@ impl Announcement {
 
     /// Whether the text says more than its first line.
     pub fn has_more(&self) -> bool {
-        plain_text(&self.text)
+        if !crate::news_markup::images(&self.text).is_empty() {
+            return true;
+        }
+        plain_text(&crate::news_markup::plain(&self.text))
             .lines()
             .filter(|line| !line.trim().is_empty())
             .nth(1)
@@ -201,7 +210,30 @@ pub enum Official {
     Round(FeedRound),
 }
 
-/// What the creator asks the hub to announce (`POST /v1/creator/announce`).
+/// A news picture the hub stored (`PUT /v1/staff/news-image`, 31/10/2026): its id, which
+/// an announcement names as `[[image:<id>]]`, and its size.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct NewsImage {
+    /// Its id: 16 lowercase hex digits.
+    pub image: String,
+    /// Its width as the hub wrote it, in pixels.
+    pub width: u32,
+    /// Its height, in pixels.
+    pub height: u32,
+}
+
+/// Largest news picture the hub sends (it writes them at most 1600 x 900).
+pub const NEWS_IMAGE_MAX: u64 = 4 * 1024 * 1024;
+/// Largest picture the SJK team may upload, as the hub takes it.
+pub const NEWS_UPLOAD_MAX: usize = 3 * 1024 * 1024;
+
+/// Where the hub serves news picture `id` (no signature).
+pub fn news_image_path(id: &str) -> String {
+    format!("/v1/news-image/{id}")
+}
+
+/// What the SJK team asks the hub to announce (`POST /v1/staff/announce`; hubs before
+/// 31/10/2026 take only the creator's, at `POST /v1/creator/announce`).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AnnounceRequest {
     /// A release's announcement (`release`) or news (`news`).
@@ -225,6 +257,8 @@ pub enum AnnounceError {
     Text,
     /// A release without a version that reads as one (`2026.1025.1`).
     Version,
+    /// A link, picture or switch written wrong ([`crate::news_markup::check`]).
+    Markup,
 }
 
 impl AnnounceError {
@@ -234,6 +268,7 @@ impl AnnounceError {
             Self::Title => "bad_title",
             Self::Text => "bad_text",
             Self::Version => "bad_version",
+            Self::Markup => "bad_markup",
         }
     }
 
@@ -243,6 +278,9 @@ impl AnnounceError {
             Self::Title => "The title is one line of 1 to 80 characters, without ^ codes.",
             Self::Text => "The text is 1 to 2000 characters on at most 30 lines, without ^ codes.",
             Self::Version => "A release needs its version, like 2026.1025.1.",
+            Self::Markup => {
+                "A link, picture or switch is not written as [Label](open:<page>),                              [[image:<id>]] or [[switch:<cvar>]]."
+            }
         }
     }
 }
@@ -253,9 +291,10 @@ impl std::fmt::Display for AnnounceError {
     }
 }
 
-/// Whether `c` may stand in an announcement: the chat's alphabet without colour codes.
+/// Whether `c` may stand in an announcement: the chat's alphabet without colour codes,
+/// and the backtick that marks code (drawn in chips, as in the changelog; 31/10/2026).
 fn allowed(c: char) -> bool {
-    c != '^' && crate::bio::allowed(c)
+    c == '`' || (c != '^' && crate::bio::allowed(c))
 }
 
 /// The request ready to send (the title's spaces made one and trimmed, the text tidied as
@@ -283,6 +322,10 @@ pub fn check(request: &AnnounceRequest) -> Result<AnnounceRequest, AnnounceError
         || !text.chars().all(|c| c == '\n' || allowed(c))
     {
         return Err(AnnounceError::Text);
+    }
+    // The hub alone knows which pictures it holds; it checks their ids.
+    if crate::news_markup::check(&text, |_| true).is_err() {
+        return Err(AnnounceError::Markup);
     }
     let version = request.version.trim().to_owned();
     if request.release && !valid_version(&version) {
