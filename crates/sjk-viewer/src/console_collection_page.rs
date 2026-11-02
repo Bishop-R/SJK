@@ -196,6 +196,11 @@ impl ViewerConsole {
                 self.pending_banana = Some(on);
                 self.banana_on = on;
             }
+            PanelAction::Banner(id) => {
+                let _ = crate::player_identity::with_service(|service| {
+                    service.set_banner(id.to_owned())
+                });
+            }
             PanelAction::ChooseTag(id, finish) => {
                 self.set_cvar(crate::tags::CVAR, &id);
                 self.set_cvar(crate::tags::FINISH_CVAR, finish);
@@ -762,6 +767,12 @@ impl ViewerConsole {
     #[cfg(test)]
     pub(crate) fn collection_shader_for_shot(&mut self, row: usize) {
         self.collection_panel.choose_shader_for_shot(row);
+    }
+
+    /// Select a banner in a windowless UI fixture.
+    #[cfg(test)]
+    pub(crate) fn collection_banner_for_shot(&mut self, index: usize) {
+        self.collection_panel.choose_banner_for_shot(index);
     }
 
     /// Whether the Profile page's, the Collection page's or the Holocrons page's last

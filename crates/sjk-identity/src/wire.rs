@@ -99,6 +99,10 @@ impl Tick {
 /// A player's public profile as the hub serves it.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Profile {
+    /// Equipped cover id, shared across UI snapshots instead of allocating on clone.
+    /// Empty on older hubs or when unequipped; JSON remains an ordinary string.
+    #[serde(default, deserialize_with = "shared_banner")]
+    pub banner: std::sync::Arc<str>,
     /// First 16 hex digits of the SHA-256 of the public key.
     pub key_id: String,
     /// The public key, unpadded base64url.
@@ -186,6 +190,13 @@ pub struct Profile {
     /// refuse a card's id or a finish in a look's tag: a client offers neither then.
     #[serde(default)]
     pub tag_cards: Vec<String>,
+}
+
+/// Decode once on the worker; cloning profiles shares immutable banner storage.
+fn shared_banner<'de, D: serde::Deserializer<'de>>(
+    input: D,
+) -> Result<std::sync::Arc<str>, D::Error> {
+    String::deserialize(input).map(std::sync::Arc::from)
 }
 
 impl Profile {
@@ -343,6 +354,9 @@ pub struct OpenedCard {
 /// What opening one holocron brought.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Opened {
+    /// Independent profile-banner bonus, beside the ordinary prize; absent on old hubs.
+    #[serde(default)]
+    pub banner: Option<OpenedUnlock>,
     /// The holocron opened.
     pub holocron: u64,
     /// Its tier's wire id.
@@ -813,6 +827,9 @@ pub struct HolocronBuyAnswer {
 /// share per mille.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct LootTier {
+    /// Independent banner bonus chance per mille, absent on older hubs.
+    #[serde(default)]
+    pub banner: u32,
     /// The tier's wire id.
     pub tier: String,
     /// How often a drop is this tier.

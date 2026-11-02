@@ -1460,3 +1460,9 @@ are built. In the SJK UI the Identity page opens from the Profile
 page (its arc holds five entries), the in-game SJK menu and the `identity` command.
 Achievements a dedicated server would vouch for, and pictures for the achievements,
 are not made yet.
+
+## Profile banners
+
+A profile may equip an owned static cover, shared by its profile header and player
+cards. Choose it in Collection > Banners; the hub validates and saves equipment.
+Old or unknown covers use the neutral fallback. See [profile banners](profile-banners.md).

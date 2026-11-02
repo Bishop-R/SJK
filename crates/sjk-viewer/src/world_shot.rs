@@ -1260,6 +1260,7 @@ mod tests {
             key_id: "44f3d0b36c9b2510".to_owned(),
             key: String::new(),
             name: "^1Sol^7Vulpes".to_owned(),
+            banner: "".into(),
             bio: "Saber duelist, mostly staff and yellow. On JoF most evenings.
 
 Found the fog bug, ask me about it!"
@@ -1476,6 +1477,7 @@ like this one.",
             key_id: key.to_owned(),
             key: String::new(),
             name: name.to_owned(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: sjk_identity::Tick::None,
@@ -4107,3 +4109,6 @@ like this one.",
         });
     }
 }
+
+#[path = "world_shot_banners.rs"]
+mod profile_banners;

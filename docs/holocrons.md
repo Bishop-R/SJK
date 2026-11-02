@@ -604,3 +604,11 @@ for 150, a Rare for 400, source `bought`, outside the caps) are live since 21/10
 Collection's Forge ([cards.md](cards.md#the-forge)).
 Saber shaders drop already
 ([unlockables.md](unlockables.md#holocron-shader-drops)).
+
+## Profile banner prizes
+
+Openings may award a counted profile banner instead of a card and credits, when
+the hub supplies a banner share. Other prize shares stay unchanged, and crystals
+still give shaders only. The reveal shows the cover and links its use to Collection
+> Banners. See [profile banners](profile-banners.md#echo-rewards-and-ownership) for
+the first catalogue, proposed balance and inventory rules.

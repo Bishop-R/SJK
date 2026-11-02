@@ -123,8 +123,10 @@ impl ChatOverlay {
             .as_mut()
             .filter(|card| card.person.avatar.is_none())
             && let Some(key_id) = &card.person.key_id
+            && let Some((avatar, banner)) = crate::player_identity::card_appearance(key_id)
         {
-            card.person.avatar = crate::player_identity::avatar_version(key_id);
+            card.person.avatar = Some(avatar);
+            card.person.banner = banner;
         }
     }
 
@@ -257,6 +259,7 @@ impl ChatOverlay {
                     creator: hub.creator,
                     trust: hub.trust,
                     emoji: hub.emoji.clone(),
+                    banner: "",
                     avatar: mark.as_ref().map(|mark| mark.avatar.clone()),
                     medals: mark.map(|mark| mark.medals).unwrap_or_default(),
                     place,
@@ -305,6 +308,7 @@ impl ChatOverlay {
                         .as_ref()
                         .is_some_and(|mark| !crate::player_trades::blocked(&mark.key_id, name))
                         && crate::player_trades::trading_open(),
+                    banner: "",
                     avatar: mark.as_ref().map(|mark| mark.avatar.clone()),
                     medals: mark.map(|mark| mark.medals).unwrap_or_default(),
                     note: None,

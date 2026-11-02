@@ -438,6 +438,7 @@ fn duel6_sjk_kyber_crystals() {
         }
         // A Rare crystal opened: the strip (shaders only) at rest, then the entrance.
         let opened = |id: &str, name: &str| sjk_identity::Opened {
+            banner: None,
             holocron: 42,
             tier: "kyber_rare".to_owned(),
             card: None,

@@ -57,7 +57,7 @@ impl Count {
 }
 
 /// Each tab's count, in the row's order.
-pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 10] {
+pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 11] {
     let medals = medals::held(inputs);
     // Out of the ones the player sees: a retired one not held is not counted.
     let (achievements, achievements_total) = crate::achievements::tally(inputs.standings);
@@ -128,6 +128,21 @@ pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 10] {
         Count {
             held: cards::held(inputs),
             total: 0,
+        },
+        Count {
+            held: inputs
+                .snapshot
+                .filter(|_| inputs.enabled)
+                .and_then(|snapshot| snapshot.me.as_ref())
+                .map(|profile| {
+                    crate::profile_card::banner::ALL
+                        .iter()
+                        .filter(|banner| {
+                            crate::profile_card::banner::count(Some(profile), banner.id) > 0
+                        })
+                        .count()
+                }),
+            total: crate::profile_card::banner::ALL.len(),
         },
         // The history counts nothing.
         Count {
@@ -351,6 +366,7 @@ impl Panel {
             Tab::Shaders => self.shaders(&frame, inputs, seconds),
             Tab::Toys => self.toys(&frame, inputs),
             Tab::Tags => self.tags(&frame, inputs),
+            Tab::Banners => self.banners(&frame, inputs),
             Tab::Cards => self.cards(&frame, inputs, seconds),
             Tab::History => self.history_tab(&frame, inputs),
             Tab::Forge => {
@@ -367,7 +383,7 @@ impl Panel {
     /// How many of all the things the player holds, at the top right: the words, and a
     /// bar under them, a stretch to a tab in the tabs' order, each filled as far as its
     /// share held (one tick a thing no longer fits two hundred things, 21/10/2026).
-    fn tally(&mut self, frame: &Frame, counts: &[Count; 10]) {
+    fn tally(&mut self, frame: &Frame, counts: &[Count; 11]) {
         let s = frame.s;
         // Only the things with a set total: the holocrons are opened, not collected.
         let total: usize = counts.iter().map(|count| count.total).sum();
@@ -552,6 +568,10 @@ impl Panel {
                     Some(_) => keys.push((&["Enter"], "equip")),
                     None => {}
                 }
+            }
+            Tab::Banners => {
+                keys.push((&["Arrows"], "choose"));
+                keys.push((&["Enter"], "equip / unequip"));
             }
             Tab::Tags => {
                 keys.push((&["Arrows"], "choose"));

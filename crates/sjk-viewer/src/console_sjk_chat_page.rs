@@ -224,7 +224,7 @@ impl ViewerConsole {
     ) {
         self.sjk_chat_panel.place_card(
             crate::player_mutes::place,
-            crate::player_identity::avatar_version,
+            crate::player_identity::card_appearance,
         );
         self.sjk_chat_panel
             .find_pictures(crate::player_identity::avatar_version);

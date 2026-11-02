@@ -360,6 +360,8 @@ pub(crate) struct Panel {
     refreshed: Option<Instant>,
     /// The opening's ceremony, or the wait for the hub, while it shows.
     ceremony: Option<opening::Ceremony>,
+    /// Bonus covers reveal after the ordinary prizes, within the same opening.
+    bonus_prizes: Vec<opening::Prize>,
     /// The loot table shows over the page.
     loot: bool,
     /// Open all's question shows, the focus on its Open all or Cancel ([`ask_all`]).
@@ -411,6 +413,7 @@ impl Panel {
             data: Data::nothing(State::Waiting),
             refreshed: None,
             ceremony: None,
+            bonus_prizes: Vec::new(),
             loot: false,
             ask_all: None,
             opening_serial: 0,
@@ -983,6 +986,7 @@ mod tests {
             key_id: "0123456789abcdef".into(),
             key: String::new(),
             name: "Sol".into(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: sjk_identity::Tick::None,
@@ -1129,6 +1133,7 @@ mod tests {
 
     fn opened(tier: &str, finish: &str) -> sjk_identity::Opened {
         sjk_identity::Opened {
+            banner: None,
             holocron: 3,
             tier: tier.to_owned(),
             card: Some(sjk_identity::OpenedCard {

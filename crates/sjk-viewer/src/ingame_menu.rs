@@ -426,7 +426,7 @@ impl InGameMenu {
         };
         // The sender card's picture and place, asked before the profile card's lock.
         self.chat
-            .picture_sender_card(crate::player_identity::avatar_version);
+            .picture_sender_card(crate::player_identity::card_appearance);
         self.chat.locate_sender_card(crate::player_mutes::place);
         let mut lines = [chat_dock::BLANK; chat_dock::LINES];
         let chat_view = chat.then(|| chat_dock::ChatDock {

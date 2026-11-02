@@ -43,6 +43,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Trading: a finished trade says your new items are in your collection only when the other player gave you something; otherwise it says you gave your offer and received nothing, with the other player's name shown in full (clan marks included); the message over play grows to show the whole line instead of cutting it off (hub report #208) _(Creyon, PR #321)_
 - JoF hats look as in JoF EJK: the pumpkin, cap, cringe, fedora, Santa hat, sombrero and top hat show their own pictures instead of plain grey, in game and in the profile preview, and McFox and McSnowFox are solid instead of see-through _(Creyon, PR #236)_
 - SJK chat: react to public messages with six shared emoji buttons; reaction errors clear after five seconds _(Lumaya, PR #316)_
+- Profile banners: collect profile covers (Jedi Archives, Binary Sunset, Sith Eclipse, Hyperspace and Living Nebula) shown on your Profile and player card; Collection > Banners previews and wears them, a plain cover being free for everyone, and once the hub turns them on a holocron opening may bring one on top of its usual prize _(Lumaya, PR #319)_
 - Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
 
 ## 2026.1102.1 (Alpha) | 02/11/2026

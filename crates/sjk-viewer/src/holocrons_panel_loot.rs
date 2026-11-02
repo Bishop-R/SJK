@@ -71,8 +71,9 @@ const BACK_Y: f32 = 988.0;
 const BACK_WIDTH: f32 = 150.0;
 
 /// The notes on how the rolls are made, and the rarest card.
-fn notes() -> [String; 5] {
+fn notes() -> [String; 6] {
     let (rarity, finish, chance) = loot::rarest();
+    let table = crate::loot_odds::current();
     [
         "A card's rarity and its finish are rolled apart, so a kind of card is the two chances multiplied, weighed by how often each holocron drops."
             .to_owned(),
@@ -85,6 +86,7 @@ fn notes() -> [String; 5] {
         ),
         "The card is picked evenly among the cards of its rarity; a rarity with no card yet stays sealed.".to_owned(),
         "Gifts from the SJK team are given, not found; they open the same way.".to_owned(),
+        format!("Bonus banner, on top: {} / {} / {} / {} (Uncommon to Mythical).", loot::percent(f64::from(table.banner[0])/1000.0), loot::percent(f64::from(table.banner[1])/1000.0), loot::percent(f64::from(table.banner[2])/1000.0), loot::percent(f64::from(table.banner[3])/1000.0)),
     ]
     .map(crate::terms::say_owned)
 }

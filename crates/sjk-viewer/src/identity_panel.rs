@@ -735,6 +735,7 @@ mod tests {
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: name.to_owned(),
+            banner: "".into(),
             bio: bio.to_owned(),
             verified: false,
             tick: sjk_identity::Tick::None,

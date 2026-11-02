@@ -35,6 +35,8 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 
 #[path = "collection_achievements.rs"]
 mod achievements;
+#[path = "collection_banners.rs"]
+mod banners;
 #[path = "collection_cards.rs"]
 mod cards;
 #[path = "collection_forge.rs"]
@@ -194,6 +196,8 @@ const CARD_LOOK_BASE: u16 = 8_010;
 const _: () = assert!(CARD_BASE as usize + CARD_TILES_MAX <= CARD_SHOW_BASE as usize);
 /// The Tags tab's tiles, one to each tag of `tags::CATALOGUE` (27/10/2026), and its card's
 /// Choose button.
+const BANNER_BASE: u16 = 8_200;
+const BANNER_WEAR: u16 = 8_299;
 const TAG_BASE: u16 = 8_100;
 const TAG_CHOOSE_TOKEN: u16 = 8_099;
 /// The Tags tab's finish chips, Normal, Holo and Solar (31/10/2026).
@@ -394,6 +398,8 @@ pub(crate) enum PanelAction {
     /// Set `cg_tag` to this tag's id: the one `toy_tag` sticks.
     /// Pick a tag (or a card) for `toy_tag`, in a finish (`cg_tag`, `cg_tagFinish`).
     ChooseTag(String, &'static str),
+    /// Ask the hub to equip an owned banner, empty to unequip.
+    Banner(&'static str),
     /// Show a tab another page draws: the Holocrons page.
     Hub(Tab),
     /// Switch blade skin `skin`'s option `option` on or off (`cg_saberSkinOptions`).
@@ -624,6 +630,10 @@ pub(crate) struct Panel {
     /// 4 the Ragdoll, 5 the Drone, 6 the Boombox, 7 the Monitor, 8 Box hunt, 9 the Banana
     /// peel.
     toy: usize,
+    /// The banner chosen on Banners, which banners the profile holds and the one worn.
+    banner: usize,
+    banner_owned: [bool; crate::profile_card::banner::ALL.len()],
+    banner_current: &'static str,
     /// The tag chosen on Tags, in the wall's order (the catalogue's tags, then the
     /// cards), the things the last frame listed and what the player held of each (Enter
     /// picks only one held).
@@ -826,6 +836,9 @@ impl Panel {
             achievement_page: crate::achievements::Page::General,
             shader: 0,
             toy: 0,
+            banner: 0,
+            banner_owned: [false; crate::profile_card::banner::ALL.len()],
+            banner_current: "",
             tag: 0,
             tag_entries: Vec::new(),
             tag_held: Vec::new(),
@@ -1090,6 +1103,7 @@ impl Panel {
             Tab::Toys => PanelAction::Illuminate(!illuminate),
             Tab::Nameplates => PanelAction::SeeAndShare(!self.share_on),
             Tab::Tags => self.choose_tag(),
+            Tab::Banners => self.wear_banner(),
             Tab::Cards => {
                 self.card_inspect = self.cards_shown > 0;
                 PanelAction::None
@@ -1153,6 +1167,7 @@ impl Panel {
             Tab::Cards => self.cards_shown,
             Tab::Toys => TOY_COUNT,
             Tab::Tags => self.tag_entries.len().max(1),
+            Tab::Banners => crate::profile_card::banner::ALL.len(),
             _ => 0,
         }
     }
@@ -1166,6 +1181,7 @@ impl Panel {
             Tab::Cards => Some(&mut self.card),
             Tab::Toys => Some(&mut self.toy),
             Tab::Tags => Some(&mut self.tag),
+            Tab::Banners => Some(&mut self.banner),
             _ => None,
         }
     }
@@ -1992,6 +2008,19 @@ impl Panel {
                 self.tag = tag;
                 return PanelAction::None;
             }
+            if self.tab == Tab::Banners {
+                if token == BANNER_WEAR {
+                    return self.wear_banner();
+                }
+                if let Some(index) = token
+                    .checked_sub(BANNER_BASE)
+                    .map(usize::from)
+                    .filter(|index| *index < crate::profile_card::banner::ALL.len())
+                {
+                    self.banner = index;
+                    return PanelAction::None;
+                }
+            }
             if let Some(finish) = token
                 .checked_sub(TAG_FINISH_BASE)
                 .map(usize::from)
@@ -2268,6 +2297,12 @@ impl Panel {
     }
 
     /// Choose shader row `row` (0 the stock blade), for a world shot.
+    /// Select a banner in an offline UI fixture.
+    #[cfg(test)]
+    pub(crate) fn choose_banner_for_shot(&mut self, index: usize) {
+        self.banner = index.min(crate::profile_card::banner::ALL.len() - 1);
+    }
+
     #[cfg(test)]
     pub(crate) fn choose_shader_for_shot(&mut self, row: usize) {
         self.shader = row.min(SHADER_ROWS - 1);
@@ -2281,6 +2316,7 @@ impl Panel {
             Tab::Shaders => SHADER_BASE + self.shader as u16,
             Tab::Toys => TOY_TOKENS[self.toy.min(TOY_COUNT - 1)],
             Tab::Tags => TAG_BASE + self.tag.min(self.tag_entries.len().saturating_sub(1)) as u16,
+            Tab::Banners => BANNER_BASE + self.banner as u16,
             Tab::Cards if self.cards_shown > 0 => CARD_BASE + self.card as u16,
             Tab::Nameplates => SHARE_TOKEN,
             Tab::History => self.history_focus(),

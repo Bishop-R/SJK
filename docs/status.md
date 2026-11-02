@@ -1,3 +1,28 @@
+## Static profile banners
+
+31/10/2026, `feat/profile-banners`, client code `56a9b774` (including `main`
+`677a6073`) and matching hub PR #6 `3c77a2f`: five collectible covers and a
+neutral fallback, with Collection equip/unequip, profile headers and player cards.
+An independent 10% banner roll adds a cover to the ordinary Echo prize; card
+frequency, credits, Solar blade bonuses and other prizes retain their rules.
+The hub defaults banner drops to disabled until a supporting minimum release is
+configured; older clients keep ordinary rewards and see zero bonus odds.
+Ordinary rewards reveal first, then bonus covers, each group within the existing
+batch limit. Banners cannot use blade-only trade/craft/shatter operations.
+
+Windows x64 formatting, locked workspace build/tests and all-target clippy passed.
+Focused checks cover old JSON, a presence avatar without a fetched profile,
+retained ordinary rewards/Solar bonuses, independent odds and twenty openings
+with twenty bonus covers, including both summaries' canvas capacity at two
+window sizes. The hub's complete suite passed (491 library, 174 signed API,
+19 CLI, 3 donation and 41 panel tests), including client gates, duplicates,
+replay refusal, atomic bonus failure and last-copy removal. Offline GPU fixtures
+for Collection, profile and the bonus reveal were refreshed and inspected after
+the main merge. Remote cards use cached profiles rather than live equipment
+broadcasts. Deployment, live interoperability, other platforms and performance
+remain unverified; Sol's remaining design decisions and rollout are still pending.
+See [profile-banners.md](profile-banners.md).
+
 ## Ghost editor
 
 01/11/2026, `personal/ghost-editor`, based on `main` `1f2c6c2f` (Sol's request: duplicate a
