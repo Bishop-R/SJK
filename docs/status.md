@@ -3353,6 +3353,18 @@ Linux x86_64 with Rust 1.99.1, formatting, the locked workspace build and test
 suite, workspace all-target Clippy, and the locked release viewer build pass;
 existing warnings remain. The result has not yet been inspected in game.
 
+## Vehicle HUD per HUD style
+
+30/10/2026, `feat/vehicle-hud-styles`, based on `Sol-Vulpes/SJK` `d7c1f21b`: the
+vector vehicle strip (hull, speed, shield, ammunition) drew the same under every HUD
+but the retail one. Now each style shows only the vehicle's health in its own way:
+Text only a yellow hull number centred at the bottom (`menu_hud::Frame::simple_hud`,
+also when the vehicle hides its rider), SJK radial a yellow arc under the crosshair
+with the number inside, SJK classic a yellow bar with an `HP` line (layout widgets
+`vehicle_arc`, `vehicle_value`, `vehicle_label`, `vehicle_meter`). The strip stays only
+for game-data HUDs without `swoopvehiclehud`; the retail vehicle HUD is unchanged.
+Unit tests pin the text HUD run and which look draws the arc, the bar or the strip.
+
 ## Stock vehicle HUD in the game HUD
 
 19/10/2026, `feat/vehicle-hud-sjk-style`, on `fix/vehicle-hud-hide-rider`: a tester

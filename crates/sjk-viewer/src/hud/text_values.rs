@@ -35,7 +35,9 @@ impl HudOverlay {
             325 => &self.lagometer_readout.ping,
             326 => &self.lagometer_readout.interpolation,
             327 => &self.lagometer_readout.speed,
-            value @ vehicle::TEXT_FIRST..=vehicle::TEXT_LAST => self.vehicle.text(value),
+            value @ (vehicle::TEXT_FIRST..=vehicle::TEXT_LAST
+            | vehicle::VALUE_TEXT
+            | vehicle::LABEL_TEXT) => self.vehicle.text(value),
             value @ crate::scope::binoculars::TEXT_FIRST..=crate::scope::binoculars::TEXT_LAST => {
                 crate::scope::binoculars::DIGIT_TEXT
                     [(value - crate::scope::binoculars::TEXT_FIRST) as usize]

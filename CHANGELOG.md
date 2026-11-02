@@ -44,6 +44,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - JoF hats look as in JoF EJK: the pumpkin, cap, cringe, fedora, Santa hat, sombrero and top hat show their own pictures instead of plain grey, in game and in the profile preview, and McFox and McSnowFox are solid instead of see-through _(Creyon, PR #236)_
 - SJK chat: react to public messages with six shared emoji buttons; reaction errors clear after five seconds _(Lumaya, PR #316)_
 - Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
+- Vehicle HUD: each HUD style shows the health of the vehicle you pilot its own way: Text only just the number, SJK radial a yellow arc under the crosshair, SJK classic a yellow bar, instead of the same speed, shield and ammo strip for all _(Slash, PR #318)_
 
 ## 2026.1102.1 (Alpha) | 02/11/2026
 

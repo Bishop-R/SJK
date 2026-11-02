@@ -233,11 +233,15 @@ impl MenuHud {
         self.active
     }
 
-    /// Whether the game HUD draws the vehicle HUD from its own
-    /// `swoopvehiclehud` pictures, in place of SJK's vector vehicle strip.
+    /// Whether the game HUD draws the vehicle HUD, in place of SJK's vector vehicle
+    /// strip: from its own `swoopvehiclehud` pictures, or as the text HUD's hull number.
     pub(crate) fn draws_vehicle(&self) -> bool {
         self.active
-            && matches!(&self.loaded, Loaded::Menus { layout, .. } if layout.vehicle.is_some())
+            && match &self.loaded {
+                Loaded::Text => true,
+                Loaded::Menus { layout, .. } => layout.vehicle.is_some(),
+                Loaded::None => false,
+            }
     }
 
     /// Follow `cg_hudStyle`, `cg_hudFiles` and `cg_hudPack`, loading on first
@@ -372,8 +376,8 @@ impl MenuHud {
         match &self.loaded {
             Loaded::None => {}
             Loaded::Text => {
-                if let Some(readout) = readout {
-                    self.frame.simple_hud(readout, &mut self.timers);
+                if readout.is_some() || vehicle.is_some() {
+                    self.frame.simple_hud(readout, vehicle, &mut self.timers);
                     self.drawn = true;
                 }
             }

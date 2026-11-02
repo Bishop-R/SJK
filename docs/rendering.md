@@ -4800,11 +4800,20 @@ wide screen and grown by `cg_hudScale` from the bottom like the rest of the game
 HUD, with the turbo bar and the weapons-linked mark in `whiteShader` white
 ([menu_hud/frame.rs](../crates/sjk-viewer/src/menu_hud/frame.rs) `vehicle_hud`).
 Stock's item names are kept: `shield_tic*` show the hull and `armor_tic*` the shields.
-Under `classic` and `radial`, or with a HUD that has no vehicle menu, SJK draws its own
+The text HUD of a nonzero `cg_hudFiles` (the HUD picker's Text only) shows just the
+hull, as a yellow number centred at the bottom in the text HUD's font
+(`Frame::simple_hud`), also when the vehicle hides its rider and the player's numbers
+give way. SJK's own looks show only the hull too, through their layout documents'
+`vehicle_*` widgets (bindings `vehicle_ratio`, `vehicle_value`, `vehicle_text`, shown by
+`draw_vehicle`): `radial` a yellow arc under the crosshair, on the health arc's circle
+between the left and right meters (132 to 48 degrees, four segments, the same track and
+shadow, moved by the radial placement with the rest of the status), with the hull's
+number inside it; `classic` a yellow bar with an `HP` line above the weapon and
+ammunition lines. With a game-data HUD that has no vehicle menu, SJK draws its own
 ([hud/vehicle.rs](../crates/sjk-viewer/src/hud/vehicle.rs)): a vector strip at the
 bottom centre laid out on `swoopvehiclehud`'s 640x80 units (hull above, speed, shield
 and ammunition below), scaled by the window height and `cg_hudScale`, with its numbers
-in the HUD font. Both follow `CG_DrawVehicleHud`
+in the HUD font. The stock HUD and the strip follow `CG_DrawVehicleHud`
 (`cg_draw.c`): hull `stats[STAT_HEALTH]`
 of `armor` in 12 tics, shield `stats[STAT_ARMOR]` of `shields` in five, `speed` of
 `speedMax` in five (red and flashing every 200 ms while the turbo burns), `ammo[0]` and
