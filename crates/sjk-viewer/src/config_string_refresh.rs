@@ -267,7 +267,7 @@ impl GpuState {
         self.install_config_model(mesh, scene)
     }
 
-    fn install_config_model(
+    pub(crate) fn install_config_model(
         &mut self,
         mesh: StaticModelMesh,
         scene: FlattenedScene,

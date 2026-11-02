@@ -71,6 +71,15 @@ pub(crate) enum Kind {
     },
     /// Draw shader `to` wherever the map draws `from`.
     Remap { from: String, to: String },
+    /// Draw side `side` of world brush `brush` (BSP numbers), a face the map draws
+    /// nothing on (caulk, nodraw), with shader `to`; `shader` is the side's own, kept to
+    /// check and to name it.
+    ShowFace {
+        brush: u32,
+        side: u32,
+        shader: String,
+        to: String,
+    },
 }
 
 fn unit_scale() -> [f32; 3] {
@@ -106,6 +115,9 @@ impl Edit {
                 }
             }
             Kind::Remap { from, to } => format!("Remap: {} -> {}", last(from), last(to)),
+            Kind::ShowFace { shader, to, .. } => {
+                format!("Shown face: {} -> {}", last(shader), last(to))
+            }
         };
         match &self.server {
             Some(server) => format!("{what}, {server} only"),
@@ -138,6 +150,12 @@ impl Edit {
                 }
             ),
             Kind::Remap { from, to } => format!("remap {from} -> {to}"),
+            Kind::ShowFace {
+                brush,
+                side,
+                shader,
+                to,
+            } => format!("show brush {brush} side {side} ({shader}) as {to}"),
         };
         let scope = self
             .server
@@ -197,6 +215,7 @@ impl Document {
                     &[model]
                 }
                 Kind::Remap { from, to } => &[from, to],
+                Kind::ShowFace { shader, to, .. } => &[shader, to],
             };
             if paths
                 .iter()
@@ -252,6 +271,14 @@ fn same_subject(a: &Kind, b: &Kind) -> bool {
         (Kind::HideProp { entity: a, .. }, Kind::HideProp { entity: b, .. }) => a == b,
         (Kind::HideSurface { surface: a, .. }, Kind::HideSurface { surface: b, .. }) => a == b,
         (Kind::Remap { from: a, .. }, Kind::Remap { from: b, .. }) => a.eq_ignore_ascii_case(b),
+        (
+            Kind::ShowFace {
+                brush: a, side: c, ..
+            },
+            Kind::ShowFace {
+                brush: b, side: d, ..
+            },
+        ) => a == b && c == d,
         _ => false,
     }
 }
@@ -380,6 +407,25 @@ mod tests {
         assert_eq!(label(hide), "Hidden prop: tree01.md3");
         assert_eq!(label(placed), "Placed: crate_big.md3, 1.2.3.4:29070 only");
         assert_eq!(label(remap), "Remap: floor -> floor2");
+    }
+
+    #[test]
+    fn a_shown_face_is_one_edit_per_brush_side() {
+        let mut document = Document::new("mp/ffa3", 1);
+        let face = |side: u32, to: &str| Kind::ShowFace {
+            brush: 40,
+            side,
+            shader: "textures/system/caulk".into(),
+            to: to.into(),
+        };
+        let first = document.add(face(7, "textures/a/wall"), None);
+        assert_eq!(document.add(face(7, "textures/a/wall2"), None), first);
+        assert_ne!(document.add(face(8, "textures/a/wall"), None), first);
+        assert_eq!(document.edits[0].kind, face(7, "textures/a/wall2"));
+        assert_eq!(document.edits[0].label(), "Shown face: caulk -> wall2");
+        let text = serde_json::to_string(&document).unwrap();
+        assert!(text.contains(r#""kind":"show_face""#), "{text}");
+        assert_eq!(Document::parse(&text, "mp/ffa3", 1).unwrap(), document);
     }
 
     #[test]

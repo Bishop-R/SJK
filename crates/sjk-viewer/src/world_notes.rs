@@ -54,6 +54,10 @@ const ENTITY_RADIUS: f32 = 160.0;
 /// `CONTENTS_SOLID | CONTENTS_PLAYERCLIP`-style mask of the collision trace: anything a
 /// player could stand against.
 const COLLISION_MASK: u32 = 1 | 0x10000;
+/// `SURF_NODRAW`: the side the collision trace met draws nothing.
+const SURF_NODRAW: u32 = 0x0020_0000;
+/// How much nearer than the drawn surface a nodraw side must be to be selected instead.
+const FACE_MARGIN: f32 = 1.0;
 /// JKA's standing view height: `setviewpos` places the origin, the eye sits above it.
 const VIEW_HEIGHT: f32 = 36.0;
 /// Most edges an outline keeps, and most dots it draws a frame (the HUD's shapes share
@@ -79,6 +83,9 @@ pub(crate) struct Selection {
     surface: Option<Surface>,
     entity: Option<Entity>,
     collision: Option<Collision>,
+    /// The caulk or nodraw brush side the ray met before any drawn surface: edits may
+    /// draw it ([`crate::map_edits::faces`]).
+    face: Option<crate::map_edits::faces::Face>,
     /// The outline drawn while selected (`Notes::draw_highlight`).
     edges: Vec<[Vec3; 2]>,
     /// The triangles shaded while selected.
@@ -189,6 +196,12 @@ impl Selection {
                 model.distance
             );
         }
+        if let Some(face) = &self.face {
+            return format!(
+                "{} (brush {} side {}, drawn by no surface), {:.0} units",
+                face.shader, face.brush, face.side, self.distance
+            );
+        }
         let what = match (&self.surface, &self.entity) {
             (_, Some(entity)) if !entity.shaders.is_empty() => format!(
                 "{} {} ({})",
@@ -229,6 +242,13 @@ impl Selection {
                 classname: model.entity.classname.clone(),
                 model: model.entity.model.clone(),
                 shader: model.shaders.first().map(|shader| shader.shader.clone()),
+            };
+        }
+        if let Some(face) = &self.face {
+            return EditTarget::Face {
+                brush: face.brush,
+                side: face.side,
+                shader: face.shader.clone(),
             };
         }
         match (&self.surface, &self.entity) {
@@ -273,6 +293,9 @@ impl Selection {
     /// The shaders the note is about, as remaps name them: the surface's, or the
     /// model's surfaces'.
     fn noted_shaders(&self) -> Vec<String> {
+        if let Some(face) = self.face.as_ref().filter(|_| self.model.is_none()) {
+            return sjk_client::shader_name(&face.shader).into_iter().collect();
+        }
         let names: Vec<&str> = match (&self.model, &self.surface, &self.entity) {
             (Some(model), _, _) => model.shaders.iter().map(|s| s.shader.as_str()).collect(),
             (None, Some(surface), _) => vec![surface.shader.as_str()],
@@ -291,7 +314,9 @@ impl Selection {
         use sjk_identity::report::{
             NOTE_MODEL_PATH_MAX, NOTE_MODEL_SHADERS_MAX, NOTE_REMAPS_MAX, NOTE_SHADER_MAX, field,
         };
+        let face = self.face.as_ref().filter(|_| self.model.is_none());
         let (shader, remapped) = match (&self.model, &self.surface, &self.entity) {
+            _ if face.is_some() => (face.map_or("", |face| face.shader.as_str()), None),
             (Some(model), _, _) => model.shaders.first().map_or(("", None), |shader| {
                 (shader.shader.as_str(), shader.remapped.as_deref())
             }),
@@ -573,6 +598,7 @@ pub(crate) fn pick(
             surface,
             entity,
             collision: collision.clone(),
+            face: None,
             edges,
             triangles,
             selected: Instant::now(),
@@ -613,6 +639,35 @@ pub(crate) fn pick(
             Some(entity_of(number, shaders)),
             outline,
         ));
+    }
+    // A caulk or nodraw side nearer than any drawn surface: the map draws nothing there
+    // (a hole in the world, or a face edits drew), only the brush is.
+    let nodraw_first = collision.as_ref().is_some_and(|collision| {
+        collision.surface_flags & SURF_NODRAW != 0
+            && world
+                .as_ref()
+                .is_none_or(|hit| collision.distance + FACE_MARGIN < hit.distance)
+    });
+    if nodraw_first && let Some(face) = crate::map_edits::faces::pick(bsp, eye, direction, REACH) {
+        let point = eye + direction * face.distance;
+        let corners: Vec<Vec3> = face.polygon.iter().map(|p| Vec3::from_array(*p)).collect();
+        let edges = (0..corners.len())
+            .map(|i| [corners[i], corners[(i + 1) % corners.len()]])
+            .collect();
+        let triangles = (2..corners.len())
+            .map(|i| [corners[0], corners[i - 1], corners[i]])
+            .collect();
+        let entity = nearest_entity(&entities, point).map(|number| entity_of(number, Vec::new()));
+        let mut selected = selection(
+            point,
+            face.normal,
+            face.distance,
+            None,
+            entity,
+            (edges, triangles),
+        );
+        selected.face = Some(face);
+        return Some(selected);
     }
     let hit = world?;
     let point = eye + direction * hit.distance;
@@ -873,6 +928,13 @@ pub(crate) enum EditTarget {
         shader: String,
         kind: &'static str,
     },
+    /// A side of a world brush the map draws nothing on (caulk, nodraw): its BSP brush
+    /// and side numbers and its shader.
+    Face {
+        brush: u32,
+        side: u32,
+        shader: String,
+    },
     /// Something edits do not change (a mover, an entity marker).
     Other,
 }
@@ -972,6 +1034,7 @@ impl Notes {
                 surface: None,
                 entity: None,
                 collision: None,
+                face: None,
                 edges: Vec::new(),
                 triangles: Vec::new(),
                 selected: Instant::now(),
@@ -1025,6 +1088,7 @@ impl Notes {
                 shaders: Vec::new(),
             }),
             collision: None,
+            face: None,
             edges: box_edges(low, high),
             triangles: box_triangles(low, high),
             selected: Instant::now(),
@@ -1611,6 +1675,7 @@ mod tests {
             }),
             entity: None,
             collision: None,
+            face: None,
             edges: Vec::new(),
             triangles: Vec::new(),
             selected: Instant::now(),
@@ -1719,6 +1784,7 @@ mod tests {
                 }),
                 entity: None,
                 collision: None,
+                face: None,
                 edges: Vec::new(),
                 triangles: Vec::new(),
                 selected: Instant::now(),

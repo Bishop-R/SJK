@@ -508,6 +508,11 @@ impl GpuState {
                     ),
                 })
             }
+            EditTarget::Face {
+                brush,
+                side,
+                shader,
+            } => self.map_edit_unshow_face(brush, side, &shader, server),
             EditTarget::Other => Err(format!("{}: not something edits hide", aim.summary)),
         }
     }
@@ -661,6 +666,14 @@ impl GpuState {
         };
         let aim = self.map_edit_aim()?;
         let server = self.map_edit_server()?;
+        if let EditTarget::Face {
+            brush,
+            side,
+            shader,
+        } = &aim.target
+        {
+            return self.map_edit_show_face(*brush, *side, shader.clone(), target, server);
+        }
         let from = match &aim.target {
             EditTarget::Surface { shader, .. } => shader.clone(),
             EditTarget::Model {
@@ -703,6 +716,67 @@ impl GpuState {
             server,
         );
         self.map_edit_saved(format!("Edit {id}: {from} drawn as {to}"))
+    }
+
+    /// Draw caulk or nodraw side `side` of brush `brush` (its shader `shader`) with
+    /// shader `target`, or as nothing again with `-`.
+    fn map_edit_show_face(
+        &mut self,
+        brush: u32,
+        side: u32,
+        shader: String,
+        target: &str,
+        server: Option<String>,
+    ) -> Result<Vec<String>, String> {
+        self.world_notes.cancel_selection();
+        if target == "-" {
+            return self.map_edit_unshow_face(brush, side, &shader, server);
+        }
+        let (vfs, shaders) = (
+            self.vfs.clone().ok_or("No loaded map")?,
+            self.shaders.clone(),
+        );
+        // The same checks a remap's target passes: a shader or image the game has.
+        let (_, to) = crate::world_materials::map_remaps::checked(&vfs, &shaders, &shader, target)?;
+        let id = self.map_edit_document()?.add(
+            Kind::ShowFace {
+                brush,
+                side,
+                shader: shader.clone(),
+                to: to.clone(),
+            },
+            server,
+        );
+        self.map_edit_saved(format!(
+            "Edit {id}: {shader} face (brush {brush} side {side}) drawn as {to}"
+        ))
+    }
+
+    /// Remove the edit drawing side `side` of brush `brush` for `server`'s scope.
+    fn map_edit_unshow_face(
+        &mut self,
+        brush: u32,
+        side: u32,
+        shader: &str,
+        server: Option<String>,
+    ) -> Result<Vec<String>, String> {
+        let document = self.map_edit_document()?;
+        let shown = document.edits.iter().find(|edit| {
+            edit.server == server
+                && matches!(
+                    edit.kind,
+                    Kind::ShowFace { brush: b, side: s, .. } if b == brush && s == side
+                )
+        });
+        let Some(id) = shown.map(|edit| edit.id) else {
+            return Err(format!(
+                "{shader}: no edit draws this face for these servers"
+            ));
+        };
+        document.remove(id);
+        self.map_edit_saved(format!(
+            "Edit {id} removed: the face is drawn as nothing again"
+        ))
     }
 
     /// Undo the last change to this map's edits (`undo`), or redo the last undone.
