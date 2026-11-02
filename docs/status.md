@@ -77,6 +77,33 @@ and a Holo tag, a Holo and a Solar credits card, a Solar tag on the floor) and
 verified: in a game against a hub running `tag-cards` (finishes and cards end to end, a
 second client seeing them), frame time with many finished tags, and the art at 512 (the
 pack's pictures are 256).
+## Loading graphics with the day tint cannot close the game (hub report #219)
+
+31/10/2026, `fix/day-clock-load-crash`, based on `main` `e4447394`. A player's game closed
+without a message while loading graphics on a JoF server three times after turning on
+`r_dayClock`, which in the SJK and Vanilla presets builds the sky's day tint
+(`sky_stage::day`), until then built only with Sun and sky on. The exact crash was not
+reproduced: offline, T1_Fatal in the SJK and Vanilla presets with the clock on and off
+loads and draws on Vulkan, also built on a worker with no console and adopted as a map
+change. What the fix covers: the tint's pipelines are built inside `gpu_guard::capture` (`day_sky_guard.rs`),
+so one wgpu rejects leaves the map's own sky; `crashes/day-sky.txt`, written before the
+compile and removed after, makes the start after a session that closed while compiling
+leave the tint out once, with a console line, then try again (as `crashes/stage-hilt.txt`
+does for #214); and on DX12 without `dxcompiler.dll` (FXC) maps load again: `hud.wgsl`
+ended its fragment program with `discard`, which FXC refused (X3507, not all control paths
+return a value), failing every load before the world, and with Sun and sky
+`gi_probes.wgsl`'s `update` returned on a probe's state (a storage read) before its
+workgroup barriers, which FXC refused (X4026); a dead probe now skips the work and returns
+after them. Verified: the unit test
+`a_compile_left_running_is_found_once_and_a_finished_one_not_at_all`, the GPU test
+`a_rejected_compile_falls_back_and_leaves_no_marker` (Vulkan and DX12), the ignored world
+shot `pc_clock_every_preset` (`PC_CLOCK_CASES` narrows it): on DX12 with FXC, T1_Fatal in
+Vanilla and SJK with the clock on and duel6 in Experimental with the clock on; with DXC
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in Experimental; on Vulkan
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in SJK and Experimental, clock on.
+Limits: T1_Fatal in Experimental on DX12 stopped at the lamp light cache's page buffer
+(`SJK lamp cache pages` invalid), not a compile, so that case was checked on duel6. fmt,
+the sjk-viewer tests and Clippy.
 
 ## Map editor made easier
 

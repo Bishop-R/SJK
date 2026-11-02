@@ -39,6 +39,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 
 - The Toy Master's toys can put on longer shows in steps: the players around one dance at its beat with a glowing ring on the ground showing how far it reaches, then float weightless (in looks only, your view stays your own), and at the end it throws out credits, kyber shards and holocrons that bounce and land: Use takes one, first come first served _(Sol)_
 - Hilts: choosing an empty hilt from the community list (such as Empty Hilt (Stance)) no longer closes the game, and no longer closes it at every start after: it shows the blade with no hilt, and a hilt the menu cannot show falls back to the stock one and says so in the log _(Slash, after hub report #214)_
+- Loading graphics with Sun follows PC clock (`r_dayClock`) or Sun and sky on can no longer close the game: if the sky's day and night tint cannot be built, the map keeps its own sky, and if the game closed while building it, the next start leaves it out once and says so in the console. On DX12 without `dxcompiler.dll` maps load again: the HUD's program, and with Sun and sky the light probes' update, no longer fail to compile _(Slash, after hub report #219)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

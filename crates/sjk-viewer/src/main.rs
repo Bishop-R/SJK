@@ -81,6 +81,7 @@ mod crash_report;
 mod crosshair_scan;
 mod cut_trace;
 mod damage_feedback;
+mod day_sky_guard;
 mod decal_marks;
 mod decal_store;
 mod decoded_image_cache;
