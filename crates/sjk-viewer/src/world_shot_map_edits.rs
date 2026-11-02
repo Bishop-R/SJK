@@ -206,3 +206,129 @@ fn duel6_map_editor_panel() {
         }
     });
 }
+
+/// A caulk face drawn by an edit (`Kind::ShowFace`): the first caulk side of `SJK_FACE_MAP`
+/// (default duel6) with open space in front and no drawn surface over it, seen from 96
+/// units out without edits, selected (the panel's Hidden face page), drawn with a wall
+/// shader of the map, then the edit taken back.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn caulk_face_shown() {
+    on_big_stack(|| {
+        let map = std::env::var("SJK_FACE_MAP").unwrap_or_else(|_| "duel6".to_owned());
+        let Some((mut gpu, _profile)) = open(&format!("maps/mp/{map}.bsp"), [1280, 720], None, &[])
+        else {
+            return;
+        };
+        if let Some(console) = gpu.console.as_mut() {
+            console.close_for_connection();
+        }
+        let bsp = &gpu.bsp;
+        let world = bsp.render().models()[0].brushes.clone();
+        let mut found = None;
+        'brushes: for brush in world {
+            for side in bsp.brushes()[brush].sides.clone() {
+                let shader = &bsp.shaders()[bsp.brush_sides()[side].shader];
+                if !shader.name_lossy().contains("caulk") {
+                    continue;
+                }
+                let polygon = bsp.brush_side_polygon(brush, side);
+                if polygon.len() < 3 {
+                    continue;
+                }
+                let normal = Vec3::from_array(bsp.planes()[bsp.brush_sides()[side].plane].normal);
+                // A wall, so the camera stands beside it rather than over or under it.
+                if normal.z.abs() > 0.3 {
+                    continue;
+                }
+                let centre = Vec3::from_array(crate::map_edits::faces::centre(&polygon));
+                let eye = centre + normal * 96.0;
+                if bsp.point_contents(eye.to_array(), 1) != 0 {
+                    continue;
+                }
+                let drawn_over = gpu.decal_surfaces.ray_hit(eye, -normal, 97.0).is_some();
+                let picked = crate::map_edits::faces::pick(bsp, eye, -normal, 200.0);
+                if !drawn_over
+                    && picked.is_some_and(|face| {
+                        face.brush as usize == brush && face.side as usize == side
+                    })
+                {
+                    found = Some((brush, side, shader.name_lossy().into_owned(), centre, eye));
+                    break 'brushes;
+                }
+            }
+        }
+        let Some((brush, side, shader, centre, eye)) = found else {
+            panic!("{map}: no caulk wall seen from open space");
+        };
+        let (yaw, pitch) = look(eye.to_array(), centre.to_array());
+        aim(&mut gpu, eye.to_array(), yaw, pitch);
+        let before = frame(&mut gpu, 40);
+        let mut document = Document::new(&format!("mp/{map}"), 1);
+        document.unpublished = true;
+        gpu.shot_map_edits(Some(document.clone()));
+        gpu.shot_map_edit_panel(Tab::Selected, None);
+        let selected = gpu.world_notes.waiting_selection().map(|s| s.summary());
+        println!("selected: {selected:?}");
+        assert!(
+            matches!(
+                gpu.world_notes.waiting_selection().map(|s| s.edit_target()),
+                Some(crate::world_notes::EditTarget::Face { brush: b, side: s, .. })
+                    if b as usize == brush && s as usize == side
+            ),
+            "the crosshair selects the caulk face"
+        );
+        let panel = shoot(&mut gpu, 8, "caulk-face-selected");
+        let target = gpu
+            .bsp
+            .shaders()
+            .iter()
+            .map(|shader| shader.name_lossy().into_owned())
+            .find(|name| {
+                name.starts_with("textures/")
+                    && name.contains("wall")
+                    && !["sky", "nodraw", "caulk", "clip", "trigger", "system"]
+                        .iter()
+                        .any(|word| name.contains(word))
+            })
+            .expect("a wall shader");
+        gpu.world_notes.cancel_selection();
+        gpu.close_map_edit_panel();
+        document.add(
+            Kind::ShowFace {
+                brush: brush as u32,
+                side: side as u32,
+                shader: shader.clone(),
+                to: target.clone(),
+            },
+            None,
+        );
+        gpu.shot_map_edits(Some(document));
+        let shown = frame(&mut gpu, 40);
+        gpu.shot_map_edits(None);
+        let after = frame(&mut gpu, 40);
+        let changed = |a: &image::RgbaImage, b: &image::RgbaImage| {
+            a.pixels()
+                .zip(b.pixels())
+                .filter(|(a, b)| a.0.iter().zip(b.0).any(|(x, y)| x.abs_diff(y) > 24))
+                .count()
+        };
+        println!("{map}: brush {brush} side {side} ({shader}) at {centre:?} drawn as {target}");
+        println!(
+            "pixels changed: shown {}, restored {}",
+            changed(&before, &shown),
+            changed(&before, &after)
+        );
+        println!("{}", panel.display());
+        println!(
+            "{}",
+            sheet(
+                &[before, shown, after],
+                3,
+                960,
+                &format!("caulk-face-{map}")
+            )
+            .display()
+        );
+    });
+}

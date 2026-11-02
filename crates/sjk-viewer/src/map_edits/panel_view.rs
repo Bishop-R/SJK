@@ -267,6 +267,7 @@ fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
         Picked::Placed => "Placed model",
         Picked::Surface { .. } => "Surface",
         Picked::Entity => "Game entity",
+        Picked::Face => "Hidden face",
         Picked::Other => "Not editable",
     };
     text(
@@ -319,6 +320,13 @@ fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
             frame,
             y + 8.0,
             "The game needs it: it can be remapped, not hidden.",
+            color::MUTED,
+        ),
+        Picked::Face => line(
+            ui,
+            frame,
+            y + 8.0,
+            "The map draws nothing here: pick a shader to draw it.",
             color::MUTED,
         ),
         Picked::Other => {}
@@ -381,10 +389,17 @@ fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
         frame,
         panel,
         y,
-        &[
-            (REMAP, "Remap", panel.has_remap_target()),
-            (UNREMAP, "Remove remap", true),
-        ],
+        &if selection.picked == Picked::Face {
+            [
+                (REMAP, "Draw", panel.has_remap_target()),
+                (UNREMAP, "Draw nothing", true),
+            ]
+        } else {
+            [
+                (REMAP, "Remap", panel.has_remap_target()),
+                (UNREMAP, "Remove remap", true),
+            ]
+        },
     );
 }
 
@@ -951,6 +966,7 @@ mod tests {
             ("entity", panel(Tab::Selected, Some(Picked::Entity))),
             ("place", panel(Tab::Place, None)),
             ("edits", panel(Tab::Edits, None)),
+            ("face", panel(Tab::Selected, Some(Picked::Face))),
         ]
     }
 
@@ -1013,6 +1029,7 @@ mod tests {
         assert!(tokens("prop").contains(&HIDE) && tokens("prop").contains(&COPY));
         assert!(tokens("surface").contains(&HIDE_GROUP));
         assert!(!tokens("entity").contains(&HIDE) && tokens("entity").contains(&REMAP_FIELD));
+        assert!(!tokens("face").contains(&HIDE) && tokens("face").contains(&REMAP));
         let prop = tokens("prop");
         assert!(prop.contains(&(SHADER_ROW + SHADER_ROWS as u16 - 1)) && prop.contains(&REMAP));
         assert!(!prop.contains(&(SHADER_ROW + SHADER_ROWS as u16)));

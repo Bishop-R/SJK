@@ -15,10 +15,13 @@
 //! - hidden surfaces get degenerate triangles in the world's index buffer (every pass
 //!   draws nothing there) and leave the triangles picks and marks use;
 //! - placed models load on demand ([`crate::model_demand`]) and are drawn each frame;
-//! - remaps join the world's remaps as source `edit`, over the map's and the server's.
+//! - remaps join the world's remaps as source `edit`, over the map's and the server's;
+//! - shown faces (caulk and nodraw brush sides) are built as small models once and drawn
+//!   each frame ([`faces`]).
 
 pub(crate) mod document;
 pub(crate) mod editor;
+pub(crate) mod faces;
 pub(crate) mod panel;
 mod panel_view;
 
@@ -34,6 +37,9 @@ pub(crate) const CVAR: &str = "cg_mapEdits";
 pub(crate) const FOLDER: &str = "map_edits";
 /// The class picks give a placed model, so they can tell it from the map's entities.
 pub(crate) const PLACED_CLASS: &str = "sjk_map_edit";
+/// The model name of a shown face's mesh; its variant names the face and its shader, so
+/// no model of the game data is ever taken for one.
+const FACE_MODEL: &str = "*sjk_face";
 
 /// The map edits of one world.
 #[derive(Default)]
@@ -50,6 +56,8 @@ pub(crate) struct State {
     applied_for: Option<(u64, Option<std::net::SocketAddr>, bool)>,
     /// The placed models drawn now.
     placed: Vec<Placed>,
+    /// The shown faces drawn now: each one's mesh in `object_meshes` and where it is lit.
+    faces: Vec<(usize, ActorInstance)>,
     /// `object_meshes.len()` when [`Self::placed`] last looked their meshes up.
     meshes_seen: usize,
     /// The hub copies' revision last read, and when the hub's state was last read.
@@ -451,6 +459,7 @@ impl GpuState {
         let mut surfaces = BTreeSet::new();
         let mut remaps = Vec::new();
         let mut placed = Vec::new();
+        let mut shown_faces = Vec::new();
         let edits = self
             .map_edits
             .document
@@ -501,8 +510,37 @@ impl GpuState {
                     }),
                 }),
                 Kind::Remap { from, to } => remaps.push((from.clone(), to.clone())),
+                Kind::ShowFace {
+                    brush,
+                    side,
+                    shader,
+                    to,
+                } => {
+                    // The checksum pins the map; the side's shader is a last check.
+                    if let Some((polygon, normal)) =
+                        faces::polygon(&self.bsp, *brush, *side, shader)
+                    {
+                        shown_faces.push((
+                            format!("{brush}:{side}:{to}"),
+                            polygon,
+                            normal,
+                            to.clone(),
+                        ));
+                    }
+                }
             }
         }
+        self.map_edits.faces = shown_faces
+            .into_iter()
+            .filter_map(|(variant, polygon, normal, to)| {
+                let origin = faces::centre(&polygon);
+                let mesh = self.face_mesh(variant, &polygon, normal, origin, &to)?;
+                Some((
+                    mesh,
+                    ActorInstance::new(origin, [0.0, 0.0, 0.0, 1.0], [1.0; 3]),
+                ))
+            })
+            .collect();
         self.static_models.set_hidden(props.clone());
         let before = std::mem::take(&mut self.map_edits.applied.surfaces);
         for &surface in before.difference(&surfaces) {
@@ -557,6 +595,54 @@ impl GpuState {
         self.decal_surfaces.set_hidden(surface, !shown);
     }
 
+    /// The mesh of a shown face (`variant` names it and its shader), built and installed
+    /// the first time it is asked for: its index in `object_meshes`.
+    fn face_mesh(
+        &mut self,
+        variant: String,
+        polygon: &[[f32; 3]],
+        normal: [f32; 3],
+        origin: [f32; 3],
+        shader: &str,
+    ) -> Option<usize> {
+        let appearance = sjk_runtime::Appearance {
+            model: FACE_MODEL.to_owned(),
+            variant,
+        };
+        let find = |meshes: &[crate::object_meshes::StaticModelMesh]| {
+            meshes.iter().position(|mesh| mesh.appearance == appearance)
+        };
+        if let Some(index) = find(&self.object_meshes) {
+            return Some(index);
+        }
+        let size = self
+            .vfs
+            .as_ref()
+            .and_then(|vfs| texture_size(vfs, &self.shaders, shader));
+        let mut scene = crate::scene_flatten::FlattenedScene::default();
+        let built =
+            faces::append(&mut scene, polygon, normal, origin, shader, size).and_then(|draws| {
+                self.install_config_model(
+                    crate::object_meshes::StaticModelMesh {
+                        appearance: appearance.clone(),
+                        draws,
+                        center: [0.0; 3],
+                        flash_bolt: None,
+                        turning_bone: None,
+                    },
+                    scene,
+                )
+            });
+        if let Err(error) = built {
+            crate::log::progress(format_args!(
+                "map edit face {}: {error}",
+                appearance.variant
+            ));
+            return None;
+        }
+        find(&self.object_meshes)
+    }
+
     /// Submit the placed models for this frame.
     pub(crate) fn append_map_edit_instances(&mut self) {
         for placed in &self.map_edits.placed {
@@ -567,7 +653,28 @@ impl GpuState {
                 group.push(placed.instance);
             }
         }
+        for (mesh, instance) in &self.map_edits.faces {
+            if let Some(group) = self.object_groups.get_mut(*mesh) {
+                group.push(*instance);
+            }
+        }
     }
+}
+
+/// The width and height of the image `shader` draws first, read from its header.
+fn texture_size(
+    vfs: &sjk_vfs::VirtualFileSystem,
+    shaders: &sjk_shader::ShaderCatalog,
+    shader: &str,
+) -> Option<[u32; 2]> {
+    let path = shaders.resolve_image(vfs, shader).ok()??;
+    let asset = vfs.read(path.as_str()).ok()??;
+    let format = image::ImageFormat::from_path(path.as_str()).ok()?;
+    let (width, height) =
+        image::ImageReader::with_format(std::io::Cursor::new(&asset.bytes[..]), format)
+            .into_dimensions()
+            .ok()?;
+    Some([width, height])
 }
 
 #[cfg(test)]

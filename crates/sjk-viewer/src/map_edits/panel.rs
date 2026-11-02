@@ -145,6 +145,8 @@ pub(crate) enum Picked {
     Surface { soup: bool },
     /// An entity the game needs (a door, a breakable): remapped, never hidden.
     Entity,
+    /// A caulk or nodraw brush side the map draws nothing on: an edit may draw it.
+    Face,
     /// Nothing an edit changes.
     Other,
 }
@@ -417,10 +419,20 @@ impl Panel {
             return;
         }
         if self.remap.is_empty() || self.remap == self.prefill {
-            self.prefill = shader
-                .as_deref()
-                .map(|shader| folder_of(&shader.to_ascii_lowercase()).to_owned())
-                .unwrap_or_default();
+            let face = self
+                .facts
+                .selection
+                .as_ref()
+                .is_some_and(|selection| selection.picked == Picked::Face);
+            // A face draws a wall or floor texture, not another tool shader.
+            self.prefill = if face {
+                "textures/".to_owned()
+            } else {
+                shader
+                    .as_deref()
+                    .map(|shader| folder_of(&shader.to_ascii_lowercase()).to_owned())
+                    .unwrap_or_default()
+            };
             self.remap = self.prefill.clone();
         }
         self.prefilled_for = shader;
@@ -1263,6 +1275,35 @@ impl GpuState {
                 detail: format!("surface {index}, {kind}"),
                 shader: Some(shader),
             },
+            EditTarget::Face {
+                brush,
+                side,
+                shader,
+            } => {
+                let server = self.map_edits_server();
+                let drawn = self.map_edits.document.as_ref().and_then(|document| {
+                    document
+                        .active(server.as_deref())
+                        .find_map(|edit| match &edit.kind {
+                            Kind::ShowFace {
+                                brush: b,
+                                side: s,
+                                to,
+                                ..
+                            } if *b == brush && *s == side => Some(to.clone()),
+                            _ => None,
+                        })
+                });
+                Selected {
+                    picked: Picked::Face,
+                    name: shader.clone(),
+                    detail: match drawn {
+                        Some(to) => format!("brush {brush} side {side}, drawn as {to}"),
+                        None => format!("brush {brush} side {side}, drawn by no surface"),
+                    },
+                    shader: Some(shader),
+                }
+            }
             EditTarget::Other => Selected {
                 picked: Picked::Other,
                 name: "Not something edits change".to_owned(),

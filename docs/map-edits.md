@@ -14,6 +14,7 @@ the hub copies in [sjk-identity's map_edits](../crates/sjk-identity/src/map_edit
 | `hide_surface` | a BSP surface draws nothing, and picks and impact marks skip it | the bake around it |
 | `place` | an MD3 from the game data at a position, turned and scaled | lighting: entity light only, as props get |
 | `remap` | a shader drawn instead of another wherever the map draws it | |
+| `show_face` | one caulk or nodraw side of a world brush, drawn with a shader | collision, the bake |
 
 Edits change what is drawn, never collision. The server keeps every brush and entity: a
 hidden prop or surface with clip brushes is an invisible wall, and a placed model can be
@@ -25,6 +26,16 @@ world, and only `misc_model_static` stays an entity (retail: none on ffa1-ffa4, 
 duel6, 84 on ffa5, 189 on siege_korriban). A merged model is hidden as surfaces:
 `mapedit_hide group` takes the triangle-soup surfaces touching the one aimed at,
 through shared corners (at most 256), which is usually the whole model.
+
+Caulk and nodraw sides have no drawn surface at all: q3map2 makes none for them, so a
+remap cannot reach them (`r_showBrushes` rebuilds them from the planes for the same
+reason). A `show_face` edit names one side of a world brush by its BSP numbers (with
+its shader, checked on load) and draws it with the shader chosen, rebuilt from its
+brush's planes, textured as Radiant textures a new brush (the axial projection at scale
+0.5, no shift or turn, the image's own size read from its header) and lit like a placed
+model from the face's middle ([faces.rs](../crates/sjk-viewer/src/map_edits/faces.rs)).
+Only sides of solid brushes are offered (caulk, nodraw, an invisible wall), never clip,
+trigger or water. Each face is one small mesh, built once.
 
 A remap edit wins over the map's own worldspawn remaps and the server's, so a fix made
 for a server's remaps holds; a console `remapShader` made after them still wins
@@ -71,7 +82,7 @@ acts on what is under the crosshair.
 | `mapedit_move <up> \| <x y z>` | Move it |
 | `mapedit_scale <factor>` | Scale it (0.01 to 64 times) |
 | `mapedit_grab` | It follows your aim until `mapedit_grab` again; meanwhile the mouse wheel turns it (15 degrees a notch, 1 with Shift) instead of changing weapon |
-| `mapedit_remap <shader> \| -` | Draw `shader` instead of the selected one; `-` removes that remap edit |
+| `mapedit_remap <shader> \| -` | Draw `shader` instead of the selected one; `-` removes that remap edit. On a caulk or nodraw face: draw that face with `shader`, `-` draws it as nothing again (as does `mapedit_hide`) |
 | `mapedit_scope [all\|server]` | New edits for all servers (the default) or only this one |
 | `mapedit_list`, `mapedit_delete <id>` | List, remove one |
 | `mapedit_undo`, `mapedit_redo` | Undo the last change to the map's edits (a hide, a placing, a turn, a move, a remap, a delete), or redo it |
@@ -99,7 +110,7 @@ waits 20 seconds), until the map changes.
 
 | Page | Offers |
 | --- | --- |
-| Selected | what it is (map prop, placed model, surface, game entity) with its model and shader; Hide (Remove for a placed model), Hide whole model (a merged model's surfaces), Place a copy; Draw another shader: a search over the shaders a remap may draw (the world's `textures/` and the map objects' `models/`, shaders and images, never the player models'), opened on the selection's own folder with its own shader chosen, five rows; Remap (or a second click on the chosen row) and Remove remap. A name the list does not know is tried as typed |
+| Selected | what it is (map prop, placed model, surface, game entity, hidden face: a caulk or nodraw side nearer than any drawn surface) with its model and shader; Hide (Remove for a placed model), Hide whole model (a merged model's surfaces), Place a copy; Draw another shader: a search over the shaders a remap may draw (the world's `textures/` and the map objects' `models/`, shaders and images, never the player models'), opened on the selection's own folder with its own shader chosen, five rows; Remap (or a second click on the chosen row) and Remove remap. A name the list does not know is tried as typed |
 | Place | every MD3 of the game data outside the player models, narrowed by a search, six rows; Place where you aimed (or a second click on the chosen row); the current placed model's Turn left and right (15 degrees), Up and Down (8 units), Left, Right, Away and Closer (8 units along the world axis nearest the view's right and ahead, so steps add up straight), Smaller and Bigger (by 1.1), Grab and Remove. Shift held makes the steps 1 degree, 1 unit and a tenth of the growth |
 | Edits | the map's edits, newest first, named shortly (`3: Placed: crate.md3`, `Hidden surface: floor (1043)`, `Remap: wall -> wall2`, a server's address when for one), those for another server dimmed; choosing a placed model makes it the one Place's buttons move; Delete the chosen one, Undo and Redo |
 
@@ -125,9 +136,13 @@ edit deletes it. Each button runs the command the console would (`mapedit_hide`,
 - The hub's side is the hub repository's `map-edits` branch (19/10/2026). Until the live
   hub runs it, it answers 404: Publish says the hub does not keep map edits yet, and
   players get no copies (found 28/10/2026: the branch had never been merged there).
+- A shown face's texture always lies at Radiant's default; the map's own projection of
+  that side is not in the BSP.
 - Verified: unit tests (documents, scopes, the remap order, the folder's sync against a
   fake hub, the refusals' words, undo and the panel's lists), the hub round trip against
   a local hub (`staff_publish_map_edits_that_every_key_reads` in `hub_e2e.rs`), and the
   world shot `duel6_prop_hidden_copied_and_floor_remapped` (a duel6 prop hidden, a surface
   hidden, a copy placed, a wall remapped, then all taken back), and
-  `duel6_map_editor_panel` for the panel. Not tried in a game.
+  `duel6_map_editor_panel` for the panel; `caulk_face_shown` (02/11/2026) selects a
+  duel6 caulk wall under the crosshair and draws it with a wall shader. Not tried in a
+  game.

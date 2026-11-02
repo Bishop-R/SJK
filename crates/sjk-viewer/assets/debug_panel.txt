@@ -7690,6 +7690,16 @@ test: After the hub's map-edits branch is deployed: Publish says Published, with
 test: Log: "map edits: N maps on the hub, ..." (or "not in step with the hub: ...") at start.
 test: Esc while aiming shows the Map editor strip at the top; Editor off removes it.
 
+[caulk-faces]
+area: Rendering & effects
+title: Map editor: draw caulk faces with a texture (staff)
+change: Aim at a caulk or nodraw face (a hole in the map): it selects as Hidden face.
+change: Pick a shader and Draw: that one face is drawn with it, Radiant's default scale.
+test: mapedit, aim at a see-through hole in a wall, O: the panel says Hidden face, caulk.
+test: Search a wall texture, Draw: the hole shows that texture, lit like the wall near it.
+test: O on it again: Draw nothing removes it; mapedit_undo brings it back.
+test: Other caulk faces of the map stay unseen; collision there is as before.
+
 # ---- Bug reports, 19/10/2026 ----
 
 [bool-settings]
