@@ -1646,8 +1646,8 @@ for the run.
     pack has not come), the name without "blade" on two lines at most, its state (Worn,
     Yours, "Yours x3", Not owned: "Locked" until 29/10/2026, when the padlock became the
     player's own lock) and the chroma's wheel; its marks: the New sticker on its top edge,
-    the star and the padlock on a dark pill over the blade's right end; the chosen tile
-    lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
+    the star and the padlock on a dark pill over the blade's right end, a New one outlined
+    in gold; the chosen tile lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
     and Down a line of tiles, to the same column or the nearest, past the headings.
   - **The list** (from y 400): column heads (Shader, Tier and Yours sort it; "#", the
     blade's number, only while `debug_collectibles` shows numbers; Look, Smith and,
@@ -1925,15 +1925,17 @@ saber shader the Shaders tab, the Forge and the trade window list carries its ma
   whose economy says `marks` (`sjk_identity::MARKS_ABILITY`), detected as `shatter_last`
   is, so against an older hub nothing of them shows and nothing is asked.
 - **New:** a shader the player holds and has not looked at since they got it
-  (holocrons, gifts, trades, crafts): a gold "New" sticker, and the Shaders tab's "2 new"
+  (holocrons, gifts, trades, crafts): a gold "New" sticker, outlined in gold on the wall
+  (a gold edge down its row in the list) while it is not the one chosen (Creyon,
+  31/10/2026), and the Shaders tab's "2 new"
   after the headline. Local, on this PC: `shader-seen.txt` beside `config.cfg`, one shader
   id a line (`shader_marks::FILE`), read at start and written at each change. With no file
   yet, everything held the first time the hub says what the player holds is seen, so a
   player never finds every shader New; a shader no longer held leaves the list (New again
-  when it comes back). A New one chosen on Shaders or in the Forge, by the pointer or the
-  keys, is seen once it has stayed chosen a second (`shader_marks::Look`, `LOOK_MS`):
-  hovering chooses, so a sweep of the pointer across the wall passes over shaders without
-  seeing them (Sol's decision, 29/10/2026). Turning to another tab or closing the page
+  when it comes back). A New one clicked on Shaders or in the Forge is seen at once, its
+  sticker gone (Creyon, 31/10/2026); one reached with the keys is seen once it has stayed
+  chosen a second (`shader_marks::Look`, `LOOK_MS`; Sol's decision, 29/10/2026). Resting the pointer never chooses a shader (31/10/2026;
+  hovering chose one before), so it never sees one either. Turning to another tab or closing the page
   sees the shader chosen only if it had already stayed its second; Mark all seen (N) sees
   them all. Nothing is New
   while the debug collectibles show.

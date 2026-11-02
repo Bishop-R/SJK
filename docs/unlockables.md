@@ -1255,7 +1255,8 @@ Profile page's See the collection) open it on its own:
   nothing apart), grey while its pack has not come. A click chooses a tile or a row and
   previews it (a double click wore it until 21/10/2026: Creyon found wearing on a click
   too easy to do by mistake, and the double click unclear), and Equip, Unequip or Enter
-  wear it; resting the pointer chooses one only over its blade strip, not its words;
+  wear it; resting the pointer never chooses one (31/10/2026; from 21/10 it chose one
+  over its blade strip), only its hover card shows;
 - until 25/10/2026 a rack of six rows of 106 and a grid of cards five by three
   (10/10/2026) stood there, `ui_shaderView` choosing (dropped from saved profiles since,
   so every player starts on the wall);
@@ -1320,9 +1321,10 @@ Profile page's See the collection) open it on its own:
   stock blade ("Unequip both"), and the stock row reads "Stock on both". The box is kept
   for the session; choosing a side (a pill or a click on a saber) unticks it, a click on a lone saber does not (review of 22/10/2026). Its label is
   drawn in the face it is measured in, so it is never cut short ("Both sab...").
-  Resting the pointer on a shader's row chooses and previews it only over its blade (the
-  swatch), not over its name or state (Creyon, 21/10/2026: going to Equip, the pointer crossed
-  other rows' words and changed the preview); a click anywhere on the row still chooses it.
+  Only a click chooses and previews a shader, on the wall, the list and the Forge's tiles;
+  resting the pointer shows its hover card and nothing else (Creyon, 31/10/2026: going to
+  Equip, the pointer crossed other blades and changed the choice; from 21/10 resting on a
+  row's blade chose it).
   Once the hub's economy is known, the foot also leads to the Collection's Forge
   ([cards.md](cards.md#the-forge), 21/10/2026; Shatter and Craft stood here before):
   "Craft in the Forge" for a shader of the trade not held, with its cost, or "Break down

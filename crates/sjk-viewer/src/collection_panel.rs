@@ -744,11 +744,6 @@ pub(crate) struct Panel {
     hover: crate::menu::sjk::hover::Hover,
     /// Where the pointer is (window pixels), while it is over the window.
     pointer: Option<[f32; 2]>,
-    /// The Shaders tab's swatches (row, window rectangle) last frame: resting the pointer
-    /// chooses (and previews) a shader only over its blade, not over its name or state
-    /// (Creyon, 21/10/2026: going to Equip, the pointer crossed other rows' words and
-    /// changed the preview).
-    shader_swatches: Vec<(usize, sjk_ui::Rect)>,
     /// The cards answering the pointer on Cards, each eased in and out.
     tilt: crate::tile_shine::HoverEase,
     /// The Shaders tab's lone saber's turn, and the window pixels to a frame pixel the
@@ -769,6 +764,9 @@ pub(crate) struct Panel {
     /// The shader chosen on Shaders or in the Forge while it was New: seen once it has
     /// stayed chosen a second (`shader_marks::Look`), not when a sweep passes over it.
     viewing: crate::shader_marks::Look,
+    /// A click just chose a shader (on Shaders or a Forge tile): a New one is seen at once,
+    /// its sticker gone, without waiting its second (Creyon, 31/10/2026).
+    clicked_shader: bool,
     /// The count of the last refused change of a mark the console was told of.
     mark_refusal_seen: u64,
     /// The marks a world shot or a test shows in place of the live ones.
@@ -885,7 +883,6 @@ impl Panel {
             backstage: Backstage::None,
             hover: Default::default(),
             pointer: None,
-            shader_swatches: Vec::new(),
             tilt: crate::tile_shine::HoverEase::default(),
             spin: spin::Spin::default(),
             scale: 1.0,
@@ -895,6 +892,7 @@ impl Panel {
             marks: Default::default(),
             marks_from: None,
             viewing: crate::shader_marks::Look::default(),
+            clicked_shader: false,
             mark_refusal_seen: 0,
             #[cfg(test)]
             preview_marks: None,
@@ -1529,6 +1527,12 @@ impl Panel {
     /// is seen once it has stayed chosen a second.
     fn view(&mut self, chosen: Option<&'static str>) {
         let new = chosen.is_some_and(|id| self.marks.is_new(id));
+        if std::mem::take(&mut self.clicked_shader)
+            && let Some(id) = chosen.filter(|_| new)
+        {
+            crate::shader_marks::see(id);
+            return;
+        }
         if let Some(id) = self.viewing.observe(chosen, new, self.look_clock()) {
             crate::shader_marks::see(id);
         }
@@ -1917,6 +1921,9 @@ impl Panel {
         if self.tab == Tab::Forge && (forge::forge_token(token) || self.forge.ask.is_some()) {
             let activate = event.kind == UiEventKind::Activate;
             let resting = matches!(event.kind, UiEventKind::HoverEnter | UiEventKind::Hover);
+            // A click on a shader tile sees a New one at once, as on Shaders.
+            self.clicked_shader |= activate
+                && (forge::TILE_BASE..forge::TILE_BASE + forge::TILES_MAX as u16).contains(&token);
             if !(activate || resting) {
                 return PanelAction::None;
             }
@@ -1946,7 +1953,9 @@ impl Panel {
         {
             // A click chooses (and previews) a shader; Equip, Unequip or Enter wear it
             // (Creyon, 21/10/2026: a click that wore it was too easy to do by mistake).
+            // A New one is seen by the click (its sticker goes).
             self.shader = index;
+            self.clicked_shader = true;
             return PanelAction::None;
         }
         if event.kind == UiEventKind::Activate {
@@ -2157,23 +2166,15 @@ impl Panel {
         PanelAction::RevealCards
     }
 
-    /// Whether resting the pointer on `token` chooses it: a shader's row only while the
-    /// pointer is over its blade (its swatch); everything else always.
+    /// Whether resting the pointer on `token` chooses it: never a shader, which only a
+    /// click chooses and previews (Creyon, 31/10/2026: going to Equip, the pointer
+    /// crossed other blades and changed the choice; before, from 21/10, resting on a
+    /// row's blade chose it); everything else always.
     fn hover_chooses(&self, token: u16) -> bool {
-        let Some(index) = token
+        token
             .checked_sub(SHADER_BASE)
             .map(usize::from)
-            .filter(|index| *index < self.shader_count)
-        else {
-            return true;
-        };
-        let Some([x, y]) = self.pointer else {
-            return false;
-        };
-        let at = sjk_ui::Vec2::new(x, y);
-        self.shader_swatches
-            .iter()
-            .any(|(row, rect)| *row == index && rect.contains(at))
+            .is_none_or(|index| index >= self.shader_count)
     }
 
     /// Choose the thing `token` stands for; whether it is one.
@@ -3032,8 +3033,60 @@ mod tests {
         );
     }
 
+    /// Creyon, 31/10/2026: a New shader not seen yet stands out in gold, on the wall and in
+    /// the list, besides its sticker; chosen, it wears the white outline instead.
     #[test]
-    fn resting_on_a_row_chooses_it_only_over_its_blade() {
+    fn a_new_shader_is_outlined_in_gold() {
+        let owned = [sun()];
+        let shown = inputs(Holdings::Known(&owned), "");
+        let gold = |panel: &Panel| {
+            panel
+                .ui
+                .draw_list()
+                .commands()
+                .iter()
+                .filter(|command| match command {
+                    sjk_ui::DrawCommand::Border { color: paint, .. }
+                    | sjk_ui::DrawCommand::RoundedRect { color: paint, .. } => {
+                        use crate::menu::sjk::color;
+                        *paint == color::alpha(color::GOLD_BRIGHT, 0.85)
+                            || *paint == color::alpha(color::GOLD_BRIGHT, 0.9)
+                    }
+                    _ => false,
+                })
+                .count()
+        };
+        for grid in [true, false] {
+            let mut panel = Panel::new();
+            panel.open(Tab::Shaders, true, true, ReturnTarget::MainMenu);
+            let _ = panel.set_grid(grid);
+            redraw(&mut panel, &shown);
+            let plain = gold(&panel);
+            panel.preview_marks = Some(crate::shader_marks::Marks::of(
+                None,
+                false,
+                &owned,
+                Some(&crate::shader_marks::Seen::default()),
+                false,
+                [None, None],
+            ));
+            redraw(&mut panel, &shown);
+            assert_eq!(gold(&panel), plain + 1, "grid {grid}: one New, outlined");
+            assert!(panel.ui.text_runs().any(|run| run == "New"), "grid {grid}");
+            panel.shader = row_of("saber_sun");
+            redraw(&mut panel, &shown);
+            assert_eq!(
+                gold(&panel),
+                plain,
+                "grid {grid}: chosen, the white outline"
+            );
+        }
+    }
+
+    /// Creyon, 31/10/2026: only a click chooses (and previews) a shader; the pointer
+    /// resting on another blade, on the way to Equip, leaves the choice alone.
+    #[test]
+    fn resting_on_a_shader_never_chooses_it() {
         let owned = [sun()];
         let mut panel = drawn(Tab::Shaders, &inputs(Holdings::Known(&owned), ""));
         let index = row_of("saber_sun");
@@ -3041,25 +3094,33 @@ mod tests {
             .ui
             .rect_for(SHADER_BASE + index as u16)
             .expect("the row's pointer area");
-        let swatch = panel
-            .shader_swatches
-            .iter()
-            .find(|(at, _)| *at == index)
-            .map(|(_, rect)| *rect)
-            .expect("the row's swatch");
+        let at = sjk_ui::Vec2::new(row.x + row.width * 0.5, row.y + row.height * 0.5);
         let now = Instant::now();
-        // Over the row's name, right of its blade: nothing changes.
-        let words = sjk_ui::Vec2::new(swatch.right() + 40.0, row.y + row.height * 0.5);
-        assert!(row.contains(words) && !swatch.contains(words));
-        let _ = panel.pointer_at(InputEvent::PointerMove(words), true, now);
         assert_ne!(panel.shader, index);
-        // Over its blade: chosen and previewed.
-        let blade = sjk_ui::Vec2::new(
-            swatch.x + swatch.width * 0.5,
-            swatch.y + swatch.height * 0.5,
+        let _ = panel.pointer_at(InputEvent::PointerMove(at), true, now);
+        let _ = panel.pointer_at(
+            InputEvent::PointerMove(at),
+            true,
+            now + std::time::Duration::from_secs(2),
         );
-        let _ = panel.pointer_at(InputEvent::PointerMove(blade), true, now);
-        assert_eq!(panel.shader, index);
+        assert_ne!(panel.shader, index, "resting chose it");
+        for event in [
+            InputEvent::PointerPress {
+                position: at,
+                button: sjk_ui::PointerButton::Primary,
+            },
+            InputEvent::PointerRelease {
+                position: at,
+                button: sjk_ui::PointerButton::Primary,
+            },
+        ] {
+            let _ = panel.pointer_at(event, true, now);
+        }
+        assert_eq!(panel.shader, index, "a click chooses it");
+        assert!(panel.clicked_shader, "a New one is seen at the click");
+        // The next frame takes the click: a New one chosen is seen then, not a second later.
+        panel.view(Some("saber_sun"));
+        assert!(!panel.clicked_shader);
     }
 
     #[test]
