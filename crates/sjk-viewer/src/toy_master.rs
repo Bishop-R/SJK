@@ -21,6 +21,10 @@ use std::time::{Duration, Instant};
 
 /// `BUTTON_USE`, `+use`.
 const BUTTON_USE: u16 = 32;
+/// `ET_PLAYER`, and the entity flags of a player not drawn: dead, `EF_NODRAW`.
+const ET_PLAYER: u8 = 1;
+const EF_DEAD: u32 = 1 << 1;
+const EF_NODRAW: u32 = 1 << 8;
 /// Farthest a player may stand from a toy to press it, across the floor.
 const REACH: f32 = 80.0;
 /// Farthest above or below the toy a player may stand to press it.
@@ -37,9 +41,6 @@ const REMOVE_REACH: f32 = 256.0;
 const VANISH_SOUND: &str = "sound/player/teleout.mp3";
 const POP_SOUND: &str = "sound/player/telein.mp3";
 const EFFECT: &str = "mp/spawn";
-/// How long a spin takes to reach its full speed, in milliseconds; it slows to a stop
-/// over its last quarter.
-const SPIN_UP: f32 = 1_000.0;
 /// How far the show's sound carries: full up to the first, gone at the second.
 const SOUND_FULL: f32 = 300.0;
 const SOUND_RANGE: f32 = 1_400.0;
@@ -78,141 +79,32 @@ pub(crate) fn is_command(name: &str) -> bool {
     COMMANDS.iter().any(|(command, _)| *command == name)
 }
 
-/// Where a show is, `elapsed` into it: how much the toy is grown (0 while gone), how far
-/// it turned (degrees) and how high it hops; `None` once it is over.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Pose {
-    scale: f32,
-    turn: f32,
-    lift: f32,
-}
+mod drops;
+mod float;
+mod track;
 
-/// The phases of `show`, `elapsed` into it.
-fn pose(show: &Show, elapsed: Duration) -> Option<Pose> {
-    let t = elapsed.as_secs_f32() * 1_000.0;
-    let (vanish, gone, pop, spin) = (
-        show.vanish as f32,
-        show.gone as f32,
-        show.pop as f32,
-        show.spin as f32,
-    );
-    let ease = |u: f32| {
-        let u = u.clamp(0.0, 1.0);
-        u * u * (3.0 - 2.0 * u)
-    };
-    if t < vanish {
-        // Shrinking away, a quick turn as it goes.
-        let u = t / vanish.max(1.0);
-        return Some(Pose {
-            scale: 1.0 - ease(u),
-            turn: 180.0 * u * u,
-            lift: 0.0,
-        });
-    }
-    let t = t - vanish;
-    if t < gone {
-        return Some(Pose {
-            scale: 0.0,
-            turn: 0.0,
-            lift: 0.0,
-        });
-    }
-    let t = t - gone;
-    if t < pop {
-        // Back, overshooting (an ease out with a bounce past 1).
-        let u = (t / pop.max(1.0)).clamp(0.0, 1.0) - 1.0;
-        return Some(Pose {
-            scale: 1.0 + 2.7 * u * u * u + 1.7 * u * u,
-            turn: 0.0,
-            lift: 0.0,
-        });
-    }
-    let t = t - pop;
-    if t >= spin {
-        return None;
-    }
-    Some(Pose {
-        scale: 1.0,
-        turn: spin_turn(show.turns, spin, t),
-        lift: ((t / 1_000.0) * std::f32::consts::TAU * show.turns.max(0.5))
-            .sin()
-            .abs()
-            * 1.5,
-    })
-}
+use track::{Moment, Track};
 
-/// How far a spin of `spin` milliseconds at up to `turns` turns a second turned, `t`
-/// milliseconds into it, in degrees: speeding up over [`SPIN_UP`], at full speed, then
-/// slowing to a stop over its last quarter.
-fn spin_turn(turns: f32, spin: f32, t: f32) -> f32 {
-    let top = turns * 360.0 / 1_000.0;
-    let up = SPIN_UP.min(spin / 4.0);
-    let down_from = (spin * 0.75).max(up);
-    let down = (spin - down_from).max(1.0);
-    let t = t.clamp(0.0, spin);
-    if t < up {
-        return top * t * t / (2.0 * up);
-    }
-    let cruise = top * up / 2.0;
-    if t < down_from {
-        return cruise + top * (t - up);
-    }
-    let into = t - down_from;
-    cruise + top * (down_from - up) + top * (into - into * into / (2.0 * down))
-}
-
-/// How long `show` lasts in all.
-fn length(show: &Show) -> Duration {
-    Duration::from_millis(u64::from(show.vanish + show.gone + show.pop + show.spin))
-}
-
-/// How fast a spin of `spin` milliseconds goes `t` milliseconds into it, from 0 to 1 (its
-/// full speed), as [`spin_turn`] turns it.
-fn spin_speed(spin: f32, t: f32) -> f32 {
-    let up = SPIN_UP.min(spin / 4.0);
-    let down_from = (spin * 0.75).max(up);
-    let down = (spin - down_from).max(1.0);
-    if t < 0.0 || t >= spin {
-        0.0
-    } else if t < up {
-        t / up.max(1.0)
-    } else if t < down_from {
-        1.0
-    } else {
-        1.0 - (t - down_from) / down
-    }
-}
-
-/// Players' models within this distance of a spinning toy spin and squish with it (Sol,
-/// 01/11/2026), fading out to none at [`DANCE_FADE`].
+/// Players' models round a toy whose show has no reach (01/11/2026) dance within this
+/// distance of it, fading out to none at [`DANCE_FADE`]; a show with a reach has them
+/// dance within it, fading out over [`DANCE_EDGE`] more.
 const DANCE_FULL: f32 = 320.0;
 const DANCE_FADE: f32 = 512.0;
+const DANCE_EDGE: f32 = 48.0;
 /// How much a model squishes at full speed: this much shorter at the bottom of a hop,
 /// as much wider as keeps it about its size.
 const SQUISH: f32 = 0.3;
 
 /// A toy's spin as the players around it dance it this frame: where it stands, how far
-/// it turned (degrees) and how far its hop squishes them (0 to 1).
+/// they turn (degrees), how far its hop squishes them (0 to 1), and how near they must
+/// stand: fully within `full`, not at all past `fade`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Dance {
     origin: Vec3,
     turn: f32,
     squish: f32,
-}
-
-/// What `show`, `elapsed` into it, has the players around it dance: only while it spins.
-fn dance(show: &Show, elapsed: Duration) -> Option<(f32, f32)> {
-    let t = elapsed.as_secs_f32() * 1_000.0 - (show.vanish + show.gone + show.pop) as f32;
-    let spin = show.spin as f32;
-    if t < 0.0 || t >= spin {
-        return None;
-    }
-    let speed = spin_speed(spin, t);
-    // In step with the toy's hops ([`pose`]'s lift).
-    let hop = ((t / 1_000.0) * std::f32::consts::TAU * show.turns.max(0.5))
-        .sin()
-        .abs();
-    Some((spin_turn(show.turns, spin, t), hop * speed))
+    full: f32,
+    fade: f32,
 }
 
 /// This frame's dances, for the actors drawn after ([`dance_actor`]).
@@ -240,12 +132,12 @@ fn dance_with(transform: &mut sjk_runtime::Transform, foot: f32, dances: &[Dance
     let Some((dance, near)) = dances
         .iter()
         .map(|dance| (dance, dance.origin.distance(at)))
-        .filter(|(_, near)| *near < DANCE_FADE)
+        .filter(|(dance, near)| *near < dance.fade)
         .min_by(|a, b| a.1.total_cmp(&b.1))
     else {
         return;
     };
-    let strength = 1.0 - ((near - DANCE_FULL) / (DANCE_FADE - DANCE_FULL)).clamp(0.0, 1.0);
+    let strength = 1.0 - ((near - dance.full) / (dance.fade - dance.full)).clamp(0.0, 1.0);
     let turn = glam::Quat::from_rotation_z((dance.turn * strength).to_radians());
     transform.rotation = (turn * glam::Quat::from_array(transform.rotation)).to_array();
     let squish = dance.squish * strength * SQUISH;
@@ -258,6 +150,39 @@ fn dance_with(transform: &mut sjk_runtime::Transform, foot: f32, dances: &[Dance
     }
 }
 
+/// How far a show reaches round its toy: fully, and not at all past the second.
+fn reach_of(show: &Show) -> (f32, f32) {
+    if show.reach > 0.0 {
+        (show.reach, show.reach + DANCE_EDGE)
+    } else {
+        (DANCE_FULL, DANCE_FADE)
+    }
+}
+
+/// What a drop is drawn as, and how much it is grown: credits a green crystal, kyber
+/// shards a kyber crystal, a holocron SJK's holocron (its tier is told to its taker only).
+fn drop_look(kind: wire::DropKind) -> (&'static str, f32) {
+    match kind {
+        wire::DropKind::Credits => ("models/map_objects/mp/crystal_green.md3", 1.3),
+        wire::DropKind::Shards => ("models/sjk/holocron_kyber_rare_crystal.md3", 2.6),
+        wire::DropKind::Holocron => (crate::illuminate::MODEL, 3.0),
+    }
+}
+
+/// What the Use prompt says at a drop, and its line.
+fn drop_words(kind: wire::DropKind) -> &'static str {
+    match kind {
+        wire::DropKind::Credits => "Take the credits",
+        wire::DropKind::Shards => "Take the kyber shards",
+        wire::DropKind::Holocron => "Take the holocron",
+    }
+}
+
+/// How long a show's drops wait for takers after it ends (the hub's `DROPS_KEPT`).
+const DROPS_KEPT: Duration = Duration::from_secs(60);
+/// How long the player waits for the hub's answer about a drop before asking again.
+const TAKE_WAIT: Duration = Duration::from_secs(3);
+
 /// One toy standing on the loaded map.
 #[derive(Clone, Debug, PartialEq)]
 struct Here {
@@ -268,12 +193,19 @@ struct Here {
     model: String,
     scale: f32,
     sound: String,
-    show: Show,
+    /// How its show plays.
+    track: Track,
     /// Its kind (the creator's list alone).
     kind: Option<String>,
     /// Its show under way, and the moments it played so far (0 nothing, 1 the vanish, 2
     /// the pop).
     playing: Option<(Instant, u8)>,
+    /// When its last show started, kept after it for its drops, and that show's seed.
+    show_at: Option<Instant>,
+    seed: u32,
+    /// What its last show threw out, and who floats in it.
+    drops: drops::Drops,
+    floats: float::Floats,
     /// It played its show on this map load: presses count no more.
     done: bool,
     /// The player's presses on it reached the hub on this map load (so it is found).
@@ -324,6 +256,8 @@ pub(crate) struct ToyMaster {
     /// The audio generation, the list revision and the game data (its address) the
     /// sounds were handed over for: a pack that came since (the Sith cloud's) is heard.
     sounds_registered: Option<(u64, u64, usize)>,
+    /// The movers the floating players and the drops meet (`ragdoll::Scene`).
+    movers: crate::ragdoll::Movers,
     /// A world shot's toys, kept without a session.
     #[cfg(test)]
     shot: bool,
@@ -371,21 +305,33 @@ impl ToyMaster {
         self.presses = None;
         self.use_pressed = false;
         dances().clear();
+        crate::ragdoll::set_floating([]);
     }
 
-    /// Hand the actors drawn this frame the spinning toys' dances, as at `now`.
-    fn publish_dances(&self, now: Instant) {
+    /// Hand the actors drawn this frame the spinning toys' dances and the floating
+    /// players, as at `now`.
+    fn publish(&self, now: Instant) {
         let mut dances = dances();
         dances.clear();
-        dances.extend(self.here.iter().filter_map(|here| {
-            let (started, _) = here.playing?;
-            let (turn, squish) = dance(&here.show, now.saturating_duration_since(started))?;
-            Some(Dance {
-                origin: here.origin,
-                turn,
-                squish,
-            })
-        }));
+        let mut floating = Vec::new();
+        for here in &self.here {
+            let moment = here.moment(now);
+            if let Some((turn, squish)) = moment.and_then(|moment| moment.dance) {
+                let (full, fade) = reach_of(here.track.show());
+                dances.push(Dance {
+                    origin: here.origin,
+                    turn,
+                    squish,
+                    full,
+                    fade,
+                });
+            }
+            let twirl = moment
+                .and_then(|moment| moment.dance)
+                .map_or(0.0, |(turn, _)| turn);
+            floating.extend(here.floats.shown(twirl));
+        }
+        crate::ragdoll::set_floating(floating);
     }
 
     /// Take the toys standing on `map` of `checksum` on `server` from `secrets`, keeping
@@ -414,9 +360,15 @@ impl ToyMaster {
                     model: placed.model.clone(),
                     scale: placed.scale.clamp(0.05, 20.0),
                     sound: placed.sound.clone(),
-                    show: placed.show,
+                    track: before
+                        .filter(|here| *here.track.show() == placed.show)
+                        .map_or_else(|| Track::new(&placed.show), |here| here.track.clone()),
                     kind: placed.kind.clone(),
                     playing: before.and_then(|here| here.playing),
+                    show_at: before.and_then(|here| here.show_at),
+                    seed: before.map_or(0, |here| here.seed),
+                    drops: before.map(|here| here.drops.clone()).unwrap_or_default(),
+                    floats: before.map(|here| here.floats.clone()).unwrap_or_default(),
                     done: !fresh_round && before.is_some_and(|here| here.done),
                     told: !fresh_round && before.is_some_and(|here| here.told),
                 }
@@ -424,8 +376,26 @@ impl ToyMaster {
             .collect();
         let mut meshes: Vec<(String, Option<usize>)> = Vec::new();
         for here in &self.here {
-            if !here.model.is_empty() && !meshes.iter().any(|(model, _)| *model == here.model) {
-                meshes.push((here.model.clone(), None));
+            let show = here.track.show();
+            let drops = show
+                .steps
+                .iter()
+                .any(|step| step.spit)
+                .then_some([
+                    wire::DropKind::Credits,
+                    wire::DropKind::Shards,
+                    wire::DropKind::Holocron,
+                ])
+                .into_iter()
+                .flatten()
+                .map(|kind| drop_look(kind).0);
+            let models = [here.model.as_str(), show.ring.as_str()]
+                .into_iter()
+                .chain(drops);
+            for model in models {
+                if !model.is_empty() && !meshes.iter().any(|(known, _)| known == model) {
+                    meshes.push((model.to_owned(), None));
+                }
             }
         }
         self.meshes = meshes;
@@ -438,7 +408,35 @@ impl ToyMaster {
             && here.playing.is_none()
         {
             here.playing = Some((now, 0));
+            here.show_at = Some(now);
+            here.seed = 0;
+            here.drops = drops::Drops::default();
+            here.floats = float::Floats::default();
             here.done = true;
+        }
+    }
+
+    /// Toy `id`'s show throws `kinds`, from `seed` (it must be under way).
+    fn throw(&mut self, id: i64, seed: u32, kinds: &[wire::DropKind]) {
+        if let Some(here) = self.here.iter_mut().find(|here| here.id == id)
+            && here.show_at.is_some()
+            && here.drops.list.is_empty()
+        {
+            here.drops = drops::Drops::new(here.track.show(), seed, kinds, here.origin);
+            here.seed = seed;
+        }
+    }
+
+    /// Drop `drop` of toy `id`'s show was taken.
+    fn taken(&mut self, id: i64, drop: u32) {
+        if let Some(drop) = self
+            .here
+            .iter_mut()
+            .find(|here| here.id == id)
+            .and_then(|here| here.drops.get_mut(drop))
+        {
+            drop.taken = true;
+            drop.asked = None;
         }
     }
 
@@ -461,7 +459,8 @@ impl ToyMaster {
                 });
                 self.sparkles.push(here.origin);
             }
-            let back = Duration::from_millis(u64::from(here.show.vanish + here.show.gone));
+            let show = here.track.show();
+            let back = Duration::from_millis(u64::from(show.vanish + show.gone));
             if *played == 1 && elapsed >= back {
                 *played = 2;
                 self.cues.push(Cue {
@@ -480,7 +479,7 @@ impl ToyMaster {
                 }
                 self.sparkles.push(here.origin);
             }
-            if elapsed >= length(&here.show) {
+            if elapsed >= Duration::from_millis(u64::from(here.track.length())) {
                 here.playing = None;
                 self.cues.push(Cue {
                     path: None,
@@ -488,6 +487,22 @@ impl ToyMaster {
                     source: source(here.id),
                     show: true,
                 });
+            }
+        }
+    }
+
+    /// Whether the player waits for the hub's answer about a drop.
+    fn asking(&self) -> bool {
+        self.here
+            .iter()
+            .any(|here| here.drops.list.iter().any(|drop| drop.asked.is_some()))
+    }
+
+    /// The player asks for no drop any more (the hub refused).
+    fn forget_asked(&mut self) {
+        for here in &mut self.here {
+            for drop in &mut here.drops.list {
+                drop.asked = None;
             }
         }
     }
@@ -519,9 +534,24 @@ const PROMPT: &str = "???";
 
 /// Whether `here` stands to be seen at `now`: not while its show has it shrunk away.
 fn shown(here: &Here, now: Instant) -> bool {
-    here.playing
-        .and_then(|(started, _)| pose(&here.show, now.saturating_duration_since(started)))
-        .is_none_or(|pose| pose.scale > 0.01)
+    here.moment(now).is_none_or(|moment| moment.scale > 0.01)
+}
+
+impl Here {
+    /// Where its show is at `now`, while it plays.
+    fn moment(&self, now: Instant) -> Option<Moment> {
+        let (started, _) = self.playing?;
+        self.track
+            .at(now.saturating_duration_since(started).as_secs_f32() * 1_000.0)
+    }
+
+    /// Milliseconds into its last show at `now`, while its drops wait (the show and
+    /// [`DROPS_KEPT`] after).
+    fn show_elapsed(&self, now: Instant) -> Option<f32> {
+        let since = now.saturating_duration_since(self.show_at?);
+        (since < Duration::from_millis(u64::from(self.track.length())) + DROPS_KEPT)
+            .then_some(since.as_secs_f32() * 1_000.0)
+    }
 }
 
 /// The toy among `toys` the player at `from` facing `yaw` (radians) may press: within
@@ -627,12 +657,18 @@ impl GpuState {
             if event.toy != wire::TOY {
                 continue;
             }
-            if let Some(id) = wire::parse_event(&event.event) {
-                self.toy_master.start(id, now);
+            match wire::Event::parse(&event.event) {
+                Some(wire::Event::Show(id)) => self.toy_master.start(id, now),
+                Some(wire::Event::Drops { id, seed, kinds }) => {
+                    self.toy_master.throw(id, seed, &kinds);
+                }
+                Some(wire::Event::Taken { id, drop }) => self.toy_master.taken(id, drop),
+                None => {}
             }
         }
         self.toy_master.tick(now);
-        self.toy_master.publish_dances(now);
+        self.run_toy_master_bodies(now);
+        self.toy_master.publish(now);
         if self.toy_master.here.is_empty() {
             self.toy_master.use_pressed = false;
             return;
@@ -642,18 +678,47 @@ impl GpuState {
         };
         let player = &session.latest_snapshot().player;
         let pressed = std::mem::take(&mut self.toy_master.use_pressed);
-        let faced = crate::mystery_box::plays(player)
+        let plays = crate::mystery_box::plays(player);
+        let from = Vec3::from_array(
+            self.local_prediction
+                .predicted_state()
+                .map_or_else(|| player.origin(), |state| state.origin),
+        );
+        // A drop at rest the player faces comes first: Use takes it.
+        let faced_drop = plays
             .then(|| {
-                let from = self
-                    .local_prediction
-                    .predicted_state()
-                    .map_or_else(|| player.origin(), |state| state.origin);
-                pick(
-                    Vec3::from_array(from),
-                    self.camera_yaw,
-                    &self.toy_master.here,
-                )
+                self.toy_master.here.iter().find_map(|here| {
+                    here.drops
+                        .faced(from, self.camera_yaw)
+                        .map(|drop| (here.id, drop.index, drop.kind, drop.asked))
+                })
             })
+            .flatten();
+        if let Some((id, index, kind, asked)) = faced_drop {
+            let waiting = asked.is_some_and(|asked| now.duration_since(asked) < TAKE_WAIT);
+            self.want_use_prompt(crate::use_prompt::Prompt {
+                action: drop_words(kind).to_owned(),
+                line: None,
+                ready: !waiting,
+            });
+            if pressed && !waiting {
+                if let Some(drop) = self
+                    .toy_master
+                    .here
+                    .iter_mut()
+                    .find(|here| here.id == id)
+                    .and_then(|here| here.drops.get_mut(index))
+                {
+                    drop.asked = Some(now);
+                }
+                let server = server.clone();
+                crate::player_identity::with_service(|service| {
+                    service.take_secret_drop(id, server, round, index);
+                });
+            }
+        }
+        let faced = (plays && faced_drop.is_none())
+            .then(|| pick(from, self.camera_yaw, &self.toy_master.here))
             .flatten()
             .and_then(|id| self.toy_master.here.iter().find(|here| here.id == id))
             .filter(|here| shown(here, now));
@@ -710,8 +775,33 @@ impl GpuState {
                     self.announce_toy_found();
                 }
             }
+            Ok(SecretDone::Took {
+                id,
+                drop,
+                kind,
+                amount,
+                tier,
+            }) => {
+                self.toy_master.taken(id, drop);
+                let what = match kind.as_str() {
+                    "credits" => format!("{amount} credits"),
+                    "shards" => format!("{amount} kyber shards"),
+                    "holocron" => format!(
+                        "a{} holocron",
+                        tier.map_or(String::new(), |tier| format!(" {tier}"))
+                    ),
+                    other => other.to_owned(),
+                };
+                self.toy_master_print(format!("^3You took {what}."));
+            }
             Ok(SecretDone::Placed(id)) => self.toy_master_print(format!("Toy {id} hidden")),
             Ok(SecretDone::Removed(id)) => self.toy_master_print(format!("Toy {id} taken away")),
+            // A drop asked for and refused: the player may ask again (the hub's
+            // `taken_` takes it away when someone else has it).
+            Err(why) if self.toy_master.asking() => {
+                self.toy_master.forget_asked();
+                self.toy_master_print(why);
+            }
             // Presses on a toy are cosmetic: a refusal tells the creator alone.
             Err(why) if crate::player_identity::is_creator() => {
                 self.toy_master_print(format!("Toy Master: {why}"));
@@ -872,30 +962,127 @@ impl GpuState {
         lines
     }
 
-    /// Add this frame's toys to the scene, each as its show poses it (none while gone).
+    /// Add this frame's toys to the scene, each as its show poses it (none while gone),
+    /// with the ring under it while its show draws one, and its show's drops.
     pub(crate) fn append_toy_master_instances(&mut self) {
         let now = Instant::now();
         for here in &self.toy_master.here {
-            let Some(mesh) = self.toy_master.mesh_of(&here.model) else {
+            let moment = here.moment(now).unwrap_or(Moment {
+                scale: 1.0,
+                ..Moment::default()
+            });
+            if let Some(mesh) = self.toy_master.mesh_of(&here.model)
+                && moment.scale > 0.01
+            {
+                let scale = here.scale * moment.scale;
+                self.object_groups[mesh].push(ActorInstance::new(
+                    (here.origin + moment.offset).to_array(),
+                    sjk_client::legacy_angles_to_quaternion([
+                        moment.pitch,
+                        here.yaw + moment.turn,
+                        moment.roll,
+                    ]),
+                    [scale; 3],
+                ));
+            }
+            let show = here.track.show();
+            if let Some((grown, turn)) = moment.ring
+                && show.ring_radius > 0.0
+                && let Some(mesh) = self.toy_master.mesh_of(&show.ring)
+            {
+                let (full, _) = reach_of(show);
+                let scale = full / show.ring_radius * grown;
+                self.object_groups[mesh].push(ActorInstance::new(
+                    here.origin.to_array(),
+                    sjk_client::legacy_angles_to_quaternion([0.0, here.yaw + turn, 0.0]),
+                    [scale; 3],
+                ));
+            }
+            let Some(elapsed) = here.show_elapsed(now) else {
                 continue;
             };
-            let pose = here
-                .playing
-                .and_then(|(started, _)| pose(&here.show, now.saturating_duration_since(started)))
-                .unwrap_or(Pose {
-                    scale: 1.0,
-                    turn: 0.0,
-                    lift: 0.0,
-                });
-            if pose.scale <= 0.01 {
-                continue;
+            for (drop, at, yaw) in here.drops.shown(elapsed) {
+                let (model, scale) = drop_look(drop.kind);
+                if let Some(mesh) = self.toy_master.mesh_of(model) {
+                    self.object_groups[mesh].push(ActorInstance::new(
+                        at.to_array(),
+                        sjk_client::legacy_angles_to_quaternion([0.0, yaw, 0.0]),
+                        [scale; 3],
+                    ));
+                }
             }
-            let scale = here.scale * pose.scale;
-            self.object_groups[mesh].push(ActorInstance::new(
-                (here.origin + Vec3::Z * pose.lift).to_array(),
-                sjk_client::legacy_angles_to_quaternion([0.0, here.yaw + pose.turn, 0.0]),
-                [scale; 3],
-            ));
+        }
+    }
+
+    /// Run the shows' drops and floating players on to `now` against the map; the
+    /// players within a show's reach float off as its `float` step begins.
+    fn run_toy_master_bodies(&mut self, now: Instant) {
+        let busy = self.toy_master.here.iter().any(|here| {
+            here.show_elapsed(now).is_some()
+                && (!here.drops.list.is_empty() || here.playing.is_some())
+        });
+        if !busy {
+            return;
+        }
+        // Who stands round each floating show as it floats off.
+        let mut players: Vec<(u8, Vec3, f32)> = Vec::new();
+        if let Some(session) = self.live_session.as_ref() {
+            let snapshot = session.latest_snapshot();
+            let time = i64::from(snapshot.server_time);
+            for entity in &snapshot.entities {
+                if entity.entity_type() == ET_PLAYER
+                    && entity.e_flags() & (EF_DEAD | EF_NODRAW) == 0
+                    && let Ok(slot) = u8::try_from(entity.number())
+                    && let Some(at) = self
+                        .live_world
+                        .entity(sjk_runtime::EntityId::new(u64::from(slot) + 1))
+                {
+                    players.push((
+                        slot,
+                        Vec3::from_array(at.sample(time).translation),
+                        entity.angles()[1],
+                    ));
+                }
+            }
+            if let Ok(own) = u8::try_from(session.game_state().client_num)
+                && snapshot.player.health() > 0
+            {
+                let origin = self
+                    .local_prediction
+                    .predicted_state()
+                    .map_or_else(|| snapshot.player.origin(), |state| state.origin);
+                players.push((
+                    own,
+                    Vec3::from_array(origin),
+                    snapshot.player.view_angles()[1],
+                ));
+            }
+        }
+        let ToyMaster { here, movers, .. } = &mut self.toy_master;
+        let mut world = crate::ragdoll::Scene::new(
+            &self.bsp,
+            &mut self.trace_scratch,
+            self.live_session.as_ref(),
+            movers,
+        );
+        for here in here.iter_mut() {
+            let Some(elapsed) = here.show_elapsed(now) else {
+                continue;
+            };
+            here.drops.run(elapsed, &mut world);
+            let moment = here.moment(now);
+            let floating = moment.is_some_and(|moment| moment.floating);
+            if floating && here.floats.is_empty() {
+                let (full, _) = reach_of(here.track.show());
+                let near: Vec<_> = players
+                    .iter()
+                    .copied()
+                    .filter(|(_, at, _)| at.distance(here.origin) <= full)
+                    .collect();
+                here.floats
+                    .begin(&near, elapsed, here.seed ^ here.id as u32);
+            }
+            here.floats.run(elapsed, floating, &mut world);
         }
     }
 
@@ -1005,15 +1192,77 @@ impl GpuState {
                 model: model.to_owned(),
                 scale: 1.0,
                 sound: String::new(),
-                show,
+                track: Track::new(&show),
                 kind: None,
                 playing: since.map(|since| (now - since, 2)),
+                show_at: since.map(|since| now - since),
+                seed: 0,
+                drops: drops::Drops::default(),
+                floats: float::Floats::default(),
                 done: false,
                 told: false,
             })
             .collect();
         self.toy_master.meshes = vec![(model.to_owned(), None)];
         self.toy_master.meshes_seen = usize::MAX;
+    }
+
+    /// For the world shots: the shot's toys of `model` playing `show` (its ring and
+    /// drops' models wanted too), each stood on the floor under where it is put, the last
+    /// one's show throwing `kinds` from `seed`, run against the map to where it is.
+    /// Answers where the last one stands.
+    pub(crate) fn shot_show(
+        &mut self,
+        model: &str,
+        show: Show,
+        toys: &[([f32; 3], f32, Option<Duration>)],
+        seed: u32,
+        kinds: &[wire::DropKind],
+    ) -> Vec3 {
+        self.shot_toys(model, show.clone(), toys);
+        let secrets = wire::Secrets {
+            secrets: vec![wire::Secret {
+                id: 1,
+                map: String::new(),
+                checksum: 0,
+                server: String::new(),
+                origin: [0.0; 3],
+                yaw: 0.0,
+                model: model.to_owned(),
+                scale: 1.0,
+                sound: String::new(),
+                show,
+                kind: None,
+            }],
+            kinds: Vec::new(),
+        };
+        // The models a show wants, as `take` finds them.
+        let mut wanted = ToyMaster::default();
+        wanted.take(&secrets, "", 0, "", true);
+        self.toy_master.meshes = wanted.meshes;
+        let now = Instant::now();
+        let mut movers = crate::ragdoll::Movers::default();
+        let mut world =
+            crate::ragdoll::Scene::new(&self.bsp, &mut self.trace_scratch, None, &mut movers);
+        // Each toy stands on the floor under where the shot puts it.
+        for here in &mut self.toy_master.here {
+            use crate::ragdoll::World as _;
+            if let Some(hit) = world.trace(here.origin, here.origin - Vec3::Z * 4_096.0, 0.0) {
+                here.origin = hit.stop;
+            }
+        }
+        let last = self.toy_master.here.len() - 1;
+        let here = &mut self.toy_master.here[last];
+        here.drops = drops::Drops::new(here.track.show(), seed, kinds, here.origin);
+        let elapsed = here.show_elapsed(now).unwrap_or_default();
+        here.drops.run(elapsed, &mut world);
+        println!(
+            "toy at {:?}; drops at rest {} of {}",
+            here.origin,
+            here.drops.list.iter().filter(|drop| drop.resting).count(),
+            here.drops.list.len()
+        );
+        here.origin
     }
 }
 
@@ -1027,52 +1276,12 @@ mod tests {
         pop: 400,
         spin: 8_000,
         turns: 2.0,
+        steps: Vec::new(),
+        length: 0,
+        reach: 0.0,
+        ring: String::new(),
+        ring_radius: 0.0,
     };
-
-    fn at(ms: u64) -> Option<Pose> {
-        pose(&SHOW, Duration::from_millis(ms))
-    }
-
-    #[test]
-    fn a_show_shrinks_away_stays_gone_pops_back_and_spins_to_a_stop() {
-        assert_eq!(at(0).unwrap().scale, 1.0);
-        assert!(at(100).unwrap().scale < 1.0);
-        assert_eq!(at(700).unwrap().scale, 0.0);
-        // The pop overshoots, then settles.
-        let peak = (0..400)
-            .map(|ms| at(1_200 + ms).unwrap().scale)
-            .fold(0.0, f32::max);
-        assert!(peak > 1.05, "{peak}");
-        assert!((at(1_600).unwrap().scale - 1.0).abs() < 1e-4);
-        // The spin speeds up, runs at full speed and slows to a stop.
-        let turn = |ms: u64| at(1_600 + ms).unwrap().turn;
-        let speed = |ms: u64| turn(ms + 10) - turn(ms);
-        assert!(speed(100) < speed(3_000));
-        assert!((speed(3_000) - 2.0 * 360.0 / 100.0).abs() < 0.1);
-        assert!(speed(7_950) < speed(6_500) && speed(7_950) < 0.5);
-        assert_eq!(at(1_600 + 8_000), None);
-        assert_eq!(length(&SHOW), Duration::from_millis(9_600));
-    }
-
-    /// The players around dance only while the toy spins, turning as it turns, squishing
-    /// in step with its hops and harder as it speeds up.
-    #[test]
-    fn players_dance_only_while_the_toy_spins() {
-        let dance_at = |ms: u64| dance(&SHOW, Duration::from_millis(ms));
-        assert_eq!(dance_at(0), None);
-        assert_eq!(dance_at(1_000), None);
-        assert_eq!(dance_at(1_599), None);
-        assert_eq!(dance_at(1_600 + 8_000), None);
-        let (turn, _) = dance_at(1_600 + 3_000).unwrap();
-        assert_eq!(turn, at(1_600 + 3_000).unwrap().turn);
-        // At the top of a hop it squishes most, on landing not at all.
-        let squish = |ms: u64| dance_at(1_600 + ms).unwrap().1;
-        assert!(squish(3_125) > 0.99, "{}", squish(3_125));
-        assert!(squish(3_250) < 0.01, "{}", squish(3_250));
-        // Speeding up, it squishes less.
-        assert!(squish(125) < 0.2);
-        assert!(spin_speed(8_000.0, 7_999.0) < 0.01);
-    }
 
     /// A model near a spinning toy turns and squishes with its feet on the floor; one far
     /// off is left as it was, one between fades.
@@ -1082,6 +1291,8 @@ mod tests {
             origin: Vec3::ZERO,
             turn: 90.0,
             squish: 1.0,
+            full: DANCE_FULL,
+            fade: DANCE_FADE,
         }];
         let start = sjk_runtime::Transform {
             translation: [100.0, 0.0, 24.0],
@@ -1113,6 +1324,17 @@ mod tests {
         moved
     }
 
+    /// A show with a reach has the players dance within it; one without, as before.
+    #[test]
+    fn a_show_reaches_as_far_as_it_says() {
+        assert_eq!(reach_of(&SHOW), (DANCE_FULL, DANCE_FADE));
+        let show = Show {
+            reach: 400.0,
+            ..SHOW
+        };
+        assert_eq!(reach_of(&show), (400.0, 400.0 + DANCE_EDGE));
+    }
+
     /// A toy shrunk away in its show is not shown, so no prompt stands over it.
     #[test]
     fn a_toy_gone_in_its_show_is_not_shown() {
@@ -1133,16 +1355,6 @@ mod tests {
         assert!(shown(&toys.here[0], now));
         assert!(!shown(&toys.here[0], now + Duration::from_millis(700)));
         assert!(shown(&toys.here[0], now + Duration::from_millis(2_000)));
-    }
-
-    #[test]
-    fn the_spin_never_turns_back() {
-        let mut last = 0.0;
-        for ms in (0..=8_000).step_by(50) {
-            let turn = spin_turn(3.0, 8_000.0, ms as f32);
-            assert!(turn >= last, "{ms}: {turn} < {last}");
-            last = turn;
-        }
     }
 
     fn toy(id: i64, origin: [f32; 3]) -> wire::Secret {
@@ -1180,6 +1392,62 @@ mod tests {
         assert!(toys.here[0].done && toys.here[0].playing.is_some());
         toys.take(&secrets, "mp/ffa3", -5, "1.2.3.4:29070", true);
         assert!(!toys.here[0].done);
+    }
+
+    /// A show with a ring and drops wants their models too, each once.
+    #[test]
+    fn a_shows_ring_and_drops_are_wanted() {
+        let mut toys = ToyMaster::default();
+        let mut stepped = toy(1, [0.0; 3]);
+        stepped.show = track::tests::stepped();
+        toys.take(
+            &wire::Secrets {
+                secrets: vec![stepped.clone(), wire::Secret { id: 2, ..stepped }],
+                kinds: Vec::new(),
+            },
+            "mp/ffa3",
+            -5,
+            "",
+            true,
+        );
+        let wanted: Vec<_> = toys.wanted_models().collect();
+        assert_eq!(wanted.len(), 5, "{wanted:?}");
+        assert!(wanted.contains(&"models/r.md3") && wanted.contains(&crate::illuminate::MODEL));
+    }
+
+    /// A show's drops come with its show and go when taken; none before the show.
+    #[test]
+    fn drops_come_with_the_show_and_go_when_taken() {
+        let mut toys = ToyMaster::default();
+        let mut stepped = toy(1, [0.0; 3]);
+        stepped.show = track::tests::stepped();
+        toys.take(
+            &wire::Secrets {
+                secrets: vec![stepped],
+                kinds: Vec::new(),
+            },
+            "mp/ffa3",
+            -5,
+            "",
+            true,
+        );
+        let kinds = [wire::DropKind::Credits, wire::DropKind::Holocron];
+        toys.throw(1, 5, &kinds);
+        assert!(toys.here[0].drops.list.is_empty());
+        let now = Instant::now();
+        toys.start(1, now);
+        toys.throw(1, 5, &kinds);
+        assert_eq!(toys.here[0].drops.list.len(), 2);
+        toys.taken(1, 1);
+        assert!(toys.here[0].drops.list[1].taken && !toys.here[0].drops.list[0].taken);
+        // The drops wait a minute past the show's end, then go.
+        let length = Duration::from_millis(u64::from(toys.here[0].track.length()));
+        assert!(toys.here[0].show_elapsed(now + length).is_some());
+        assert!(
+            toys.here[0]
+                .show_elapsed(now + length + DROPS_KEPT)
+                .is_none()
+        );
     }
 
     #[test]
@@ -1234,7 +1502,7 @@ mod tests {
         );
         // Starting again while it plays changes nothing.
         toys.start(1, start + Duration::from_millis(1_400));
-        toys.tick(start + length(&SHOW));
+        toys.tick(start + Duration::from_millis(9_600));
         assert!(toys.here[0].playing.is_none() && toys.here[0].done);
         assert!(
             toys.cues

@@ -42,9 +42,10 @@ mod sounds;
 
 use crate::GpuState;
 use crate::ghost_replay::Drive;
-use body::{Body, PELVIS};
+use body::PELVIS;
 pub(crate) use body::{
-    JOINTS, L_FOOT, MAX_PUSH, R_FOOT, STEP_MS, Start, Strike, World, friction, unbounced, unit,
+    Body, JOINTS, L_FOOT, MAX_PUSH, R_FOOT, STEP_MS, Start, Strike, World, friction, unbounced,
+    unit,
 };
 use glam::Vec3;
 pub(crate) use scene::{Movers, Scene};
@@ -368,9 +369,36 @@ fn shown_lock() -> std::sync::MutexGuard<'static, [Option<[Vec3; JOINTS]>; SLOTS
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// The ragdoll of the player in `slot` this frame, world space, if they are limp.
+/// The ragdoll of the player in `slot` this frame, world space, if they are limp, or
+/// floating in a Toy Master's show ([`set_floating`]).
 pub(crate) fn shown(slot: u8) -> Option<[Vec3; JOINTS]> {
-    shown_lock().get(usize::from(slot)).copied().flatten()
+    shown_lock()
+        .get(usize::from(slot))
+        .copied()
+        .flatten()
+        .or_else(|| floating_lock().get(usize::from(slot)).copied().flatten())
+}
+
+/// The players floating in a Toy Master's show this frame (`toy_master::float`): drawn
+/// as their ragdolls are, a fall of their own coming first.
+static FLOATING: LazyLock<Mutex<[Option<[Vec3; JOINTS]>; SLOTS]>> =
+    LazyLock::new(|| Mutex::new([None; SLOTS]));
+
+fn floating_lock() -> std::sync::MutexGuard<'static, [Option<[Vec3; JOINTS]>; SLOTS]> {
+    FLOATING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Set the floating players of this frame, by slot.
+pub(crate) fn set_floating(bodies: impl IntoIterator<Item = (u8, [Vec3; JOINTS])>) {
+    let mut floating = floating_lock();
+    *floating = [None; SLOTS];
+    for (slot, points) in bodies {
+        if let Some(entry) = floating.get_mut(usize::from(slot)) {
+            *entry = Some(points);
+        }
+    }
 }
 
 /// The head joint's centre lies this far below the top of the head.

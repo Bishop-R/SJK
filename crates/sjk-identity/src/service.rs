@@ -118,6 +118,20 @@ pub enum SecretDone {
         /// The player found it with these presses (its achievement unlocked).
         found: bool,
     },
+    /// The player took drop `drop` of toy `id`'s show: what it gave (`credits`,
+    /// `shards` or `holocron`), how many, and a holocron's tier.
+    Took {
+        /// The toy.
+        id: i64,
+        /// The drop.
+        drop: u32,
+        /// What it gave.
+        kind: String,
+        /// How many credits or shards.
+        amount: i64,
+        /// A holocron's tier.
+        tier: Option<String>,
+    },
     /// SJK's creator hid a toy: its id.
     Placed(i64),
     /// SJK's creator took toy `id` away.
@@ -800,6 +814,13 @@ enum Command {
         server: String,
         round: i32,
         presses: u32,
+    },
+    /// The player takes drop `drop` of toy `id`'s show on `server`, in map load `round`.
+    TakeSecretDrop {
+        id: i64,
+        server: String,
+        round: i32,
+        drop: u32,
     },
     /// SJK's creator: hide a toy.
     PlaceSecret(crate::toy_master::Placing),
@@ -1729,6 +1750,24 @@ impl Worker {
                             found: used.profile.is_some(),
                         };
                         (done, used.profile)
+                    })
+            }),
+            Command::TakeSecretDrop {
+                id,
+                server,
+                round,
+                drop,
+            } => self.secret(now, |hub, identity| {
+                hub.take_secret_drop(identity, id, &server, round, drop)
+                    .map(|took| {
+                        let done = SecretDone::Took {
+                            id,
+                            drop,
+                            kind: took.kind,
+                            amount: took.amount,
+                            tier: took.tier,
+                        };
+                        (done, took.profile)
                     })
             }),
             Command::PlaceSecret(placing) => self.secret(now, |hub, identity| {
@@ -3906,6 +3945,17 @@ impl Service {
             server,
             round,
             presses,
+        });
+    }
+
+    /// Take drop `drop` of toy `id`'s show on `server` in map load `round`: what it gave
+    /// arrives in [`Snapshot::secret`], the profile after in [`Snapshot::me`].
+    pub fn take_secret_drop(&self, id: i64, server: String, round: i32, drop: u32) {
+        let _ = self.commands.send(Command::TakeSecretDrop {
+            id,
+            server,
+            round,
+            drop,
         });
     }
 

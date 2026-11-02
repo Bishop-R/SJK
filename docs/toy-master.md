@@ -25,7 +25,10 @@ placed for one only, where it stands and faces, and how it looks and plays:
   (the Sith cloud's optional [extras](sith-cloud.md)): without it the show plays
   silent;
 - `show`: how long it shrinks away, stays gone and pops back, how long it spins and its
-  fastest spin.
+  fastest spin; since 02/11/2026 also its steps (below), how long they last
+  (`length`), how far round the toy the players take part (`reach`), and the model of
+  the ring drawn on the ground to show it (`ring`, with its own radius,
+  `ring_radius`).
 
 The creator's list also names each toy's kind and the kinds there are.
 
@@ -60,6 +63,55 @@ shrunk away in its show. The client sends the presses on the toy twice a second 
   dance only in third person.
 - Once a toy played its show on a map load, presses on it count no more until the next
   (a player who has not found it yet still finds it with one press).
+
+## A show in steps
+
+Since 02/11/2026 a show may go on in steps (`Show::steps`, Sol's design for the first
+toy, timed on its sound): each from a moment after the pop, when the sound starts, to the
+next, saying how fast the toy spins (`spin`, turns a second, 0 still) and what else goes
+on (`toy_master/track.rs`). A show without steps plays as above; a client older than
+steps plays a stepped show's spin for `spin` only.
+
+- `dance`: the players within `reach` dance as above (fading out over 48 units more),
+  turning as fast as the toy.
+- `ring`: the ring model lies on the ground round the toy, grown to the reach, turning at
+  a quarter of the toy's speed. It is flat at the toy's floor: ground higher than that
+  hides part of it.
+- `float`: the toy rises and drifts, tumbling, and every player within reach as the step
+  begins floats with no gravity (`toy_master/float.rs`): drawn as the Ragdoll toy draws a
+  limp player (`ragdoll::set_floating`, a body of the ragdoll's own with
+  `Body::weightless`), pushed up and away and gently now and then, turning with the
+  toy while it spins. Only their looks float: their view, aim and real body are
+  untouched. When the floating ends the bodies fall back to the floor, and 3.5 seconds
+  later the players are drawn standing again. Each client floats them by itself, from
+  the show's seed and the slot.
+- `spit`: the toy throws out the show's drops, spread evenly over the step (below).
+
+Changes are eased: a spin's speed over 0.7 s, the dance and the ring over 0.5 s, the
+toy's rise over 1.5 s and its landing over 0.9 s. The toy's sound plays for the whole
+show and stops at its end.
+
+## Drops
+
+A show with drops gives real rewards, the hub's to roll (Sol, 02/11/2026: "modest",
+and no cap: whoever takes a drop first has it). Right after `show_<id>` the hub tells
+the server's SJK players what the show throws: `drops_<id>_<seed>_<letters>`, a letter a
+drop, `c` credits, `s` kyber shards, `h` a holocron; how much each gives is told only to
+its taker. Every client throws the drops alike from the seed
+(`toy_master/drops.rs`): drop *i* of *n* leaves the toy's mouth at
+`lead + from + (to - from) * (2i + 1) / 2n` milliseconds into the show (the `spit` step
+from `from` to `to`; `Show::drop_time`, the hub reckons it the same way), flies in fixed
+16 ms steps with gravity, bounces off the map and slides to rest, the same everywhere.
+A credits drop is drawn as a green crystal, kyber shards as a kyber crystal, a holocron
+as SJK's holocron.
+
+A drop at rest, within 64 units across the floor and 80 up or down and faced, shows the
+Use prompt ("Take the credits", "Take the kyber shards", "Take the holocron"); Use asks
+the hub for it (`POST /v1/secrets/take`) and greys the prompt for 3 seconds while it
+answers. The first to ask gets it: the console says what it gave, and the hub tells
+every SJK player there (`taken_<id>_<drop>`), whose clients stop drawing it. A drop
+someone else took first, or one gone, is refused in a line. Drops wait a minute after
+the show ends. History lists them as taken from a Toy Master's toy.
 
 Every sound plays on a source of the toy's own (`0x5300_0000` and its id), and the
 show's sound stops when the show ends or the player leaves the map. The sounds are
