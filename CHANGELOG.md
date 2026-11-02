@@ -45,6 +45,8 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
 - JA+ tools: `japlus.guntele` with a distance (`japlus.guntele 300`, from the console or a quick wheel choice) takes you that far straight ahead, level, and stops just before a wall or step in the way, so it no longer drops you under the floor when you look down or into a wall _(Slash, after hub report #218, Nib)_
 - Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
+= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
+- Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

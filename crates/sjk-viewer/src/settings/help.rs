@@ -733,6 +733,10 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
+        "cl_unfocusedChatbox",
+        "Shows your automatic chat bubble while unfocused or minimized. Open chat, console and menus still show their normal bubble.",
+    ),
+    (
         "cg_chatBoxFontSize",
         "Size of chat messages and their rows; 1 is EternalJK's size, higher is larger and wraps sooner.",
     ),

@@ -7,6 +7,20 @@ use super::*;
 /// alt-tabbed client does not keep a 4K frame rate. EternalJK leaves it at 0.
 const UNFOCUSED_CAP: i64 = 30;
 
+/// Retired archived window preferences, discarded after loading old profiles.
+const RETIRED_CVARS: &[&str] = &[
+    // #331, 01/11/2026: the requested single unfocused switch covers both away
+    // states, so an old minimized value must not survive as a phantom setting.
+    "cl_minimizedChatbox",
+];
+
+/// Remove retired user-created entries without changing the surviving preference.
+pub(super) fn discard_retired(cvars: &mut CvarRegistry) {
+    for name in RETIRED_CVARS {
+        let _ = cvars.unset(name);
+    }
+}
+
 /// Window preferences retained across world installs with the console.
 pub(super) struct Options {
     unfocused_cap: IntegerSetting,
@@ -16,7 +30,6 @@ pub(super) struct Options {
     /// [`crate::runtime_settings::MENU_CAP_CVAR`], read every frame.
     menu_cap: IntegerSetting,
     unfocused_chatbox: IntegerSetting,
-    minimized_chatbox: IntegerSetting,
     mute_away: IntegerSetting,
     unfocused: bool,
     minimized: bool,
@@ -53,12 +66,7 @@ impl Options {
             (
                 "cl_unfocusedChatbox",
                 1,
-                "Show your chat balloon while the game window is unfocused",
-            ),
-            (
-                "cl_minimizedChatbox",
-                1,
-                "Show your chat balloon while the game window is minimised",
+                "Show your automatic chat balloon while the game window is unfocused or minimized",
             ),
             (
                 "snd_mute_losefocus",
@@ -108,7 +116,6 @@ impl Options {
             monitor_cap: IntegerSetting::bind(cvars, crate::runtime_settings::MONITOR_CAP_CVAR, 0)?,
             menu_cap: IntegerSetting::bind(cvars, crate::runtime_settings::MENU_CAP_CVAR, 0)?,
             unfocused_chatbox: IntegerSetting::bind(cvars, "cl_unfocusedChatbox", 1)?,
-            minimized_chatbox: IntegerSetting::bind(cvars, "cl_minimizedChatbox", 1)?,
             mute_away: IntegerSetting::bind(cvars, "snd_mute_losefocus", 1)?,
             unfocused: false,
             minimized: false,
@@ -168,17 +175,14 @@ impl ViewerConsole {
         cap.min(i64::from(u32::MAX)) as u32
     }
 
-    /// Whether commands carry `BUTTON_TALK` because the window is away: EternalJK's
-    /// `cl_unfocusedChatbox` / `cl_minimizedChatbox` (both on by default) in
-    /// `CL_CmdButtons` (`codemp/client/cl_input.cpp`), so other players see the
-    /// balloon over someone who alt-tabbed.
+    /// Whether commands carry the automatic away talk flag. One archived switch,
+    /// `cl_unfocusedChatbox` (default 1), covers unfocused and minimized windows.
     pub(crate) fn window_talk(&self) -> bool {
         let options = &self.window_options;
         away_talk(
             options.unfocused,
             options.minimized,
             options.unfocused_chatbox.value(),
-            options.minimized_chatbox.value(),
         )
     }
 
@@ -323,15 +327,9 @@ fn private_flash(away: bool, setting: Option<bool>) -> bool {
     away && setting != Some(false)
 }
 
-/// `CL_CmdButtons`' away test: unfocused with `cl_unfocusedChatbox`, or minimised
-/// with `cl_minimizedChatbox`, each enabled by any nonzero value.
-fn away_talk(
-    unfocused: bool,
-    minimized: bool,
-    unfocused_chatbox: i64,
-    minimized_chatbox: i64,
-) -> bool {
-    unfocused && unfocused_chatbox != 0 || minimized && minimized_chatbox != 0
+/// One switch covers either away state, including a minimized event before focus loss.
+fn away_talk(unfocused: bool, minimized: bool, enabled: i64) -> bool {
+    (unfocused || minimized) && enabled != 0
 }
 
 #[cfg(test)]
@@ -412,18 +410,63 @@ mod menu_cap_tests {
 
 #[cfg(test)]
 mod away_talk_tests {
-    use super::away_talk;
+    use super::{ViewerConsole, away_talk};
 
     #[test]
-    fn an_away_window_talks_unless_its_setting_is_off() {
-        assert!(!away_talk(false, false, 1, 1));
-        assert!(away_talk(true, false, 1, 1));
-        assert!(away_talk(true, true, 1, 1));
-        assert!(!away_talk(true, false, 0, 1));
-        // A minimised window is usually unfocused too; either setting raises it.
-        assert!(away_talk(true, true, 0, 1));
-        assert!(away_talk(true, true, 1, 0));
-        assert!(!away_talk(true, true, 0, 0));
-        assert!(away_talk(false, true, 0, 2));
+    fn one_switch_controls_every_away_state() {
+        for unfocused in [false, true] {
+            for minimized in [false, true] {
+                assert!(!away_talk(unfocused, minimized, 0));
+                for enabled in [-1, 1, 2] {
+                    assert_eq!(
+                        away_talk(unfocused, minimized, enabled),
+                        unfocused || minimized
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_shared_switch_changes_live_and_the_old_setting_has_no_default() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(console.cvar_default("cl_minimizedChatbox").is_none());
+        console.window_state(None, Some(true));
+        assert!(
+            console.window_talk(),
+            "a minimized event can arrive before focus loss"
+        );
+        assert!(console.set_cvar("cl_unfocusedChatbox", "0"));
+        assert!(!console.window_talk());
+        console.window_state(Some(false), None);
+        assert!(!console.window_talk());
+        console.window_state(None, Some(false));
+        assert!(!console.window_talk(), "unfocused is off too");
+        assert!(console.set_cvar("cl_unfocusedChatbox", "2"));
+        assert!(console.window_talk());
+        console.window_state(Some(true), None);
+        assert!(!console.window_talk());
+    }
+
+    #[test]
+    fn old_profiles_follow_the_saved_unfocused_choice_in_both_states() {
+        for (unfocused, old_minimized) in [(0, 1), (1, 0)] {
+            let directory = tempfile::tempdir().unwrap();
+            let config = directory.path().join("config.cfg");
+            std::fs::write(&config, format!("seta cl_unfocusedChatbox {unfocused}\nseta cl_minimizedChatbox {old_minimized}\n")).unwrap();
+            let mut console = ViewerConsole::new(config).unwrap();
+            assert!(console.cvar("cl_minimizedChatbox").is_none());
+            console.window_state(Some(false), Some(true));
+            assert_eq!(console.window_talk(), unfocused != 0);
+            console.window_state(None, Some(false));
+            assert_eq!(console.window_talk(), unfocused != 0);
+            assert!(console.set_cvar(
+                "cl_unfocusedChatbox",
+                if unfocused == 0 { "1" } else { "0" }
+            ));
+            let saved = std::fs::read_to_string(directory.path().join("config.cfg")).unwrap();
+            assert!(!saved.to_ascii_lowercase().contains("cl_minimizedchatbox"));
+        }
     }
 }

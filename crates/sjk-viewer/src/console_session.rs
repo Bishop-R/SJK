@@ -332,6 +332,7 @@ impl ViewerConsole {
                 "could not load config: {error}; settings will NOT be saved until it loads cleanly"
             ));
         }
+        window_options::discard_retired(&mut shell.cvars);
         // Sensitivity used to be counts-to-radians at 0.001; it is now stock's
         // degrees-per-count through `m_yaw`/`m_pitch`. Rescale a value saved
         // under the old units once, so an existing profile keeps the aim it
