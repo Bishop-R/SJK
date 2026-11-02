@@ -193,6 +193,7 @@ impl GameAudio {
                     prepared.cue_handles.map(|h| h.map(|h| remap[h.0 as usize]));
                 // Apply the current filter before replaying even the first deferred chat.
                 prepared.adapter.set_pm_only_chat(self.pm_only_chat);
+                prepared.adapter.set_quiet_chat(self.quiet_chat);
                 self.legacy = Some(prepared.adapter);
                 self.saber_sets_generation = Some(prepared.skins_generation);
                 // Skins loaded while the tables were built: their sounds now.

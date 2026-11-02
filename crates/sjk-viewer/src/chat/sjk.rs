@@ -46,6 +46,7 @@ impl ChatOverlay {
         } else {
             (body, Vec::new(), None)
         };
+        let loud = self.sjk_line_loud(&message.key_id, official.is_some());
         if self.lines.len() == HISTORY_LIMIT {
             self.lines.pop_front();
         }
@@ -83,8 +84,9 @@ impl ChatOverlay {
             encrypted: false,
             verified: false,
             recipient: None,
+            loud,
         });
-        if self.is_typing() && self.scroll > 0 {
+        if self.is_typing() && self.scroll > 0 && (loud || !self.options.quiet) {
             self.scroll = (self.scroll + 1).min(self.lines.len().saturating_sub(1));
             self.unread = (self.unread + 1).min(HISTORY_LIMIT);
         }
@@ -95,6 +97,7 @@ impl ChatOverlay {
     /// ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_holocron(&mut self, tier: &str, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -126,6 +129,7 @@ impl ChatOverlay {
         now: Instant,
     ) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -159,6 +163,7 @@ impl ChatOverlay {
     /// `debug_reward`. The real lines come from the hub's feed ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_official(&mut self, official: sjk_identity::Official, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -391,6 +396,7 @@ mod tests {
 
     fn message(id: u64, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

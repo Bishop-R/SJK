@@ -30,6 +30,21 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+= cg_soundSonar: Sound sonar, for deaf and hard-of-hearing players: arcs round the crosshair point toward the sounds you hear.
+= cg_scoreboardIDs: New: each player's client number, small before the name on SJK's scoreboard, as the classic one's Id column shows it.
+
+- Move the HUD with the mouse: Settings > HUD "Move HUD elements" (or `hud_edit`) outlines the health, Force, weapon, timer, lagometer, chat, kill feed, movement keys and the rest over the game; drag one to move it, right-click it to put it back _(Slash, PR #295, after Lex's idea)_
+- Sound sonar (Settings > Sound, `cg_soundSonar`, off by default): short arcs round the crosshair point toward the sounds you hear, footsteps, shots and swings, voices, explosions and the rest, each kind its own colour, fading over a second _(Slash, PR #301, after Dawson's idea)_
+- Quiet mode: `quiet` (or Settings > Chat > Quiet mode, `cg_quietMode`) hides public, team, SJK and admin chat and their sounds until you turn it off or the map changes, but for your private duel partner and whispers; your SJK scoreboard row says Quiet _(Slash, PR #302, after Lex Deifaber's idea)_
+- Fonts from your PC: Settings > Chat font (`cg_chatFont`) and Console font (`con_font`) list the font families installed on this PC; pick one to draw the chat or the console in it. Characters it lacks, Cyrillic, Chinese, Japanese, Korean and emoji still come from SJK's fonts, and SJK default keeps SJK's own _(Slash, PR #303, after Saturn's idea)_
+- Scoreboard: each player's client number on SJK's scoreboard too (`cg_scoreboardIDs`, off by default), and Rank by score - deaths (`cg_scoreboardDeathsRank`, off by default), with the # column numbering players in that order (Foshin's idea) _(Creyon, PR #317)_
+- Trading: a finished trade says your new items are in your collection only when the other player gave you something; otherwise it says you gave your offer and received nothing, with the other player's name shown in full (clan marks included); the message over play grows to show the whole line instead of cutting it off (hub report #208) _(Creyon, PR #321)_
+- JoF hats look as in JoF EJK: the pumpkin, cap, cringe, fedora, Santa hat, sombrero and top hat show their own pictures instead of plain grey, in game and in the profile preview, and McFox and McSnowFox are solid instead of see-through _(Creyon, PR #236)_
+- SJK chat: react to public messages with six shared emoji buttons; reaction errors clear after five seconds _(Lumaya, PR #316)_
+- Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
+
 ## 2026.1102.1 (Alpha) | 02/11/2026
 
 Toon shading, livelier Toy Master shows, grand finds told in colour and a round of crash fixes.

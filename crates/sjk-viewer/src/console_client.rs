@@ -58,6 +58,10 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
         "pmonly",
         "Toggle private-only game chat for this map: pmonly [on|off]",
     ),
+    (
+        crate::chat::quiet::COMMAND,
+        "Toggle quiet mode until the map changes (only your duel partner and whispers): quiet [on|off]",
+    ),
     ("messagemode", "Compose global chat"),
     ("messagemode2", "Compose team chat"),
     (
@@ -277,6 +281,7 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     ("colorstring", "Configure outgoing chat colors"),
     ("vid_restart", "Reapply video settings (device is retained)"),
     (crate::fps_help::COMMAND, crate::fps_help::HELP),
+    (crate::hud_edit::COMMAND, crate::hud_edit::HELP),
     (crate::emote_help::COMMAND, crate::emote_help::HELP),
     (crate::emote_picker::COMMAND, crate::emote_picker::HELP),
     (crate::news_panel::COMMAND, crate::news_panel::HELP),
@@ -868,7 +873,7 @@ impl crate::GpuState {
             .chat
             .reply_target()
             .map_err(|why| why.line().to_owned())?;
-        let Some(command) = sjk_client::chat_command(
+        let Some(command) = sjk_client::chat_command_full(
             sjk_client::ChatDestination::Player(target.slot()),
             &args.join(" "),
         ) else {
@@ -1025,6 +1030,12 @@ impl crate::GpuState {
             crate::chat_sounds::PREVIEW_COMMAND => return crate::chat_sounds::command(args),
             "pmonly" => {
                 return crate::chat::pm_only::command(
+                    self.console.as_mut().ok_or("Console unavailable")?,
+                    args,
+                );
+            }
+            crate::chat::quiet::COMMAND => {
+                return crate::chat::quiet::command(
                     self.console.as_mut().ok_or("Console unavailable")?,
                     args,
                 );
@@ -1285,6 +1296,7 @@ impl crate::GpuState {
             crate::ghost_replay::COMMAND => return self.ghost_command(args),
             crate::mimic::COMMAND => return self.mimic_command(args),
             crate::fps_help::COMMAND => return self.fps_help_command(),
+            crate::hud_edit::COMMAND => return self.hud_edit_command(args),
             crate::emote_help::COMMAND => return self.emote_help_command(),
             crate::emote_picker::COMMAND => return self.emote_picker_command(),
             crate::news_panel::COMMAND => {

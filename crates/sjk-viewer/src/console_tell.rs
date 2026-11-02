@@ -6,7 +6,7 @@
 //! `tell <slot> <message>`; when nobody or several players match it prints why
 //! and sends nothing. A numeric target is passed through unchanged.
 
-use sjk_client::{ChatDestination, ChatRoster, PlayerLookup, chat_command};
+use sjk_client::{ChatDestination, ChatRoster, PlayerLookup, chat_command_full};
 
 /// What to do with a forwarded console command.
 #[derive(Debug, Eq, PartialEq)]
@@ -33,7 +33,7 @@ pub(super) fn resolve(tokens: &[String], roster: &ChatRoster) -> Tell {
     }
     match roster.lookup(target) {
         PlayerLookup::Found(slot) => {
-            chat_command(ChatDestination::Player(slot), &message.join(" "))
+            chat_command_full(ChatDestination::Player(slot), &message.join(" "))
                 .map_or(Tell::Unchanged, Tell::Send)
         }
         PlayerLookup::NotFound => Tell::Refused(vec![format!(

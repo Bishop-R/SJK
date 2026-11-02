@@ -403,6 +403,62 @@ impl Options {
             .collect()
     }
 
+    /// jaPRO's hats and capes in the folders JoF's pieces used before
+    /// `models/cosmetics/` ([`crate::cosmetics::MOVED_FOLDERS`]): their pictures and any
+    /// `.shader` file defining only such shaders (`japro_hats.shader`), from the
+    /// highest-priority PK3 in `install/EternalJK` that has each (jaPRO's
+    /// `japro-assets.pk3`), as `(archive, path, bytes)`. Seven of JoF's hats name these
+    /// folders and JoF EJK draws them from here (hub report #192); only these files are
+    /// taken from the pack. Empty when the folder is a game directory already.
+    pub(crate) fn eternaljk_old_hats(&self, install: &Path) -> Vec<(PathBuf, String, Vec<u8>)> {
+        let Some(directory) = self.eternaljk_directory(install) else {
+            return Vec::new();
+        };
+        let mut found: Vec<(PathBuf, String, Vec<u8>)> = Vec::new();
+        for archive in sjk_vfs::pk3_search_order(&directory)
+            .unwrap_or_default()
+            .into_iter()
+            .rev()
+            .filter(|archive| self.disabled.allows(archive))
+        {
+            let mut probe = VirtualFileSystem::new();
+            if probe.mount_pk3(&archive).is_err() {
+                continue;
+            }
+            let take = |path: String, found: &mut Vec<(PathBuf, String, Vec<u8>)>| {
+                if found
+                    .iter()
+                    .any(|(_, known, _)| known.eq_ignore_ascii_case(&path))
+                {
+                    return None;
+                }
+                let bytes = probe.read(&path).ok()??.bytes;
+                Some((archive.clone(), path, bytes))
+            };
+            for (old, _) in crate::cosmetics::MOVED_FOLDERS {
+                for extension in [".png", ".tga", ".jpg", ".jpeg"] {
+                    for name in probe.list_files(old, extension) {
+                        if let Some(file) = take(format!("{old}{name}"), &mut found) {
+                            found.push(file);
+                        }
+                    }
+                }
+            }
+            for name in probe.list_files("shaders", ".shader") {
+                let path = format!("shaders/{name}");
+                let only_hats = probe.read(&path).ok().flatten().is_some_and(|asset| {
+                    crate::cosmetics::only_old_folder_shaders(&String::from_utf8_lossy(
+                        &asset.bytes,
+                    ))
+                });
+                if only_hats && let Some(file) = take(path, &mut found) {
+                    found.push(file);
+                }
+            }
+        }
+        found
+    }
+
     /// JoF EternalJK's chat emoji pictures, every `gfx/emoji/*.png` in the PK3s of
     /// `install/EternalJK` (jaPRO's `japro-assets.pk3` ships 175), as `(path as the
     /// archive stores it, image bytes)`, the highest-priority archive's copy of each
@@ -579,6 +635,46 @@ impl Options {
                 "EternalJK movement keys",
                 keys.into_iter().map(|(_, path, bytes)| (path, bytes)),
             )?;
+        }
+        // The hats and capes whose models name the folders JoF's pieces used before
+        // `models/cosmetics/`: jaPRO's copies from the EternalJK folder, likewise only
+        // those, as JoF EJK draws them, and where it has none the same picture from the
+        // new folder under the old name (`cosmetics::old_folder_pictures`, hub report
+        // #192: they drew grey).
+        let mut hats: Vec<(String, Vec<u8>)> = Vec::new();
+        for (archive, path, bytes) in self.eternaljk_old_hats(install) {
+            if log {
+                crate::log::progress(format_args!("hat file {path} from {}", archive.display()));
+            }
+            hats.push((path, bytes));
+        }
+        let pieces = crate::cosmetics::piece_models(&vfs);
+        let moved = crate::cosmetics::old_folder_pictures(&vfs, &pieces, |path| {
+            hats.iter()
+                .any(|(known, _)| known.eq_ignore_ascii_case(path))
+        });
+        if log {
+            for (path, _) in &moved {
+                crate::log::progress(format_args!("hat picture {path} from the new folder"));
+            }
+        }
+        hats.extend(moved);
+        if !hats.is_empty() {
+            vfs.mount_memory("EternalJK hats", hats)?;
+        }
+        // JoF's pieces built inside out (McFox), drawn two-sided as JoF EJK shows them.
+        if let Some((path, text)) = crate::cosmetics::inside_out_shaders(&pieces) {
+            if log {
+                crate::log::progress(format_args!(
+                    "two-sided cosmetics: {}",
+                    String::from_utf8_lossy(&text)
+                        .lines()
+                        .filter(|line| !line.starts_with(['\t', '{', '}', '/']))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            vfs.mount_memory("SJK two-sided cosmetics", [(path, text)])?;
         }
         // JoF EternalJK's chat emojis, likewise only those pictures from the folder.
         let emojis = self.eternaljk_emojis(install);

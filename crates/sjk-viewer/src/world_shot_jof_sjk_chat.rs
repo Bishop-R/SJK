@@ -69,6 +69,7 @@ fn duel6_jof_sjk_chat_feed() {
             console.set_open(false);
         }
         let message = |id: u64, name: &str, text: &str, client: &str| sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

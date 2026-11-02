@@ -44,6 +44,8 @@ fn center_size(value: f32) -> f32 {
 /// Bounded presentation settings read from the archived cvars.
 pub(super) struct Options {
     pub(super) pm_only: bool,
+    /// Quiet mode ([`super::quiet::CVAR`]).
+    pub(super) quiet: bool,
     /// Milliseconds before a message expires.
     pub(super) lifetime: u64,
     /// Maximum retained conversation entries displayed together.
@@ -105,6 +107,9 @@ impl Options {
             pm_only: console
                 .and_then(|c| c.bool_cvar("cg_pmonlychat"))
                 .unwrap_or(false),
+            quiet: console
+                .and_then(|c| c.bool_cvar(super::quiet::CVAR))
+                .unwrap_or(false),
             lifetime: integer("cg_chatbox", 10000).max(0) as u64,
             lines: integer("cg_chatboxlines", 5).clamp(1, MAX_VISIBLE as i64) as usize,
             font: scalar(console, "cg_chatboxfontsize", CHAT_SIZE_DEFAULT)
@@ -150,6 +155,22 @@ impl Options {
         g.gap = self.gap * g.scale;
         g
     }
+}
+
+/// Where the chat's messages show, in pixels, with as many lines as `cg_chatBoxLines`
+/// keeps: the box the HUD edit mode drags ([`crate::hud_edit`]) whether messages show
+/// or not.
+pub(crate) fn box_rect(console: Option<&ViewerConsole>, viewport: [f32; 2]) -> sjk_ui::Rect {
+    let options = Options::read(console);
+    let geometry = options.geometry(viewport);
+    let lines = options.lines.max(1) as f32;
+    let height = geometry.row * lines + geometry.gap * (lines - 1.0);
+    sjk_ui::Rect::new(
+        geometry.left,
+        geometry.bottom - height,
+        geometry.width,
+        height,
+    )
 }
 
 #[cfg(test)]
@@ -277,7 +298,7 @@ impl ChatOverlay {
     pub(crate) fn configure(&mut self, console: Option<&ViewerConsole>) {
         let options = Options::read(console);
         if self.options != options {
-            if self.options.pm_only != options.pm_only {
+            if self.options.pm_only != options.pm_only || self.options.quiet != options.quiet {
                 self.scroll = 0;
                 self.unread = 0;
             }

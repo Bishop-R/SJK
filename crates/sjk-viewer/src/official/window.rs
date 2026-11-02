@@ -266,6 +266,7 @@ impl Composer {
     /// The line the chat would show for it now.
     fn preview(&self) -> String {
         let message = sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id: 0,
             at: 0,
             key_id: String::new(),

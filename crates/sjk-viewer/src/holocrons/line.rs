@@ -152,6 +152,7 @@ mod tests {
 
     fn drop(name: &str, tier: &str, own: bool) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id: 5,
             at: 0,
             key_id: "aa".to_owned(),

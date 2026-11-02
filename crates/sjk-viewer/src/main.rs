@@ -159,6 +159,7 @@ mod hitch_log;
 mod holocron_popup;
 mod holocrons;
 mod hud;
+mod hud_edit;
 mod hud_runtime;
 mod impact_spawn;
 mod impacts;
@@ -337,6 +338,7 @@ mod sjk_packs;
 mod sky_stage;
 mod small_card_notice;
 mod snapshot_presentation;
+mod sound_sonar;
 mod static_models;
 mod stock_blades;
 mod support_links;
@@ -484,6 +486,8 @@ struct GpuState {
     fps_help: fps_help::State,
     /// The low-FPS card (`help_fps`).
     fps_card: fps_help::card::Card,
+    /// The HUD edit mode (`hud_edit`, [`hud_edit`]).
+    hud_edit: hud_edit::HudEdit,
     /// The emote help card (`help_emotes`, [`emote_help`]).
     emote_help: emote_help::State,
     /// The emote picker (`emotes`, [`emote_picker`]).
@@ -1526,6 +1530,7 @@ impl GpuState {
             graphics_reload: graphics_reload::State::default(),
             fps_help: fps_help::State::default(),
             fps_card: fps_help::card::Card::default(),
+            hud_edit: hud_edit::HudEdit::default(),
             emote_help: emote_help::State::default(),
             emote_picker: emote_picker::State::default(),
             e2e_whispers: e2e_whispers::State::default(),
@@ -2087,6 +2092,7 @@ impl GpuState {
         if stock_vehicle {
             hud_visibility.vehicle = false;
         }
+        self.update_sound_sonar(game_audio.as_ref());
         let hud_style = menu_hud::HudStyle::read(self.console.as_ref());
         // The radial look is laid out for the bundled font (Inter), whatever
         // `cg_classicHudFont` says: its numbers are aligned to that font's metrics.
@@ -2107,6 +2113,8 @@ impl GpuState {
             .set_force_wheel_bar(hud_style != menu_hud::HudStyle::Radial);
         self.hud
             .set_radial_placement(hud::RadialPlacement::read(self.console.as_ref()));
+        let hud_offsets = hud::placement::Offsets::read(self.console.as_ref());
+        self.hud.set_offsets(hud_offsets);
         let hud_layout = self.hud.layout(
             hud_font,
             match hud_style {
@@ -2407,7 +2415,21 @@ impl GpuState {
             vehicle_readout.as_ref(),
             viewport,
             hud_scale,
+            [
+                hud::placement::Element::Vitals,
+                hud::placement::Element::Force,
+            ]
+            .map(|element| hud_offsets.get(element)),
         );
+        for (element, bounds) in [
+            hud::placement::Element::Vitals,
+            hud::placement::Element::Force,
+        ]
+        .into_iter()
+        .zip(self.menu_hud.block_bounds(viewport, hud_scale))
+        {
+            self.hud.element_bounds.add(element, bounds);
+        }
         if classic_hud && let Some(font) = &self.classic_hud_font {
             self.menu_hud
                 .append_text(&mut self.classic_text_vertices, font, viewport, hud_scale);
@@ -2615,6 +2637,11 @@ impl GpuState {
             }
         }
         // A trade running while its window is closed: the toast at the top, over play.
+        // The HUD edit mode's outlines and panel, over the game it edits.
+        let hud_edit_shown = !console_covers_frame && self.prepare_hud_edit();
+        if hud_edit_shown {
+            self.append_hud_edit(viewport);
+        }
         let trade_toast = self.append_trade_toast(viewport, console_covers_frame || medal_popup);
         // An achievement unlocked, or a medal or holocron in a match: its card over play or
         // the menus, never input-taking.
@@ -2647,6 +2674,7 @@ impl GpuState {
                 .then(|| self.quick_wheel.draw_list()),
             information_visible.then(|| self.hud.draw_list()),
             (chat_visible && !chat_over_trade).then(|| self.chat.draw_list()),
+            hud_edit_shown.then(|| self.hud_edit.draw_list()),
             map_edit_strip.then(|| self.map_edits.strip.0.draw_list()),
             self.ghost
                 .editor

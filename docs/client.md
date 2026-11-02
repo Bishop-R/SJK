@@ -526,7 +526,11 @@ A list (a choice of more than three values, the display mode) does not change
 on a click or Enter: they open a dropdown under the value, a rounded list over a
 soft shadow with the value in use in gold and marked with a dot, and nothing
 changes until a choice is applied with Enter or a click. Up and Down move in it;
-Escape, Backspace or a click elsewhere close it unchanged. Left and Right still
+Escape, Backspace or a click elsewhere close it unchanged. A list of more than
+eight choices (a PC's installed fonts run to hundreds) shows eight at a time with
+a thumb on its edge: the wheel scrolls it, Page Up, Page Down, Home and End jump,
+and the highlight stays in view; only the shown choices take click tokens, so a
+long list never reaches other controls' tokens. Left and Right still
 step the value directly. The rows the dropdown covers leave their values out
 while it is open, since text draws over every shape.
 
@@ -921,7 +925,20 @@ SJK wears JoF EJK's free-choice cosmetics
 whichever hat and cape they like. A hat is any `.md3`
 in `models/cosmetics/hats/`, a cape any in `models/cosmetics/capes/`
 (`models/players/hats/` and `capes/` when the new folders are empty, as older
-packs used them); names of JoF's catalogue are found in either. A name is at
+packs used them); names of JoF's catalogue are found in either. Seven of JoF's hats
+(pumpkin, cap, cringe, fedora, santahat, sombrero, tophat) moved to the new folder but
+their models still name `models/players/hats/<name>` for their surfaces; JoF EJK finds
+those in jaPRO's `japro-assets.pk3`, which holds its own copies of their pictures and
+`japro_hats.shader`. SJK takes those files alone from the EternalJK folder, as it takes
+the crosshairs, and where that pack is not installed copies the same picture from the
+new folder under the old name (`cosmetics::old_folder_pictures`), so they draw as in
+JoF EJK (hub report #192, 28/10/2026: they drew grey; JoF's `jof_hats.shader` in the
+new folder, which no model names, is left unused as there: its pumpkin glows). Hats
+built inside out (JoF's McFox and McSnowFox, most of their triangles wound away from
+their middle) are drawn two-sided, their picture lit as an unscripted surface is
+(`cosmetics::inside_out_shaders`), as JoF EJK shows them solid; their file sorts before
+every other script, so a script defining the same name keeps its own culling. Each mount
+lists and parses the hats' models once for both (`cosmetics::piece_models`). A name is at
 most 13 letters, digits, `_` or `-` and does not start with a digit. JoF's
 launcher installs its pack (`zzz_jof_cosmetics.pk3`) in the `EternalJK` folder:
 SJK mounts every PK3 there that has models in `models/cosmetics/hats/` or
@@ -1664,6 +1681,29 @@ the audio thread mixes while the frame is built, so the blocks mixed in between 
 sounds near the player differently from the others whenever they moved, and the saber's
 hum, a loop on the view, crackled (Toad's report). Unit test:
 `a_snapshot_leaves_the_listener_where_the_frame_put_it`; not yet heard in a game.
+
+## Sound sonar
+
+`cg_soundSonar` (Settings > Sound, Sound sonar; off by default; Dawson's idea for deaf
+and hard-of-hearing players) draws a short arc round the crosshair toward each world
+sound the client plays, ahead being up: light blue steps (`CHAN_BODY`), orange shots
+and swings (`CHAN_WEAPON`), green voices, yellow for the rest (explosions, clashes,
+Force, items, toys). Louder at the listener (the sound's own volume and falloff) is
+thicker and brighter; each fades over a second, and one source's sounds of a kind share
+an arc. It is fed where the audio output sends a positional one-shot
+(`AudioOutput::send`, [sound_sonar.rs](../crates/sjk-viewer/src/sound_sonar.rs), a
+24-entry ring), so it shows nothing the speakers do not get: muted players, `cg_footsteps
+0` and sounds past their falloff stay hidden, and the player's own, listener-relative,
+ambient, announcer, menu and music sounds and loops are left out. The volume cvars do
+not hide it, since it is for players who cannot hear. It needs an audio output: with
+`s_initsound 0` or no sound device nothing is sent, so the sonar shows nothing. Its
+memory is cleared when the setting goes off and when the output stops the effects (a
+new map's gamestate) or everything (`soundstop`); out of a game it draws nothing. A
+deliberate choice: the arcs give a sound's full direction round the player, ahead,
+behind and to either side, which stereo panning alone does not, as other games' sound
+visualisers do for accessibility; they add nothing the speakers do not get. Drawn with
+the HUD (`cg_drawHud`), following `cg_hudScale`. Unit tests: the bearing, the ring, the
+filters, the fade and falloff, the arc's place and scale.
 
 ## Voice volume
 
@@ -2722,6 +2762,25 @@ and returns when the switch is off; console history/logs, centre notices and
 SJK hub chat are independent. Moving to another map resets the choice; a graphics
 reload preserves it. Unmarked private formats from other mods are not guessed.
 
+`quiet` toggles **quiet mode** (`cg_quietMode`, not archived; Settings > Chat > Quiet
+mode, both styles; `quiet on`/`off` and 1/0), after Lex Deifaber's idea of 30/10/2026,
+and says ON or OFF in the console. Until it is turned off or the map changes, the chat box
+hides public, team, SJK and admin chat, their beeps and the SJK chat sound, and keeps
+them out of the console's alert words, but for whispers (server tells, encrypted SJK
+whispers), the player's own lines (the gamestate's slot, never a followed player's) and
+the private duel partner's (`ps.duelIndex` while the player's own `ps.duelInProgress`, kept
+10 seconds after the duel ends for the "gg", until they leave or rename; on the SJK chat,
+the key the hub knows in that slot). Lines no player's name starts (server notices) and the
+SJK team's announcements still show, and so do centre prints; a line two players' names fit
+is a player's and is hidden. A public line of a player whose name starts with the tell
+marker is not taken for a tell (this holds for `pmonly` too). The console scrollback keeps
+every line. Whether a line passes is decided when it arrives, so turning it off brings the
+hidden history back ([quiet.rs](../crates/sjk-viewer/src/chat/quiet.rs), the shared rules
+in [quiet_chat.rs](../crates/sjk-client/src/quiet_chat.rs)). The SJK scoreboard writes a muted
+"Quiet" after the player's own name while it is on; showing it on other players' rows
+needs the hub to relay the flag (for example a `quiet` field in the look of
+`POST /v1/look`, given back in presence and look events), which it does not yet.
+
 Chat remains connected to the real server during intermission, including
 global/team/private composer messages and console/bound chat commands. Messages
 received during background loading are retained; its loading notice hides the HUD. The scoreboard reserves a separate left column for messages and the
@@ -3006,7 +3065,16 @@ Ctrl+arrows and Ctrl+Backspace/Delete, Shift-selection, Ctrl+A/C/X/V,
 Ctrl+Insert to copy and Shift+Insert to paste. Click places the caret, drag selects,
 and double-click selects a token. Selected text is highlighted; typing/pasting
 replaces it. Clipboard text keeps colour escapes, strips controls and obeys the
-existing chat byte limit. Pasting never sends a message. Dead keys type as in
+1,200-character storage bound and the smaller four-message submission bound. Pasting
+never sends a message. On submission, a draft that exceeds the game server's 149-byte
+escaped-message budget is sent completely as at most four messages, split at a word
+where possible and at a character boundary for one oversized word. A fifth piece is
+refused; commands entered outside the composer get a warning instead. This is shared
+by All, Team, Admin, whispers and declared mod-chat commands, including an encrypted
+whisper the player chooses to send unencrypted from its failure card. An encrypted
+whisper within the hub's 900-byte limit remains one message. The last `^` colour of
+each piece starts the next one, within its 149-byte budget.
+Dead keys type as in
 the console (see below): `^` then a digit is a colour code, `^` then `e` is `ê`.
 
 Actions use server-provided sender slots and current roster generations. Old
@@ -3248,14 +3316,22 @@ the menus are the SJK UI. A look chosen after that stays. The classic board
 - Columns are Name, Score, Ping, Time and, with `cg_showClientIDs` (on by
   default), the client ID; CTF shows Score, C, A, D, Ping and Time, and duels with
   a frag limit show wins/losses. Score shows score/deaths when `cg_scoreDeaths`
-  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, the
-  default 1 uses a JA+/jaPRO server's appended value, 2 falls back to the
-  session-local counter when the server sends none, and 3 always uses the local
-  counter. As in EJK, duels and CTF never show deaths, and the local counter
+  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, 1 uses a
+  JA+/jaPRO server's appended value only (the default, as EJK), 2 uses that value and
+  falls back to the session-local counter when the server sends none, so kills/deaths
+  show on every server, and 3 always uses the local counter. The local counter knows
+  only the deaths seen since you joined. As in EJK, duels and CTF never show deaths, and the local counter
   starts again for everyone on `map_restart` or a new level (a new
   `CS_LEVEL_START_TIME`), and for one player when they change team or leave
   (`scoreboard/deaths.rs`). Bots show `BOT` for their ping; clients still connecting show
   `-`, and connected clients the scores do not list yet show `N/A`.
+- **Rank by score - deaths** (`cg_scoreboardDeathsRank`, archived, off; Settings >
+  HUD > Scoreboard, both looks; #ideas recap of 29/10/2026): where the board shows
+  deaths, players are listed by their score minus their deaths, fewer deaths first on
+  a tie, then the server's order; rows without a count or still joining follow, and
+  away players stay below the others. The SJK board numbers its rows in that order, one
+  number each. Off, the server's order and places as before, ties sharing a place. Neither EternalJK nor JoF EJK has it
+  ([style.rs](../crates/sjk-viewer/src/scoreboard/style.rs) `rank_value`).
 - Team games list the leading team first over a translucent team band, then the
   spectators; free-for-all lists the players, then the spectators. Your row is
   highlighted in your rank's colour (1st blue, 2nd red, 3rd yellow, else grey) and
@@ -3381,6 +3457,42 @@ crosshair, its name, the timer and the rest of the HUD stay put. Both are 0 by d
 the layout as bundled ([hud.rs](../crates/sjk-viewer/src/hud.rs), `RadialPlacement`,
 which moves each widget of `RADIAL_STATUS` by its side: an arc's from its sweep, the
 rest from their offset).
+
+### Moving HUD elements
+
+The HUD edit mode moves the HUD's elements with the mouse (Lex's idea, #ideas
+29/10/2026). Settings > HUD "Move HUD elements" (or the `hud_edit` command, in a match
+or a demo) closes the menus and outlines every movable element that shows, with its
+name, over the game; a small "Move the HUD" panel holds Reset all and Done. Drag an
+element to move it; right-click it, or point at it and press Delete, to put it back;
+Escape, Enter or Done leave (back to the game menu when the mode was opened from it).
+`hud_edit reset <element>` and `hud_edit reset all` do the same from the console
+([hud_edit.rs](../crates/sjk-viewer/src/hud_edit.rs)).
+
+An element with position cvars of its own is moved by changing them, in their units,
+so the console and the mode agree: the lagometer (`cg_lagometerX`, `cg_lagometerY`),
+the movement keys (`cg_movementKeysX`, `cg_movementKeysY`), the speedometer
+(`cg_speedometerX`, `cg_speedometerY`), the kill feed (`cg_killfeedX`, `cg_killfeedY`),
+the personal score (`cg_drawScoreX`, `cg_drawScoreY`) and the chat (`cg_chatBoxX`,
+`cg_chatBoxHeight`); a reset sets their defaults. The others keep an offset in
+`cg_hudOffsets`, `id:x,y` pairs in 480-line units (the screen's height over 480 pixels a
+unit on both axes, right and down positive), an element left out being where its HUD
+puts it: `vitals` (health and armour), `force` (Force and saber style, and the radial
+look's ammo, which sits in its right pill), `weapon` (weapon name and ammo), `timer`,
+`vote`, `jetpack`, `vehicle`, `selection` (the weapon, Force and inventory selectors),
+`flags` (CTF flags and team scores) and `follow` (the followed player's name)
+([placement.rs](../crates/sjk-viewer/src/hud/placement.rs)). The layouts' widgets move
+in the layout pass, the rest by moving what they drew
+(`sjk_ui::DrawList::translate_from`); with the game-data HUD, `vitals` moves its left
+menu block and `force` its right one (Force, ammo and score line), whatever
+`cg_hudScale` is. Offsets apply on top of the radial sliders above.
+
+Not movable yet: the crosshair (`cg_crosshairX`/`Y` move it by hand), its name, the
+warm-up and interruption notices, the frame rate and timer in the upper right, the
+power-up and inventory icons, the text-only game HUD (`cg_hudFiles 1`), the stock
+vehicle HUD drawn from the game's pictures, centre prints and the scoreboard. Only
+what shows at the moment can be dragged: the vote panel during a vote, the lagometer
+with `cg_lagometer` on, the jetpack bar with a jetpack, and so on.
 
 The upper right stacks the readouts as JoF EJK's `CG_DrawUpperRight` does, in every
 HUD style ([console_overlay.rs](../crates/sjk-viewer/src/console_overlay.rs)): with
@@ -7121,11 +7233,11 @@ byte 0xB0) and `"` as `''`. The chat box shows those back as `%` and `"`, as
 EternalJK's `CG_ChatBox_AddString` does (`cg_draw.c:9897-9916`), so SJK and
 EternalJK players see each other's `%` and quotes; a client without this shows
 `°/.` and `''`. As in EternalJK, the console's copy of a chat line keeps the
-escapes, and two apostrophes typed together show as a quote. The composer counts
-a draft's length as it will be sent (`%` takes four bytes, `"` two), so it stops
-accepting characters where the sent message would otherwise be cut
-([chat.rs](../crates/sjk-client/src/chat.rs) `chat_command`, `chat_unescape`,
-`chat_input_cost`).
+escapes, and two apostrophes typed together show as a quote. Each piece of a long
+draft counts its escaped legacy bytes (`%` takes three bytes, `"` two) and stays at
+or below 149 bytes; neither a Unicode character nor either escape is cut, and the
+active colour is repeated at the start of the next piece
+([chat.rs](../crates/sjk-client/src/chat.rs) `chat_commands`, `chat_unescape`).
 
 ### Chat emojis
 

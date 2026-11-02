@@ -3,6 +3,10 @@
 use super::*;
 
 impl ViewerConsole {
+    pub(crate) fn mod_chat_commands(&self) -> &[&'static str] {
+        self.mods.chat_commands()
+    }
+
     pub(crate) fn drain_input(&mut self) -> std::vec::Drain<'_, String> {
         self.pending_input.drain(..)
     }
@@ -237,9 +241,13 @@ impl ViewerConsole {
                             }
                             _ => payload,
                         };
-                        if ["say", "say_team", "tell"]
+                        if ["say", "say_team", "tell", "amsay"]
                             .iter()
                             .any(|name| tokens[0].eq_ignore_ascii_case(name))
+                            || mods
+                                .chat_commands()
+                                .iter()
+                                .any(|name| tokens[0].eq_ignore_ascii_case(name))
                         {
                             if pending_chat.len() >= 64 {
                                 return Some(Err("Chat command queue is full".into()));

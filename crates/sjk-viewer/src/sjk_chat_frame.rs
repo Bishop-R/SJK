@@ -39,6 +39,16 @@ impl GpuState {
         let is_muted = |key: &str| muted.iter().any(|m| m == key);
         let now = Instant::now();
         let own_key = player_identity::own_key_id();
+        // Quiet mode (`chat/quiet.rs`): only the player's own and their duel partner's
+        // messages sound.
+        self.chat.set_sjk_own_key(own_key.as_deref());
+        let quiet = self.chat.quiet_keys();
+        let hushed = |key: &str| {
+            is_muted(key)
+                || quiet
+                    .as_ref()
+                    .is_some_and(|keys| !keys.iter().any(|k| !k.is_empty() && k == key))
+        };
         let chat = &mut self.chat;
         let update = player_identity::with_chat(|state| {
             let after = chat.sync_sjk_in_feed(state, is_muted, now, feed);
@@ -48,8 +58,8 @@ impl GpuState {
                 .iter()
                 .filter(|message| after.is_some_and(|after| message.id > after));
             chat.follow_server_copies(joined, own_key.as_deref(), state.outcome.as_ref(), now);
-            let news = after
-                .is_some_and(|after| chat::sjk::worth_a_sound(&state.messages, after, is_muted));
+            let news =
+                after.is_some_and(|after| chat::sjk::worth_a_sound(&state.messages, after, hushed));
             let console_lines = if in_console {
                 after.map_or_else(Vec::new, |after| {
                     chat::sjk::console_lines(&state.messages, after, is_muted)

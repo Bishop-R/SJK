@@ -1804,6 +1804,42 @@ pub(crate) struct Toast {
 /// composer open), and the toast itself.
 const TOAST_OPEN_TOKEN: u16 = 1;
 const TOAST_TOKEN: u16 = 2;
+/// The toast's usual width (frame pixels); it grows for longer words, up to
+/// [`TOAST_MAX_W`], so its text stays on one line and is never cut.
+const TOAST_W: f32 = 660.0;
+const TOAST_MAX_W: f32 = 1800.0;
+/// The room left of the words (their picture) and right of them.
+const TOAST_LEFT: f32 = 92.0;
+const TOAST_RIGHT: f32 = 24.0;
+
+/// How wide the toast's words are, in frame pixels: the headline (Rajdhani 24,
+/// semibold) or the line (15), whichever is wider.
+fn toast_words(
+    said: &Said,
+    display: &crate::sjk_chat_look::Measure<'_>,
+    body: &crate::sjk_chat_look::Measure<'_>,
+) -> f32 {
+    let headline = display.width(&said.headline, 24.0, crate::text::TextFace::Semibold);
+    let line = body.width(&said.line, 15.0, crate::text::TextFace::Regular);
+    (headline + toast_beside(said)).max(line)
+}
+
+/// The room the clock, the key hint or the Open trade button take right of the headline.
+fn toast_beside(said: &Said) -> f32 {
+    if said.clickable && !said.key.0.is_empty() {
+        190.0
+    } else if said.clock.is_some() || !said.key.0.is_empty() {
+        70.0
+    } else {
+        0.0
+    }
+}
+
+/// The toast's width for `words` frame pixels of text: [`TOAST_W`], or wider so they fit
+/// on one line (with a little to spare), up to [`TOAST_MAX_W`].
+fn toast_width(words: f32) -> f32 {
+    (TOAST_LEFT + words + 8.0 + TOAST_RIGHT).clamp(TOAST_W, TOAST_MAX_W)
+}
 
 impl Default for Toast {
     fn default() -> Self {
@@ -1924,17 +1960,20 @@ impl Toast {
 
     /// Draw `said` at the top centre of the frame.
     pub(crate) fn append(&mut self, said: &Said, target: TextTarget<'_>, viewport: [f32; 2]) {
-        self.build(said, viewport);
+        let words = toast_words(said, &target.display_measure(), &target.body_measure());
+        self.build(said, viewport, words);
         target.append(&self.ui, viewport);
     }
 
-    /// Lay `said` out at the top centre of the frame.
-    fn build(&mut self, said: &Said, viewport: [f32; 2]) {
+    /// Lay `said` out at the top centre of the frame, `words` wide (frame pixels: the
+    /// headline or the line, whichever is wider, see [`toast_words`]).
+    fn build(&mut self, said: &Said, viewport: [f32; 2], words: f32) {
         let frame = Frame::new(viewport);
         let s = frame.s;
         let ui = &mut self.ui;
         ui.begin_transparent(viewport);
-        let (width, x, y) = (660.0, 630.0, 64.0);
+        let width = toast_width(words);
+        let (x, y) = (960.0 - width * 0.5, 64.0);
         let height = if said.line.is_empty() { 78.0 } else { 104.0 };
         let card = frame.rect(x, y, width, height);
         let _ = ui.draw_list_mut().push(DrawCommand::RoundedRect {
@@ -1983,7 +2022,7 @@ impl Toast {
             ui,
             TextFamily::Display,
             format_args!("{}", said.headline),
-            frame.rect(text_x, y + 16.0, text_w - 70.0, 32.0),
+            frame.rect(text_x, y + 16.0, text_w - toast_beside(said), 32.0),
             24.0 * s,
             color::TEXT,
             FontWeight::Semibold,
@@ -2017,7 +2056,7 @@ impl Toast {
         if said.clickable && !key.is_empty() {
             // The pointer is free: a gold button opens the window, and so does the card.
             let button = [
-                x + 660.0 - 24.0 - 170.0,
+                x + width - 24.0 - 170.0,
                 y + (height - 40.0) * 0.5,
                 170.0,
                 40.0,
@@ -2034,10 +2073,10 @@ impl Toast {
             );
             ui.hit_region(TOAST_TOKEN, card);
         } else if !key.is_empty() {
-            let width = key_hint_width(&[key], does, s);
-            // Clear of the request's bar along the bottom.
-            let [right, keys_y] = frame.point(x + 660.0 - 24.0, y + height - 40.0);
-            key_hint(ui, &[key], does, right - width, keys_y, s);
+            let hint = key_hint_width(&[key], does, s);
+            // Clear of the request's bar along the bottom, at the card's right edge.
+            let [right, keys_y] = frame.point(x + width - 24.0, y + height - 40.0);
+            key_hint(ui, &[key], does, right - hint, keys_y, s);
         }
         if let Some(share) = said.share {
             let _ = ui.draw_list_mut().push(DrawCommand::RoundedRect {
@@ -2521,8 +2560,22 @@ pub(crate) mod tests {
         let mut toast = Toast::default();
         let mut said = Said::of(&open_view());
         said.clickable = true;
-        toast.build(&said, [1920.0, 1080.0]);
+        toast.build(&said, [1920.0, 1080.0], 0.0);
         std::fs::write(folder.join("toast.svg"), svg(&toast.ui)).unwrap();
+        let mut ended = open_view();
+        ended.trade.state = "done".to_owned();
+        ended.trade.mine.items = vec![sjk_identity::TradeItem::default()];
+        ended.trade.theirs.items.clear();
+        ended.trade.with.name = "Rollembones".to_owned();
+        let said = Said::of(&ended);
+        let font = crate::text::test_font();
+        let measure = crate::sjk_chat_look::Measure::new(&font, font.style());
+        toast.build(
+            &said,
+            [1920.0, 1080.0],
+            toast_words(&said, &measure, &measure),
+        );
+        std::fs::write(folder.join("toast-ended.svg"), svg(&toast.ui)).unwrap();
     }
 
     /// Giving and getting nothing back asks once more: Ready opens the question, Go
@@ -2675,7 +2728,7 @@ pub(crate) mod tests {
         let mut said = Said::of(&open_view());
         said.clickable = true;
         let mut toast = Toast::default();
-        toast.build(&said, [1920.0, 1080.0]);
+        toast.build(&said, [1920.0, 1080.0], 0.0);
         let texts: Vec<String> = toast.ui.text_runs().map(str::to_owned).collect();
         assert!(texts.iter().any(|t| t == "Open trade"), "{texts:?}");
         let button = toast.ui.rect_for(TOAST_OPEN_TOKEN).expect("Open trade");
@@ -2692,8 +2745,41 @@ pub(crate) mod tests {
         }));
         // Not clickable: the key hint, no button.
         said.clickable = false;
-        toast.build(&said, [1920.0, 1080.0]);
+        toast.build(&said, [1920.0, 1080.0], 0.0);
         assert!(toast.ui.rect_for(TOAST_OPEN_TOKEN).is_none());
+    }
+
+    /// In play the toast's key hint sits at the card's right edge, wide card or not
+    /// (Sol's review of #321: a local `width` once put it at the left edge).
+    #[test]
+    fn the_key_hint_sits_at_the_cards_right_edge() {
+        let mut view = open_view();
+        view.trade.state = "asked".to_owned();
+        view.trade.asker = false;
+        let said = Said::of(&view);
+        assert!(!said.clickable && !said.key.0.is_empty());
+        for words in [0.0, 900.0] {
+            let width = toast_width(words);
+            let (left, right) = (960.0 - width * 0.5, 960.0 + width * 0.5);
+            let mut toast = Toast::default();
+            toast.build(&said, [1920.0, 1080.0], words);
+            // The key's cap is the one small rounded border on the card.
+            let cap = toast
+                .ui
+                .draw_list()
+                .commands()
+                .iter()
+                .find_map(|command| match command {
+                    DrawCommand::Border { rect, radius, .. } if *radius < 8.0 => Some(*rect),
+                    _ => None,
+                })
+                .expect("the key's cap");
+            assert!(cap.x > left + width * 0.5, "{cap:?} on a card from {left}");
+            assert!(
+                cap.x + cap.width <= right - 24.0 + 0.5,
+                "{cap:?} to {right}"
+            );
+        }
     }
 
     #[test]
@@ -2722,5 +2808,35 @@ pub(crate) mod tests {
         view.trade.theirs.ready = true;
         assert_eq!(Said::of(&view).line, "They are ready: your turn.");
         assert_eq!(clock(272), "4:32");
+    }
+
+    /// An ended trade's toast keeps its words on one line, never cut: the card grows to
+    /// fit them, centred, and stays the usual width for short ones.
+    #[test]
+    fn an_ended_trade_toast_fits_its_words_on_one_line() {
+        let font = crate::text::test_font();
+        let measure = crate::sjk_chat_look::Measure::new(&font, font.style());
+        let mut view = open_view();
+        view.trade.state = "done".to_owned();
+        view.trade.mine.items = vec![sjk_identity::TradeItem::default()];
+        view.trade.theirs.items.clear();
+        view.trade.with.name = "^5jof^7\u{bb}jk\u{ab}^5bel^3y^5ash".to_owned();
+        let said = Said::of(&view);
+        let words = toast_words(&said, &measure, &measure);
+        let width = toast_width(words);
+        assert!(width > TOAST_W && width <= TOAST_MAX_W, "{width}");
+        assert!(width - TOAST_LEFT - TOAST_RIGHT >= words, "the words fit");
+        let mut toast = Toast::default();
+        toast.build(&said, [1920.0, 1080.0], words);
+        let texts: Vec<String> = toast.ui.text_runs().map(str::to_owned).collect();
+        assert_eq!(
+            texts,
+            ["N".to_owned(), said.headline.clone()],
+            "one line, whole"
+        );
+        assert!(said.headline.ends_with("and received nothing."));
+        // Short words keep the usual card; the widest stays on the frame.
+        assert_eq!(toast_width(300.0), TOAST_W);
+        assert_eq!(toast_width(5_000.0), TOAST_MAX_W);
     }
 }

@@ -765,6 +765,11 @@ enum Command {
     NoteImage(u64, Vec<u8>),
     /// An SJK chat message.
     Chat(String),
+    React {
+        message: u64,
+        emoji: String,
+        active: bool,
+    },
     /// Ban the player of this key from the SJK chat for 24 hours.
     ChatBan(String),
     /// An emote, for the slot the player claims, in step with another slot's or not.
@@ -1444,6 +1449,22 @@ impl Worker {
     /// Send an SJK chat message under the rules, once registered. A key the hub neither
     /// verifies nor made staff sends no links (GIFs are links) and one message every
     /// [`UNVERIFIED_CHAT_GAP`]: both are refused here, before the hub refuses them too.
+    fn send_reaction(&mut self, message: u64, emoji: &str, active: bool) {
+        let outcome = if !crate::reactions::valid(emoji) {
+            Err(HubError::Protocol("Unknown chat reaction".into()))
+        } else {
+            match (self.hub.as_mut(), self.registered) {
+                (Some(hub), true) => hub
+                    .react(&self.identity, message, emoji, active)
+                    .map(|_| String::new()),
+                _ => Err(self.not_connected()),
+            }
+        };
+        let mut chat = lock_chat(&self.chat);
+        let serial = chat.reaction.as_ref().map_or(1, |last| last.serial + 1);
+        chat.reaction = Some(outcome_of(serial, outcome));
+    }
+
     fn send_chat(&mut self, text: &str, now: Instant) {
         let vouched = lock(&self.snapshot)
             .me
@@ -1690,6 +1711,11 @@ impl Worker {
                 }
             }
             Command::Chat(text) => self.send_chat(&text, now),
+            Command::React {
+                message,
+                emoji,
+                active,
+            } => self.send_reaction(message, &emoji, active),
             Command::ChatBan(key_id) => self.send_chat_ban(key_id),
             Command::Emote(emote, sync, quiet) => self.send_emote(&emote, sync, quiet),
             Command::Ping(pos, scope) => self.send_ping(pos, &scope),
@@ -4303,6 +4329,16 @@ impl Service {
     }
 
     /// Send an SJK chat message; what became of it arrives in [`ChatState::outcome`].
+    /// Add or remove this identity's reaction; the authoritative feed updates counts.
+    pub fn react(&self, message: u64, emoji: String, active: bool) {
+        let _ = self.commands.send(Command::React {
+            message,
+            emoji,
+            active,
+        });
+    }
+
+    /// Send a checked SJK chat message through the identity worker.
     pub fn chat(&self, text: String) {
         let _ = self.commands.send(Command::Chat(text));
     }
@@ -5118,6 +5154,15 @@ mod tests {
         }
         fn chat(&mut self, _: &Identity, text: &str, name: &str) -> Result<u64, HubError> {
             Fake::record(self, format!("chat {text} as {name}")).map(|()| 12)
+        }
+        fn react(
+            &mut self,
+            _: &Identity,
+            message: u64,
+            emoji: &str,
+            active: bool,
+        ) -> Result<(), HubError> {
+            Fake::record(self, format!("react {message} {emoji} {active}"))
         }
         fn chat_ban(&mut self, _: &Identity, key_id: &str) -> Result<ChatBan, HubError> {
             Fake::record(self, format!("ban {key_id}")).map(|()| ChatBan {
@@ -6400,6 +6445,37 @@ mod tests {
         worker.handle(Command::Chat("again".into()), t0 + Duration::from_secs(30));
         assert!(chat_outcome(&worker).sent);
         assert_eq!(fake.log().last().unwrap(), "chat again as ^2Sol");
+    }
+
+    #[test]
+    fn reactions_use_the_worker_but_not_text_sending_or_its_outcome() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, _) = worker(&fake, t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.tick(t0);
+        worker.handle(
+            Command::React {
+                message: 7,
+                emoji: "heart".into(),
+                active: true,
+            },
+            t0,
+        );
+        assert_eq!(fake.log().last().unwrap(), "react 7 heart true");
+        assert!(lock_chat(&worker.chat).reaction.as_ref().unwrap().sent);
+        assert!(lock_chat(&worker.chat).outcome.is_none());
+        let before = fake.log().len();
+        worker.handle(
+            Command::React {
+                message: 7,
+                emoji: "invalid".into(),
+                active: true,
+            },
+            t0,
+        );
+        assert_eq!(fake.log().len(), before);
+        assert!(!lock_chat(&worker.chat).reaction.as_ref().unwrap().sent);
     }
 
     #[test]

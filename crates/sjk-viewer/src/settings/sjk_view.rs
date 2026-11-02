@@ -435,6 +435,7 @@ impl SettingsMenu {
             | ValueKind::ImportPage
             | ValueKind::AssetBrowser
             | ValueKind::ContentCard
+            | ValueKind::HudEdit
             | ValueKind::GameplayFps => kit::field(
                 &mut self.ui,
                 frame,
@@ -558,7 +559,7 @@ impl SettingsMenu {
             .iter()
             .position(|line| *line == Line::Row(dropdown.row))?;
         let middle = ROWS_TOP + index as f32 * LINE + LINE * 0.5;
-        let height = 16.0 + dropdown.picks.len() as f32 * LIST_ROW;
+        let height = 16.0 + dropdown.shown().len() as f32 * LIST_ROW;
         let below = middle + kit::CONTROL_HEIGHT * 0.5 + 6.0;
         let y = if below + height <= bottom {
             below
@@ -593,12 +594,14 @@ impl SettingsMenu {
             return;
         };
         let cvar = self.rows().get(dropdown.row).map_or("", |row| row.cvar);
-        let labels: Vec<&str> = dropdown
-            .picks
+        let shown = dropdown.shown();
+        let labels: Vec<&str> = dropdown.picks[shown.clone()]
             .iter()
             .map(|pick| Self::pick_label(cvar, *pick))
             .collect();
-        let (highlighted, current) = (dropdown.highlighted, dropdown.current);
+        let highlighted = dropdown.highlighted.wrapping_sub(shown.start);
+        let current = dropdown.current.wrapping_sub(shown.start);
+        let scroll = (shown.start, dropdown.picks.len());
         kit::list(
             &mut self.ui,
             frame,
@@ -608,6 +611,7 @@ impl SettingsMenu {
             highlighted,
             current,
             DROPDOWN_BASE,
+            scroll,
         );
     }
 
@@ -870,6 +874,7 @@ impl SettingsMenu {
                     ValueKind::ImportPage => (&["Enter"][..], "choose"),
                     ValueKind::GameplayFps => (&["Enter"][..], "explain"),
                     ValueKind::AssetBrowser | ValueKind::ContentCard => (&["Enter"][..], "browse"),
+                    ValueKind::HudEdit => (&["Enter"][..], "edit"),
                     ValueKind::SoundPreview => (&["Enter"][..], "play"),
                     ValueKind::Text => (&["Enter"][..], "type"),
                     _ => (&["Left", "Right"][..], "change"),

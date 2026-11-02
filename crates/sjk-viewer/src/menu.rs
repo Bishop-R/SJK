@@ -801,6 +801,16 @@ impl ClientMenu {
         }
     }
 
+    /// Close Settings (or Key bindings) when they were opened from the game menu, for
+    /// the game to show (the HUD edit mode); whether they were.
+    pub(crate) fn leave_settings_for_game(&mut self) -> bool {
+        if !self.opened_from_game() {
+            return false;
+        }
+        let _ = self.close_settings();
+        true
+    }
+
     /// Whether the screen on show was opened from the game menu, over a
     /// live match rather than the menu map.
     fn opened_from_game(&self) -> bool {

@@ -310,6 +310,7 @@ mod tests {
 
     fn message(id: u64, key_id: &str, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: key_id.to_owned(),

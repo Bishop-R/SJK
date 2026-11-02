@@ -455,6 +455,7 @@ mod tests {
 
     fn message(id: u64, name: &str, text: &str, verified: bool) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),
@@ -612,6 +613,7 @@ mod tests {
         use crate::ui_renderer::{VERIFIED_TEXTURE, trust_texture};
         use sjk_identity::Trust;
         let trust = |id, trust| ChatMessage {
+            reactions: Default::default(),
             trust: Some(trust),
             ..message(id, "^2Fox", "hi", false)
         };
@@ -761,6 +763,7 @@ mod tests {
     #[test]
     fn a_message_sent_from_jof_eternaljk_starts_with_its_icon() {
         let ejk = ChatMessage {
+            reactions: Default::default(),
             client: "ejk".to_owned(),
             ..message(2, "Milamber", "hello from JoF", false)
         };
@@ -779,6 +782,7 @@ mod tests {
 
     fn drop(id: u64, name: &str, tier: &str, own: bool) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             name: name.to_owned(),
             verified: true,
             holocron: Some(sjk_identity::DropMark {

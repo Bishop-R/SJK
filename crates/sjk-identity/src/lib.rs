@@ -25,6 +25,7 @@ pub mod mystery_box;
 pub mod name_emoji;
 pub mod news;
 pub mod news_markup;
+pub mod reactions;
 pub mod relay;
 pub mod report;
 pub mod service;

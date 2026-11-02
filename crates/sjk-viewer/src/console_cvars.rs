@@ -362,6 +362,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "SJK radial HUD: how much higher its meters sit, in per cent of the screen (-20 lower to 40 higher)",
         ),
         CvarDefinition::new(
+            crate::hud::placement::OFFSETS_CVAR,
+            "",
+            archive,
+            "Where hud_edit moved the HUD's elements: id:x,y pairs in 480-line units, right and down positive (vitals:0,-20 timer:40,0)",
+        ),
+        CvarDefinition::new(
             "cg_thirdPersonRange",
             80.0,
             archive,
@@ -506,6 +512,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Jetpack hover sound: 1 default, 2 alternate",
         ),
         CvarDefinition::new("cg_footsteps", true, archive, "Play footstep sounds"),
+        CvarDefinition::new(
+            crate::sound_sonar::CVAR,
+            false,
+            archive,
+            "Sound sonar: arcs round the crosshair point toward the sounds you hear",
+        ),
         CvarDefinition::new(
             crate::team_sabers::TEAM_COLORS_CVAR,
             true,
@@ -1526,10 +1538,22 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Classic scoreboard: always use the small rows",
         ),
         CvarDefinition::new(
-            "cg_showClientIDs",
+            crate::scoreboard::style::IDS_CVAR,
             true,
             archive,
             "Classic scoreboard: show each player's client ID",
+        ),
+        CvarDefinition::new(
+            crate::scoreboard::style::SJK_IDS_CVAR,
+            false,
+            archive,
+            "SJK scoreboard: show each player's client number before the name",
+        ),
+        CvarDefinition::new(
+            crate::scoreboard::style::DEATHS_RANK_CVAR,
+            false,
+            archive,
+            "Scoreboard: rank players by score minus deaths where deaths are shown, fewer deaths first on a tie",
         ),
         CvarDefinition::new(
             crate::jof_tag::CVAR,

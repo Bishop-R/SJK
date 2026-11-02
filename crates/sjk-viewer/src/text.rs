@@ -19,6 +19,7 @@ pub(crate) mod logo_glyph;
 pub(crate) mod retail_font;
 pub(crate) mod sdf;
 pub(crate) mod style;
+pub(crate) mod system_font;
 pub(crate) mod wide;
 pub(crate) mod wide_texture;
 pub(crate) use bounded::append_bounded;
@@ -135,6 +136,7 @@ pub(crate) struct FontGlyph {
 }
 
 /// Immutable glyph metrics used by all menu, console, HUD, and chat layout.
+#[derive(Clone)]
 pub(crate) struct UiFont {
     glyphs: [[FontGlyph; GLYPH_COUNT]; 2],
     /// Fonts lending each face the characters beyond its slots ([`wide`]).
@@ -410,14 +412,42 @@ pub(crate) fn load_family(
 /// Pack `rasterized` into a coverage atlas [`ATLAS_WIDTH`] wide with mipmappable
 /// padding, and return it with each glyph's rectangle `[u0, v0, u1, v1]`.
 fn paint_atlas(rasterized: &[RasterizedGlyph]) -> (GrayImage, Vec<[f32; 4]>) {
+    paint_atlas_within(rasterized, u32::MAX).expect("no height limit")
+}
+
+/// The size a glyph takes in the atlas: its own, or nothing for one wider than the
+/// atlas or whose pixels do not match its size (it then draws no ink).
+fn drawn_size(glyph: &RasterizedGlyph) -> (u32, u32) {
+    let metrics = glyph.metrics;
+    let fits = metrics.width as u64 + 2 * u64::from(ATLAS_PADDING) <= u64::from(ATLAS_WIDTH)
+        && metrics.width.checked_mul(metrics.height) == Some(glyph.pixels.len());
+    if fits {
+        (metrics.width as u32, metrics.height as u32)
+    } else {
+        (0, 0)
+    }
+}
+
+/// [`paint_atlas`], or `None` when the atlas would be taller than `max_height`
+/// (decided before it is allocated).
+fn paint_atlas_within(
+    rasterized: &[RasterizedGlyph],
+    max_height: u32,
+) -> Option<(GrayImage, Vec<[f32; 4]>)> {
     let placements = pack_glyphs(rasterized);
     let height = placements
         .iter()
         .zip(rasterized)
-        .map(|([_, y], glyph)| y + glyph.metrics.height as u32 + ATLAS_PADDING)
+        .map(|([_, y], glyph)| {
+            u64::from(*y) + u64::from(drawn_size(glyph).1) + u64::from(ATLAS_PADDING)
+        })
         .max()
         .unwrap_or(1)
         .next_power_of_two();
+    if height > u64::from(max_height) {
+        return None;
+    }
+    let height = height as u32;
     // Coverage only: the text colour comes from the vertices, so the atlas needs
     // no RGB (the shaders read coverage from the red channel).
     let mut image = GrayImage::new(ATLAS_WIDTH, height);
@@ -425,22 +455,22 @@ fn paint_atlas(rasterized: &[RasterizedGlyph]) -> (GrayImage, Vec<[f32; 4]>) {
         .iter()
         .zip(placements)
         .map(|(glyph, [x, y])| {
-            let metrics = glyph.metrics;
-            for row in 0..metrics.height {
-                for column in 0..metrics.width {
-                    let coverage = glyph.pixels[row * metrics.width + column];
-                    image.put_pixel(x + column as u32, y + row as u32, Luma([coverage]));
+            let (width, rows) = drawn_size(glyph);
+            for row in 0..rows {
+                for column in 0..width {
+                    let coverage = glyph.pixels[(row * width + column) as usize];
+                    image.put_pixel(x + column, y + row, Luma([coverage]));
                 }
             }
             [
                 x as f32 / ATLAS_WIDTH as f32,
                 y as f32 / height as f32,
-                (x + metrics.width as u32) as f32 / ATLAS_WIDTH as f32,
-                (y + metrics.height as u32) as f32 / height as f32,
+                (x + width) as f32 / ATLAS_WIDTH as f32,
+                (y + rows) as f32 / height as f32,
             ]
         })
         .collect();
-    (image, rectangles)
+    Some((image, rectangles))
 }
 
 fn pack_glyphs(glyphs: &[RasterizedGlyph]) -> Vec<[u32; 2]> {
@@ -449,11 +479,10 @@ fn pack_glyphs(glyphs: &[RasterizedGlyph]) -> Vec<[u32; 2]> {
     let mut y = ATLAS_PADDING;
     let mut row_height = 0;
     for glyph in glyphs {
-        let width = glyph.metrics.width as u32;
-        let height = glyph.metrics.height as u32;
+        let (width, height) = drawn_size(glyph);
         if x + width + ATLAS_PADDING > ATLAS_WIDTH {
             x = ATLAS_PADDING;
-            y += row_height + ATLAS_PADDING;
+            y = y.saturating_add(row_height + ATLAS_PADDING);
             row_height = 0;
         }
         positions.push([x, y]);

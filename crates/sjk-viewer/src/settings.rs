@@ -196,12 +196,63 @@ enum Pick {
 }
 
 /// A classic+ dropdown open on row `row`: its choices, the highlighted one
-/// and the one in use. Nothing changes until a choice is applied.
+/// and the one in use. Nothing changes until a choice is applied. A list
+/// longer than [`Dropdown::ROWS`] shows that many from `first` and scrolls,
+/// so a PC's hundreds of fonts stay on screen and their click tokens stay
+/// within `ROWS` of `DROPDOWN_BASE`.
 struct Dropdown {
     row: usize,
     picks: Vec<Pick>,
     highlighted: usize,
     current: usize,
+    first: usize,
+}
+
+impl Dropdown {
+    /// Most choices an open list shows at once.
+    const ROWS: usize = 8;
+
+    fn new(row: usize, picks: Vec<Pick>, current: usize) -> Self {
+        let mut dropdown = Self {
+            row,
+            picks,
+            highlighted: current,
+            current,
+            first: 0,
+        };
+        dropdown.first = current.saturating_sub(Self::ROWS / 2);
+        dropdown.scroll_by(0);
+        dropdown
+    }
+
+    /// The choices shown, as indices into `picks`.
+    fn shown(&self) -> std::ops::Range<usize> {
+        self.first..self.picks.len().min(self.first + Self::ROWS)
+    }
+
+    /// Scroll the shown choices by `rows`, kept within the list.
+    fn scroll_by(&mut self, rows: i32) {
+        let max = self.picks.len().saturating_sub(Self::ROWS);
+        self.first = self.first.saturating_add_signed(rows as isize).min(max);
+    }
+
+    /// Highlight choice `index` and scroll it into view.
+    fn highlight(&mut self, index: usize) {
+        self.highlighted = index.min(self.picks.len().saturating_sub(1));
+        if self.highlighted < self.first {
+            self.first = self.highlighted;
+        } else if self.highlighted >= self.first + Self::ROWS {
+            self.first = self.highlighted + 1 - Self::ROWS;
+        }
+    }
+
+    /// The choice a click token past `DROPDOWN_BASE` names: the `offset`-th
+    /// shown one.
+    fn shown_pick(&self, offset: usize) -> Option<usize> {
+        (offset < Self::ROWS)
+            .then(|| self.first + offset)
+            .filter(|index| *index < self.picks.len())
+    }
 }
 
 /// A Text setting being typed. Its row is fixed when typing starts, so Enter
@@ -734,7 +785,8 @@ impl SettingsMenu {
                         return SettingsResult::OpenIdentity;
                     } else if matches!(setting.kind(), ValueKind::AssetBrowser) {
                         return SettingsResult::OpenAssets;
-                    } else if matches!(setting.kind(), ValueKind::ContentCard) {
+                    } else if matches!(setting.kind(), ValueKind::ContentCard | ValueKind::HudEdit)
+                    {
                         return SettingsResult::OpenContent(setting.cvar);
                     } else if matches!(setting.kind(), ValueKind::ImportPage) {
                         return SettingsResult::OpenImport;
@@ -922,6 +974,7 @@ impl SettingsMenu {
                 ValueKind::GameplayFps => crate::gameplay_fps::row_text(console),
                 ValueKind::AssetBrowser => "Browse packs".to_owned(),
                 ValueKind::ContentCard => "Choose and download".to_owned(),
+                ValueKind::HudEdit => "Edit".to_owned(),
                 ValueKind::SoundPreview => PREVIEW_TEXT.to_owned(),
                 ValueKind::Quality => crate::graphics_quality::shown(console).to_owned(),
                 ValueKind::Bool if derived_switch(setting.cvar).is_some() => {
@@ -1382,6 +1435,7 @@ mod tests {
                     | ValueKind::ImportPage
                     | ValueKind::AssetBrowser
                     | ValueKind::ContentCard
+                    | ValueKind::HudEdit
                     | ValueKind::SoundPreview
                     | ValueKind::Quality
             ) {
@@ -1570,5 +1624,33 @@ mod tests {
         assert!(!console.post_color.policy().bloom);
         assert_eq!(console.dust_motes.intensity(), 0.0);
         assert_eq!(console.integer_cvar("r_normalMapping"), Some(0));
+    }
+
+    /// A long list (a PC's fonts) shows a page of choices that follows the
+    /// highlight, scrolls in bounds and maps its few click tokens back.
+    #[test]
+    fn a_long_dropdown_shows_a_page_and_scrolls() {
+        let picks = vec![Pick::Value("font"); 300];
+        let mut dropdown = Dropdown::new(0, picks, 150);
+        assert_eq!(dropdown.shown().len(), Dropdown::ROWS);
+        assert!(dropdown.shown().contains(&150));
+        assert_eq!(dropdown.shown_pick(0), Some(dropdown.first));
+        assert_eq!(dropdown.shown_pick(Dropdown::ROWS), None);
+        dropdown.highlight(299);
+        assert_eq!(dropdown.shown(), 300 - Dropdown::ROWS..300);
+        dropdown.scroll_by(1);
+        assert_eq!(dropdown.shown(), 300 - Dropdown::ROWS..300);
+        assert_eq!(dropdown.shown_pick(Dropdown::ROWS - 1), Some(299));
+        dropdown.highlight(0);
+        assert_eq!(dropdown.shown(), 0..Dropdown::ROWS);
+        dropdown.scroll_by(-3);
+        assert_eq!(dropdown.first, 0);
+        dropdown.scroll_by(5);
+        assert_eq!(dropdown.shown_pick(0), Some(5));
+        // A short list shows whole and never scrolls.
+        let mut short = Dropdown::new(0, vec![Pick::Value("a"); 3], 2);
+        assert_eq!(short.shown(), 0..3);
+        short.scroll_by(4);
+        assert_eq!(short.shown(), 0..3);
     }
 }

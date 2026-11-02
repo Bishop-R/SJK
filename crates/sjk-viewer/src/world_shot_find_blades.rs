@@ -37,6 +37,7 @@ fn duel6_find_blades_in_chat() {
             find,
         };
         let line = |id: u64, name: &str, holocron| sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

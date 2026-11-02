@@ -1271,6 +1271,9 @@ pub struct Presence {
 /// `name` and `text` only through [`crate::chat::for_display`].
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ChatMessage {
+    /// Shared emoji reactions; absent from older hubs.
+    #[serde(default)]
+    pub reactions: crate::reactions::State,
     /// Its id in the feed's sequence.
     pub id: u64,
     /// When the hub took it, unix seconds.
@@ -1469,6 +1472,9 @@ pub struct SharedVitals {
 /// The hub's answer to `GET /v1/feed` (`PROTOCOL.md`, "The feed").
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct Feed {
+    /// Replacement reaction state for retained messages; absent on older hubs.
+    #[serde(default)]
+    pub reaction_updates: Vec<crate::reactions::Update>,
     /// The `after` of the next request.
     pub next: u64,
     /// New messages, oldest first.

@@ -281,6 +281,7 @@ pub(super) fn choice_name(cvar: &str, value: &str) -> Option<&'static str> {
         .map(|(_, _, shown)| *shown)
         .or_else(|| crate::away_emote::choice_name(cvar, value))
         .or_else(|| crate::chat_sounds::choice_name(cvar, value))
+        .or_else(|| crate::text::system_font::choice_name(cvar, value))
 }
 
 /// What the detail column says, in gold, while the SJK renderer is on and a
@@ -486,10 +487,18 @@ const HELP: &[(&str, &str)] = &[
         "Shows only server-marked private game chat for this map. Console history and SJK hub chat stay available.",
     ),
     (
+        crate::chat::quiet::CVAR,
+        "Hides all chat but your duel partner's and whispers, and their sounds, until the map changes. Also `quiet`.",
+    ),
+    (
         crate::audio::SKIN_SOUNDS_CVAR,
         "A blade skin's own ignition, swings and hum: off (normal saber sounds), over the normal ones, or instead of them.",
     ),
     ("cg_footsteps", "Footstep sounds, yours and other players'."),
+    (
+        crate::sound_sonar::CVAR,
+        "For deaf and hard-of-hearing players: arcs round the crosshair point to the sounds played. Needs sound output (not s_initsound 0).",
+    ),
     (
         crate::footprints::PRINTS_CVAR,
         "Steps on sand, snow, mud and dirt kick up dust and leave footprints for ten seconds, as in the original game.",
@@ -555,6 +564,14 @@ const HELP: &[(&str, &str)] = &[
         "Off: the toys the Toy Master hides on maps play their shows in silence on this PC.",
     ),
     (
+        crate::text::system_font::CHAT_CVAR,
+        "A font from this PC for the chat. What it lacks (Cyrillic, CJK, emoji) comes from SJK's fonts.",
+    ),
+    (
+        crate::text::system_font::CONSOLE_CVAR,
+        "A font from this PC for the console, kept to its even grid. What it lacks comes from SJK's fonts.",
+    ),
+    (
         crate::away_emote::SJK_CVAR,
         "A looping emote you play while away (alt-tabbed out or idle), silent. Any emote you play then goes quiet too, for everyone.",
     ),
@@ -588,6 +605,10 @@ const HELP: &[(&str, &str)] = &[
         "Shows the HUD; off hides it, for screenshots and recordings.",
     ),
     ("cg_hudScale", "Size of the HUD: higher is larger."),
+    (
+        crate::hud_edit::COMMAND,
+        "Drag the HUD's elements over the game with the mouse; right-click one to put it back.",
+    ),
     (
         crate::hud::RadialPlacement::SPREAD_CVAR,
         "SJK radial HUD only: moves the health and armour meters left and the Force and ammo meters right, farther from your character.",
@@ -1343,8 +1364,16 @@ const HELP: &[(&str, &str)] = &[
         "Players whose view has not moved for 3 minutes, or with [AFK] in their name, show faint below the others.",
     ),
     (
-        "cg_showClientIDs",
+        crate::scoreboard::style::IDS_CVAR,
         "Shows each player's client number on the scoreboard.",
+    ),
+    (
+        crate::scoreboard::style::SJK_IDS_CVAR,
+        "Shows each player's client number on SJK's scoreboard, small before the name.",
+    ),
+    (
+        crate::scoreboard::style::DEATHS_RANK_CVAR,
+        "Lists players by score minus deaths where deaths show, fewer deaths first on a tie. Off keeps the server's order.",
     ),
     (
         crate::jof_tag::CVAR,

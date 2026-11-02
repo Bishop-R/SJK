@@ -266,13 +266,18 @@ impl HudOverlay {
             if !enabled {
                 continue;
             }
+            let rect = Rect::new(
+                viewport[0] - 480.0 * s + offset[0] * viewport[0] / 640.0,
+                y - offset[1] * viewport[1] / 480.0,
+                440.0 * s,
+                28.0 * s,
+            );
+            if id == 315 {
+                self.element_bounds
+                    .add(super::placement::Element::Score, Some(rect));
+            }
             let _ = self.draw_list.push(DrawCommand::Text {
-                rect: Rect::new(
-                    viewport[0] - 480.0 * s + offset[0] * viewport[0] / 640.0,
-                    y - offset[1] * viewport[1] / 480.0,
-                    440.0 * s,
-                    28.0 * s,
-                ),
+                rect,
                 text: TextId(id),
                 size: 22.0 * s,
                 color: self.theme.foreground,

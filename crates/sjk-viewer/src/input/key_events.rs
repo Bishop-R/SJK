@@ -135,6 +135,20 @@ impl GpuState {
             self.trade_window_choice(choice);
             return;
         }
+        // The HUD edit mode takes every key but the console's.
+        if !console_open && self.hud_edit.is_open() && !self.text_dialog.is_open() {
+            if self
+                .console
+                .as_ref()
+                .is_some_and(|console| console.leaves_chat_for_console(&event))
+            {
+                self.route_console_key(&event);
+                self.sync_cursor_policy();
+            } else {
+                self.hud_edit_key(&event);
+            }
+            return;
+        }
         // And the low-FPS card.
         if !console_open && self.fps_card.is_open() {
             let choice = self.fps_card.handle_key(&event);
