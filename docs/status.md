@@ -1,3 +1,16 @@
+## Joining no longer overflows the main thread's stack
+
+02/11/2026, `personal/t1-danger-overflow`: joining JoF's public server (T1_Danger,
+then Vjun3) closed the client with `thread 'main' has overflowed its stack` just
+after `camera starts at`. The built world (`GpuState`, about 600 KiB) went to the
+main thread by value, and each move was a stack copy: `window_event`'s frame was
+3.1 MB and `Destination::poll`, `WorldInstallTask::poll` and the channel's
+`try_recv` about 1.9 MB each, nested past the 8 MiB stack. It is boxed from the
+worker to adoption now; by `dumpbin /disasm` of the release client, `window_event`
+is 0.62 MB and the others under 200 KB. Viewer tests and the map change world shots
+pass; offline joins of a local server did not reproduce the crash (their frames are
+not called from `window_event`). Not yet confirmed on the JoF server in the client.
+
 ## Static profile banners
 
 31/10/2026, `feat/profile-banners`, client code `56a9b774` (including `main`

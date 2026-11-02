@@ -60,7 +60,7 @@ fn graphics_reload_menu() {
             started.elapsed().as_secs_f32()
         );
         let previous_context = gpu.context.id;
-        gpu = rebuilt;
+        gpu = *rebuilt;
         attach_target(&mut gpu, size);
         assert!(gpu.is_menu_world);
         assert!(gpu.client_menu.is_some() && gpu.console.is_some());
@@ -103,7 +103,7 @@ fn step(gpu: &mut GpuState, parked: &mut crate::menu_world::Parked, size: [u32; 
         Err(error) => panic!("map transition failed: {error}"),
     }
     if let Some(rebuilt) = gpu.poll_rebuild() {
-        *gpu = rebuilt;
+        *gpu = *rebuilt;
         attach_target(gpu, size);
     }
     parked.restore_if_idle(gpu);

@@ -63,7 +63,7 @@ fn fps_help_card() {
             );
             std::thread::sleep(Duration::from_millis(16));
         };
-        gpu = rebuilt;
+        gpu = *rebuilt;
         attach_target(&mut gpu, size);
         assert!(gpu.graphics_changes().is_empty());
         // `help_fps` with EJK graphics on: the button turns them off.

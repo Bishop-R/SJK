@@ -143,7 +143,7 @@ impl Destination {
                         task.started.elapsed().as_secs_f64() * 1_000.0
                     ));
                     self.install = None;
-                    self.world = Some(Box::new(world));
+                    self.world = Some(world);
                 }
             }
         }
@@ -183,8 +183,8 @@ impl Destination {
 }
 
 impl Destination {
-    pub(crate) fn take_world(&mut self) -> Option<GpuState> {
-        self.world.take().map(|world| *world)
+    pub(crate) fn take_world(&mut self) -> Option<Box<GpuState>> {
+        self.world.take()
     }
 
     pub(crate) fn session_error(&mut self) -> Option<String> {

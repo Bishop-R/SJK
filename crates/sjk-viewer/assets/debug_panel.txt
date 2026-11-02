@@ -24,6 +24,14 @@
 
 # ---- Console & chat ----
 
+[join-stack-overflow]
+area: Gameplay
+title: Joining JoF public no longer crashes (main thread stack overflow)
+change: The built world is boxed from the install worker to the main thread instead of copied.
+test: Join JoF's public server (T1_Danger, Vjun3 or any map) from the menus.
+note: Tested by Sol 02/11/2026: the join works.
+
+
 [cloud-auto-update]
 area: Menus & settings
 title: JoF content and Sith cloud update automatically (opt in, per group)

@@ -35,7 +35,7 @@ fn map_change_after_resize() {
         .expect("the next map is built");
         assert_eq!([built.size.width, built.size.height], [1280, 720]);
 
-        let mut adopted = gpu.adopt_world(built);
+        let mut adopted = gpu.adopt_world(Box::new(built));
         assert_eq!(
             [adopted.size.width, adopted.size.height],
             screen,
@@ -90,7 +90,7 @@ fn map_change_keeps_blade_signatures() {
             None,
         ))
         .expect("the next map is built");
-        let mut adopted = gpu.adopt_world(built);
+        let mut adopted = gpu.adopt_world(Box::new(built));
         attach_target(&mut adopted, screen);
         let (spawn, yaw) = assets::initial_camera(&adopted.bsp).expect("a spawn point");
         let turn = glam::Quat::from_rotation_z(yaw);

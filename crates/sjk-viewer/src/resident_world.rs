@@ -239,7 +239,7 @@ impl GpuState {
     /// second parallel install.
     pub(crate) fn poll_destination(
         &mut self,
-    ) -> Result<Option<GpuState>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<Box<GpuState>>, Box<dyn std::error::Error>> {
         if let Some(error) = self.portal.session_error() {
             return Err(error.into());
         }

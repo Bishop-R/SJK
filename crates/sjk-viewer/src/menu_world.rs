@@ -50,8 +50,8 @@ impl Parked {
 
     /// Make `installed` the current world. The world it replaces is dropped; a
     /// menu world leaves its map to be built again later.
-    pub(crate) fn install(&mut self, current: &mut GpuState, installed: GpuState) {
-        let previous = std::mem::replace(current, installed);
+    pub(crate) fn install(&mut self, current: &mut GpuState, installed: Box<GpuState>) {
+        let previous = std::mem::replace(current, *installed);
         if previous.is_menu_world && !previous.graphics_reload.map.is_empty() {
             self.map = Some(previous.graphics_reload.map.clone());
         }
