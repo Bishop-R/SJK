@@ -32,6 +32,27 @@ effect tests with a new one (a `count 0 0.6` runner with two entries fires about
 time, one entry per run). Not verified in game: other retail effects with runners now fire
 less often or pick one entry, which is what retail does.
 
+## Prop gun toy
+
+01/11/2026, `personal/prop-guns`, based on `main` `57f60dde` (Sol's idea): `toy_propgun`
+(opt-in, `cl_toyPropGun`) holds a fake weapon a pk3 defines (`propguns/<id>.gun`, SJK ships
+none; `propgun` chooses, `cl_propGun`) instead of the real weapon or saber, in first person
+(placed from the bobbing view, not a hand rig) and third person (on `*r_hand`); attack
+never reaches the server while it is held and fires a bolt instead, flown alike by every
+client from the relay's `fire_...` event; a bolt that reaches a player who has the toy on
+knocks them down through the Ragdoll ([client.md](client.md#prop-gun)). A gun may add a muzzle effect, a
+trail and a looped flight sound (`fireEffect`, `boltEffect`, `boltSound`); in first person
+the bolt leaves from the drawn gun's `tag_flash`; in third person the world model is turned
+onto the hand as the game's own world guns are. No hub change (the
+relay checks no toy ids). Not in the look, the Collection's Toys tab, the quick wheel or
+the settings (`cg_toyPropGunShow`, `s_toyPropGunSound` are console cvars). Verified: fmt,
+workspace build and tests (gun files read and refused, events read back, the bolt's line
+and life, a standing body struck or missed, the blow, attack kept from the server only
+while held, the first-person placing), Clippy on the new code, and world shots of two
+private test guns held in first and third person on a demo, with bolts in flight. Not
+verified: anything in a game, two clients seeing each other's guns and shots, a hit
+landing on a live server.
+
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
 31/10/2026, `personal/tag-cards`, based on `main` `4fcdecab`, with the hub's `tag-cards`

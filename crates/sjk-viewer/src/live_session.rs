@@ -325,6 +325,8 @@ impl GpuState {
             if !flying {
                 self.ragdoll.wake(&command);
             }
+            // A held prop gun fires instead of the real weapon (`propgun`).
+            self.propgun.shape_command(&mut command);
             let replay = self
                 .hax
                 .drive(&command, delta_angles, (self.camera_pitch, self.camera_yaw))

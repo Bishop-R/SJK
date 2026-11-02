@@ -9,6 +9,32 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 02/11/2026 | - | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
+- 3b1d9cd |  | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
++ 02/11/2026 | - | Prop gun: turn the world model onto the hand as the game's own world guns are
+- e6e56b1 |  | Prop gun: turn the world model onto the hand as the game's own world guns are
++ 02/11/2026 | - | Prop gun: muzzle, trail and flight sound settings; shots leave the drawn muzzle
+- 6a3c05b |  | Prop gun: muzzle, trail and flight sound settings; shots leave the drawn muzzle
++ 02/11/2026 | - | Prop gun: neutral test gun names; debug panel entry
+- a38488b |  | Prop gun: neutral test gun names; debug panel entry
++ 02/11/2026 | - | Toy Master: shows in steps, a ring, floating players, and drops to take
+- b82c78b |  | Toy Master: shows in steps, a ring, floating players, and drops to take
++ 02/11/2026 | - | Toon models: banded, rim-lit model shading (r_toonModels, off by default)
+- 95011b4 |  | Toon models: banded, rim-lit model shading (r_toonModels, off by default)
++ 01/11/2026 | - | Showcase tools: staff editing
+- be3f4f4 |  | Showcase tools: staff editing
++ 01/11/2026 | - | Effects: FxRunner rolls its count and plays one random playFx entry
+- d65206c |  | Effects: FxRunner rolls its count and plays one random playFx entry
++ 01/11/2026 | - | Debug panel: fxrunner-count entry
+- fdfe2eb |  | Debug panel: fxrunner-count entry
++ 01/11/2026 | - | Debug panel ASCII again, card finish tests formatted
+- 529dc04 |  | Debug panel ASCII again, card finish tests formatted
++ 01/11/2026 | - | Cards: look at every finish held (Normal/Holo/Solar chips and V), not only the best
+- 5f49d46 |  | Cards: look at every finish held (Normal/Holo/Solar chips and V), not only the best
++ 01/11/2026 | - | Cards: kind Clan, the clan being the card's collection (JoF reads "Clan - JoF")
+- 24b9df0 |  | Cards: kind Clan, the clan being the card's collection (JoF reads "Clan - JoF")
++ 01/11/2026 | - | Chat: grand finds show the crystal's picture, the prize's colour and its blade
+- cf2fd1b |  | Chat: grand finds show the crystal's picture, the prize's colour and its blade
 + 01/11/2026 | - | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
 - b0232b5 |  | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
 + 01/11/2026 | - | Release 2026.1101.1
@@ -2475,6 +2501,10 @@
 - 7bfdbbb |  | Add project wiki and shared contributor guidance
 + 01/10/2026 | - | Initial JKR source
 - 0d215f1 |  | Initial JKR source
+
+= Blackwolf1337
++ 01/11/2026 | SJK #333 | Fix JA+ dual saber forward jump hull to match the server
+- 46efdd7 |  | Predict the JA+ dual jump-attack hull over a player ahead
 
 = Creyon
 + 31/10/2026 | SJK #320 | Chat GIFs: hide chosen GIFs on this PC, a Hidden tab to show them again

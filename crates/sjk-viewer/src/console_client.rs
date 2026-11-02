@@ -204,6 +204,7 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     ),
     (crate::emotes::COMMAND, crate::emotes::HELP),
     (crate::boombox::TRACK_COMMAND, crate::boombox::HELP),
+    (crate::propgun::PICK_COMMAND, crate::propgun::PICK_HELP),
     (
         crate::toy_switch_words::COMMAND,
         crate::toy_switch_words::HELP,
@@ -1143,6 +1144,7 @@ impl crate::GpuState {
             }
             crate::emotes::COMMAND => return self.emote_command(args),
             crate::boombox::TRACK_COMMAND => return self.boombox_command(args),
+            crate::propgun::PICK_COMMAND => return self.propgun_command(args),
             crate::toy_switch_words::COMMAND => return Ok(crate::toy_switch_words::help_lines()),
             crate::block_command::COMMAND => return self.block_command(args),
             crate::block_command::UNBLOCK_COMMAND => return self.unblock_command(args),

@@ -8180,3 +8180,15 @@ test: Settings > Graphics > Image > Toon models on: players look banded, edges l
 test: Try r_dayNight 0 and 1, bright and dark maps, saber glow and shiny hilts stay as before.
 test: Check weapons, NPCs and vehicles too; tell if any looks wrong or too bright.
 note: First pass: no ink outlines yet; the menu character preview keeps stock shading.
+
+[prop-gun]
+area: Gameplay
+title: Prop gun toy: a fake gun from your pk3
+change: cl_toyPropGun holds a gun a pk3 defines (propguns/<id>.gun); propgun lists them.
+change: Bolts with muzzle, trail and impact effects; opted-in players get knocked down.
+change: The world gun sits on the hand like JA's own guns; shots leave the drawn muzzle.
+test: with a private gun pk3, toy_propgun on; fire in first and third person.
+test: the bolt leaves the barrel tip; muzzle, trail and impact effects show.
+test: a second SJK client sees the gun, the bolts, and hears the shots.
+test: an opted-in player hit by a bolt is knocked down; others are not.
+note: SJK ships no gun; test only with a local private pack.

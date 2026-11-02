@@ -44,6 +44,7 @@ PEOPLE = {
     "Slash": "Slash",
     "Milamber0": "Milamber",
     "Stéphane Roblin": "Milamber",
+    "Blackwolf1337": "Blackwolf1337",
     "Claude": None,
 }
 # The person a piece made only of Claude's commits belongs to.
