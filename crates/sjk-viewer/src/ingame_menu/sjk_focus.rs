@@ -29,28 +29,36 @@ pub(crate) enum Icon {
     Credits,
     ReportBug,
     Chat,
+    /// The map editor's panel on this map (`docs/map-edits.md`), for staff keys only.
+    MapEditor,
     /// Staff tools, for staff keys only.
     Staff,
 }
 
 impl Icon {
-    /// Every icon, Staff last.
-    pub(crate) const ALL: [Self; 6] = [
+    /// Every icon, the staff keys' two last (Staff the very last).
+    pub(crate) const ALL: [Self; 7] = [
         Self::Camera,
         Self::WhatsNew,
         Self::Credits,
         Self::ReportBug,
         Self::Chat,
+        Self::MapEditor,
         Self::Staff,
     ];
 
-    /// The icons the row shows: Staff only for a staff key.
+    /// The icons the row shows: Map editor and Staff only for a staff key.
     pub(crate) fn shown(staff: bool) -> &'static [Self] {
         if staff {
             &Self::ALL
         } else {
-            &Self::ALL[..Self::ALL.len() - 1]
+            &Self::ALL[..Self::ALL.len() - 2]
         }
+    }
+
+    /// Whether only staff keys see it (drawn quieter).
+    pub(crate) fn staff_only(self) -> bool {
+        matches!(self, Self::MapEditor | Self::Staff)
     }
 
     /// Its name, shown over the row while it is hovered or has the keyboard.
@@ -61,6 +69,7 @@ impl Icon {
             Self::Credits => "Credits",
             Self::ReportBug => "Report a bug",
             Self::Chat => "SJK chat",
+            Self::MapEditor => "Map editor",
             Self::Staff => "Staff tools",
         }
     }
@@ -73,6 +82,7 @@ impl Icon {
             Self::Credits => "The people who make SJK",
             Self::ReportBug => "Tell the SJK team what went wrong",
             Self::Chat => "Talk with every SJK player",
+            Self::MapEditor => "Hide, place and remap on this map, for every SJK player",
             Self::Staff => "Medals, unlockables and players, for the SJK team",
         }
     }
@@ -90,6 +100,7 @@ impl Icon {
             Self::Credits => "credits",
             Self::ReportBug => "other_controls",
             Self::Chat => "text",
+            Self::MapEditor => "maps_own",
             Self::Staff => "identity",
         }
     }
@@ -172,6 +183,8 @@ pub(crate) struct Match {
     pub(crate) siege: bool,
     /// The player's team (`TEAM_FREE` 0, red 1, blue 2, spectator 3).
     pub(crate) team: u8,
+    /// The player follows someone: Spectate frees the camera, so it stays on offer.
+    pub(crate) following: bool,
     /// A vote is on.
     pub(crate) vote: bool,
 }
@@ -199,6 +212,8 @@ impl Controls {
             return controls;
         }
         let watching = game.team == 3;
+        // A follower's Spectate goes back to the free camera.
+        let free_camera = watching && !game.following;
         if game.vote {
             controls.push(Control::VoteYes, VOTE_LINE, true);
             controls.push(Control::VoteNo, VOTE_LINE, true);
@@ -222,7 +237,7 @@ impl Controls {
         controls.push(
             Control::Team(LegacyTeamChoice::Spectator),
             SIDE_LINE,
-            !watching,
+            !free_camera,
         );
         if !game.vote {
             controls.push(Control::CallVote, FOOT_LINE, true);
@@ -453,6 +468,7 @@ mod tests {
             team_game,
             siege: false,
             team,
+            following: false,
             vote,
         }
     }
@@ -492,6 +508,15 @@ mod tests {
         assert_eq!(
             labels(&Controls::for_match(game(false, 3, false)))[..2],
             [("Join", SIDE_LINE, true), ("Spectate", SIDE_LINE, false)]
+        );
+        // Following someone in an FFA: Join, and Spectate back to the free camera.
+        let following = Controls::for_match(Match {
+            following: true,
+            ..game(false, 3, false)
+        });
+        assert_eq!(
+            labels(&following)[..2],
+            [("Join", SIDE_LINE, true), ("Spectate", SIDE_LINE, true)]
         );
         // Siege: its class and side page, and Spectate.
         let siege = Controls::for_match(Match {
@@ -543,6 +568,8 @@ mod tests {
     #[test]
     fn the_staff_icon_shows_only_for_staff() {
         assert!(!Icon::shown(false).contains(&Icon::Staff));
+        assert!(!Icon::shown(false).contains(&Icon::MapEditor));
+        assert!(Icon::shown(false).iter().all(|icon| !icon.staff_only()));
         assert_eq!(Icon::shown(false).len(), 5);
         assert_eq!(Icon::shown(true).last(), Some(&Icon::Staff));
         // A staff icon focused when the key is no longer staff falls back to the list.

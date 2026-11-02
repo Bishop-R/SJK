@@ -16,14 +16,16 @@
 
 use super::view::{LIST_WIDTH, LIST_X};
 use super::*;
-use crate::chat_gifs::{self, GifId, Shown, favourites, link, search};
+use crate::chat_gifs::{self, GifId, Shown, favourites, hidden, link, search};
 use crate::menu::sjk::{Frame, color, kit, text};
 use crate::menu_widgets::TextFamily;
 use sjk_ui::{Color, DrawCommand, FontWeight, Rect, TextAlign};
 
 /// The tabs (one token each), the search field, the tiles on show and their stars.
 pub(super) const TAB_BASE: u16 = 1_500;
-pub(super) const SEARCH_TOKEN: u16 = 1_504;
+pub(super) const SEARCH_TOKEN: u16 = 1_506;
+/// The Hidden tab's "Show this GIF again", for the tile chosen there.
+pub(super) const UNHIDE_TOKEN: u16 = 1_507;
 pub(super) const TILE_BASE: u16 = 1_510;
 pub(super) const STAR_BASE: u16 = 1_530;
 /// The key card's field, Open GIPHY, Save key and Not now; Get a GIPHY key (or Change
@@ -34,6 +36,10 @@ pub(super) const KEY_SAVE_TOKEN: u16 = 1_547;
 pub(super) const KEY_LATER_TOKEN: u16 = 1_548;
 pub(super) const KEY_ASK_TOKEN: u16 = 1_549;
 /// The grid.
+// Every tab has a token below the search field's.
+const _: () = assert!(TAB_BASE as usize + Tab::ALL.len() <= SEARCH_TOKEN as usize);
+const _: () = assert!(UNHIDE_TOKEN < TILE_BASE);
+
 pub(super) const COLUMNS: usize = 5;
 pub(super) const ROWS: usize = 3;
 pub(super) const TILES: usize = COLUMNS * ROWS;
@@ -71,17 +77,26 @@ pub(super) enum Tab {
     Favourites,
     Search,
     Seen,
+    /// The GIFs the player hid ([`hidden`]): a tile shows one again.
+    Hidden,
     Sources,
 }
 
 impl Tab {
-    pub(super) const ALL: [Self; 4] = [Self::Favourites, Self::Search, Self::Seen, Self::Sources];
+    pub(super) const ALL: [Self; 5] = [
+        Self::Favourites,
+        Self::Search,
+        Self::Seen,
+        Self::Hidden,
+        Self::Sources,
+    ];
 
     fn label(self) -> &'static str {
         match self {
             Self::Favourites => "Favourites",
             Self::Search => "Search",
             Self::Seen => "Seen in chat",
+            Self::Hidden => "Hidden",
             Self::Sources => "Sources",
         }
     }
@@ -96,6 +111,7 @@ impl Tab {
 struct Made {
     tab: Tab,
     favourites: u64,
+    hidden: u64,
     search: u64,
     words: String,
     pages: usize,
@@ -135,6 +151,8 @@ pub(super) struct Picker {
     pub(super) notice: Option<&'static str>,
     /// The key card, while it is on show.
     pub(super) key_card: Option<KeyCard>,
+    /// The Hidden tab's chosen tile: Show this GIF again shows it again.
+    pub(super) hidden_chosen: Option<GifId>,
     /// Not now was chosen: the card opens again only from Get a GIPHY key.
     key_card_put_off: bool,
 }
@@ -157,6 +175,7 @@ impl Picker {
             notice: None,
             key_card: None,
             key_card_put_off: false,
+            hidden_chosen: None,
         }
     }
 
@@ -266,6 +285,7 @@ impl Picker {
     pub(super) fn choose_tab(&mut self, tab: Tab) {
         if self.tab != tab {
             self.tab = tab;
+            self.hidden_chosen = None;
             if tab == Tab::Sources {
                 self.ids.clear();
             }
@@ -339,6 +359,7 @@ impl Picker {
         let made = Made {
             tab: self.tab,
             favourites: favourites::revision(),
+            hidden: hidden::revision(),
             search: self.searcher.revision(),
             words: self.searched.clone(),
             pages: self.pages,
@@ -359,6 +380,7 @@ impl Picker {
                 self.ids.extend(self.results.ids.iter().cloned());
             }
             Tab::Seen => self.ids.extend(seen(inputs)),
+            Tab::Hidden => self.ids.extend(hidden::list()),
             Tab::Sources => {}
         }
         self.row = self.row.min(self.last_row());
@@ -433,7 +455,7 @@ fn seen(inputs: &Inputs<'_>) -> Vec<GifId> {
             continue;
         }
         if let Some((id, _)) = link::find(&message.text)
-            && chat_gifs::sources::trusted(&id)
+            && chat_gifs::shows(&id)
             && !ids.contains(&id)
         {
             ids.push(id);
@@ -498,11 +520,31 @@ impl Panel {
                 SEARCH_TOKEN,
             );
             self.order.push(SEARCH_TOKEN);
+        } else if tab == Tab::Hidden
+            && self
+                .gifs
+                .hidden_chosen
+                .as_ref()
+                .is_some_and(|chosen| self.gifs.ids.contains(chosen))
+        {
+            // The chosen tile's action, where Search's field stands.
+            kit::button(
+                &mut self.ui,
+                frame,
+                [LIST_X, PICKER_TOP, 260.0, 40.0],
+                "Show this GIF again",
+                false,
+                true,
+                self.focus == UNHIDE_TOKEN,
+                UNHIDE_TOKEN,
+            );
+            self.order.push(UNHIDE_TOKEN);
         } else {
             let line = match tab {
                 Tab::Favourites => {
                     "Your favourite GIFs, kept on this PC. F or the star removes one."
                 }
+                Tab::Hidden => "GIFs you hid, kept on this PC. Click one to choose it.",
                 _ => "GIFs posted in SJK chat lately, newest first. F or the star keeps one.",
             };
             text(
@@ -557,7 +599,13 @@ impl Panel {
             area.width - 8.0 * s,
             area.height - 8.0 * s,
         );
-        match chat_gifs::show_preview(id) {
+        let hidden_tab = self.gifs.tab == Tab::Hidden;
+        let shown = if hidden_tab {
+            chat_gifs::show_hidden_preview(id)
+        } else {
+            chat_gifs::show_preview(id)
+        };
+        match shown {
             Shown::Ready { texture, size } => {
                 let [w, h] = contain(size, [inner.width, inner.height]);
                 let _ = self.ui.draw_list_mut().push(DrawCommand::TexturedQuad {
@@ -589,8 +637,10 @@ impl Panel {
                 TextAlign::Center,
             ),
         }
-        if self.focus == token {
-            // The keyboard's tile: a gold edge, as the kit's focused controls have.
+        let chosen = hidden_tab && self.gifs.hidden_chosen.as_ref() == Some(id);
+        if self.focus == token || chosen {
+            // The keyboard's tile, or the Hidden tab's chosen one: a gold edge, as the
+            // kit's focused controls have.
             let edge = 2.0 * s;
             for bar in [
                 Rect::new(area.x, area.y, area.width, edge),
@@ -606,6 +656,10 @@ impl Panel {
         }
         self.ui.hit_region(token, area);
         self.order.push(token);
+        // A hidden GIF's tile is chosen for Show this GIF again; it has no star.
+        if hidden_tab {
+            return;
+        }
         let favourite = favourites::contains(id);
         let star = frame.rect(x + width - STAR - STAR_INSET, y + STAR_INSET, STAR, STAR);
         if favourite || lit {
@@ -663,6 +717,9 @@ impl Panel {
                 "No favourite GIFs yet: star one in Search or Seen in chat, or choose a message with a GIF and Add to favourites.".to_owned()
             }
             Tab::Seen => "No GIFs in SJK chat yet.".to_owned(),
+            Tab::Hidden => {
+                "No hidden GIFs: choose a message with a GIF and Hide this GIF.".to_owned()
+            }
             Tab::Sources => String::new(),
             Tab::Search => match &picker.results.failure {
                 Some(failure) => failure.message(),

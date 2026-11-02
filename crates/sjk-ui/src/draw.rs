@@ -192,6 +192,149 @@ pub enum DrawCommand {
     PopOpacity,
 }
 
+impl DrawCommand {
+    /// Move what the command draws by `dx`, `dy` pixels: its rectangles, points,
+    /// centres and pivots. A transform is conjugated, so what it maps moves too; opacity
+    /// and the ends of groups have nothing to move.
+    pub fn translate(&mut self, dx: f32, dy: f32) {
+        let point = |p: &mut [f32; 2]| {
+            p[0] += dx;
+            p[1] += dy;
+        };
+        match self {
+            Self::SolidRect { rect, .. }
+            | Self::RoundedRect { rect, .. }
+            | Self::GradientRect { rect, .. }
+            | Self::Border { rect, .. }
+            | Self::Text { rect, .. }
+            | Self::TexturedQuad { rect, .. }
+            | Self::TexturedQuadUv { rect, .. }
+            | Self::CardShine { rect, .. }
+            | Self::PushClip(rect)
+            | Self::PushRoundedClip { rect, .. } => *rect = rect.translated(dx, dy),
+            Self::TexturedQuadTurned { rect, pivot, .. } => {
+                *rect = rect.translated(dx, dy);
+                point(pivot);
+            }
+            Self::Arc {
+                center, knockout, ..
+            } => {
+                point(center);
+                if let Some(knockout) = knockout {
+                    *knockout = knockout.translated(dx, dy);
+                }
+            }
+            Self::StrafeAura { center, .. } => point(center),
+            Self::Line { from, to, .. } => {
+                point(from);
+                point(to);
+            }
+            Self::Polygon { points, .. } => points.iter_mut().for_each(point),
+            Self::PushTransform(matrix) => *matrix = conjugate_translation(*matrix, dx, dy),
+            Self::PopClip | Self::PopTransform | Self::PushOpacity(_) | Self::PopOpacity => {}
+        }
+    }
+
+    /// The pixels the command covers, roughly but never less: an arc's box is its
+    /// stroke's, sampled along its sweep. `None` for commands that draw nothing
+    /// themselves (clips, transforms, opacity groups); a transformed command's box is
+    /// the one before its transform.
+    pub fn bounds(&self) -> Option<Rect> {
+        match *self {
+            Self::SolidRect { rect, .. }
+            | Self::RoundedRect { rect, .. }
+            | Self::GradientRect { rect, .. }
+            | Self::Border { rect, .. }
+            | Self::Text { rect, .. }
+            | Self::TexturedQuad { rect, .. }
+            | Self::TexturedQuadUv { rect, .. }
+            | Self::TexturedQuadTurned { rect, .. }
+            | Self::CardShine { rect, .. } => Some(rect),
+            Self::Arc {
+                center,
+                radius,
+                width,
+                start,
+                sweep,
+                ..
+            } => {
+                const STEPS: usize = 16;
+                let half = width * 0.5;
+                let mut bounds: Option<Rect> = None;
+                for step in 0..=STEPS {
+                    let angle = start + sweep * step as f32 / STEPS as f32;
+                    let x = center[0] + radius * angle.cos();
+                    let y = center[1] + radius * angle.sin();
+                    let dot = Rect::new(x - half, y - half, width, width);
+                    bounds = Some(bounds.map_or(dot, |bounds| bounds.union(dot)));
+                }
+                bounds
+            }
+            Self::StrafeAura { center, aura } => {
+                let reach = aura.radius + aura.width;
+                Some(Rect::new(
+                    center[0] - reach,
+                    center[1] - reach,
+                    reach * 2.0,
+                    reach * 2.0,
+                ))
+            }
+            Self::Line {
+                from, to, width, ..
+            } => {
+                let half = width * 0.5;
+                let x = from[0].min(to[0]) - half;
+                let y = from[1].min(to[1]) - half;
+                Some(Rect::new(
+                    x,
+                    y,
+                    from[0].max(to[0]) + half - x,
+                    from[1].max(to[1]) + half - y,
+                ))
+            }
+            Self::Polygon { points, count, .. } => {
+                let points = &points[..usize::from(count).min(POLYGON_POINTS)];
+                let first = points.first()?;
+                let (mut low, mut high) = (*first, *first);
+                for point in points {
+                    low = [low[0].min(point[0]), low[1].min(point[1])];
+                    high = [high[0].max(point[0]), high[1].max(point[1])];
+                }
+                Some(Rect::new(
+                    low[0],
+                    low[1],
+                    high[0] - low[0],
+                    high[1] - low[1],
+                ))
+            }
+            Self::PushClip(_)
+            | Self::PushRoundedClip { .. }
+            | Self::PopClip
+            | Self::PushTransform(_)
+            | Self::PopTransform
+            | Self::PushOpacity(_)
+            | Self::PopOpacity => None,
+        }
+    }
+}
+
+/// `matrix` for content moved by (`dx`, `dy`): the move back, then `matrix`, then the
+/// move, so moved content lands where the original landed, moved.
+fn conjugate_translation(matrix: [f32; 9], dx: f32, dy: f32) -> [f32; 9] {
+    let multiply = |a: [f32; 9], b: [f32; 9]| {
+        let mut out = [0.0; 9];
+        for row in 0..3 {
+            for column in 0..3 {
+                out[row * 3 + column] = (0..3).map(|k| a[row * 3 + k] * b[k * 3 + column]).sum();
+            }
+        }
+        out
+    };
+    let to = [1.0, 0.0, dx, 0.0, 1.0, dy, 0.0, 0.0, 1.0];
+    let back = [1.0, 0.0, -dx, 0.0, 1.0, -dy, 0.0, 0.0, 1.0];
+    multiply(to, multiply(matrix, back))
+}
+
 /// Fixed-capacity command buffer reused between frames.
 #[derive(Debug)]
 pub struct DrawList {
@@ -246,5 +389,122 @@ impl DrawList {
     /// Fixed command limit.
     pub const fn limit(&self) -> usize {
         self.capacity
+    }
+
+    /// Move every command from index `start` on by `dx`, `dy` pixels
+    /// ([`DrawCommand::translate`]): to place what one part of a screen drew.
+    pub fn translate_from(&mut self, start: usize, dx: f32, dy: f32) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        for command in self.commands.iter_mut().skip(start) {
+            command.translate(dx, dy);
+        }
+    }
+
+    /// The box round what the commands from index `start` on draw
+    /// ([`DrawCommand::bounds`]), `None` when they draw nothing.
+    pub fn bounds_from(&self, start: usize) -> Option<Rect> {
+        self.bounds_between(start, self.commands.len())
+    }
+
+    /// The box round what the commands from index `start` to `end` (excluded) draw.
+    pub fn bounds_between(&self, start: usize, end: usize) -> Option<Rect> {
+        self.commands
+            .get(start..end.min(self.commands.len()))?
+            .iter()
+            .filter_map(DrawCommand::bounds)
+            .reduce(Rect::union)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WHITE: Color = Color::new(1.0, 1.0, 1.0, 1.0);
+
+    /// Moving the commands from an index moves only those, and their box with them.
+    #[test]
+    fn translating_from_an_index_moves_only_the_later_commands() {
+        let mut list = DrawList::new(8);
+        let first = Rect::new(0.0, 0.0, 10.0, 10.0);
+        list.push(DrawCommand::SolidRect {
+            rect: first,
+            color: WHITE,
+        });
+        list.push(DrawCommand::Line {
+            from: [20.0, 20.0],
+            to: [40.0, 30.0],
+            width: 2.0,
+            color: WHITE,
+        });
+        list.push(DrawCommand::TexturedQuadTurned {
+            rect: Rect::new(50.0, 50.0, 4.0, 4.0),
+            texture: TextureId(1),
+            color: WHITE,
+            pivot: [52.0, 52.0],
+            degrees: 30.0,
+        });
+        assert_eq!(list.bounds_from(1), Some(Rect::new(19.0, 19.0, 35.0, 35.0)));
+        list.translate_from(1, 5.0, -10.0);
+        assert_eq!(
+            list.commands()[0],
+            DrawCommand::SolidRect {
+                rect: first,
+                color: WHITE
+            }
+        );
+        assert_eq!(list.bounds_from(1), Some(Rect::new(24.0, 9.0, 35.0, 35.0)));
+        match list.commands()[2] {
+            DrawCommand::TexturedQuadTurned { pivot, .. } => assert_eq!(pivot, [57.0, 42.0]),
+            _ => unreachable!(),
+        }
+        assert_eq!(list.bounds_from(3), None);
+        assert_eq!(list.bounds_between(0, 1), Some(first));
+    }
+
+    /// An arc's box is its stroke's: a quarter turn of radius 10 from the right to the
+    /// bottom stays in the lower right quarter.
+    #[test]
+    fn an_arcs_box_follows_its_sweep() {
+        let arc = DrawCommand::Arc {
+            center: [100.0, 100.0],
+            radius: 10.0,
+            width: 2.0,
+            start: 0.0,
+            sweep: std::f32::consts::FRAC_PI_2,
+            color: WHITE,
+            knockout: None,
+        };
+        let bounds = arc.bounds().unwrap();
+        assert!((bounds.x - 99.0).abs() < 1e-3, "{bounds:?}");
+        assert!((bounds.y - 99.0).abs() < 1e-3, "{bounds:?}");
+        assert!((bounds.right() - 111.0).abs() < 1e-3, "{bounds:?}");
+        assert!((bounds.bottom() - 111.0).abs() < 1e-3, "{bounds:?}");
+    }
+
+    /// A transform moved with its content maps the moved content where the original
+    /// mapped, moved.
+    #[test]
+    fn a_transform_moves_with_its_content() {
+        // Twice the size about the origin.
+        let matrix = [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 1.0];
+        let mut command = DrawCommand::PushTransform(matrix);
+        command.translate(3.0, 4.0);
+        let DrawCommand::PushTransform(moved) = command else {
+            unreachable!()
+        };
+        let map = |m: [f32; 9], p: [f32; 2]| {
+            [
+                m[0] * p[0] + m[1] * p[1] + m[2],
+                m[3] * p[0] + m[4] * p[1] + m[5],
+            ]
+        };
+        let original = map(matrix, [5.0, 6.0]);
+        assert_eq!(
+            map(moved, [8.0, 10.0]),
+            [original[0] + 3.0, original[1] + 4.0]
+        );
     }
 }

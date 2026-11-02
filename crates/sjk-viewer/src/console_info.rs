@@ -10,6 +10,20 @@ impl ViewerConsole {
         mut session: Option<&mut ClientSession>,
     ) -> Result<Vec<String>, String> {
         match name {
+            "copyserverip" => {
+                if !args.is_empty() {
+                    return Err("usage: copyServerIP".into());
+                }
+                let address = session
+                    .as_ref()
+                    .ok_or("Not connected to a server.")?
+                    .server()
+                    .to_string();
+                if !crate::console::clipboard::copy(&address) {
+                    return Err("Could not copy server IP to the clipboard".into());
+                }
+                Ok(vec![format!("Copied server IP: {address}")])
+            }
             "cmd" => {
                 let session = session.as_deref_mut().ok_or("Not connected to a server.")?;
                 if !args.is_empty() {

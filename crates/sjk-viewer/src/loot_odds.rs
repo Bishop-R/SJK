@@ -21,6 +21,8 @@ pub(crate) const SHADER_TIERS: usize = 5;
 /// Every odds table, one entry per holocron tier in [`TIERS`] order; shares per mille.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Table {
+    /// Independent banner bonus odds (zero until a supporting hub supplies it).
+    pub(crate) banner: [u32; COUNT],
     /// How often a drop is each tier.
     pub(crate) drop: [u16; COUNT],
     /// The card's rarity and finish inside each tier.
@@ -42,11 +44,14 @@ pub(crate) struct Table {
     /// The shards a card brings beside its credits (the card pack): the least and the
     /// most.
     pub(crate) card_shards: [(u32, u32); COUNT],
+    /// How often a dropped tag comes Holo and Solar (31/10/2026).
+    pub(crate) tag_finish: [[u32; 2]; COUNT],
 }
 
 /// This client's copy of the hub's tables (`src/holocrons.rs`, `src/cards.rs` and
 /// `src/loot.rs` there), shown until the hub sends its own.
 pub(crate) const BUILT_IN: Table = Table {
+    banner: [0; COUNT],
     drop: [
         TIERS[0].per_mille,
         TIERS[1].per_mille,
@@ -68,6 +73,9 @@ pub(crate) const BUILT_IN: Table = Table {
     tag: [0, 0, 0, 0],
     shards: [(5, 15), (10, 25), (25, 50), (100, 200)],
     card_shards: [(1, 3), (2, 5), (5, 10), (20, 40)],
+    // The hub sends them (40 and 5 per mille in every tier since 31/10/2026); the copy
+    // keeps a hub's from before, whose tags are all Normal.
+    tag_finish: [[0, 0]; COUNT],
 };
 
 static HUB: Mutex<Option<Table>> = Mutex::new(None);
@@ -114,10 +122,12 @@ fn of_hub(tiers: &[sjk_identity::LootTier]) -> Option<Table> {
             && whole(&tier.rarity)
             && whole(&tier.finish)
             && whole(&tier.shader_tier)
-            && tier.shader + tier.tag + tier.shard_pile <= 1_000
+            && u64::from(tier.shader) + u64::from(tier.tag) + u64::from(tier.shard_pile) <= 1_000
+            && tier.banner <= 1_000
             && tier.credits[0] <= tier.credits[1]
             && tier.shards[0] <= tier.shards[1]
-            && tier.card_shards[0] <= tier.card_shards[1];
+            && tier.card_shards[0] <= tier.card_shards[1]
+            && tier.tag_finish[0] + tier.tag_finish[1] <= 1_000;
         if !fits {
             return None;
         }
@@ -136,6 +146,8 @@ fn of_hub(tiers: &[sjk_identity::LootTier]) -> Option<Table> {
         table.shader_tier[index].copy_from_slice(&tier.shader_tier);
         table.shard_pile[index] = tier.shard_pile;
         table.tag[index] = tier.tag;
+        table.banner[index] = tier.banner;
+        table.tag_finish[index] = tier.tag_finish;
         table.shards[index] = (
             u32::try_from(tier.shards[0]).ok()?,
             u32::try_from(tier.shards[1]).ok()?,
@@ -157,6 +169,7 @@ mod tests {
         (0..COUNT)
             .map(|index| sjk_identity::LootTier {
                 tier: TIERS[index].id.to_owned(),
+                banner: table.banner[index],
                 drop: u32::from(table.drop[index]),
                 rarity: table.card[index]
                     .rarity
@@ -184,8 +197,24 @@ mod tests {
                     u64::from(table.card_shards[index].0),
                     u64::from(table.card_shards[index].1),
                 ],
+                tag_finish: table.tag_finish[index],
             })
             .collect()
+    }
+
+    #[test]
+    fn bonus_banner_odds_are_independent_of_the_ordinary_prize_shares() {
+        let mut tiers = wire(&BUILT_IN);
+        for tier in &mut tiers {
+            tier.banner = 1_000;
+        }
+        let table = of_hub(&tiers).expect("a guaranteed bonus is still compatible");
+        assert_eq!(table.shader, BUILT_IN.shader);
+        assert_eq!(table.tag, BUILT_IN.tag);
+        assert_eq!(table.shard_pile, BUILT_IN.shard_pile);
+        assert_eq!(table.card, BUILT_IN.card);
+        tiers[0].banner = 1_001;
+        assert_eq!(of_hub(&tiers), None);
     }
 
     #[test]

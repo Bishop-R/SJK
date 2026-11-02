@@ -7,22 +7,29 @@
 //!
 //! The job runs on its own thread ([`sjk_jof_content::job`]); a download goes
 //! on while the card is closed, and the card shows it again when reopened.
+//!
+//! Automatic updates (opt in, `docs/jof-content.md`): the second switch and an
+//! Auto tick on each group say which groups the client keeps up to date by
+//! itself, [`AUTO_FIRST`] after the start and then every [`AUTO_EVERY`], with the
+//! card's own job ([`Card::auto_due`], [`Card::start_auto`]), so one job at a
+//! time runs per collection.
 
 use crate::menu::sjk::{Frame, TextTarget, color, kit, text};
 use crate::menu_widgets::{BACK_TOKEN, MenuCanvas, TextFamily};
 use sjk_jof_content::job::{Job, Outcome, Phase, Settings};
-use sjk_jof_content::{AssetState, Plan, Selection, Snapshot, Target, human_size};
+use sjk_jof_content::{AssetState, AutoGroups, Plan, Selection, Snapshot, Target, human_size};
 use sjk_ui::{Color, DrawCommand, FontWeight, InputEvent, TextAlign, UiEventKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 /// Group rows shown at once.
-const ROWS: usize = 7;
+const ROWS: usize = 6;
 const ROW_HEIGHT: f32 = 62.0;
 /// File rows shown at once, under the group's own row.
-const FILE_ROWS: usize = 8;
+const FILE_ROWS: usize = 7;
 const FILE_ROW_HEIGHT: f32 = 46.0;
 const SWITCH_TOKEN: u16 = 800;
 const CHECK_TOKEN: u16 = 801;
@@ -31,8 +38,18 @@ const MAIN_TOKEN: u16 = 802;
 const GROUPS_TOKEN: u16 = 803;
 /// A group's own row over its files.
 const HEADER_TOKEN: u16 = 804;
+/// The automatic updates' switch.
+const AUTO_TOKEN: u16 = 805;
+/// The open group's Auto tick, over its files.
+const HEADER_AUTO_TOKEN: u16 = 806;
 /// A group row's tick box, by slot.
 const TICK_BASE: u16 = 100;
+/// A group row's Auto tick, by slot.
+const AUTO_TICK_BASE: u16 = 200;
+/// The first automatic check after the start (the client is up, the hub can be
+/// asked), and then how often.
+pub(crate) const AUTO_FIRST: Duration = Duration::from_secs(30);
+pub(crate) const AUTO_EVERY: Duration = Duration::from_secs(60 * 60);
 /// Whose the files are (Sol's request, 16/10/2026): JoF chooses them, SJK
 /// only fetches what the player picks.
 pub(crate) const NOTICE: &str = "JoF chooses and publishes these files and is responsible for them; SJK only downloads what you pick and is not responsible for their content.";
@@ -51,6 +68,28 @@ pub(crate) struct Words {
     pub(crate) folder_note: &'static str,
     /// Where the list comes from, as a sentence's subject.
     pub(crate) repository: &'static str,
+    /// The automatic updates' switch's line, when on.
+    pub(crate) auto_on: &'static str,
+}
+
+/// The automatic updates' switch, the same for every collection.
+const AUTO_SWITCH: &str = "Update automatically";
+/// Its line while off.
+const AUTO_OFF: &str = "Off by default. On: SJK checks at start and every hour, and downloads only the groups marked Auto.";
+
+/// A collection's settings: the same code reads both collections through
+/// these ([`crate::jof_content::NAMES`], [`crate::sith_cloud::NAMES`]).
+pub(crate) struct Names {
+    /// On and off (`jof.content`).
+    pub(crate) switch: &'static str,
+    /// The groups chosen ([`Selection`]).
+    pub(crate) groups: &'static str,
+    /// Single files picked against their group.
+    pub(crate) files: &'static str,
+    /// Automatic updates on and off.
+    pub(crate) auto: &'static str,
+    /// The groups updated automatically ([`AutoGroups`]).
+    pub(crate) auto_groups: &'static str,
 }
 
 /// JoF content's words.
@@ -63,13 +102,21 @@ pub(crate) const JOF: Words = Words {
     off: "Off by default. Turn it on to download and load JoF's files; nothing is fetched until you press Download.",
     folder_note: "files JoF's launcher put in your game folder are used as they are",
     repository: "JoF's repository",
+    auto_on: "On: checks at start and every hour, also in a match; new files of the groups marked Auto load from the next map.",
 };
 
 /// The card, in frame pixels.
 const CARD: [f32; 4] = [360.0, 96.0, 1200.0, 888.0];
 const LEFT: f32 = 404.0;
 const RIGHT: f32 = 1516.0;
-const GROUPS_TOP: f32 = 372.0;
+/// The automatic updates' row, under the switch's.
+const AUTO_TOP: f32 = 338.0;
+const AUTO_HEIGHT: f32 = 60.0;
+/// The list's heading, and its first row.
+const HEADING: f32 = 412.0;
+const GROUPS_TOP: f32 = HEADING + 26.0;
+/// A group row's Auto tick, from the left.
+const AUTO_X: f32 = LEFT + 500.0;
 
 /// What the console does after an input.
 pub(crate) enum Action {
@@ -77,6 +124,10 @@ pub(crate) enum Action {
     Close,
     /// Store `jof.content`.
     Switch(bool),
+    /// Store `jof.contentAuto`.
+    Auto(bool),
+    /// Store `jof.contentAutoGroups`.
+    AutoGroups(String),
     /// Store `jof.contentGroups` and `jof.contentFiles`.
     Choice {
         groups: String,
@@ -113,11 +164,20 @@ pub(crate) struct Card {
     job: Job,
     on: bool,
     selection: Selection,
+    /// The automatic updates' switch and groups.
+    auto: bool,
+    auto_groups: AutoGroups,
+    /// When the next automatic check is due, and its time on the clock (24 h).
+    next_check: Option<Instant>,
+    next_clock: Option<(u8, u8)>,
+    /// The job running or last run is an automatic update not yet reported.
+    auto_running: bool,
     folder: String,
     /// The group whose files are shown, or None for the groups.
     view: Option<usize>,
-    /// In the groups: 0 the switch, then the groups. In a group: 0 the group's
-    /// own row, then its files. Then Check again and the main button.
+    /// In the groups: 0 the switch, 1 the automatic switch, then the groups. In
+    /// a group: 0 the group's own row, then its files. Then Check again and the
+    /// main button.
     focus: usize,
     first: usize,
     /// The groups' focus and scroll, given back when a group's files close.
@@ -147,6 +207,11 @@ impl Card {
             job: Job::default(),
             on: false,
             selection: Selection::default(),
+            auto: false,
+            auto_groups: AutoGroups::default(),
+            next_check: None,
+            next_clock: None,
+            auto_running: false,
             folder: String::new(),
             view: None,
             focus: 0,
@@ -186,16 +251,87 @@ impl Card {
         &self.game_data
     }
 
+    /// The automatic updates' settings, as the card shows them.
+    pub(crate) fn set_auto(&mut self, auto: bool, groups: AutoGroups) {
+        self.auto = auto;
+        self.auto_groups = groups;
+    }
+
+    /// Whether the automatic check is due at `now`; when it is, the next one is
+    /// set an hour on. The first call sets the first check [`AUTO_FIRST`] on.
+    /// Called every frame: a comparison while nothing is due.
+    pub(crate) fn auto_due(&mut self, now: Instant) -> bool {
+        match self.next_check {
+            Some(next) if now < next => false,
+            Some(_) => {
+                self.schedule(now, AUTO_EVERY);
+                true
+            }
+            None => {
+                self.schedule(now, AUTO_FIRST);
+                false
+            }
+        }
+    }
+
+    /// Set the next automatic check `after` from `now`.
+    pub(crate) fn schedule(&mut self, now: Instant, after: Duration) {
+        self.next_check = Some(now + after);
+        let time = sjk_shell::local_time::LocalTime::now();
+        self.next_clock = Some(clock_after(time.hour, time.minute, time.second, after));
+    }
+
+    /// Start an automatic update; false when a job is at work already.
+    pub(crate) fn start_auto(
+        &mut self,
+        settings: Settings,
+        selection: Selection,
+        auto: AutoGroups,
+    ) -> bool {
+        let started = self.job.auto(settings, selection, auto);
+        self.auto_running |= started;
+        started
+    }
+
+    /// An automatic update that just ended: its outcome, once, when it
+    /// finished (stopped or failed ones come back as None, after a log line).
+    /// A flag test while none runs.
+    pub(crate) fn auto_finished(&mut self) -> Option<Outcome> {
+        if !self.auto_running || self.job.busy() {
+            return None;
+        }
+        self.auto_running = false;
+        match self.job.progress().phase {
+            Phase::Finished(outcome) if outcome.automatic => Some(outcome),
+            Phase::Failed(reason) => {
+                crate::log::progress(format_args!(
+                    "{}: automatic update skipped ({reason}); next try in an hour",
+                    self.words.title
+                ));
+                None
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn title(&self) -> &'static str {
+        self.words.title
+    }
+
+    /// The player's own look; the job is no longer an automatic update's.
     pub(crate) fn refresh(&mut self, settings: Settings) {
-        self.job.refresh(settings);
+        if self.job.refresh(settings) {
+            self.auto_running = false;
+        }
     }
 
     pub(crate) fn download(&mut self, settings: Settings) {
-        self.job.sync(settings, self.selection.clone());
+        if self.job.sync(settings, self.selection.clone()) {
+            self.auto_running = false;
+        }
     }
 
     /// Whether a refresh or download is still at work.
-    #[cfg(test)]
     pub(crate) fn busy(&self) -> bool {
         self.job.busy()
     }
@@ -223,12 +359,26 @@ impl Card {
         if self.view.is_some() { FILE_ROWS } else { ROWS }
     }
 
+    /// The focus of the list's first row: after the two switches over the
+    /// groups, after the group's own row over its files.
+    fn head(&self) -> usize {
+        if self.view.is_some() { 1 } else { 2 }
+    }
+
     fn check_focus(&self) -> usize {
-        self.items() + 1
+        self.items() + self.head()
     }
 
     fn main_focus(&self) -> usize {
-        self.items() + 2
+        self.items() + self.head() + 1
+    }
+
+    /// The list row under the focus, if it is on one.
+    fn focused_row(&self) -> Option<usize> {
+        let head = self.head();
+        (head..head + self.items())
+            .contains(&self.focus)
+            .then(|| self.focus - head)
     }
 
     /// Take the job's latest state; the plan is made again only when the
@@ -261,8 +411,7 @@ impl Card {
     fn set_focus(&mut self, focus: usize) {
         self.focus = focus.min(self.main_focus());
         let rows = self.rows();
-        if (1..=self.items()).contains(&self.focus) {
-            let row = self.focus - 1;
+        if let Some(row) = self.focused_row() {
             if row < self.first {
                 self.first = row;
             }
@@ -304,29 +453,66 @@ impl Card {
 
     /// Enter: switch, open a group, tick a file, or press a button.
     fn activate(&mut self) -> Action {
-        let items = self.items();
-        match (self.focus, self.view) {
-            (0, None) => {
+        match (self.focus, self.view, self.focused_row()) {
+            (0, None, _) => {
                 self.on = !self.on;
                 Action::Switch(self.on)
             }
-            (0, Some(group)) => self.toggle_group(group),
-            (focus, None) if focus <= items => {
-                self.open_group(focus - 1);
+            (1, None, _) => self.toggle_auto(),
+            (0, Some(group), _) => self.toggle_group(group),
+            (_, None, Some(row)) => {
+                self.open_group(row);
                 Action::None
             }
-            (focus, Some(group)) if focus <= items => self.toggle_file(group, focus - 1),
-            (focus, _) if focus == items + 1 => self.check(),
+            (_, Some(group), Some(row)) => self.toggle_file(group, row),
+            (focus, _, _) if focus == self.check_focus() => self.check(),
             _ => self.main(),
         }
     }
 
     /// Space: tick the focused group or file; elsewhere as Enter.
     fn tick(&mut self) -> Action {
-        match (self.focus, self.view) {
-            (focus, None) if (1..=self.items()).contains(&focus) => self.toggle_group(focus - 1),
+        match (self.view, self.focused_row()) {
+            (None, Some(row)) => self.toggle_group(row),
             _ => self.activate(),
         }
+    }
+
+    fn toggle_auto(&mut self) -> Action {
+        self.auto = !self.auto;
+        Action::Auto(self.auto)
+    }
+
+    /// A: mark or unmark the focused group (or the open one) as Auto.
+    fn auto_key(&mut self) -> Action {
+        match (self.view, self.focused_row()) {
+            (Some(group), _) | (None, Some(group)) => self.toggle_auto_group(group),
+            _ => Action::None,
+        }
+    }
+
+    /// Whether the group at `index` shows its Auto tick ticked.
+    #[cfg(test)]
+    fn auto_group_marked(&self, index: usize) -> bool {
+        self.snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.manifest.groups.get(index))
+            .is_some_and(|group| self.auto_groups.includes(&self.selection, group))
+    }
+
+    fn toggle_auto_group(&mut self, index: usize) -> Action {
+        let Some(snapshot) = self.snapshot.clone() else {
+            return Action::None;
+        };
+        let Some(group) = snapshot.manifest.groups.get(index) else {
+            return Action::None;
+        };
+        if group.size() == 0 {
+            return Action::None;
+        }
+        self.auto_groups
+            .toggle(&self.selection, &snapshot.manifest, group.id);
+        Action::AutoGroups(self.auto_groups.saved())
     }
 
     /// Show one group's files.
@@ -343,7 +529,7 @@ impl Card {
         }
         self.back = (self.focus, self.first);
         self.view = Some(index);
-        self.focus = 1;
+        self.focus = self.head();
         self.first = 0;
     }
 
@@ -422,16 +608,24 @@ impl Card {
         let PhysicalKey::Code(key) = event.physical_key else {
             return Action::None;
         };
+        self.key_code(key)
+    }
+
+    /// One key pressed.
+    fn key_code(&mut self, key: KeyCode) -> Action {
         self.update();
         let items = self.items();
         let rows = self.rows();
-        let in_list = (1..=items).contains(&self.focus);
+        let head = self.head();
+        let row = self.focused_row();
+        let last = (items + head).saturating_sub(1).max(head);
         match key {
             KeyCode::Escape if self.view.is_some() => self.close_group(),
             KeyCode::Escape => return Action::Close,
             KeyCode::Backspace if self.view.is_some() => self.close_group(),
             KeyCode::Enter | KeyCode::NumpadEnter => return self.activate(),
             KeyCode::Space => return self.tick(),
+            KeyCode::KeyA => return self.auto_key(),
             KeyCode::F5 => return self.check(),
             KeyCode::ArrowUp => self.set_focus(self.focus.saturating_sub(1)),
             KeyCode::ArrowDown => self.set_focus(self.focus + 1),
@@ -442,13 +636,13 @@ impl Card {
                 self.set_focus(self.main_focus())
             }
             KeyCode::ArrowLeft if self.view.is_some() => self.close_group(),
-            KeyCode::ArrowRight if self.view.is_none() && in_list => {
-                self.open_group(self.focus - 1)
+            KeyCode::ArrowRight if self.view.is_none() && row.is_some() => {
+                self.open_group(row.unwrap_or_default())
             }
-            KeyCode::PageUp => self.set_focus(self.focus.saturating_sub(rows).max(1).min(items)),
-            KeyCode::PageDown => self.set_focus((self.focus + rows).min(items.max(1))),
-            KeyCode::Home if self.view.is_some() => self.set_focus(1),
-            KeyCode::End if self.view.is_some() => self.set_focus(items),
+            KeyCode::PageUp => self.set_focus(self.focus.saturating_sub(rows).max(head).min(last)),
+            KeyCode::PageDown => self.set_focus((self.focus + rows).min(last)),
+            KeyCode::Home if self.view.is_some() => self.set_focus(head),
+            KeyCode::End if self.view.is_some() => self.set_focus(last),
             _ => {}
         }
         Action::None
@@ -482,24 +676,43 @@ impl Card {
                 self.on = !self.on;
                 return Action::Switch(self.on);
             }
+            AUTO_TOKEN if activate => return self.toggle_auto(),
+            HEADER_AUTO_TOKEN if activate => {
+                return self
+                    .view
+                    .map_or(Action::None, |group| self.toggle_auto_group(group));
+            }
             tick if (TICK_BASE..TICK_BASE + ROWS as u16).contains(&tick)
                 && activate
                 && self.view.is_none() =>
             {
                 let index = self.first + usize::from(tick - TICK_BASE);
-                self.focus = index + 1;
+                self.focus = index + self.head();
                 return self.toggle_group(index);
+            }
+            tick if (AUTO_TICK_BASE..AUTO_TICK_BASE + ROWS as u16).contains(&tick)
+                && activate
+                && self.view.is_none() =>
+            {
+                let index = self.first + usize::from(tick - AUTO_TICK_BASE);
+                self.focus = index + self.head();
+                return self.toggle_auto_group(index);
             }
             _ => {}
         }
+        let head = self.head();
         let focus = match token {
             SWITCH_TOKEN if self.view.is_none() => 0,
-            HEADER_TOKEN if self.view.is_some() => 0,
+            AUTO_TOKEN if self.view.is_none() => 1,
+            HEADER_TOKEN | HEADER_AUTO_TOKEN if self.view.is_some() => 0,
             CHECK_TOKEN => self.check_focus(),
             MAIN_TOKEN => self.main_focus(),
-            row if usize::from(row) < self.rows() => self.first + usize::from(row) + 1,
+            row if usize::from(row) < self.rows() => self.first + usize::from(row) + head,
             tick if (TICK_BASE..TICK_BASE + ROWS as u16).contains(&tick) => {
-                self.first + usize::from(tick - TICK_BASE) + 1
+                self.first + usize::from(tick - TICK_BASE) + head
+            }
+            tick if (AUTO_TICK_BASE..AUTO_TICK_BASE + ROWS as u16).contains(&tick) => {
+                self.first + usize::from(tick - AUTO_TICK_BASE) + head
             }
             _ => return Action::None,
         };
@@ -529,6 +742,7 @@ impl Card {
         let rows = self.rows();
         let items = self.items();
         let words = self.words;
+        let head = self.head();
         self.ui.begin_transparent(viewport);
         kit::scrim(&mut self.ui, viewport);
         kit::card(&mut self.ui, &frame, CARD);
@@ -626,9 +840,45 @@ impl Card {
             frame.rect(LEFT - 16.0, top, RIGHT - LEFT + 32.0, 116.0),
         );
 
+        // Automatic updates: the second opt-in, under the first.
+        let auto_focused = self.focus == 1 && self.view.is_none();
+        if auto_focused {
+            kit::band(
+                ui,
+                &frame,
+                [LEFT - 16.0, AUTO_TOP, RIGHT - LEFT + 32.0, AUTO_HEIGHT],
+            );
+        }
+        text(
+            ui,
+            TextFamily::Body,
+            format_args!("{AUTO_SWITCH}"),
+            frame.rect(LEFT, AUTO_TOP + 6.0, 700.0, 28.0),
+            19.0 * s,
+            color::TEXT,
+            FontWeight::Semibold,
+            TextAlign::Start,
+        );
+        kit::switch(ui, &frame, RIGHT, AUTO_TOP + 24.0, self.auto, auto_focused);
+        text(
+            ui,
+            TextFamily::Body,
+            format_args!("{}", if self.auto { words.auto_on } else { AUTO_OFF }),
+            frame.rect(LEFT, AUTO_TOP + 33.0, 1000.0, 22.0),
+            15.0 * s,
+            color::MUTED,
+            FontWeight::Regular,
+            TextAlign::Start,
+        );
+        ui.hit_region(
+            AUTO_TOKEN,
+            frame.rect(LEFT - 16.0, AUTO_TOP, RIGHT - LEFT + 32.0, AUTO_HEIGHT),
+        );
+        let auto = self.auto;
+
         match (&self.snapshot, self.view) {
             (None, _) => {
-                kit::heading(ui, &frame, LEFT, 346.0, RIGHT - LEFT, "Groups");
+                kit::heading(ui, &frame, LEFT, HEADING, RIGHT - LEFT, "Groups");
                 let waiting = match &self.phase {
                     Phase::Failed(_) => {
                         "The list could not be fetched. Check again to retry.".to_owned()
@@ -647,7 +897,7 @@ impl Card {
                 );
             }
             (Some(snapshot), None) => {
-                kit::heading(ui, &frame, LEFT, 346.0, RIGHT - LEFT, "Groups");
+                kit::heading(ui, &frame, LEFT, HEADING, RIGHT - LEFT, "Groups");
                 let groups = &snapshot.manifest.groups;
                 for (slot, (index, group)) in groups
                     .iter()
@@ -657,7 +907,7 @@ impl Card {
                     .enumerate()
                 {
                     let top = GROUPS_TOP + slot as f32 * ROW_HEIGHT;
-                    let focused = self.focus == index + 1;
+                    let focused = self.focus == index + head;
                     let summary = self.summaries.get(index).copied().unwrap_or_default();
                     let fetchable = summary.files > 0;
                     if focused {
@@ -678,11 +928,19 @@ impl Card {
                             frame.rect(LEFT - 16.0, top, 52.0, ROW_HEIGHT - 4.0),
                         );
                     }
+                    if fetchable {
+                        let marked = self.auto_groups.includes(&self.selection, group);
+                        auto_tick(ui, &frame, top + 29.0, marked, auto, focused);
+                        ui.hit_region(
+                            AUTO_TICK_BASE + slot as u16,
+                            frame.rect(AUTO_X - 12.0, top, 104.0, ROW_HEIGHT - 4.0),
+                        );
+                    }
                     text(
                         ui,
                         TextFamily::Body,
-                        format_args!("{}", group.name),
-                        frame.rect(LEFT + 42.0, top + 6.0, 560.0, 28.0),
+                        format_args!("{}", cut(&group.name, 36)),
+                        frame.rect(LEFT + 42.0, top + 6.0, 440.0, 28.0),
                         20.0 * s,
                         if fetchable { color::TEXT } else { color::QUIET },
                         FontWeight::Semibold,
@@ -691,8 +949,8 @@ impl Card {
                     text(
                         ui,
                         TextFamily::Body,
-                        format_args!("{}  ·  {}", group.kind.label(), cut(&group.description, 80)),
-                        frame.rect(LEFT + 42.0, top + 33.0, 600.0, 22.0),
+                        format_args!("{}  ·  {}", group.kind.label(), cut(&group.description, 48)),
+                        frame.rect(LEFT + 42.0, top + 33.0, 440.0, 22.0),
                         15.0 * s,
                         color::MUTED,
                         FontWeight::Regular,
@@ -742,7 +1000,7 @@ impl Card {
                             (self.first + ROWS).min(groups.len()),
                             groups.len()
                         ),
-                        frame.rect(RIGHT - 300.0, 338.0, 300.0, 22.0),
+                        frame.rect(RIGHT - 300.0, HEADING - 8.0, 300.0, 22.0),
                         14.0 * s,
                         color::QUIET,
                         FontWeight::Regular,
@@ -759,7 +1017,7 @@ impl Card {
                     ui,
                     &frame,
                     LEFT,
-                    346.0,
+                    HEADING,
                     RIGHT - LEFT,
                     &back,
                     if ui.token_hovered(GROUPS_TOKEN) {
@@ -768,7 +1026,10 @@ impl Card {
                         color::HOLO
                     },
                 );
-                ui.hit_region(GROUPS_TOKEN, frame.rect(LEFT - 8.0, 330.0, 560.0, 32.0));
+                ui.hit_region(
+                    GROUPS_TOKEN,
+                    frame.rect(LEFT - 8.0, HEADING - 16.0, 560.0, 32.0),
+                );
                 if group.assets.len() > FILE_ROWS {
                     text(
                         ui,
@@ -779,7 +1040,7 @@ impl Card {
                             (self.first + FILE_ROWS).min(group.assets.len()),
                             group.assets.len()
                         ),
-                        frame.rect(RIGHT - 300.0, 324.0, 300.0, 22.0),
+                        frame.rect(RIGHT - 300.0, HEADING - 22.0, 300.0, 22.0),
                         14.0 * s,
                         color::QUIET,
                         FontWeight::Regular,
@@ -808,8 +1069,8 @@ impl Card {
                 text(
                     ui,
                     TextFamily::Body,
-                    format_args!("All of {}", group.name),
-                    frame.rect(LEFT + 42.0, GROUPS_TOP + 4.0, 560.0, 26.0),
+                    format_args!("All of {}", cut(&group.name, 32)),
+                    frame.rect(LEFT + 42.0, GROUPS_TOP + 4.0, 440.0, 26.0),
                     19.0 * s,
                     color::TEXT,
                     FontWeight::Semibold,
@@ -819,12 +1080,12 @@ impl Card {
                     ui,
                     TextFamily::Body,
                     format_args!(
-                        "{} of {} chosen  ·  {}  ·  Space on a file picks it alone",
+                        "{} of {} chosen  ·  {}",
                         summary.wanted,
                         summary.files,
                         human_size(summary.size)
                     ),
-                    frame.rect(LEFT + 42.0, GROUPS_TOP + 30.0, 700.0, 22.0),
+                    frame.rect(LEFT + 42.0, GROUPS_TOP + 30.0, 440.0, 22.0),
                     15.0 * s,
                     color::MUTED,
                     FontWeight::Regular,
@@ -845,6 +1106,14 @@ impl Card {
                     HEADER_TOKEN,
                     frame.rect(LEFT - 16.0, GROUPS_TOP, RIGHT - LEFT + 32.0, 54.0),
                 );
+                if summary.files > 0 {
+                    let marked = self.auto_groups.includes(&self.selection, group);
+                    auto_tick(ui, &frame, GROUPS_TOP + 27.0, marked, auto, header_focused);
+                    ui.hit_region(
+                        HEADER_AUTO_TOKEN,
+                        frame.rect(AUTO_X - 12.0, GROUPS_TOP, 104.0, 54.0),
+                    );
+                }
                 // The files.
                 let files_top = GROUPS_TOP + 64.0;
                 for (slot, (asset_index, asset)) in group
@@ -966,26 +1235,42 @@ impl Card {
             MAIN_TOKEN,
         );
         let hints = if self.view.is_some() {
-            "Up Down choose  ·  Space pick  ·  Esc back to groups  ·  F5 check"
+            "Space pick  ·  A auto  ·  Esc back to groups  ·  F5 check"
         } else {
-            "Up Down choose  ·  Space tick group  ·  Enter its files  ·  Esc close"
+            "Up Down choose  ·  Space tick  ·  A auto  ·  Enter files  ·  Esc close"
         };
         text(
             ui,
             TextFamily::Body,
             format_args!("{hints}"),
-            frame.rect(LEFT + 230.0, buttons + 12.0, 640.0, 24.0),
+            frame.rect(LEFT + 215.0, buttons + 12.0, 600.0, 24.0),
             15.0 * s,
             color::QUIET,
             FontWeight::Regular,
             TextAlign::Center,
         );
+        // When the next automatic check runs, while it will.
+        if let (true, true, Some((hour, minute))) = (self.on, self.auto, self.next_clock) {
+            text(
+                ui,
+                TextFamily::Body,
+                format_args!("Next automatic check {hour:02}:{minute:02}"),
+                frame.rect(LEFT, buttons + 60.0, RIGHT - LEFT, 22.0),
+                14.0 * s,
+                color::QUIET,
+                FontWeight::Regular,
+                TextAlign::Center,
+            );
+        }
         let focused_token = match self.focus {
             0 if self.view.is_some() => HEADER_TOKEN,
             0 => SWITCH_TOKEN,
+            1 if self.view.is_none() => AUTO_TOKEN,
             focus if focus == check_focus => CHECK_TOKEN,
             focus if focus == main_focus => MAIN_TOKEN,
-            focus if focus <= items => (focus - 1).saturating_sub(self.first).min(rows) as u16,
+            focus if focus < items + head => {
+                (focus - head).saturating_sub(self.first).min(rows) as u16
+            }
             _ => SWITCH_TOKEN,
         };
         self.ui.finish(focused_token);
@@ -1038,7 +1323,15 @@ impl Card {
                 color::GOLD_BRIGHT,
                 ratio(*done, *total),
             ),
-            Phase::Finished(outcome) if outcome.synced => self.finished(outcome),
+            // An automatic check that found nothing to do says what is here.
+            Phase::Finished(outcome)
+                if outcome.synced
+                    && !(outcome.automatic
+                        && !outcome.changed()
+                        && outcome.failures.is_empty()) =>
+            {
+                self.finished(outcome)
+            }
             Phase::Failed(reason) => (
                 format!(
                     "{} could not be reached: {}",
@@ -1115,6 +1408,43 @@ impl Card {
             format!("{what} Turn on {} first.", self.words.switch)
         }
     }
+}
+
+/// A group's Auto tick and its word at [`AUTO_X`], dimmed while the automatic
+/// updates are off (`live`).
+fn auto_tick(
+    canvas: &mut MenuCanvas,
+    frame: &Frame,
+    y: f32,
+    marked: bool,
+    live: bool,
+    focused: bool,
+) {
+    if !live {
+        canvas.push_opacity(0.4);
+    }
+    kit::tick(canvas, frame, AUTO_X, y, marked, focused && live);
+    text(
+        canvas,
+        TextFamily::Body,
+        format_args!("Auto"),
+        frame.rect(AUTO_X + 34.0, y - 12.0, 60.0, 24.0),
+        16.0 * frame.s,
+        if marked { color::TEXT } else { color::MUTED },
+        FontWeight::Regular,
+        TextAlign::Start,
+    );
+    if !live {
+        canvas.pop_opacity();
+    }
+}
+
+/// The 24-hour clock `after` from `hour:minute:second`, to the minute (a
+/// started minute counts whole, so the check is never before the time shown).
+fn clock_after(hour: u8, minute: u8, second: u8, after: Duration) -> (u8, u8) {
+    let now = u64::from(hour) * 3600 + u64::from(minute) * 60 + u64::from(second);
+    let then = (now + after.as_secs()).div_ceil(60) % (24 * 60);
+    ((then / 60) as u8, (then % 60) as u8)
 }
 
 /// The text with its first letter in capitals, for a name starting a sentence.
@@ -1396,7 +1726,7 @@ mod tests {
         let mut card = looked_at();
         assert_eq!(card.plan.download_bytes, 7, "Maps by default");
         // Enter on Skins shows its files; Space on c.pk3 picks it alone.
-        assert!(matches!(press(&mut card, 2, false), Action::None));
+        assert!(matches!(press(&mut card, 3, false), Action::None));
         assert_eq!(card.view, Some(1));
         let Action::Choice { files, .. } = press(&mut card, 1, true) else {
             panic!("no choice")
@@ -1405,8 +1735,8 @@ mod tests {
         assert_eq!(card.plan.download_bytes, 9);
         // Back to the groups where the player was; leave b.pk3 out of Maps.
         card.close_group();
-        assert_eq!((card.view, card.focus), (None, 2));
-        press(&mut card, 1, false);
+        assert_eq!((card.view, card.focus), (None, 3));
+        press(&mut card, 2, false);
         let Action::Choice { files, groups } = press(&mut card, 2, true) else {
             panic!("no choice")
         };
@@ -1418,6 +1748,80 @@ mod tests {
         };
         assert_eq!(files, "+20");
         assert_eq!(card.plan.download_bytes, 9);
+    }
+
+    fn key(card: &mut Card, code: KeyCode) -> Action {
+        card.key_code(code)
+    }
+
+    #[test]
+    fn the_automatic_switch_and_auto_ticks_answer_keys() {
+        let mut card = looked_at();
+        // Under the switch, the automatic updates' switch.
+        card.set_focus(0);
+        key(&mut card, KeyCode::ArrowDown);
+        assert!(matches!(card.activate(), Action::Auto(true)));
+        assert!(card.auto);
+        // A on a group marks it Auto; all (the default) means the chosen groups.
+        assert!(card.auto_group_marked(0) && !card.auto_group_marked(1));
+        key(&mut card, KeyCode::ArrowDown);
+        let Action::AutoGroups(groups) = key(&mut card, KeyCode::KeyA) else {
+            panic!("no automatic groups")
+        };
+        assert_eq!(groups, "");
+        card.set_focus(3);
+        let Action::AutoGroups(groups) = key(&mut card, KeyCode::KeyA) else {
+            panic!("no automatic groups")
+        };
+        assert_eq!(groups, "2");
+        // In a group's files, A marks the group itself.
+        key(&mut card, KeyCode::Enter);
+        assert_eq!(card.view, Some(1));
+        let Action::AutoGroups(groups) = key(&mut card, KeyCode::KeyA) else {
+            panic!("no automatic groups")
+        };
+        assert_eq!(groups, "");
+        // On the buttons A does nothing.
+        card.close_group();
+        card.set_focus(card.check_focus());
+        assert!(matches!(key(&mut card, KeyCode::KeyA), Action::None));
+    }
+
+    #[test]
+    fn the_automatic_check_comes_soon_after_the_start_then_hourly() {
+        let mut card = Card::default();
+        let start = Instant::now();
+        assert!(!card.auto_due(start), "the first call sets the first check");
+        assert!(!card.auto_due(start + AUTO_FIRST - Duration::from_secs(1)));
+        assert!(card.auto_due(start + AUTO_FIRST));
+        let then = start + AUTO_FIRST;
+        assert!(!card.auto_due(then + AUTO_EVERY - Duration::from_secs(1)));
+        assert!(card.auto_due(then + AUTO_EVERY));
+        assert!(card.next_clock.is_some());
+        // The clock shown: a started minute counts whole, past midnight wraps.
+        assert_eq!(clock_after(13, 5, 0, AUTO_EVERY), (14, 5));
+        assert_eq!(clock_after(13, 5, 1, AUTO_EVERY), (14, 6));
+        assert_eq!(clock_after(23, 40, 0, AUTO_EVERY), (0, 40));
+        assert_eq!(clock_after(9, 59, 50, AUTO_FIRST), (10, 1));
+    }
+
+    #[test]
+    fn a_quiet_automatic_check_says_what_is_here() {
+        let mut card = looked_at();
+        card.phase = Phase::Finished(Outcome {
+            synced: true,
+            automatic: true,
+            ..Outcome::default()
+        });
+        assert_eq!(card.status().0, "2 files to download (7 B).");
+        card.phase = Phase::Finished(Outcome {
+            synced: true,
+            automatic: true,
+            downloaded: 1,
+            downloaded_bytes: 3,
+            ..Outcome::default()
+        });
+        assert!(card.status().0.starts_with("Done: 1 files downloaded"));
     }
 
     #[test]
@@ -1443,6 +1847,16 @@ mod tests {
                 };
                 console.set_cvar(switch, "1");
             }
+            // SJK_JOF_CONTENT_AUTO: automatic updates on, with their next check shown.
+            let auto = std::env::var_os("SJK_JOF_CONTENT_AUTO").is_some();
+            if auto {
+                let names = if sith {
+                    &crate::sith_cloud::NAMES
+                } else {
+                    &crate::jof_content::NAMES
+                };
+                console.set_cvar(names.auto, "1");
+            }
             if sith {
                 console.open_sith_cloud(&game_data);
             } else {
@@ -1456,6 +1870,9 @@ mod tests {
             let start = std::time::Instant::now();
             while card.busy() && start.elapsed().as_secs() < 300 {
                 std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            if auto {
+                card.schedule(Instant::now(), AUTO_EVERY);
             }
             // SJK_JOF_CONTENT_GROUP=<n>: show the n-th group's files.
             if let Some(group) = std::env::var("SJK_JOF_CONTENT_GROUP")
@@ -1473,6 +1890,34 @@ mod tests {
             let console = gpu.console.as_ref().unwrap();
             assert!(console.covers_frame());
             assert!(console.sjk_page_open());
+            let card = if sith {
+                &console.sith_cloud
+            } else {
+                &console.jof_content
+            };
+            // The automatic updates' switch, and an Auto tick on each group row
+            // SJK can fetch from (or on the open group's own row).
+            assert!(card.ui.rect_for(AUTO_TOKEN).is_some());
+            let fetchable = |slot: usize| {
+                card.summaries
+                    .get(card.first + slot)
+                    .is_some_and(|summary| summary.files > 0)
+            };
+            if card.view.is_some() {
+                let open = card.view.and_then(|group| card.summaries.get(group));
+                assert_eq!(
+                    card.ui.rect_for(HEADER_AUTO_TOKEN).is_some(),
+                    open.is_some_and(|summary| summary.files > 0)
+                );
+            } else {
+                for slot in 0..ROWS.min(card.summaries.len()) {
+                    assert_eq!(
+                        card.ui.rect_for(AUTO_TICK_BASE + slot as u16).is_some(),
+                        fetchable(slot),
+                        "slot {slot}"
+                    );
+                }
+            }
             if let Some(path) = std::env::var_os("SJK_JOF_CONTENT_SHOT") {
                 crate::world_shot::frame(&mut gpu, 2).save(path).unwrap();
             }

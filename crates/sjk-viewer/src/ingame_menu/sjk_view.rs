@@ -130,7 +130,7 @@ pub(crate) fn row_count(page: Page, team_game: bool) -> Option<usize> {
 /// with [`return_focus`] on the card). `None` closes the menu.
 pub(crate) fn parent(page: Page) -> Option<(Page, usize)> {
     Some(match page {
-        Page::Main | Page::Shot | Page::MapEdit => return None,
+        Page::Main | Page::Shot | Page::MapEdit | Page::GhostEdit => return None,
         Page::Team | Page::Siege | Page::CallVote => (Page::Main, Entry::Resume.index()),
         Page::Players => (Page::Main, Entry::Players.index()),
         // The chosen player's row: `sjk_back` takes it from the roster.
@@ -295,7 +295,7 @@ pub(super) fn split_hints(page: Page, rows: &mut [String], hints: &mut [String])
 fn page_title(page: Page, siege: bool) -> Option<&'static str> {
     Some(match page {
         // Leave's rows say what they do; a title over them only repeats it.
-        Page::Main | Page::Shot | Page::MapEdit | Page::Leave => return None,
+        Page::Main | Page::Shot | Page::MapEdit | Page::GhostEdit | Page::Leave => return None,
         Page::Team if siege => "Class",
         Page::Team => "Team",
         // Its step's own title comes with the rows (`Rows::title`).
@@ -1978,6 +1978,7 @@ mod tests {
             page,
             selected_row,
             team,
+            following: false,
             team_game,
             siege: false,
             red_players: 4,
@@ -1995,6 +1996,7 @@ mod tests {
             team_game: true,
             siege: false,
             team: 2,
+            following: false,
             vote: true,
         })
     }
@@ -2284,6 +2286,7 @@ mod tests {
                         team_game: false,
                         siege: false,
                         team: 3,
+                        following: false,
                         vote: false,
                     }),
                     Focus::Card(Control::CallVote),
@@ -2458,6 +2461,7 @@ mod tests {
                 team_game: true,
                 siege: false,
                 team: 2,
+                following: false,
                 vote,
             });
             for viewport in VIEWPORTS {

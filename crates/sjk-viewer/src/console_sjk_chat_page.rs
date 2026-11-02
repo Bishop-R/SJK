@@ -136,6 +136,17 @@ impl ViewerConsole {
 
     fn sjk_chat_panel_action(&mut self, action: PanelAction) {
         match action {
+            PanelAction::React {
+                message,
+                emoji,
+                active,
+            } => {
+                if self.bool_cvar("cl_sjkChat") == Some(false) {
+                    self.push_log("^3sjkchat: SJK chat is off");
+                } else if !crate::player_identity::react(message, emoji, active) {
+                    self.push_log("^3sjkchat: turn identity on to react");
+                }
+            }
             PanelAction::None => {}
             PanelAction::Close => self.close_sjk_chat_panel(),
             PanelAction::SendSjkOnly(text) => {
@@ -213,7 +224,7 @@ impl ViewerConsole {
     ) {
         self.sjk_chat_panel.place_card(
             crate::player_mutes::place,
-            crate::player_identity::avatar_version,
+            crate::player_identity::card_appearance,
         );
         self.sjk_chat_panel
             .find_pictures(crate::player_identity::avatar_version);

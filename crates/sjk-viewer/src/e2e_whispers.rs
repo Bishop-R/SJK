@@ -804,7 +804,7 @@ impl GpuState {
             .map(|console| console.config_directory().to_owned());
         match (choice, directory) {
             (Choice::SendPlain(failure), _) => {
-                self.send_chat_to_server(&failure.command, Some(failure.name));
+                self.send_plain_chat_command(&failure.command, Some(failure.name));
             }
             (Choice::Verify(safety), Some(directory)) => {
                 self.e2e_whispers

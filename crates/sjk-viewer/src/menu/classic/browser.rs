@@ -40,9 +40,9 @@ pub(crate) const INFO_CLOSE_TOKEN: u16 = 18;
 pub(crate) const EXIT_TOKEN: u16 = 19;
 /// REFRESH LIST, the second refresh button.
 pub(crate) const REFRESH_LIST_TOKEN: u16 = 21;
-/// The dimmed PASSWORD and FIND PLAYER buttons, for their descriptions.
+/// The disabled password placeholder and the copy-address action.
 const PASSWORD_TOKEN: u16 = 23;
-const FIND_PLAYER_TOKEN: u16 = 24;
+const COPY_IP_TOKEN: u16 = super::super::browser_view::COPY_IP_TOKEN;
 /// The filter toggles of [`crate::menu::browser_filters`]: empty, full,
 /// locked, valid info, game type.
 const FILTER_BASE: u16 = crate::menu::browser_filters::BASE;
@@ -244,10 +244,10 @@ fn secondary_buttons(favourite: bool) -> [Button; 5] {
             INFO_TOKEN,
         ),
         button(
-            "FIND PLAYER",
-            "Searching for players is not available in SJK yet.",
+            "COPY IP",
+            "Copy the selected server address and port (Ctrl+C).",
             510.0,
-            FIND_PLAYER_TOKEN,
+            COPY_IP_TOKEN,
         ),
     ]
 }
@@ -349,7 +349,7 @@ pub(crate) fn build(
         .visible_entry(browser.selected())
         .is_some_and(|entry| browser.is_favorite(entry.address));
     for button in &secondary_buttons(favourite) {
-        let enabled = !matches!(button.token, PASSWORD_TOKEN | FIND_PLAYER_TOKEN);
+        let enabled = !matches!(button.token, PASSWORD_TOKEN);
         button_item(canvas, &place, screen.art, button, enabled, &mut hint);
     }
     for button in bottom_buttons(screen.from_game) {
@@ -1236,7 +1236,7 @@ mod tests {
             EXIT_TOKEN,
             REFRESH_LIST_TOKEN,
             PASSWORD_TOKEN,
-            FIND_PLAYER_TOKEN,
+            COPY_IP_TOKEN,
             REFRESH_TOKEN,
             FAVOURITE_TOKEN,
             BACK_TOKEN,

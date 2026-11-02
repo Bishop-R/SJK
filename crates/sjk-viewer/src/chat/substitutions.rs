@@ -1,7 +1,7 @@
 //! EJK `CG_Say_f` substitutions, expanded once at submission before colouring,
 //! quoting and the existing chat byte budget. No received text is interpreted.
 
-use sjk_client::{ChatDestination, chat_command, chat_unescape};
+use sjk_client::{ChatDestination, chat_command_full, chat_unescape};
 use sjk_game_jka::pmove::MovementState;
 use sjk_protocol::PlayerState;
 use sjk_shell::local_time::LocalTime;
@@ -132,7 +132,7 @@ pub(super) fn expand<'a>(text: &'a str, values: Option<&Values>, time: LocalTime
 
 /// Normalize only an explicit outgoing game-chat command. The composer already
 /// escaped percent signs; undo those display escapes before expanding, then use
-/// the normal safe serializer again, including its post-expansion byte bound.
+/// the normal safe serializer again. The send boundary divides the result.
 pub(super) fn command(command: &str, values: Option<&Values>, time: LocalTime) -> String {
     let Ok(tokens) = sjk_shell::tokenize(command) else {
         return command.to_owned();
@@ -159,7 +159,8 @@ pub(super) fn command(command: &str, values: Option<&Values>, time: LocalTime) -
     };
     let text = tokens[start..].join(" ");
     let text = chat_unescape(&text);
-    chat_command(destination, &expand(&text, values, time)).unwrap_or_else(|| command.to_owned())
+    chat_command_full(destination, &expand(&text, values, time))
+        .unwrap_or_else(|| command.to_owned())
 }
 
 impl crate::GpuState {
@@ -242,7 +243,8 @@ mod tests {
         ] {
             assert_eq!(command(input, Some(&values()), time(0)), expected);
         }
-        let composer = chat_command(ChatDestination::Player(7), "%H% \"; quit\" 100%").unwrap();
+        let composer =
+            chat_command_full(ChatDestination::Player(7), "%H% \"; quit\" 100%").unwrap();
         let sent = command(&composer, Some(&values()), time(0));
         assert_eq!(sent, "tell 7 \"73 ''; quit'' 100°/.\"");
         assert_eq!(sjk_shell::tokenize(&sent).unwrap().len(), 3);
@@ -253,12 +255,13 @@ mod tests {
     }
 
     #[test]
-    fn expansion_is_bounded_after_long_weapon_names_and_unicode() {
+    fn expansion_is_retained_for_the_send_boundary_to_divide() {
         let input = format!("say \"{}\"", "%W% 雪 ".repeat(80));
         let sent = command(&input, Some(&values()), time(0));
         let tokens = sjk_shell::tokenize(&sent).unwrap();
-        assert!(sjk_protocol::encode_legacy_text(&tokens[1]).len() <= sjk_client::CHAT_INPUT_BYTES);
+        assert!(sjk_protocol::encode_legacy_text(&tokens[1]).len() > sjk_client::CHAT_INPUT_BYTES);
         assert!(tokens[1].starts_with("Concussion rifle 雪"));
+        assert!(tokens[1].ends_with("Concussion rifle 雪"));
     }
 
     #[test]

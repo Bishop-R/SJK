@@ -10,6 +10,8 @@ pub(super) struct LockView {
     enemy: u16,
     client: u16,
     origin: [f32; 3],
+    /// `cg_predictLegacy` [`SABER_LOCK_FACING`](sjk_client::pmove::predict_legacy): no facing.
+    pub(super) off: bool,
 }
 
 impl LockView {
@@ -35,7 +37,8 @@ impl LockView {
     /// Before Pmove, its input freeze absorbs these angles into delta_angles.
     /// On display-only frames, the existing view-lock flag also cancels fresh mouse input.
     pub(super) fn face(&self, state: &mut MovementState, time: i32, target: Option<[f32; 3]>) {
-        if self.until <= time
+        if self.off
+            || self.until <= time
             || state.saber_lock_time <= time
             || state.saber_lock_time < state.command_time
             || self.client != state.client_num
@@ -73,6 +76,7 @@ mod tests {
                 enemy: 2,
                 client: 1,
                 origin: [10.0, 20.0, 30.0],
+                off: false,
             };
             let mut state = MovementState {
                 client_num: 1,
@@ -103,6 +107,7 @@ mod tests {
             enemy: 2,
             client: 1,
             origin: [0.0; 3],
+            off: false,
         };
         for (time, client, command, target) in [
             (1000, 1, 100, Some([1.0; 3])),

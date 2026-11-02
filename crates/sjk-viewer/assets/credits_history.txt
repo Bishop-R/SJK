@@ -9,6 +9,106 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 02/11/2026 | - | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
+- 3b1d9cd |  | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
++ 02/11/2026 | - | Prop gun: turn the world model onto the hand as the game's own world guns are
+- e6e56b1 |  | Prop gun: turn the world model onto the hand as the game's own world guns are
++ 02/11/2026 | - | Prop gun: muzzle, trail and flight sound settings; shots leave the drawn muzzle
+- 6a3c05b |  | Prop gun: muzzle, trail and flight sound settings; shots leave the drawn muzzle
++ 02/11/2026 | - | Prop gun: neutral test gun names; debug panel entry
+- a38488b |  | Prop gun: neutral test gun names; debug panel entry
++ 02/11/2026 | - | Toy Master: shows in steps, a ring, floating players, and drops to take
+- b82c78b |  | Toy Master: shows in steps, a ring, floating players, and drops to take
++ 02/11/2026 | - | Toon models: banded, rim-lit model shading (r_toonModels, off by default)
+- 95011b4 |  | Toon models: banded, rim-lit model shading (r_toonModels, off by default)
++ 01/11/2026 | - | Showcase tools: staff editing
+- be3f4f4 |  | Showcase tools: staff editing
++ 01/11/2026 | - | Effects: FxRunner rolls its count and plays one random playFx entry
+- d65206c |  | Effects: FxRunner rolls its count and plays one random playFx entry
++ 01/11/2026 | - | Debug panel: fxrunner-count entry
+- fdfe2eb |  | Debug panel: fxrunner-count entry
++ 01/11/2026 | - | Debug panel ASCII again, card finish tests formatted
+- 529dc04 |  | Debug panel ASCII again, card finish tests formatted
++ 01/11/2026 | - | Cards: look at every finish held (Normal/Holo/Solar chips and V), not only the best
+- 5f49d46 |  | Cards: look at every finish held (Normal/Holo/Solar chips and V), not only the best
++ 01/11/2026 | - | Cards: kind Clan, the clan being the card's collection (JoF reads "Clan - JoF")
+- 24b9df0 |  | Cards: kind Clan, the clan being the card's collection (JoF reads "Clan - JoF")
++ 01/11/2026 | - | Chat: grand finds show the crystal's picture, the prize's colour and its blade
+- cf2fd1b |  | Chat: grand finds show the crystal's picture, the prize's colour and its blade
++ 01/11/2026 | - | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
+- b0232b5 |  | Toy Master: a "???" Use prompt, players dance with the spin, the missing sound logged
++ 01/11/2026 | - | Release 2026.1101.1
+- 57f60dd |  | Release 2026.1101.1
++ 01/11/2026 | - | Toy Master props: hidden map toys that count Use presses and play a show
+- 60c27fe |  | Toy Master props: hidden map toys that count Use presses and play a show
++ 01/11/2026 | - | Debug panel: Toy Master entry within the line limit
+- caf616c |  | Debug panel: Toy Master entry within the line limit
++ 01/11/2026 | - | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
+- 17af01d |  | Tester medal by date: docs and changelog (the hub gives it, rank IV to I, until 22/11/2026)
++ 31/10/2026 | - | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
+- 98fcaf3 |  | Tags: sharp on walls, Holo and Solar finishes, credits cards as tags
++ 31/10/2026 | - | Release 2026.1031.2
+- 4fcdeca |  | Release 2026.1031.2
++ 31/10/2026 | - | Map editor: easier to use, and say why the hub sync failed
+- f0021d0 |  | Map editor: easier to use, and say why the hub sync failed
++ 31/10/2026 | - | Box hunt: marks only among players in play, an arrow to the mark; boxes open inside, with a halo
+- 514946f |  | Box hunt: marks only among players in play, an arrow to the mark; boxes open inside, with a halo
++ 31/10/2026 | - | Identity: announcement markup (links, pictures, switches), staff announce and news pictures
+- 39acb88 |  | Identity: announcement markup (links, pictures, switches), staff announce and news pictures
++ 31/10/2026 | - | News panel: what's new and announcements in one panel, with links, pictures and switches
+- f235658 |  | News panel: what's new and announcements in one panel, with links, pictures and switches
++ 31/10/2026 | - | News panel: docs, changelog, credits, debug panel; close puts it away; empty recap pointer
+- 583c9f9 |  | News panel: docs, changelog, credits, debug panel; close puts it away; empty recap pointer
++ 31/10/2026 | - | Cloud content: opt-in automatic updates for JoF content and the Sith cloud
+- 6cd9768 |  | Cloud content: opt-in automatic updates for JoF content and the Sith cloud
++ 31/10/2026 | - | Cloud auto-update: docs, changelog, credits, debug panel
+- d48d80b |  | Cloud auto-update: docs, changelog, credits, debug panel
++ 31/10/2026 | - | What's new: Settings to review switches read number cvars as Settings does
+- 6294787 |  | What's new: Settings to review switches read number cvars as Settings does
++ 31/10/2026 | - | Collection > History: the player's inventory history from GET /v1/history
+- 21e5def |  | Collection > History: the player's inventory history from GET /v1/history
++ 31/10/2026 | - | History: bought holocrons show their price on their own line; plainer mystery box words
+- 84022d2 |  | History: bought holocrons show their price on their own line; plainer mystery box words
++ 31/10/2026 | - | Blade signatures: Reactor, Between Worlds, Felucia Spores, Starforge skip pieces a ray passes far from
+- f8346b3 |  | Blade signatures: Reactor, Between Worlds, Felucia Spores, Starforge skip pieces a ray passes far from
++ 31/10/2026 | - | Blade signatures: Exogorth's saliva strands and Nebula Song's ribbons skip far rays
+- fe2a43b |  | Blade signatures: Exogorth's saliva strands and Nebula Song's ribbons skip far rays
++ 31/10/2026 | - | Blade perf round 2: docs, changelog, credits, debug panel
+- bebd74c |  | Blade perf round 2: docs, changelog, credits, debug panel
++ 31/10/2026 | - | Changelog: the blade perf line under Unreleased (2026.1031.1 was tagged meanwhile)
+- 9523d55 |  | Changelog: the blade perf line under Unreleased (2026.1031.1 was tagged meanwhile)
++ 31/10/2026 | - | Blade signatures: behindBlade works out the ray's part once per ray
+- 54cdcb4 |  | Blade signatures: behindBlade works out the ray's part once per ray
++ 31/10/2026 | - | blade_cost.py: resolve --out, the test runs from the crate's folder
+- 83f59ad |  | blade_cost.py: resolve --out, the test runs from the crate's folder
++ 31/10/2026 | - | Blade signatures: ray cache filled once per pixel, bolt3 and Exogorth skip what draws nothing
+- 0dcd79a |  | Blade signatures: ray cache filled once per pixel, bolt3 and Exogorth skip what draws nothing
++ 31/10/2026 | - | Blade signatures: World Shift draws its hiding whole again (@raycache off by rename)
+- 3923312 |  | Blade signatures: World Shift draws its hiding whole again (@raycache off by rename)
++ 31/10/2026 | - | Blade perf: docs, changelog, credits, debug panel
+- 28c3437 |  | Blade perf: docs, changelog, credits, debug panel
++ 31/10/2026 | - | Release 2026.1031.1
+- 6adedf1 |  | Release 2026.1031.1
++ 31/10/2026 | - | Cards: ranks in place of rarities (rank + rank_colour, for the JoF collection)
+- c406c9b |  | Cards: ranks in place of rarities (rank + rank_colour, for the JoF collection)
++ 31/10/2026 | - | Nameplate styles: holo, capsule or classic (cg_nameplateStyle)
+- bd94cdd |  | Nameplate styles: holo, capsule or classic (cg_nameplateStyle)
++ 31/10/2026 | - | Blade cost ranking: time every Legendary/Mythical blade (scripts/blade_cost.py)
+- 8bab688 |  | Blade cost ranking: time every Legendary/Mythical blade (scripts/blade_cost.py)
++ 31/10/2026 | - | AGENTS.md: time every blade change with blade_cost.py, keep blades cheap (Sol's rule)
+- ee0ac8f |  | AGENTS.md: time every blade change with blade_cost.py, keep blades cheap (Sol's rule)
++ 31/10/2026 | - | Credits: blade cost ranking
+- b6a0b0d |  | Credits: blade cost ranking
++ 31/10/2026 | - | Looks (toys) reach the hub sooner: picked up between hub calls, 1 s quota retry
+- 60995f2 |  | Looks (toys) reach the hub sooner: picked up between hub calls, 1 s quota retry
++ 31/10/2026 | - | Prediction as in 2026.1028.1: cg_predictLegacy, one bit per change (Kushina's request)
+- e243873 |  | Prediction as in 2026.1028.1: cg_predictLegacy, one bit per change (Kushina's request)
++ 30/10/2026 | - | Defaults are the stock base JKA experience (Sol's rule)
+- 7bd082a |  | Defaults are the stock base JKA experience (Sol's rule)
++ 30/10/2026 | - | Achievements: the toys' own, and a Fun page for them
+- 04151f1 |  | Achievements: the toys' own, and a Fun page for them
++ 30/10/2026 | - | Release 2026.1030.2
+- 2ddd0d8 |  | Release 2026.1030.2
 + 30/10/2026 | - | jaPRO plugin options: offer Force jumps, now that prediction follows it
 - 6ed042b |  | jaPRO plugin options: offer Force jumps, now that prediction follows it
 + 30/10/2026 | - | Banana peel in the look: its id goes in the look's toys like the others
@@ -2402,7 +2502,20 @@
 + 01/10/2026 | - | Initial JKR source
 - 0d215f1 |  | Initial JKR source
 
+= Blackwolf1337
++ 01/11/2026 | SJK #333 | Fix JA+ dual saber forward jump hull to match the server
+- 46efdd7 |  | Predict the JA+ dual jump-attack hull over a player ahead
+
 = Creyon
++ 31/10/2026 | SJK #320 | Chat GIFs: hide chosen GIFs on this PC, a Hidden tab to show them again
+- 4d8595a |  | Chat GIFs: hide chosen GIFs on this PC, a Hidden tab to show them again
+- e9afed7 |  | CI: run the checks again
++ 30/10/2026 | SJK #289 | Toys say ON and OFF in colour, and toy_help explains every toy
+- 5929535 |  | Toys say ON and OFF, and toy_help explains them
++ 30/10/2026 | SJK #296 | Day and night follow the PC's clock (r_dayClock), in every graphics preset
+- 874c7fb |  | Let day and night follow the PC's clock (r_dayClock)
++ 30/10/2026 | SJK #297 | Blade core thickness slider (cg_saberCoreSize)
+- d638459 |  | Add a blade core thickness slider (cg_saberCoreSize)
 + 29/10/2026 | SJK #275 | Movement keys added to SJK, the same as JoF EJK (cg_movementKeys)
 - 2da84bf |  | Add JoF EJK's movement keys (cg_movementKeys)
 + 29/10/2026 | SJK #259 | Chat tabs: an Admin (amsay) button and key, and choosable Team/SJK/Admin/PM buttons that filter
@@ -2648,8 +2761,11 @@
 - 0874042 |  | Decode print and cp text as legacy bytes
 
 = Lukas
-+ 24/10/2026 | SJK #198 | Release stale profile VFS generations
++ 30/10/2026 | SJK #304 | Let spectators follow the crosshair player
+- 4de76ec |  | Let spectators follow the crosshair player
++ 30/10/2026 | SJK #198 | Add VFS headroom and lifetime diagnostics
 - 69c6da4 |  | Release stale profile VFS generations
+- 37c8ade |  | Add VFS headroom and lifetime diagnostics
 + 21/10/2026 | SJK #179 | Add holocron notification modes
 - d7ae6dc |  | Add holocron notification modes
 + 20/10/2026 | SJK #190 | Add JA+ anti-kiss protection
@@ -2692,6 +2808,41 @@
 - ddfe116 |  | Fix Linux clipboard integration
 
 = Lumaya
++ 31/10/2026 | SJK #274 | Apply vehicle and rider collision exclusions per predicted actor
+- 71172a6 |  | Record the missing per-entity vehicle collision exclusions
+- f5e5223 |  | Separate pilot and chassis collision exclusions during prediction
+- 9b9efcb |  | Record original JA+ vehicle prediction comparison
++ 31/10/2026 | SJK #315 | Add a local colour override for public All chat
+- b20f5ee |  | Let players force incoming chat message colours
+- e71522e |  | Fix chat colour settings values and verify incoming display
+- 9c00f25 |  | Show the incoming chat colour in the UI guide
+- c7f9a31 |  | Place the chat UI guide beside implemented features
+- d75b368 |  | Limit chat colour override to the public All channel
+- 533f67f |  | Verify preserved channel colours and refresh the chat screenshot
++ 30/10/2026 | SJK #312 | Let players copy server IPs from the browser and console
+- 13856ad |  | Let players copy selected and connected server IPs
+- c8afe53 |  | Show and document the Copy IP browser action
++ 30/10/2026 | SJK #313 | Reassess necessity and integration of the prediction changes
+- a9b446a |  | Claim a necessity review of the prediction changes
+- 4474dd8 |  | Replace blanket prediction retention with necessity evidence
+- 18968c7 |  | Place the necessity review beside prediction status
++ 30/10/2026 | SJK #314 | Resolve saber definitions in multiplayer load order
+- 3d7346d |  | Claim the saber definition precedence correction
+- 308a4ae |  | Keep the first saber definition in multiplayer load order
+- fe1b6a0 |  | Place the prediction finding beside the existing audit
++ 30/10/2026 | - | Restore fixed dual-jump hull after JA+ runtime regression
+- 8fd4f9b |  | Restore fixed dual-jump hull after JA+ runtime regression
++ 30/10/2026 | - | Remove zero-gravity impulses from transient spawn prediction
+- f5e68c6 |  | Remove zero-gravity impulses from transient spawn prediction
++ 30/10/2026 | SJK #305 | Audit reported JA+ prediction regressions after October 29 merges
+- 626f005 |  | Record reported JA+ prediction regressions and audit scope
+- e25ad39 |  | Record runtime regression audit of all prediction PRs
++ 30/10/2026 | SJK #308 | Back out zero-gravity push prediction after spawn regression
+- cb5a74c |  | Claim rollback of zero-gravity prediction regression
+- 97002d2 |  | Remove zero-gravity impulses from transient spawn prediction
++ 30/10/2026 | SJK #307 | Back out dual jump-hull prediction after JA+ regression
+- 3e7be04 |  | Claim rollback of dual jump-hull prediction regression
+- bbc8fd4 |  | Restore fixed dual-jump hull after JA+ runtime regression
 + 29/10/2026 | SJK #284 | Predict jaPRO new-jetpack activation and thrust
 - 588cd09 |  | Record jaPRO new-jetpack prediction scope
 - ea8ed75 |  | Predict jaPRO new jetpack only for current server profile
@@ -2898,6 +3049,36 @@
 - fed9acd |  | Hide duel opponents' bars and send nothing while duelling
 
 = Slash
++ 31/10/2026 | SJK #323 | Duels: fakenoclip and freecam no longer make you take no damage (#209)
+- cf43dcc |  | Keep fakenoclip and freecam out of duels (hub #209)
++ 31/10/2026 | SJK #322 | Melee kick: holding it no longer freezes your kick on its last frame
+- 628f8e2 |  | Restart a held animation whose stand went unseen
++ 31/10/2026 | SJK #299 | SJK profile: the nickname can be set again (#202)
+- 7e2eb55 |  | Start fix for the missing nickname option (hub report #202)
+- 0860d6d |  | Add Change name to the Profile screen's SJK Profile tab
+- 8f4ec53 |  | Document Change name and test the Profile tab's button row
++ 30/10/2026 | SJK #309 | Force templates: Force Speed no longer turns into Force Sense (#206)
+- cb942b6 |  | Start fix for Force Sense taking Force Speed's place (hub report #206)
+- 6202a1f |  | Take free saber skills from the server's EV_SET_FREE_SABER
+- 52f52da |  | Keep the server's free-saber word across map changes
++ 30/10/2026 | SJK #291 | Collection > Shaders: the wheel scrolls past the tiers' headings (#201)
+- a3f9075 |  | Collection > Shaders: the wheel scrolls past the tiers' headings (#201)
++ 30/10/2026 | SJK #298 | Away emote: alt-tab on a vehicle no longer breaks riding (#205)
+- a2a15e4 |  | Start fix for the away emote on a vehicle (hub report #205)
+- dc5f0df |  | Keep the away emote off a vehicle rider (hub report #205)
++ 30/10/2026 | SJK #288 | Settings no longer go back to old values after config.cfg is edited or deleted while running
+- 1bfb4c6 |  | Settings no longer go back to old values after config.cfg is edited or deleted while running
++ 30/10/2026 | SJK #290 | Settings search: every result takes a typed value (#203)
+- ebd048e |  | Settings search: every result takes a typed value (#203)
++ 30/10/2026 | SJK #293 | Quick wheel: custom commands are remembered in the command list (Dante's idea)
+- b8744f9 |  | Quick wheel: custom commands are remembered in the catalogue (Dante's idea)
+- aa573c2 |  | Changelog: credit the remembered wheel commands to Slash
++ 30/10/2026 | SJK #294 | Dynamic glow: No glow on sabers (r_dynamicGlowNoSabers), g0dchris' idea
+- d12b687 |  | Dynamic glow: No glow on sabers (r_dynamicGlowNoSabers)
++ 30/10/2026 | SJK #310 | Spectate: joining the game works while following a player (#207)
+- 83af9e8 |  | Start fix for joining while following a player (hub report #207)
+- 5933e67 |  | Offer Join while following a player from spectate
+- 3301940 |  | Keep Spectate on offer while following, read team votes by own team
 + 29/10/2026 | SJK #286 | fs_restart: mount the game files again without restarting SJK
 - de38ac3 |  | fs_restart: mount the game files again without restarting SJK
 - ac00c0f |  | Changelog: fs_restart's PR number

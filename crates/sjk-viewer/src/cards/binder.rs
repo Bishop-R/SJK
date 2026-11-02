@@ -54,6 +54,22 @@ impl Tile {
         self.best().map_or(&FINISHES[0], |stack| stack.finish)
     }
 
+    /// The copy shown in the finish of index `finish` when one is held in it, else the
+    /// best (01/11/2026, Sol's request: every finish held can be looked at).
+    pub(crate) fn in_finish(&self, finish: Option<usize>) -> Option<&Stack> {
+        finish
+            .and_then(|index| self.copies.iter().find(|stack| stack.finish.index == index))
+            .or_else(|| self.best())
+    }
+
+    /// The finishes held, by their index (Normal first).
+    pub(crate) fn finishes_held(&self) -> Vec<usize> {
+        let mut held: Vec<usize> = self.copies.iter().map(|stack| stack.finish.index).collect();
+        held.sort_unstable();
+        held.dedup();
+        held
+    }
+
     /// Whether a copy in `finish` is held.
     pub(crate) fn holds(&self, finish: &Finish) -> bool {
         self.copies.iter().any(|stack| stack.finish.id == finish.id)
@@ -75,6 +91,12 @@ impl Tile {
             Slot::Card(index) => faces.list.get(index),
             _ => None,
         }
+    }
+
+    /// How it reads and is coloured: its face's rank or rarity, else its rarity's
+    /// ([`super::Tone`]).
+    pub(crate) fn tone<'a>(&self, faces: &'a Faces) -> super::Tone<'a> {
+        super::Tone::of(self.rarity, self.face(faces))
     }
 
     /// What players read it as: the card's name, "Sealed Legendary cards" or "Unknown
@@ -252,7 +274,8 @@ impl Filter {
     }
 
     /// Whether `tile` stays in the binder. Sealed copies and unknown cards have no kind,
-    /// so a kind leaves them out.
+    /// so a kind leaves them out; a ranked card shows no rarity, so a rarity leaves it out
+    /// (its tier would show through).
     pub(crate) fn passes(&self, tile: &Tile, faces: &Faces) -> bool {
         let shown = match self.show {
             Show::All => true,
@@ -260,7 +283,10 @@ impl Filter {
             Show::Missing => !tile.owned(),
         };
         shown
-            && self.rarity.is_none_or(|rarity| rarity.id == tile.rarity.id)
+            && self.rarity.is_none_or(|rarity| {
+                rarity.id == tile.rarity.id
+                    && tile.face(faces).is_none_or(|face| face.rank.is_none())
+            })
             && self
                 .kind
                 .is_none_or(|kind| tile.face(faces).is_some_and(|face| face.kind == kind))
@@ -381,6 +407,7 @@ mod tests {
             grants: None,
             blade: None,
             scene: None,
+            rank: None,
         }
     }
 
@@ -525,5 +552,36 @@ mod tests {
         filter.cycle_kind(&faces, false);
         assert_eq!(filter.kind, Some(Kind::Place));
         assert!(filter.active());
+    }
+
+    /// A ranked card shows its rank's name and colour, and a rarity filter leaves it out
+    /// so its rarity (its odds) never shows through.
+    #[test]
+    fn a_ranked_card_shows_its_rank_and_no_rarity_filter_finds_it() {
+        let rank = crate::cards::faces::Rank {
+            name: "Leader".to_owned(),
+            colour: sjk_ui::Color::new(0.1, 0.8, 0.9, 1.0),
+        };
+        let mut leader = face("r_001", "r", 1, 4, Kind::Community);
+        leader.rank = Some(rank.clone());
+        let faces = Faces::of_list(vec![face("a_000", "a", 0, 4, Kind::Credits), leader]);
+        let tiles = tiles(&[], &faces);
+        assert_eq!(tiles.len(), 2);
+        let tone = tiles[1].tone(&faces);
+        assert_eq!(
+            (tone.name, tone.colour, tone.mark),
+            ("Leader", rank.colour, None)
+        );
+        assert_eq!(tiles[0].tone(&faces).name, "Mythical");
+        let filter = Filter {
+            rarity: Some(&RARITIES[4]),
+            ..Filter::default()
+        };
+        assert!(filter.passes(&tiles[0], &faces));
+        assert!(
+            !filter.passes(&tiles[1], &faces),
+            "its tier would show through"
+        );
+        assert!(Filter::default().passes(&tiles[1], &faces));
     }
 }

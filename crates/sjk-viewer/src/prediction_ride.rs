@@ -9,7 +9,7 @@
 //! configstring gives it (`$swoop_mp`), as the cgame's `BG_VehicleGetIndex` finds it.
 //!
 //! The pilot sits on the vehicle model's `*driver` tag (`AttachRidersGeneric`): the client
-//! poses the model as the server does ([`sjk_game_jka::vehicle_skeleton`]) — the root on
+//! poses the model as the server does ([`sjk_game_jka::vehicle_skeleton`]) â€” the root on
 //! the vehicle's legs animation, installed when a snapshot shows it change, read at the
 //! snapshot's time for replay. Presentation resamples that bolt at cgame time,
 //! as `AttachRidersGeneric` does, so the camera does not hold a network-rate pose. It reads
@@ -17,7 +17,7 @@
 //! a new animation starts, blended, once presentation reaches the snapshot that brought it.
 //! Read from the replay skeleton, whose animation starts at the newest snapshot's time
 //! (ahead of presentation), the seat jumped to the new animation's first frame and back
-//! at every walk, run and stand change — the AT-ST pilot's camera jumped when it started
+//! at every walk, run and stand change â€” the AT-ST pilot's camera jumped when it started
 //! or stopped (Kushina, 21/10/2026).
 //!
 //! Presentation reads this same predicted vehicle root for its model and rider seat
@@ -380,10 +380,13 @@ pub(super) fn predict(
     ride: Option<&mut RidePrediction>,
     command: UserCommand,
     collision: &impl MovementCollision,
+    vehicle_collision: &impl MovementCollision,
     context: &sjk_game_jka::pmove::MoveContext,
 ) {
     match ride {
-        Some(ride) => ride.predict_in(predictor, command, collision, context),
+        Some(ride) => {
+            ride.predict_with_collisions(predictor, command, collision, vehicle_collision, context)
+        }
         None => predictor.predict_command_in(command, collision, context),
     }
 }

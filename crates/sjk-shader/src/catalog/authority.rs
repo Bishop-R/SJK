@@ -23,14 +23,29 @@ impl ShaderCatalog {
     pub fn load_with_authority(
         vfs: &VirtualFileSystem,
         authoritative: impl Fn(&AssetSource) -> bool,
+        warning: impl FnMut(&VirtualPath, &ShaderError),
+        suppressed: impl FnMut(&str, &DefinitionSource, &DefinitionSource),
+    ) -> Self {
+        Self::load_with_authority_until(vfs, authoritative, || false, warning, suppressed)
+            .expect("an uncancelled shader load completes")
+    }
+
+    /// Loads with source authority, stopping before the next script read when cancelled.
+    pub fn load_with_authority_until(
+        vfs: &VirtualFileSystem,
+        authoritative: impl Fn(&AssetSource) -> bool,
+        mut cancelled: impl FnMut() -> bool,
         mut warning: impl FnMut(&VirtualPath, &ShaderError),
         mut suppressed: impl FnMut(&str, &DefinitionSource, &DefinitionSource),
-    ) -> Self {
+    ) -> Option<Self> {
         let mut catalog = Self::default();
         let mut origins: HashMap<String, DefinitionSource> = HashMap::new();
         let paths: Vec<_> = shader_paths(vfs).collect();
         for path in &paths {
             for mount in vfs.mounts() {
+                if cancelled() {
+                    return None;
+                }
                 let source = AssetSource {
                     mount_id: mount.id,
                     mount_name: mount.name,
@@ -64,6 +79,9 @@ impl ShaderCatalog {
         }
         let mut reported = std::collections::HashSet::new();
         for path in &paths {
+            if cancelled() {
+                return None;
+            }
             match vfs.read(path.as_str()) {
                 Ok(Some(asset)) => {
                     if authoritative(&asset.source) {
@@ -94,7 +112,7 @@ impl ShaderCatalog {
                 Err(error) => warning(path, &ShaderError::Vfs(error)),
             }
         }
-        catalog
+        Some(catalog)
     }
 
     /// Adds the definitions of the visible scripts that `added` mounts supply, without
@@ -105,12 +123,28 @@ impl ShaderCatalog {
         &mut self,
         vfs: &VirtualFileSystem,
         added: impl Fn(&AssetSource) -> bool,
+        claimed: impl FnMut(&str) -> bool,
+        warning: impl FnMut(&VirtualPath, &ShaderError),
+        refused: impl FnMut(&str, &DefinitionSource),
+    ) {
+        let _ = self.add_unclaimed_until(vfs, added, || false, claimed, warning, refused);
+    }
+
+    /// Adds unclaimed definitions, stopping before the next script read when cancelled.
+    pub fn add_unclaimed_until(
+        &mut self,
+        vfs: &VirtualFileSystem,
+        added: impl Fn(&AssetSource) -> bool,
+        mut cancelled: impl FnMut() -> bool,
         mut claimed: impl FnMut(&str) -> bool,
         mut warning: impl FnMut(&VirtualPath, &ShaderError),
         mut refused: impl FnMut(&str, &DefinitionSource),
-    ) {
+    ) -> bool {
         let mut own = std::collections::HashSet::new();
         for path in shader_paths(vfs) {
+            if cancelled() {
+                return false;
+            }
             let asset = match vfs.read(path.as_str()) {
                 Ok(Some(asset)) if added(&asset.source) => asset,
                 Ok(_) => continue,
@@ -139,6 +173,7 @@ impl ShaderCatalog {
                 self.definitions.insert(name, definition);
             }
         }
+        true
     }
 }
 

@@ -3,7 +3,9 @@
 //! picks one of them on the server as the mark; another who kills the mark wins a free
 //! mystery box roll. Only players with it on see the mark or can be it. The hub never
 //! sees kills: this client tells it who killed its player when its player is the mark,
-//! so no one can claim a kill they did not make.
+//! so no one can claim a kill they did not make. Each read says whether the player is
+//! away (typing in the chat, in a menu, spectating, idle), so the hub never picks them
+//! and hands their mark on after a minute (Sol, 31/10/2026).
 
 use super::label::{Label, Tone};
 use crate::GpuState;
@@ -16,6 +18,9 @@ use std::time::{Duration, Instant};
 const READ_EVERY: Duration = Duration::from_secs(20);
 /// Soonest a read follows another asked by an event.
 const READ_GAP: Duration = Duration::from_secs(2);
+/// How long before the hub's end of a mark this client stops showing it: a kill told
+/// after the end is not counted, so none is shown that could arrive late.
+const END_EARLY: Duration = Duration::from_secs(1);
 /// How high over a player's origin the mark's label stands, and the point it is seen by.
 const MARK_RISE: f32 = 70.0;
 const MARK_SIGHT: f32 = 20.0;
@@ -37,6 +42,11 @@ pub(crate) struct Hunt {
     obituaries: u64,
     /// The mark last told to the player, so each is told once.
     told: Option<u8>,
+    /// When the mark last read ends, by this client's clock (a little before the hub's,
+    /// [`END_EARLY`]): it is no longer shown nor told again after.
+    ends: Option<Instant>,
+    /// Whether the last read said the player was away; a change is read at once.
+    away: Option<bool>,
     /// The mark the card at the top of the screen names, while they are the mark.
     card: Option<Card>,
     /// Where a box's price went when it blew up, told when its roll stops on the teddy
@@ -82,14 +92,22 @@ impl Hunt {
         mark_words(slot, own, name)
     }
 
-    /// The mark was hunted: no mark until the hub picks the next one, so the last read
-    /// does not tell the hunted one again.
+    /// The mark was hunted, or its time is up: no mark until the hub picks the next one,
+    /// so the last read does not tell the old one again.
     fn hunted(&mut self) {
         self.told = None;
         self.card = None;
+        self.ends = None;
         if let Some((_, state)) = &mut self.state {
             state.mark = None;
         }
+    }
+
+    /// Whether the player is the mark: the last read says so, or the hub's event did
+    /// before a read could (the kill is told either way; the hub checks it).
+    fn marked(&self, own: u8) -> bool {
+        self.mark().is_some_and(|mark| mark.slot == own)
+            || self.card.as_ref().is_some_and(|card| card.own)
     }
 
     /// Whether the hunt should be read at `now`.
@@ -99,6 +117,19 @@ impl Hunt {
             since >= READ_EVERY || (self.stale && since >= READ_GAP)
         })
     }
+}
+
+/// When `mark`, read at `now` (`unix` seconds by this client's clock), ends by this
+/// client's clock, [`END_EARLY`] before the hub's: from the seconds the hub says are
+/// left, or from its end time for a hub that does not say them.
+fn mark_ends(mark: &wire::HuntMark, now: Instant, unix: i64) -> Instant {
+    let left = mark
+        .left
+        .unwrap_or_else(|| u64::try_from(mark.until - unix).unwrap_or(0));
+    (now + Duration::from_secs(left))
+        .checked_sub(END_EARLY)
+        .unwrap_or(now)
+        .max(now)
 }
 
 /// What the player is told when slot `slot` (named `name`) becomes the mark; `own` is
@@ -157,7 +188,13 @@ impl GpuState {
         now: Instant,
     ) {
         let on = self.box_hunt.on();
+        // Away: not playing (a menu, the console, spectating, idle) or typing in the chat.
+        let away = !self.actively_playing(now) || self.chat.is_typing();
         let hunt = &mut self.mystery_boxes.hunt;
+        if on && hunt.away != Some(away) {
+            hunt.away = Some(away);
+            hunt.stale = true;
+        }
         // A read for this server.
         let read = crate::player_identity::with_snapshot(|snapshot| {
             snapshot
@@ -167,9 +204,21 @@ impl GpuState {
                 .cloned()
         })
         .flatten();
-        if let Some((serial, read_on, state)) = read {
+        if let Some((serial, read_on, mut state)) = read {
             hunt.seen = serial;
             self.mystery_boxes.free = state.free;
+            if let Some(mark) = state.mark.as_ref().filter(|_| state.hunting) {
+                let unix = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |since| since.as_secs() as i64);
+                let ends = mark_ends(mark, now, unix);
+                // A mark about to end is not shown (nor told again) at all.
+                if ends > now {
+                    hunt.ends = Some(ends);
+                } else {
+                    state.mark = None;
+                }
+            }
             hunt.state = Some((read_on, state));
             // The hub has no mark now, or another one (told below): not this card.
             let read_slot = hunt.mark().map(|mark| mark.slot);
@@ -189,6 +238,13 @@ impl GpuState {
             hunt.state = None;
             hunt.told = None;
             hunt.card = None;
+            hunt.ends = None;
+        }
+        // The mark's time is up: shown no more (a kill would not count), and the hunt is
+        // read again for what comes next. The same player picked again later is told.
+        if hunt.ends.is_some_and(|ends| now >= ends) {
+            hunt.hunted();
+            hunt.stale = true;
         }
         let told_before = hunt.told;
         let mut lines = Vec::new();
@@ -212,10 +268,11 @@ impl GpuState {
                             "You hunted the mark!\nFree mystery box roll".to_owned(),
                         )
                     } else if slot == own {
+                        // In the centre too, so a hunter who won nothing knows why.
                         (
-                            false,
-                            "Box hunt: you hunted the mark (no free roll: you hold the most \
-                             or won enough today)"
+                            true,
+                            "You hunted the mark!\nNo free roll: you hold the most unspent, \
+                             or won enough today"
                                 .to_owned(),
                         )
                     } else {
@@ -273,7 +330,7 @@ impl GpuState {
         let decoded = self.obituaries.decoded();
         let new = decoded.saturating_sub(hunt.obituaries).min(8) as usize;
         hunt.obituaries = decoded;
-        let marked = on && hunt.mark().is_some_and(|mark| mark.slot == own);
+        let marked = on && hunt.marked(own);
         let killer = (0..new)
             .filter_map(|offset| self.obituaries.feed().newest(offset))
             .find(|kill| {
@@ -293,16 +350,17 @@ impl GpuState {
         if let (true, Some(by)) = (marked, killer) {
             hunt.asked = Some(now);
             crate::player_identity::with_service(|service| {
-                service.box_hunt_killed(server.to_owned(), by);
+                service.box_hunt_killed(server.to_owned(), by, away);
             });
         } else if read_now {
             crate::player_identity::with_service(|service| {
-                service.read_box_hunt(server.to_owned());
+                service.read_box_hunt(server.to_owned(), away);
             });
         }
         if !on {
             self.mystery_boxes.hunt.told = None;
             self.mystery_boxes.hunt.card = None;
+            self.mystery_boxes.hunt.away = None;
         }
         for (centre, text) in lines {
             if centre {
@@ -324,9 +382,9 @@ impl GpuState {
         (i32::from(slot) != own).then_some(u16::from(slot))
     }
 
-    /// The mark's label over their head, while the player takes part and someone else
-    /// is the mark: the point it stands at, the point it is seen by, and the label.
-    pub(super) fn box_hunt_mark_label(&mut self) -> Option<(Vec3, Vec3, Label)> {
+    /// Where the mark stands, while the player takes part, someone else is the mark and
+    /// the game server sends them (in this player's snapshot).
+    pub(super) fn box_hunt_mark_origin(&mut self) -> Option<Vec3> {
         if !self.box_hunt.on() {
             return None;
         }
@@ -335,12 +393,25 @@ impl GpuState {
         if i32::from(slot) == session.game_state().client_num {
             return None;
         }
+        let sent = session
+            .latest_snapshot()
+            .entities
+            .iter()
+            .any(|entity| entity.number() == u16::from(slot));
+        if !sent {
+            return None;
+        }
         let time = self.presentation_clock.sample(Instant::now());
         let presented = self
             .live_world
             .entity(sjk_runtime::EntityId::new(u64::from(slot) + 1))?;
-        let origin = Vec3::from_array(presented.sample(time).translation);
-        Some((
+        Some(Vec3::from_array(presented.sample(time).translation))
+    }
+
+    /// The mark's label over their head (`origin`, [`Self::box_hunt_mark_origin`]): the
+    /// point it stands at, the point it is seen by, and the label.
+    pub(super) fn box_hunt_mark_label(origin: Vec3) -> (Vec3, Vec3, Label) {
+        (
             origin + Vec3::Z * MARK_RISE,
             origin + Vec3::Z * MARK_SIGHT,
             Label {
@@ -348,7 +419,7 @@ impl GpuState {
                 line: "Kill for a free box roll".to_owned(),
                 tone: Tone::Mark,
             },
-        ))
+        )
     }
 }
 
@@ -409,12 +480,60 @@ mod tests {
                     slot: 2,
                     name: "Sol".to_owned(),
                     until: 0,
+                    left: None,
                 }),
                 ..HuntState::default()
             },
         ));
         hunt.hunted();
         assert!(hunt.card().is_none() && hunt.told.is_none() && hunt.mark().is_none());
+    }
+
+    #[test]
+    fn the_player_is_the_mark_by_the_read_or_the_event() {
+        let now = Instant::now();
+        let mut hunt = Hunt::default();
+        assert!(!hunt.marked(2));
+        // Told by the hub's event, before any read.
+        hunt.tell(2, 2, "Sol", now);
+        assert!(hunt.marked(2));
+        hunt.tell(4, 2, "Kyle", now);
+        assert!(!hunt.marked(2));
+        hunt.hunted();
+        hunt.state = Some((
+            "server".to_owned(),
+            HuntState {
+                hunting: true,
+                mark: Some(wire::HuntMark {
+                    slot: 2,
+                    ..wire::HuntMark::default()
+                }),
+                ..HuntState::default()
+            },
+        ));
+        assert!(hunt.marked(2) && !hunt.marked(3));
+    }
+
+    #[test]
+    fn a_mark_ends_a_little_before_the_hub_says() {
+        let now = Instant::now();
+        let mark = |until, left| wire::HuntMark {
+            until,
+            left,
+            ..wire::HuntMark::default()
+        };
+        // The seconds left, whatever this clock says.
+        assert_eq!(
+            mark_ends(&mark(0, Some(30)), now, 5_000),
+            now + Duration::from_secs(29)
+        );
+        // An older hub: its end by this clock.
+        assert_eq!(
+            mark_ends(&mark(1_030, None), now, 1_000),
+            now + Duration::from_secs(29)
+        );
+        // Over already.
+        assert_eq!(mark_ends(&mark(900, None), now, 1_000), now);
     }
 
     #[test]

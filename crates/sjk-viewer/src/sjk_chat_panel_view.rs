@@ -169,9 +169,21 @@ fn lay(message: &ChatMessage, inputs: &Inputs<'_>, measure: &Measure<'_>, s: f32
         ""
     };
     let when = ago(u64::try_from(message.at).unwrap_or(0), inputs.now);
-    let meta = format!("{staff}{when}");
-    let meta_room = width(&meta, META_SIZE, TextFace::Regular) + 24.0;
     let muted = inputs.muted.contains(&message.key_id) && official.is_none();
+    let counts = if muted {
+        [0; 6]
+    } else {
+        sjk_identity::reactions::counts(&message.reactions, None).0
+    };
+    // One allocation, as before: reserve for the bounded reaction suffix too.
+    let mut meta = String::with_capacity(128);
+    use std::fmt::Write as _;
+    let _ = write!(
+        meta,
+        "{staff}{when}{}",
+        sjk_identity::reactions::Summary(counts)
+    );
+    let meta_room = width(&meta, META_SIZE, TextFace::Regular) + 24.0;
     let mut gif = None;
     let text = if let Some(official) = &official {
         official.text.clone()
@@ -330,6 +342,10 @@ impl Panel {
     /// Who reads the chat, or why it cannot be read, and what it is.
     fn status(&mut self, frame: &Frame, inputs: &Inputs<'_>) {
         let s = frame.s;
+        let reaction_error = self.reaction_notice.message(
+            inputs.chat.and_then(|chat| chat.reaction.as_ref()),
+            Instant::now(),
+        );
         let (line, colour) = match inputs.chat {
             _ if !inputs.enabled => (
                 "SJK chat is off (Settings > Network > SJK chat)".to_owned(),
@@ -339,6 +355,9 @@ impl Panel {
                 "The SJK identity is off: turn it on to chat (Settings > Network)".to_owned(),
                 color::EMBER,
             ),
+            Some(_) if reaction_error.is_some() => {
+                (reaction_error.unwrap().to_owned(), color::EMBER)
+            }
             Some(chat) if !chat.live => ("Connecting to the SJK hub...".to_owned(), color::MUTED),
             Some(chat) if chat.online == 1 => {
                 ("1 SJK player reading".to_owned(), color::GOLD_BRIGHT)
@@ -449,6 +468,7 @@ impl Panel {
                     emoji: laid.emoji.clone(),
                     medals: crate::medals::Medals::default(),
                     place: crate::sender_card::Place::Unknown,
+                    banner: "",
                     avatar: None,
                     note: None,
                     safety: false,
@@ -959,6 +979,7 @@ impl Panel {
                 emoji: row.emoji.clone(),
                 medals: crate::medals::Medals::default(),
                 place: crate::sender_card::Place::Unknown,
+                banner: "",
                 avatar: version,
                 note: Some(note),
                 safety: false,
@@ -1311,6 +1332,17 @@ impl Panel {
             );
         }
         // No key id here: key ids never show in the game.
+        super::reactions::draw(
+            self,
+            frame,
+            message,
+            [SIDE_X, top + 68.0, SIDE_WIDTH, 36.0],
+            !muted && inputs.enabled,
+            inputs
+                .chat
+                .and_then(|chat| chat.own_key.as_ref())
+                .and_then(|key| std::str::from_utf8(key).ok()),
+        );
         let mut y = top + 110.0;
         kit::button(
             &mut self.ui,
@@ -1380,29 +1412,51 @@ impl Panel {
                 TextAlign::Start,
             );
         }
-        // The message's GIF, as its line shows it (none for a muted sender), can be made
-        // a favourite for the GIF picker.
-        if let (_, Some(gif)) = crate::chat_gifs::for_message(&message.text, muted) {
+        // The message's GIF (none for a muted sender), on one row as Staff's buttons are:
+        // one that shows can be made a favourite for the GIF picker and hidden on this PC;
+        // a hidden one shown again.
+        if let Some(gif) = crate::chat_gifs::chosen_gif(&message.text, muted) {
+            let hidden = crate::chat_gifs::hidden::contains(&gif);
             let at = y + 84.0;
-            let favourite = crate::chat_gifs::favourites::contains(&gif);
+            let (hide_x, hide_width) = if hidden {
+                (SIDE_X, 300.0)
+            } else {
+                let favourite = crate::chat_gifs::favourites::contains(&gif);
+                kit::button(
+                    &mut self.ui,
+                    frame,
+                    [SIDE_X, at, 240.0, 42.0],
+                    if favourite {
+                        "Remove GIF favourite"
+                    } else {
+                        "Add GIF to favourites"
+                    },
+                    false,
+                    true,
+                    self.focus == FAVOURITE_TOKEN,
+                    FAVOURITE_TOKEN,
+                );
+                self.order.push(FAVOURITE_TOKEN);
+                (SIDE_X + 252.0, 232.0)
+            };
             kit::button(
                 &mut self.ui,
                 frame,
-                [SIDE_X, at, 300.0, 42.0],
-                if favourite {
-                    "Remove GIF from favourites"
+                [hide_x, at, hide_width, 42.0],
+                if hidden {
+                    "Show this GIF again"
                 } else {
-                    "Add GIF to favourites"
+                    "Hide this GIF"
                 },
                 false,
                 true,
-                self.focus == FAVOURITE_TOKEN,
-                FAVOURITE_TOKEN,
+                self.focus == HIDE_GIF_TOKEN,
+                HIDE_GIF_TOKEN,
             );
-            self.order.push(FAVOURITE_TOKEN);
+            self.order.push(HIDE_GIF_TOKEN);
             self.shown.chosen_gif = Some(gif);
-            // Staff's part goes under the button, as far below it as under Mute's line.
-            y = at - 30.0;
+            // Manage GIF source (or Staff's part) under the row, rows 54 apart as Staff's.
+            y = at - 50.0;
         }
         if !muted && let Some((id, _)) = crate::chat_gifs::link::find(&message.text) {
             let at = y + 104.0;
@@ -1427,12 +1481,13 @@ impl Panel {
         y += 104.0;
         kit::heading(&mut self.ui, frame, SIDE_X, y, SIDE_WIDTH, "Staff");
         y += 24.0;
-        // Lift chat ban beside Delete, so the three rows stay.
+        // Lift chat ban beside Delete and Unmute beside Mute: two rows, so a message with a
+        // GIF and its two rows of tools still fits above the keys.
         for (row, column, label, token) in [
             (0_u8, 0, "Delete for everyone", DELETE_TOKEN),
             (0, 1, "Lift chat ban", LIFT_TOKEN),
             (1, 0, "Mute at the hub", HUB_MUTE_TOKEN),
-            (2, 0, "Unmute at the hub", HUB_UNMUTE_TOKEN),
+            (1, 1, "Unmute at the hub", HUB_UNMUTE_TOKEN),
         ] {
             let (x, width) = if column == 0 {
                 (SIDE_X, 240.0)
@@ -1474,7 +1529,7 @@ impl Panel {
             &mut self.ui,
             TextFamily::Body,
             format_args!("{line}"),
-            frame.rect(SIDE_X, y + 3.0 * 54.0, SIDE_WIDTH, 22.0),
+            frame.rect(SIDE_X, y + 2.0 * 54.0, SIDE_WIDTH, 22.0),
             14.0 * s,
             colour,
             FontWeight::Regular,
@@ -2228,6 +2283,66 @@ mod tests {
                 mute.y > window.bottom() && unmute.bottom() < keys,
                 "{viewport:?}"
             );
+        }
+    }
+
+    /// A chosen message with a GIF, as staff, on a full window: the GIF row (favourites
+    /// and Hide this GIF), Manage GIF source and Staff's buttons all stand above the keys,
+    /// none over another, at every screen shape.
+    #[test]
+    fn a_gif_message_and_staff_fit_above_the_keys() {
+        let fonts = crate::text::load_modern(1.0, None).expect("Inter");
+        let mut state = crowd(20);
+        state.messages[2].text = "look https://giphy.com/gifs/wave-PanelFit01xyz".to_owned();
+        let mut panel = Panel::new();
+        panel.open(true);
+        panel.selected = Some(3);
+        let staff = inputs(&state, &[], true);
+        for viewport in [
+            [1920.0, 1080.0],
+            [3840.0, 2160.0],
+            [1440.0, 1080.0],
+            [2560.0, 1080.0],
+            [1024.0, 768.0],
+        ] {
+            panel.build_with(&staff, &fonts.font, viewport);
+            let keys = Frame::new(viewport).point(0.0, KEYS_Y - 20.0)[1];
+            let tokens = [
+                MUTE_TOKEN,
+                FAVOURITE_TOKEN,
+                HIDE_GIF_TOKEN,
+                super::gif_sources::OPEN,
+                DELETE_TOKEN,
+                HUB_MUTE_TOKEN,
+                HUB_UNMUTE_TOKEN,
+            ];
+            let rects: Vec<Rect> = tokens
+                .iter()
+                .map(|token| {
+                    panel
+                        .ui
+                        .rect_for(*token)
+                        .unwrap_or_else(|| panic!("{token}"))
+                })
+                .collect();
+            for (index, rect) in rects.iter().enumerate() {
+                assert!(
+                    rect.bottom() < keys,
+                    "{} under the keys at {viewport:?}",
+                    tokens[index]
+                );
+                for (other, second) in rects.iter().enumerate().skip(index + 1) {
+                    let apart = rect.right() <= second.x
+                        || second.right() <= rect.x
+                        || rect.bottom() <= second.y
+                        || second.bottom() <= rect.y;
+                    assert!(
+                        apart,
+                        "{} over {} at {viewport:?}",
+                        tokens[index], tokens[other]
+                    );
+                }
+            }
         }
     }
 

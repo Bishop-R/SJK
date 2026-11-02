@@ -304,6 +304,13 @@ impl Signature {
         self.meta("moments") == Some("own")
     }
 
+    /// Whether its pieces read the view ray's part of the blade's hiding kept once per pixel
+    /// (`lab.glsl` behindBlade, 31/10/2026); `@raycache off` works it out at every piece, as
+    /// before, for World Shift, which drew at a third of its speed with it (RTX 5080, Vulkan).
+    pub(crate) fn ray_cache(&self) -> bool {
+        self.meta("raycache") != Some("off")
+    }
+
     /// Its `design` lane in `saber.wgsl`'s `Skin`: the signature's number, no reach of its
     /// own, its room (in the designs' metres) and whether it has a solid layer.
     pub(crate) fn lane(&self) -> [f32; 4] {
@@ -482,7 +489,14 @@ impl Signature {
 
     /// The shader its pipelines are built from: `saber.wgsl` with its own signature.
     pub(crate) fn module_source(&self) -> String {
-        let source = slim(&module_source(include_str!("saber.wgsl"), self.wgsl));
+        let mut source = slim(&module_source(include_str!("saber.wgsl"), self.wgsl));
+        if !self.ray_cache() {
+            // Every piece calls the hiding worked out whole, as before (`lab.glsl`); the kept
+            // one is left unused.
+            source = source
+                .replace("fn behindBlade(", "fn behindBladeCached(")
+                .replace("behindBladeFull(", "behindBlade(");
+        }
         // A mythical blade's awakening, breath and clash ring (round 19, `sig_mythic`), and a
         // Unique one's (25/10/2026, Sol: Mythical's level of effects), unless it draws its own
         // (`@moments own`).
@@ -665,6 +679,7 @@ fn module_source(saber: &str, signature: &str) -> String {
             .and_then(|rest| rest.split('(').next());
         if let Some(name) = name
             && !signature.contains(&format!("fn {name}("))
+            && !LAB.contains(&format!("fn {name}("))
         {
             source.push('\n');
             source.push_str(function.trim_end());
@@ -692,6 +707,35 @@ fn modules() -> &'static Vec<(&'static str, String)> {
 mod tests {
     use super::*;
     use wgpu::naga;
+
+    /// 31/10/2026: every signature reads the ray's part of its hiding kept once per pixel but
+    /// World Shift (`@raycache off`), whose module works it out at every piece.
+    #[test]
+    fn world_shift_alone_goes_without_the_ray_cache() {
+        for signature in &SIGNATURES {
+            let source = signature.module_source();
+            let off = signature.id == "saber_world_shift";
+            assert_eq!(signature.ray_cache(), !off, "{}", signature.id);
+            // off: the kept one is defined but nothing calls it
+            assert_eq!(
+                source.matches("behindBladeCached(").count(),
+                usize::from(off),
+                "{}",
+                signature.id
+            );
+            assert_eq!(
+                source.contains("behindBladeFull("),
+                !off,
+                "{}",
+                signature.id
+            );
+            assert!(
+                source.contains("labRayPrepare(ray.o, ray.d)"),
+                "{}",
+                signature.id
+            );
+        }
+    }
 
     /// Round 20: a signature's module keeps its pipelines' entry points and drops the designs'
     /// code and the entry points it has no pipelines for.

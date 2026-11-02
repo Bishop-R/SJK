@@ -40,17 +40,26 @@ server, or on one server only (`"server": "ip:port"`): the same map can carry fi
 all servers and others for one server's remaps or layout. The map's checksum is read on
 a worker, and only when a document of the map is there or the editor is on.
 
-The identity worker reads the hub's list every 10 minutes once registered, downloads the
-documents newer than its copies and removes the copies of documents the hub no longer
-lists. A copy changed on this PC and not yet published (`"unpublished": true`) is never
-overwritten or removed. The loaded map's document is read again when a copy changes.
+The identity worker reads the hub's list every 10 minutes once registered (and at once
+when the editor turns on, or after a publish), downloads the documents newer than its
+copies and removes the copies of documents the hub no longer lists. A copy changed on
+this PC and not yet published (`"unpublished": true`) is never overwritten or removed.
+The loaded map's document is read again when a copy changes. What each look did goes in
+the log when it changes (`map edits: 3 maps on the hub, 1 copy changed`, or `map edits:
+not in step with the hub: <why>`), and the panel shows a failure at its foot. A hub
+without map edits answers 404, worded "This SJK hub does not keep map edits yet"
+(`sjk_identity::map_edits::refusal`).
+
+A publish replaces the hub's whole list for the map: two staff members editing one map
+should take turns, or the later publish drops the other's edits.
 
 ## The editor (staff)
 
-`mapedit` turns the editor on for SJK staff (the hub's staff flag). While it is on, the
-world-note key selects (its outline shows what an edit will touch) and opens [the
-panel](#the-panel), never a note; a command without a selection acts on what is under
-the crosshair.
+`mapedit` turns the editor on for SJK staff (the hub's staff flag), and so does the
+in-game menu's Map editor icon (a staff key's, beside Staff tools), which opens [the
+panel](#the-panel) too. While it is on, the world-note key selects (its outline shows
+what an edit will touch) and opens the panel, never a note; a command without a selection
+acts on what is under the crosshair.
 
 | Command | Does |
 | --- | --- |
@@ -61,15 +70,20 @@ the crosshair.
 | `mapedit_turn [degrees]` | Turn the current placed model (15 by default) |
 | `mapedit_move <up> \| <x y z>` | Move it |
 | `mapedit_scale <factor>` | Scale it (0.01 to 64 times) |
-| `mapedit_grab` | It follows your aim until `mapedit_grab` again |
+| `mapedit_grab` | It follows your aim until `mapedit_grab` again; meanwhile the mouse wheel turns it (15 degrees a notch, 1 with Shift) instead of changing weapon |
 | `mapedit_remap <shader> \| -` | Draw `shader` instead of the selected one; `-` removes that remap edit |
 | `mapedit_scope [all\|server]` | New edits for all servers (the default) or only this one |
-| `mapedit_list`, `mapedit_delete <id>`, `mapedit_undo` | List, remove one, remove the newest |
+| `mapedit_list`, `mapedit_delete <id>` | List, remove one |
+| `mapedit_undo`, `mapedit_redo` | Undo the last change to the map's edits (a hide, a placing, a turn, a move, a remap, a delete), or redo it |
 | `mapedit_publish` | Send the map's document to the hub for every SJK player |
 
 Every change is saved to the map's document at once and drawn at once; it reaches other
-players only with `mapedit_publish`. The current placed model is the last placed, or the
-placed model selected.
+players only with `mapedit_publish`, whose answer (published with the hub's revision, or
+why not) shows in the panel, the chat and the log. The current placed model is the last
+placed, the placed model selected, or the one chosen in the Edits list. Undo keeps the
+last 100 changes of the map ([editor.rs](../crates/sjk-viewer/src/map_edits/editor.rs),
+`History`), forgotten when the map changes or the hub brings another staff member's
+version.
 
 ## The panel
 
@@ -85,17 +99,21 @@ waits 20 seconds), until the map changes.
 
 | Page | Offers |
 | --- | --- |
-| Selected | what it is (map prop, placed model, surface, game entity) with its model and shader; Hide (Remove for a placed model), Hide whole model (a merged model's surfaces), Place a copy; a shader typed in Draw another shader, Remap and Remove remap |
-| Place | every MD3 of the game data outside the player models, narrowed by a search; Place where you aimed (or a second click on the chosen row); the current placed model's Turn left and right (15 degrees), Up and Down (8 units), Smaller and Bigger (by 1.1), Grab and Remove |
-| Edits | the map's edits, newest first, those for another server dimmed; Delete the chosen one, Undo newest |
+| Selected | what it is (map prop, placed model, surface, game entity) with its model and shader; Hide (Remove for a placed model), Hide whole model (a merged model's surfaces), Place a copy; Draw another shader: a search over the shaders a remap may draw (the world's `textures/` and the map objects' `models/`, shaders and images, never the player models'), opened on the selection's own folder with its own shader chosen, five rows; Remap (or a second click on the chosen row) and Remove remap. A name the list does not know is tried as typed |
+| Place | every MD3 of the game data outside the player models, narrowed by a search, six rows; Place where you aimed (or a second click on the chosen row); the current placed model's Turn left and right (15 degrees), Up and Down (8 units), Left, Right, Away and Closer (8 units along the world axis nearest the view's right and ahead, so steps add up straight), Smaller and Bigger (by 1.1), Grab and Remove. Shift held makes the steps 1 degree, 1 unit and a tenth of the growth |
+| Edits | the map's edits, newest first, named shortly (`3: Placed: crate.md3`, `Hidden surface: floor (1043)`, `Remap: wall -> wall2`, a server's address when for one), those for another server dimmed; choosing a placed model makes it the one Place's buttons move; Delete the chosen one, Undo and Redo |
 
 Under them on every page: New edits for All servers or This server, the last command's
-answer (ember when refused), Publish (gold while the map has edits not published), Aim and
-Editor off. Grab hides the panel and the model follows the aim; the world-note key puts it
-down and opens the panel again. Keys: Up and Down (along a list too), Tab, Left and Right
-on the tabs and the scope, Enter acts (in the search it places, in the shader field it
-remaps), Ctrl+Z undoes, Delete on an edit deletes it. Each button runs the command the
-console would (`mapedit_hide`, `mapedit_place <model>`, ...), so both stay one editor.
+answer (ember when refused; Publish's comes when the hub answers; with nothing to say, a
+failed look at the hub), Publish (gold while the map has edits not published), Aim and
+Editor off. A click on the scene selects what is under the pointer and shows it on
+Selected; on Place it stays there and chooses where Place puts the model. Grab hides the
+panel and the model follows the aim, the wheel turning it; the world-note key puts it
+down and opens the panel again. Keys: Up and Down (along a list too; in a search they
+choose in its list), Tab, Left and Right on the tabs and the scope, Enter acts (in a
+search it places or remaps), Ctrl+Z undoes, Ctrl+Y (or Ctrl+Shift+Z) redoes, Delete on an
+edit deletes it. Each button runs the command the console would (`mapedit_hide`,
+`mapedit_place <model>`, ...), so both stay one editor.
 
 ## Limits
 
@@ -104,8 +122,12 @@ console would (`mapedit_hide`, `mapedit_place <model>`, ...), so both stay one e
 - A hidden prop's lamps and a hidden surface's bake stay; a placed model casts no baked
   shadow.
 - Edits are not drawn in the menu world.
+- The hub's side is the hub repository's `map-edits` branch (19/10/2026). Until the live
+  hub runs it, it answers 404: Publish says the hub does not keep map edits yet, and
+  players get no copies (found 28/10/2026: the branch had never been merged there).
 - Verified: unit tests (documents, scopes, the remap order, the folder's sync against a
-  fake hub), the hub round trip against a local hub (`staff_publish_map_edits_that_every_key_reads`
-  in `hub_e2e.rs`), and the world shot `duel6_prop_hidden_copied_and_floor_remapped`
-  (a duel6 prop hidden, a surface hidden, a copy placed, a wall remapped, then all taken
-  back), and `duel6_map_editor_panel` for the panel. Not tried in a game.
+  fake hub, the refusals' words, undo and the panel's lists), the hub round trip against
+  a local hub (`staff_publish_map_edits_that_every_key_reads` in `hub_e2e.rs`), and the
+  world shot `duel6_prop_hidden_copied_and_floor_remapped` (a duel6 prop hidden, a surface
+  hidden, a copy placed, a wall remapped, then all taken back), and
+  `duel6_map_editor_panel` for the panel. Not tried in a game.

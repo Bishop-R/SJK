@@ -39,8 +39,10 @@
 
 use crate::GpuState;
 use crate::gpu_texture;
+use crate::text::system_font::{self, Scope};
 use crate::text::{self, MAX_TEXT_VERTICES, TextVertex, UiFont, retail_font};
 use sjk_ui::{DrawList, TextId};
+use std::sync::mpsc::{self, Receiver};
 
 /// The cvar that turns the game fonts on.
 pub(crate) const CVAR: &str = "ui_gameFont";
@@ -65,10 +67,19 @@ pub(crate) enum RetailFont {
     /// Not a retail font: SJK's headline face for centre prints and the words in
     /// the world, on whether `ui_gameFont` is or not.
     Headline,
+    /// Not a retail font: a font installed on the PC the player chose for chat
+    /// (`cg_chatFont`, [`text::system_font`]), once it is loaded.
+    Chat,
 }
 
 impl RetailFont {
-    const ALL: [Self; 4] = [Self::Medium, Self::Small, Self::Console, Self::Headline];
+    const ALL: [Self; 5] = [
+        Self::Medium,
+        Self::Small,
+        Self::Console,
+        Self::Headline,
+        Self::Chat,
+    ];
 
     const fn index(self) -> usize {
         match self {
@@ -76,6 +87,7 @@ impl RetailFont {
             Self::Small => 1,
             Self::Console => 2,
             Self::Headline => 3,
+            Self::Chat => 4,
         }
     }
 }
@@ -236,6 +248,24 @@ pub(crate) struct GameFonts {
     /// time `ui_menuStyle sjk` is on ([`SjkFonts`]).
     sjk_attempted: bool,
     sjk: Option<SjkLayers>,
+    /// The fonts from the PC the player chose for chat and the console, by
+    /// [`Scope::index`].
+    system: [SystemSlot; 2],
+}
+
+/// A font from the PC for one [`Scope`]: the family its cvar named when last read,
+/// the worker loading it and, once loaded, its layer.
+#[derive(Default)]
+struct SystemSlot {
+    wanted: String,
+    /// The family [`Self::layer`] was made from, as the system spells it.
+    shown: String,
+    /// The last family that could not be loaded, so it is not tried every frame.
+    failed: String,
+    /// The one load in flight, for this family: a change while it runs waits for it,
+    /// and its result is dropped when the family is no longer wanted.
+    job: Option<(String, Receiver<Result<system_font::Loaded, String>>)>,
+    layer: Option<Layer>,
 }
 
 /// The SJK UI's display and body families on the GPU.
@@ -340,7 +370,7 @@ impl GameFonts {
     /// The console font's metrics when it is loaded, whether `ui_gameFont` is
     /// on or not (the classic console draws with it).
     pub(crate) fn console_font(&self) -> Option<&UiFont> {
-        self.console.as_ref().map(|layer| &layer.font)
+        self.console_layer().map(|layer| &layer.font)
     }
 
     /// The SJK UI's display and body families' atlases, each with whether it
@@ -354,9 +384,18 @@ impl GameFonts {
 
     /// The console font's atlas and whether it is a distance field.
     pub(crate) fn console_atlas(&self) -> Option<(&wgpu::BindGroup, bool)> {
-        self.console
-            .as_ref()
+        self.console_layer()
             .map(|layer| (&layer.bind_group, layer.distance_field))
+    }
+
+    /// The layer the console's own grid (the classic console and the SJK UI's) draws
+    /// with: the player's font from the PC (`con_font`) once loaded, else JetBrains
+    /// Mono. The HUD's and notify lines' console text keeps JetBrains Mono.
+    fn console_layer(&self) -> Option<&Layer> {
+        self.system[Scope::Console.index()]
+            .layer
+            .as_ref()
+            .or(self.console.as_ref())
     }
 
     fn slot(&self, font: RetailFont) -> &Option<Layer> {
@@ -365,6 +404,7 @@ impl GameFonts {
             RetailFont::Small => &self.chat,
             RetailFont::Console => &self.console,
             RetailFont::Headline => &self.headline,
+            RetailFont::Chat => &self.system[Scope::Chat.index()].layer,
         }
     }
 
@@ -374,13 +414,17 @@ impl GameFonts {
             RetailFont::Small => &mut self.chat,
             RetailFont::Console => &mut self.console,
             RetailFont::Headline => &mut self.headline,
+            RetailFont::Chat => &mut self.system[Scope::Chat.index()].layer,
         }
     }
 
     /// Whether `font` is on this frame: the retail ones with `ui_gameFont`, the
-    /// headline always.
+    /// headline and the player's chat font always.
     fn on(&self, font: RetailFont) -> bool {
-        self.enabled || font == RetailFont::Headline
+        match font {
+            RetailFont::Headline | RetailFont::Chat => true,
+            RetailFont::Medium | RetailFont::Small | RetailFont::Console => self.enabled,
+        }
     }
 
     /// Whether `font` is on and loaded this frame.
@@ -506,6 +550,11 @@ impl GameFonts {
             .chain(self.console.iter_mut())
             .chain(self.headline.iter_mut())
             .chain(sjk)
+            .chain(
+                self.system
+                    .iter_mut()
+                    .filter_map(|slot| slot.layer.as_mut()),
+            )
     }
 
     /// Bind every loaded font's atlas again with `gpu`'s wide and emoji atlases, after
@@ -542,7 +591,14 @@ impl GameFonts {
         pipeline: &wgpu::RenderPipeline,
         sdf_pipeline: &wgpu::RenderPipeline,
     ) {
-        for layer in self.menu.iter().chain(&self.chat).chain(&self.headline) {
+        let chat = &self.system[Scope::Chat.index()].layer;
+        for layer in self
+            .menu
+            .iter()
+            .chain(&self.chat)
+            .chain(&self.headline)
+            .chain(chat)
+        {
             layer.draw(pass, pipeline, sdf_pipeline);
         }
         if let Some(layers) = &self.sjk {
@@ -560,6 +616,104 @@ impl GameFonts {
     ) {
         if let Some(layer) = &self.console {
             layer.draw(pass, pipeline, sdf_pipeline);
+        }
+    }
+
+    /// Follow `cg_chatFont` and `con_font` in `console`. A new family is taken at once
+    /// when an earlier world made it, else loaded on one worker at a time; the font on
+    /// show stays until the new one is ready (empty drops it at once). A load that
+    /// finishes for a family no longer wanted is dropped, unlogged and uncached, and the
+    /// wanted one starts. Missing or unreadable keeps SJK's own font. Every frame this
+    /// compares the cvars' text; it allocates only when a value changes or a load ends.
+    fn follow_system_fonts(
+        &mut self,
+        console: Option<&crate::console::ViewerConsole>,
+        gpu: &Device<'_>,
+    ) {
+        for scope in Scope::ALL {
+            let slot = &mut self.system[scope.index()];
+            let value = console
+                .and_then(|console| console.text_value(scope.cvar()))
+                .unwrap_or("")
+                .trim();
+            if value != slot.wanted {
+                slot.wanted.clear();
+                slot.wanted.push_str(value);
+            }
+            if slot.wanted.is_empty() && slot.layer.is_some() {
+                slot.layer = None;
+                slot.shown.clear();
+            }
+            let finished = match &slot.job {
+                Some((_, receiver)) => match receiver.try_recv() {
+                    Ok(result) => Some(result),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Some(Err("the font worker stopped".to_owned()))
+                    }
+                    Err(mpsc::TryRecvError::Empty) => None,
+                },
+                None => None,
+            };
+            if let Some(result) = finished
+                && let Some((family, _)) = slot.job.take()
+                && family.eq_ignore_ascii_case(&slot.wanted)
+            {
+                match result {
+                    Ok((name, atlas)) => {
+                        system_font::remember(scope, &name, &atlas);
+                        crate::log::progress(format_args!(
+                            "{} font: {name} from the system",
+                            scope.cvar()
+                        ));
+                        slot.layer = Some(Layer::upload(
+                            scope.cvar(),
+                            atlas.font.clone(),
+                            atlas.image.clone(),
+                            gpu,
+                        ));
+                        slot.shown = name;
+                    }
+                    Err(error) => {
+                        crate::log::progress(format_args!(
+                            "warning: {} font unavailable, keeping SJK's: {error}",
+                            scope.cvar()
+                        ));
+                        slot.layer = None;
+                        slot.shown.clear();
+                        slot.failed = family;
+                    }
+                }
+            }
+            let current = slot.layer.is_some() && slot.shown.eq_ignore_ascii_case(&slot.wanted);
+            if slot.wanted.is_empty()
+                || current
+                || slot.job.is_some()
+                || slot.failed.eq_ignore_ascii_case(&slot.wanted)
+            {
+                continue;
+            }
+            if let Some((name, atlas)) = system_font::cached(scope, &slot.wanted) {
+                slot.layer = Some(Layer::upload(
+                    scope.cvar(),
+                    atlas.font.clone(),
+                    atlas.image.clone(),
+                    gpu,
+                ));
+                slot.shown = name;
+                continue;
+            }
+            let (sender, receiver) = mpsc::sync_channel(1);
+            let family = slot.wanted.clone();
+            let request = family.clone();
+            let spawned = std::thread::Builder::new()
+                .name("system font".to_owned())
+                .spawn(move || {
+                    let _ = sender.send(system_font::load_installed(scope, &request));
+                });
+            match spawned {
+                Ok(_) => slot.job = Some((family, receiver)),
+                Err(_) => slot.failed = family,
+            }
         }
     }
 }
@@ -593,14 +747,15 @@ pub(crate) fn prepare(gpu: &mut GpuState) {
     // The SJK UI's families: every menu style draws SJK's own pages (Profile,
     // Update, Import, Camera control, ...) in them.
     let load_sjk = !fonts.sjk_attempted;
+    let device = Device {
+        device: &gpu.device,
+        queue: &gpu.queue,
+        layout: &gpu.text_layout,
+        sampler: &gpu.text_sampler,
+        wide: &gpu.wide_text,
+    };
+    fonts.follow_system_fonts(gpu.console.as_ref(), &device);
     if load || load_console || load_sjk {
-        let device = Device {
-            device: &gpu.device,
-            queue: &gpu.queue,
-            layout: &gpu.text_layout,
-            sampler: &gpu.text_sampler,
-            wide: &gpu.wide_text,
-        };
         if load {
             fonts.load(&device);
         } else if load_console {

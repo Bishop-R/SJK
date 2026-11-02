@@ -11,11 +11,17 @@ use sjk_runtime::{
     HeldEquipment, PoseState,
 };
 
+/// A held animation's timer at or below this has run out, as far as a restart goes:
+/// a frame lands a few milliseconds before the end as often as after it.
+const RAN_OUT_MILLIS: i32 = 50;
+
 /// Persistent no-allocation clock state for the predicted local actor.
 #[derive(Default)]
 pub(crate) struct Tracker {
     entity: Option<EntityId>,
     animation: Option<AnimationState>,
+    /// The presented state's `legsTimer` and `torsoTimer`.
+    timers: Option<[i32; 2]>,
 }
 
 impl Tracker {
@@ -40,11 +46,26 @@ impl Tracker {
         if self.entity != Some(entity) {
             self.entity = Some(entity);
             self.animation = authoritative;
+            self.timers = None;
         }
-        let previous = self.animation.or(authoritative);
+        let mut previous = self.animation.or(authoritative);
         let command_time = i64::from(predicted.command_time);
-        let [lower, upper] =
+        let timers = [predicted.legs_timer, predicted.torso_timer];
+        let [mut lower, mut upper] =
             sjk_client::legacy_predicted_animation_inputs(predicted, previous, command_time);
+        if let (Some(state), Some(old)) = (previous.as_mut(), self.timers) {
+            let legs = restart_unseen(&mut state.lower, &lower, old[0], timers[0], command_time);
+            let torso = restart_unseen(&mut state.upper, &upper, old[1], timers[1], command_time);
+            if legs || torso {
+                // The other track's synchronized start reads the restarted clock.
+                [lower, upper] = sjk_client::legacy_predicted_animation_inputs(
+                    predicted,
+                    previous,
+                    command_time,
+                );
+            }
+        }
+        self.timers = Some(timers);
         let animation = AnimationState {
             lower: update_track(previous.map(|state| state.lower), lower, command_time),
             upper: update_track(previous.map(|state| state.upper), upper, command_time),
@@ -61,7 +82,38 @@ impl Tracker {
     fn clear(&mut self) {
         self.entity = None;
         self.animation = None;
+        self.timers = None;
     }
+}
+
+/// Start `track` over when the clip it plays came back without a frame in between.
+///
+/// A restart of the clip already playing is presented through its flip, or through
+/// another animation in between, such as the stand a held melee kick passes through
+/// for one command before the next kick (`bg_pmove.c:7464-7581`). A frame shows only
+/// the last command (and the frame's own part of the next one), so that command can go
+/// unseen, and a JA+ server restarts the kick with neither: the clip and revision then
+/// stay the same, the track kept the finished kick's clock and stood on its last
+/// frame, and the legs, which start a kick on the torso's frame, joined it (Slash,
+/// 30/10/2026). A held timer that ran out and came back up is that restart.
+fn restart_unseen(
+    track: &mut AnimationTrackState,
+    input: &AnimationTrackInput,
+    old_timer: i32,
+    timer: i32,
+    command_time: i64,
+) -> bool {
+    let restarted = track.clip == input.clip
+        && track.revision == input.revision
+        && track.forced_frame.is_none()
+        && old_timer <= RAN_OUT_MILLIS
+        && timer > old_timer + RAN_OUT_MILLIS;
+    if restarted {
+        track.started_at_millis = command_time;
+        track.phase_millis = 0;
+        track.transition = None;
+    }
+    restarted
 }
 
 /// Replace snapshot saber/weapon presentation fields for the local actor.
@@ -159,5 +211,67 @@ fn update_track(
             blend_started_at_millis: command_time,
             blend_duration_millis: input.blend_millis,
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WP_MELEE: u8 = 2;
+
+    fn animation(name: &str) -> u16 {
+        sjk_game_jka::legacy_animation_index(name).unwrap() as u16
+    }
+
+    fn kicker(command_time: i32, legs: &str, torso: &str, timer: i32) -> MovementState {
+        MovementState {
+            command_time,
+            weapon: WP_MELEE,
+            legs_anim: animation(legs),
+            torso_anim: animation(torso),
+            legs_timer: timer,
+            torso_timer: timer,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_held_kick_starts_over_when_its_stand_went_unseen() {
+        for step in [8, 7, 4, 3] {
+            let mut tracker = Tracker::default();
+            let entity = EntityId::new(1);
+            let kick = "BOTH_A7_KICK_F";
+            let end = 1_000 + 690 - step;
+            for state in [
+                kicker(1_000, kick, kick, 690),
+                kicker(end, kick, kick, step),
+                // The torso's stand (one command) is not presented.
+                kicker(end + step, "BOTH_STAND1", kick, 0),
+            ] {
+                tracker.resolve(entity, Some(&state), None, None);
+            }
+            let next = end + 3 * step;
+            let animation = tracker
+                .resolve(entity, Some(&kicker(next, kick, kick, 690)), None, None)
+                .unwrap();
+            let next = i64::from(next);
+            assert_eq!(animation.upper.elapsed_millis(next), 0, "{step} ms");
+            assert_eq!(animation.lower.elapsed_millis(next), 0, "{step} ms");
+        }
+    }
+
+    #[test]
+    fn a_held_animation_keeps_its_clock_while_it_runs() {
+        let mut tracker = Tracker::default();
+        let entity = EntityId::new(1);
+        let kick = "BOTH_A7_KICK_F";
+        tracker.resolve(entity, Some(&kicker(1_000, kick, kick, 690)), None, None);
+        // A timer raised before it ran out is not a restart.
+        let animation = tracker
+            .resolve(entity, Some(&kicker(1_400, kick, kick, 800)), None, None)
+            .unwrap();
+        assert_eq!(animation.upper.elapsed_millis(1_400), 400);
+        assert_eq!(animation.lower.elapsed_millis(1_400), 400);
     }
 }

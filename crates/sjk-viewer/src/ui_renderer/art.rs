@@ -296,6 +296,8 @@ pub(super) enum Source {
     Preview,
     /// The settings' HUD picker preview.
     HudPreview,
+    /// One of the News panel's pictures, by its slot.
+    News(u8),
     /// The Collection's live blade pictures, added over what is below.
     BladePictures,
 }

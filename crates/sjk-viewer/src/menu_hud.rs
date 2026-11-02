@@ -233,11 +233,15 @@ impl MenuHud {
         self.active
     }
 
-    /// Whether the game HUD draws the vehicle HUD from its own
-    /// `swoopvehiclehud` pictures, in place of SJK's vector vehicle strip.
+    /// Whether the game HUD draws the vehicle HUD, in place of SJK's vector vehicle
+    /// strip: from its own `swoopvehiclehud` pictures, or as the text HUD's hull number.
     pub(crate) fn draws_vehicle(&self) -> bool {
         self.active
-            && matches!(&self.loaded, Loaded::Menus { layout, .. } if layout.vehicle.is_some())
+            && match &self.loaded {
+                Loaded::Text => true,
+                Loaded::Menus { layout, .. } => layout.vehicle.is_some(),
+                Loaded::None => false,
+            }
     }
 
     /// Follow `cg_hudStyle`, `cg_hudFiles` and `cg_hudPack`, loading on first
@@ -354,7 +358,9 @@ impl MenuHud {
     /// present under retail's condition for `CG_DrawStats` (a living,
     /// non-spectating player with the status HUD on and no scoreboard) unless
     /// the vehicle hides its rider; `vehicle` is the vehicle HUD's, present
-    /// while it shows and [`Self::draws_vehicle`].
+    /// while it shows and [`Self::draws_vehicle`]. `offsets` moves the menu HUD's
+    /// left and right blocks, in 480-line units ([`crate::hud::placement`]), whatever
+    /// `scale` is.
     pub(crate) fn prepare(
         &mut self,
         queue: &crate::frame_queue::FrameQueue,
@@ -362,6 +368,7 @@ impl MenuHud {
         vehicle: Option<&VehicleReadout>,
         viewport: [f32; 2],
         scale: f32,
+        offsets: [[f32; 2]; 2],
     ) {
         self.drawn = false;
         let readout = readout.filter(|_| self.active);
@@ -369,8 +376,8 @@ impl MenuHud {
         match &self.loaded {
             Loaded::None => {}
             Loaded::Text => {
-                if let Some(readout) = readout {
-                    self.frame.simple_hud(readout, &mut self.timers);
+                if readout.is_some() || vehicle.is_some() {
+                    self.frame.simple_hud(readout, vehicle, &mut self.timers);
                     self.drawn = true;
                 }
             }
@@ -384,12 +391,43 @@ impl MenuHud {
                         *digits,
                         &self.score_label,
                     );
+                    let scale = scale.max(1e-3);
+                    for (block, offset) in offsets.into_iter().enumerate() {
+                        self.frame.place(block, offset.map(|units| units / scale));
+                    }
                     self.drawn = true;
                 }
             }
         }
         self.gpu
             .prepare(queue, self.drawn.then_some(&self.frame), viewport, scale);
+    }
+
+    /// The boxes, in pixels, round the pictures the menu HUD's left and right blocks
+    /// drew this frame, for the HUD edit mode.
+    pub(crate) fn block_bounds(&self, viewport: [f32; 2], scale: f32) -> [Option<sjk_ui::Rect>; 2] {
+        std::array::from_fn(|block| {
+            if !self.drawn {
+                return None;
+            }
+            let range = self.frame.blocks[block].pictures.clone();
+            self.frame
+                .pictures
+                .get(range)?
+                .iter()
+                .map(|picture| {
+                    let [x, y, width, height] =
+                        gpu::to_pixels(picture.rect, picture.side, viewport, scale);
+                    // A right menu's rectangles run leftwards (negative widths).
+                    sjk_ui::Rect::new(
+                        x.min(x + width),
+                        y.min(y + height),
+                        width.abs(),
+                        height.abs(),
+                    )
+                })
+                .reduce(sjk_ui::Rect::union)
+        })
     }
 
     /// Append this frame's text runs (score line, infinite-ammo mark, text

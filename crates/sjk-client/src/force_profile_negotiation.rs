@@ -39,6 +39,7 @@
 use crate::force_profile::{ForceLegalizeRules, legalize_force_powers};
 use crate::force_rank_reply::{
     ForceRankReply, force_rank_reply, force_rules_from_serverinfo, server_force_rules,
+    serverinfo_shows_free_saber,
 };
 use crate::team_commands::{LegacyTeamChoice, legacy_team_command};
 use crate::{ClientError, ClientSession, UserinfoUpdateStatus};
@@ -54,9 +55,32 @@ const REJOIN_ATTEMPTS: u8 = 3;
 /// Fit `preferred` to the rules the server advertises in `CS_SERVERINFO`,
 /// using its `g_maxForceRank` as the rank ceiling, as it is sent
 /// ([`ForceLegalizeRules::for_sent_profile`]: disabled and team powers are kept).
+///
+/// When `CS_SERVERINFO` lacks the weapon mask `HasSetSaberOnly` reads, the
+/// profile is not cut by a guess ([`fit_sent`]): stock sends
+/// `forcepowers` as the player last committed it (a `CVAR_USERINFO` cvar,
+/// `codemp/client/cl_main.cpp:3894`, written only by the Force menu's
+/// `UI_UpdateClientForcePowers`, `ui_force.c:192-216`) and the server fits it
+/// itself (`w_force.c:240-247`).
 pub fn server_legal_forcepowers(game_state: &GameState, preferred: &str) -> String {
     let rules = server_force_rules(game_state).for_sent_profile();
-    legalize_force_powers(preferred, rules).allocation.encode()
+    fit_sent(preferred, rules, serverinfo_shows_free_saber(game_state))
+}
+
+/// Fit `preferred` to the sent-profile `rules`. While whether saber skills
+/// come free is not `known`, a profile that only fits with free saber skills
+/// is fitted with them, so it is not cut by a guess: the server, which knows,
+/// cuts it if it must, as it would stock's unfitted profile.
+fn fit_sent(preferred: &str, rules: ForceLegalizeRules, known: bool) -> String {
+    let fitted = legalize_force_powers(preferred, rules);
+    if known || rules.free_saber || fitted.was_legal {
+        return fitted.allocation.encode();
+    }
+    let free = ForceLegalizeRules {
+        free_saber: true,
+        ..rules
+    };
+    legalize_force_powers(preferred, free).allocation.encode()
 }
 
 /// `gametype_t` values (`bg_public.h:235-244`) for which `Cmd_ForceChanged_f`
@@ -217,6 +241,14 @@ pub struct ForceProfileNegotiator {
     /// The server's Force rules, `g_forcePowerDisable` included; `None` off a
     /// server, where the profile goes out as the player wrote it.
     rules: Option<ForceLegalizeRules>,
+    /// The server's `EV_SET_FREE_SABER` (its own `HasSetSaberOnly()`), which
+    /// wins over the `CS_SERVERINFO` guess once it has arrived. Kept across
+    /// the same server's map changes ([`Self::begin_server`]).
+    free_saber: Option<bool>,
+    /// The address `free_saber` came from.
+    address: Option<String>,
+    /// `CS_SERVERINFO` carries the weapon mask `HasSetSaberOnly` reads.
+    free_saber_shown: bool,
     desired_team: LegacyTeamChoice,
     pending: Option<Vec<u8>>,
     retry: Option<Retry>,
@@ -226,6 +258,9 @@ impl Default for ForceProfileNegotiator {
     fn default() -> Self {
         Self {
             rules: None,
+            free_saber: None,
+            address: None,
+            free_saber_shown: true,
             desired_team: LegacyTeamChoice::Free,
             pending: None,
             retry: None,
@@ -242,7 +277,31 @@ impl ForceProfileNegotiator {
 
     /// Adopt the server's rules (`None` once off a server).
     pub fn set_server_rules(&mut self, rules: Option<ForceLegalizeRules>) {
-        self.rules = rules;
+        self.rules = rules.map(|rules| self.with_free_saber(rules));
+    }
+
+    /// Adopt the server's `EV_SET_FREE_SABER` ([`crate::free_saber_event`]),
+    /// as stock cgame sets `ui_freeSaber` from it; returns whether that was
+    /// news ([`Self::free_saber_news`]). Kept for the same server
+    /// ([`Self::begin_server`]), ignored off a server.
+    pub fn note_free_saber(&mut self, free_saber: bool) -> bool {
+        let Some(rules) = self.rules else {
+            return false;
+        };
+        let news = self.free_saber_news(free_saber);
+        self.free_saber = Some(free_saber);
+        self.rules = Some(ForceLegalizeRules {
+            free_saber,
+            ..rules
+        });
+        news
+    }
+
+    fn with_free_saber(&self, rules: ForceLegalizeRules) -> ForceLegalizeRules {
+        ForceLegalizeRules {
+            free_saber: self.free_saber.unwrap_or(rules.free_saber),
+            ..rules
+        }
     }
 
     /// Adopt the rules `CS_SERVERINFO` advertises now, as it changes during a
@@ -253,17 +312,35 @@ impl ForceProfileNegotiator {
         if rules.team_side.is_none() && serverinfo_i32(game_state, "g_forceBasedTeams") != 0 {
             rules.team_side = self.rules.and_then(|held| held.team_side);
         }
-        self.rules = Some(rules);
+        self.free_saber_shown = serverinfo_shows_free_saber(game_state);
+        self.rules = Some(self.with_free_saber(rules));
+    }
+
+    /// The rules the sent profile is fitted to
+    /// ([`ForceLegalizeRules::for_sent_profile`]); `None` off a server.
+    pub fn sent_rules(&self) -> Option<ForceLegalizeRules> {
+        self.rules.map(ForceLegalizeRules::for_sent_profile)
+    }
+
+    /// Whether the server's event or `CS_SERVERINFO` tells if saber skills
+    /// come free.
+    fn free_saber_known(&self) -> bool {
+        self.free_saber.is_some() || self.free_saber_shown
+    }
+
+    /// Whether [`Self::note_free_saber`] with `free_saber` would change what
+    /// the sent profile is fitted to.
+    pub fn free_saber_news(&self, free_saber: bool) -> bool {
+        self.rules
+            .is_some_and(|rules| rules.free_saber != free_saber || !self.free_saber_known())
     }
 
     /// The `forcepowers` value sent for the player's `preferred` one: fitted
     /// to the server's rules while on one, keeping disabled and team powers
     /// for the server to grant or remove.
     pub fn sent_forcepowers(&self, preferred: &str) -> String {
-        match self.rules {
-            Some(rules) => legalize_force_powers(preferred, rules.for_sent_profile())
-                .allocation
-                .encode(),
+        match self.sent_rules() {
+            Some(rules) => fit_sent(preferred, rules, self.free_saber_known()),
             None => preferred.to_owned(),
         }
     }
@@ -320,7 +397,22 @@ impl ForceProfileNegotiator {
 
     /// Drop all per-connection state, e.g. on disconnect or a new server.
     pub fn reset(&mut self) {
+        self.begin_server("");
+        self.free_saber = None;
+        self.address = None;
+    }
+
+    /// A new game state from `address` (a join or the same server's map
+    /// change): per-connection state goes, but the server's free-saber word
+    /// stays for the same address. Its next `EV_SET_FREE_SABER`, at every
+    /// player's `WP_InitForcePowers`, corrects it if the rules changed.
+    pub fn begin_server(&mut self, address: &str) {
+        if self.address.as_deref() != Some(address) {
+            self.free_saber = None;
+            self.address = Some(address.to_owned());
+        }
         self.rules = None;
+        self.free_saber_shown = true;
         self.pending = None;
         self.retry = None;
     }
@@ -371,12 +463,13 @@ mod tests {
     use crate::force_profile::ForceAllocation;
 
     /// A server at Jedi Adept (rank 4, 30 points) with Heal (bit 0) and
-    /// Grip (bit 6) disabled, in a free-for-all.
+    /// Grip (bit 6) disabled, in a free-for-all with every weapon.
     fn adept_server() -> GameState {
         let mut game = GameState::empty_local(0);
         game.replace_config_string(
             0,
-            b"\\g_gametype\\0\\g_maxForceRank\\4\\g_forcePowerDisable\\65".to_vec(),
+            b"\\g_gametype\\0\\g_maxForceRank\\4\\g_forcePowerDisable\\65\\g_weaponDisable\\0"
+                .to_vec(),
         )
         .unwrap();
         game
@@ -581,5 +674,133 @@ mod tests {
             negotiator.poll(at + REJOIN_INTERVAL, true, true),
             RejoinOutput::default()
         );
+    }
+
+    fn snapshot(entities: Vec<sjk_protocol::EntityState>) -> sjk_protocol::Snapshot {
+        sjk_protocol::Snapshot {
+            message_sequence: 1,
+            reliable_acknowledge: 0,
+            server_commands: Vec::new(),
+            server_time: 1_000,
+            delta_from: None,
+            flags: 0,
+            area_mask: Vec::new(),
+            player: sjk_protocol::PlayerState::zero(),
+            vehicle_player: None,
+            entities,
+            consumed_bits: 0,
+        }
+    }
+
+    #[test]
+    fn the_servers_free_saber_event_is_read_from_its_temp_entity() {
+        use sjk_game_jka::event_entity::EventEntity;
+        assert_eq!(crate::free_saber_event(&snapshot(Vec::new())), None);
+        for saber_only in [false, true] {
+            let entities = EventEntity::force_rules(saber_only, false)
+                .iter()
+                .map(EventEntity::state)
+                .collect();
+            assert_eq!(
+                crate::free_saber_event(&snapshot(entities)),
+                Some(saber_only)
+            );
+        }
+    }
+
+    const FULLFORCE_FFA: &str = "7-1-331330000330001133";
+    const WITHOUT_SPEED: &str = "7-1-330330000330001133";
+
+    fn game_with(info: Vec<u8>) -> GameState {
+        let mut game = GameState::empty_local(0);
+        game.replace_config_string(0, info).unwrap();
+        game
+    }
+
+    /// The server's `EV_SET_FREE_SABER` wins over the `CS_SERVERINFO` guess,
+    /// as `ui_freeSaber` does in stock, through the same server's map changes;
+    /// another server or a disconnect forgets it.
+    #[test]
+    fn the_free_saber_event_decides_the_sent_profile() {
+        // Every weapon allowed, as far as the serverinfo tells.
+        let game = game_with(b"\\g_gametype\\0\\g_maxForceRank\\7\\g_weaponDisable\\0".to_vec());
+        let mut negotiator = ForceProfileNegotiator::default();
+        assert!(!negotiator.note_free_saber(true), "off a server");
+        negotiator.begin_server("203.0.113.1:29070");
+        negotiator.refresh_server_rules(&game);
+        assert!(!negotiator.server_rules().unwrap().free_saber);
+        assert_eq!(
+            negotiator.sent_forcepowers(FULLFORCE_FFA),
+            WITHOUT_SPEED,
+            "Speed cut as BG_LegalizedForcePowers cuts it"
+        );
+        assert!(negotiator.note_free_saber(true));
+        assert!(!negotiator.note_free_saber(true));
+        assert_eq!(negotiator.sent_forcepowers(FULLFORCE_FFA), FULLFORCE_FFA);
+        negotiator.set_server_rules(Some(server_force_rules(&game)));
+        assert!(negotiator.server_rules().unwrap().free_saber);
+        // A map change: a new game state from the same server.
+        negotiator.begin_server("203.0.113.1:29070");
+        negotiator.refresh_server_rules(&game);
+        assert!(negotiator.server_rules().unwrap().free_saber);
+        assert_eq!(negotiator.sent_forcepowers(FULLFORCE_FFA), FULLFORCE_FFA);
+        // Another server starts from its serverinfo.
+        negotiator.begin_server("203.0.113.2:29070");
+        negotiator.refresh_server_rules(&game);
+        assert!(!negotiator.server_rules().unwrap().free_saber);
+        assert!(negotiator.note_free_saber(true));
+        // A disconnect forgets it, even for the same server after.
+        negotiator.reset();
+        negotiator.begin_server("203.0.113.2:29070");
+        negotiator.refresh_server_rules(&game);
+        assert!(!negotiator.server_rules().unwrap().free_saber);
+    }
+
+    /// Without the weapon mask in `CS_SERVERINFO` and before the server's
+    /// event, the profile is not cut by a guess: stock sends it as committed.
+    #[test]
+    fn an_unknown_free_saber_does_not_cut_the_sent_profile() {
+        let hidden = game_with(b"\\g_gametype\\0\\g_maxForceRank\\7".to_vec());
+        assert!(!serverinfo_shows_free_saber(&hidden));
+        assert_eq!(
+            server_legal_forcepowers(&hidden, FULLFORCE_FFA),
+            FULLFORCE_FFA
+        );
+        let mut negotiator = ForceProfileNegotiator::default();
+        negotiator.begin_server("203.0.113.1:29070");
+        negotiator.refresh_server_rules(&hidden);
+        assert_eq!(negotiator.sent_forcepowers(FULLFORCE_FFA), FULLFORCE_FFA);
+        // The server's word then decides, both ways.
+        assert!(negotiator.note_free_saber(false));
+        assert_eq!(negotiator.sent_forcepowers(FULLFORCE_FFA), WITHOUT_SPEED);
+        assert!(!negotiator.note_free_saber(false));
+        // Shown in serverinfo, the guess is used until then.
+        let shown = game_with(b"\\g_gametype\\0\\g_maxForceRank\\7\\g_weaponDisable\\0".to_vec());
+        assert!(serverinfo_shows_free_saber(&shown));
+        assert_eq!(
+            server_legal_forcepowers(&shown, FULLFORCE_FFA),
+            WITHOUT_SPEED
+        );
+        let duel = game_with(b"\\g_gametype\\3\\g_weaponDisable\\0".to_vec());
+        assert!(
+            !serverinfo_shows_free_saber(&duel),
+            "duels read g_duelWeaponDisable"
+        );
+    }
+
+    /// `HasSetSaberOnly` tests `g_weaponDisable` as C `int` bits: -1 disables
+    /// every weapon.
+    #[test]
+    fn a_negative_weapon_disable_is_every_weapon() {
+        let mut game = GameState::empty_local(0);
+        game.replace_config_string(0, b"\\g_gametype\\0\\g_weaponDisable\\-1".to_vec())
+            .unwrap();
+        assert!(server_force_rules(&game).free_saber);
+        game.replace_config_string(0, b"\\g_gametype\\0\\g_weaponDisable\\524279".to_vec())
+            .unwrap();
+        assert!(server_force_rules(&game).free_saber);
+        game.replace_config_string(0, b"\\g_gametype\\0\\g_weaponDisable\\1".to_vec())
+            .unwrap();
+        assert!(!server_force_rules(&game).free_saber);
     }
 }

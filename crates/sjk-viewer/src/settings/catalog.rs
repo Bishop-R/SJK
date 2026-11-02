@@ -73,6 +73,9 @@ pub(super) enum ValueKind {
     /// Sith cloud (`sith.downloads`, `crate::sith_cloud`); the row's cvar is the command.
     #[cfg_attr(not(feature = "mod-jof"), allow(dead_code))]
     ContentCard,
+    /// Open the HUD edit mode over the game (`hud_edit`, [`crate::hud_edit`]); the
+    /// row's cvar is the command.
+    HudEdit,
     /// `cl_gameplayFps`: Left/Right step through the presets (125, 142, 250,
     /// 333); Enter opens the card that explains it and takes any value
     /// ([`crate::gameplay_fps`]).
@@ -269,6 +272,11 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Sound sonar",
+        cvar: crate::sound_sonar::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Footprints and dust",
         cvar: crate::footprints::PRINTS_CVAR,
         kind: ValueKind::Bool,
@@ -383,6 +391,11 @@ pub(super) const AUDIO: &[Setting] = &[
     Setting {
         label: "Banana peel sounds",
         cvar: crate::toy_sounds::Toy::Banana.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Toy Master sounds",
+        cvar: crate::toy_sounds::Toy::Master.cvar(),
         kind: ValueKind::Bool,
     },
     Setting {
@@ -523,7 +536,17 @@ pub(super) const HUD_OPTIONS: &[Setting] = &[
     },
     Setting {
         label: "Scoreboard client IDs",
-        cvar: "cg_showClientIDs",
+        cvar: crate::scoreboard::style::IDS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "SJK scoreboard IDs",
+        cvar: crate::scoreboard::style::SJK_IDS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Rank by score - deaths",
+        cvar: crate::scoreboard::style::DEATHS_RANK_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {
@@ -557,6 +580,11 @@ pub(super) const HUD: &[Setting] = &[
             max: 1.5,
             step: 0.05,
         },
+    },
+    Setting {
+        label: "Move HUD elements",
+        cvar: crate::hud_edit::COMMAND,
+        kind: ValueKind::HudEdit,
     },
     Setting {
         label: "Radial HUD spacing",
@@ -661,6 +689,11 @@ pub(super) const HUD: &[Setting] = &[
         label: "See & share nameplates",
         cvar: "cg_nameplate",
         kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Nameplate style",
+        cvar: crate::hud::nameplate::STYLE_CVAR,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
     },
     Setting {
         label: "Nameplate range",
@@ -812,8 +845,23 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Chat bubble while away",
+        cvar: "cl_unfocusedChatbox",
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Save game chat logs",
+        cvar: crate::console::chat_log::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Game PM-only chat",
         cvar: crate::chat::pm_only::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Quiet mode",
+        cvar: crate::chat::quiet::CVAR,
         kind: ValueKind::Bool,
     },
     Setting {
@@ -824,6 +872,11 @@ pub(super) const HUD: &[Setting] = &[
             max: crate::chat::options::CHAT_SIZE.1,
             step: 0.05,
         },
+    },
+    Setting {
+        label: "Chat font",
+        cvar: crate::text::system_font::CHAT_CVAR,
+        kind: ValueKind::Live(crate::text::system_font::choices),
     },
     Setting {
         label: "Chat emojis",
@@ -886,6 +939,11 @@ pub(super) const HUD: &[Setting] = &[
             max: 100,
             step: 10,
         },
+    },
+    Setting {
+        label: "Incoming chat colour",
+        cvar: crate::chat::incoming_color::CVAR,
+        kind: ValueKind::Choice(crate::chat::incoming_color::CHOICES),
     },
     Setting {
         label: "Chat text outline",
@@ -1019,6 +1077,15 @@ pub(super) const GAME: &[Setting] = &[
         kind: ValueKind::Float {
             min: 0.0,
             max: 2.0,
+            step: 0.1,
+        },
+    },
+    Setting {
+        label: "Blade core thickness",
+        cvar: crate::saber_core::CVAR,
+        kind: ValueKind::Float {
+            min: crate::saber_core::MIN as f64,
+            max: crate::saber_core::MAX as f64,
             step: 0.1,
         },
     },
@@ -1369,6 +1436,11 @@ pub(super) const GAME: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Prediction",
+        cvar: "cg_predictLegacy",
+        kind: ValueKind::Choice(&["0", "255"]),
+    },
+    Setting {
         label: "Prediction error smoothing (ms)",
         cvar: "cg_errorDecay",
         kind: ValueKind::Float {
@@ -1528,6 +1600,12 @@ pub(super) const GAME: &[Setting] = &[
     },
     #[cfg(feature = "mod-jof")]
     Setting {
+        label: "JoF content auto-update",
+        cvar: crate::jof_content::AUTO,
+        kind: ValueKind::Bool,
+    },
+    #[cfg(feature = "mod-jof")]
+    Setting {
         label: "JoF content host",
         cvar: crate::jof_content::SOURCE,
         kind: ValueKind::Choice(&crate::jof_content::SOURCES),
@@ -1538,6 +1616,12 @@ pub(super) const GAME: &[Setting] = &[
         label: "Sith cloud",
         cvar: crate::sith_cloud::COMMAND,
         kind: ValueKind::ContentCard,
+    },
+    #[cfg(feature = "mod-jof")]
+    Setting {
+        label: "Sith cloud auto-update",
+        cvar: crate::sith_cloud::AUTO,
+        kind: ValueKind::Bool,
     },
     Setting {
         label: "Invisible brushes",
@@ -1702,6 +1786,11 @@ pub(super) const TEXT: &[Setting] = &[
         },
     },
     Setting {
+        label: "Console font",
+        cvar: crate::text::system_font::CONSOLE_CVAR,
+        kind: ValueKind::Live(crate::text::system_font::choices),
+    },
+    Setting {
         label: "Console text size",
         cvar: "con_scale",
         kind: ValueKind::Float {
@@ -1796,6 +1885,11 @@ pub(super) const RENDER_IMAGE: &[Setting] = &[
         kind: ValueKind::Choice(&["0", "1", "2"]),
     },
     Setting {
+        label: "No glow on sabers",
+        cvar: crate::frame_target::aa::glow::NO_SABERS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Glow style",
         cvar: "r_dynamicGlowStyle",
         kind: ValueKind::Choice(&["0", "1"]),
@@ -1864,6 +1958,11 @@ pub(super) const RENDER_IMAGE: &[Setting] = &[
     Setting {
         label: "Per-pixel model lighting",
         cvar: "r_modelPixelLight",
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Toon models",
+        cvar: crate::dynamic_lights::TOON_MODELS_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {
@@ -1944,6 +2043,11 @@ pub(super) const RENDER_LIGHTING: &[Setting] = &[
             max: 24.0,
             step: 0.5,
         },
+    },
+    Setting {
+        label: "Sun follows PC clock",
+        cvar: "r_dayClock",
+        kind: ValueKind::Bool,
     },
     Setting {
         label: "Day length, min (0 holds)",

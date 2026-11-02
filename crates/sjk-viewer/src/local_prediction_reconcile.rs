@@ -120,8 +120,12 @@ impl LocalPrediction {
         }
         self.rides
             .seed(snapshot, acknowledged, self.movement_config);
-        let collision =
-            BspMovementCollision::with_movers(bsp, scratch, &self.physics_movers.colliders);
+        let collision = BspMovementCollision::for_actor(
+            bsp,
+            scratch,
+            &self.physics_movers.colliders,
+            self.physics_movers.local_actor,
+        );
         let mut miss_units = 0.0;
         let server = telemetry::Endpoint::new(
             ride::error_state(predictor.state(), self.rides.committed.as_ref())
@@ -170,11 +174,12 @@ impl LocalPrediction {
                 self.physics_movers
                     .entity_origin(self.saber_lock_view.enemy()),
             );
-            self.entities.predict(
+            self.entities.predict_with_collisions(
                 &mut predictor,
                 self.rides.committed.as_mut(),
                 *command,
                 &collision,
+                &collision.chassis(self.physics_movers.vehicle_actor),
             );
             let state = predictor.state();
             counts.replayed += 1;
@@ -250,8 +255,12 @@ impl LocalPrediction {
                 self.physics_movers
                     .entity_origin(self.saber_lock_view.enemy()),
             );
-            let collision =
-                BspMovementCollision::with_movers(bsp, scratch, &self.physics_movers.colliders);
+            let collision = BspMovementCollision::for_actor(
+                bsp,
+                scratch,
+                &self.physics_movers.colliders,
+                self.physics_movers.local_actor,
+            );
             wall_grab_view::align(
                 &mut presented,
                 &collision,

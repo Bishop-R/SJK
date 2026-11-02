@@ -88,6 +88,31 @@ impl Edit {
         }
     }
 
+    /// A short line naming what the edit does, for the panel's list and its answers:
+    /// `Hidden prop: tree01.md3`, `Placed: crate.md3`, `Remap: floor -> floor2`, with its
+    /// server when it is for one.
+    pub(crate) fn label(&self) -> String {
+        let last = |path: &str| path.rsplit('/').next().unwrap_or(path).to_owned();
+        let what = match &self.kind {
+            Kind::HideProp { model, .. } => format!("Hidden prop: {}", last(model)),
+            Kind::HideSurface { surface, shader } => {
+                format!("Hidden surface: {} ({surface})", last(shader))
+            }
+            Kind::Place { model, scale, .. } => {
+                if scale.iter().all(|axis| (axis - 1.0).abs() < 1e-3) {
+                    format!("Placed: {}", last(model))
+                } else {
+                    format!("Placed: {} x{:.2}", last(model), scale[0])
+                }
+            }
+            Kind::Remap { from, to } => format!("Remap: {} -> {}", last(from), last(to)),
+        };
+        match &self.server {
+            Some(server) => format!("{what}, {server} only"),
+            None => what,
+        }
+    }
+
     /// One line naming the edit, for `mapedit_list`.
     pub(crate) fn describe(&self) -> String {
         let what = match &self.kind {
@@ -324,6 +349,37 @@ mod tests {
         assert_eq!(document.edits.len(), 4);
         assert!(document.remove(first).is_some());
         assert!(document.remove(first).is_none());
+    }
+
+    #[test]
+    fn labels_name_edits_shortly() {
+        let mut document = Document::new("mp/ffa3", 1);
+        let hide = document.add(
+            Kind::HideProp {
+                entity: 12,
+                model: "models/map_objects/yavin/tree01.md3".into(),
+            },
+            None,
+        );
+        let placed = document.add(place(0.0), Some("1.2.3.4:29070".into()));
+        let remap = document.add(
+            Kind::Remap {
+                from: "textures/a/floor".into(),
+                to: "textures/b/floor2".into(),
+            },
+            None,
+        );
+        let label = |id: u32| {
+            document
+                .edits
+                .iter()
+                .find(|edit| edit.id == id)
+                .unwrap()
+                .label()
+        };
+        assert_eq!(label(hide), "Hidden prop: tree01.md3");
+        assert_eq!(label(placed), "Placed: crate_big.md3, 1.2.3.4:29070 only");
+        assert_eq!(label(remap), "Remap: floor -> floor2");
     }
 
     #[test]

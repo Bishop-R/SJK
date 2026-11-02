@@ -97,6 +97,17 @@ impl<'a> TextTarget<'a> {
         }
     }
 
+    /// How the display family's text measures as this target will draw it, in the
+    /// player's menu text style.
+    pub(crate) fn display_measure(&self) -> crate::sjk_chat_look::Measure<'a> {
+        match *self {
+            Self::Families(ref fonts, style) => {
+                crate::sjk_chat_look::Measure::new(fonts.display.1, style)
+            }
+            Self::Inter(_, font) => crate::sjk_chat_look::Measure::new(font, font.style()),
+        }
+    }
+
     /// How chips' text (`inline_code`) measures as this target draws it, and the body
     /// family's text beside it.
     pub(crate) fn inline_measures(&self) -> crate::inline_code::Measures<'a> {
@@ -197,7 +208,7 @@ impl ClientMenu {
         let mut lines = [chat_dock::BLANK; chat_dock::LINES];
         // The sender card's picture, asked before the profile card's lock is taken.
         self.home
-            .place_sender_card(crate::player_identity::avatar_version);
+            .place_sender_card(crate::player_identity::card_appearance);
         let measure = target.body_measure();
         let chat = chat_on.then(|| home::ChatDock {
             measure: Some(measure),

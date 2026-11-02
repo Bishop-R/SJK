@@ -58,6 +58,7 @@ pub(super) fn build(panel: &mut Panel, ui: &mut MenuCanvas, viewport: [f32; 2]) 
     header(ui, &frame, panel);
     panel.model_list = None;
     panel.edit_list = None;
+    panel.shader_list = None;
     match panel.tab {
         Tab::Selected => selected(ui, &frame, panel),
         Tab::Place => place(ui, &frame, panel),
@@ -219,35 +220,9 @@ fn buttons(ui: &mut MenuCanvas, frame: &Frame, panel: &Panel, y: f32, row: &[(u1
     }
 }
 
-/// A field over the column at `y`: its text with a cursor while typed in, else `prompt`.
-fn field(
-    ui: &mut MenuCanvas,
-    frame: &Frame,
-    panel: &Panel,
-    y: f32,
-    token: u16,
-    value: &str,
-    prompt: &str,
-) {
-    let focused = panel.focus == token;
-    let rect = [COLUMN_X, y, COLUMN_WIDTH, FIELD];
-    match (value.is_empty(), focused) {
-        (true, false) => kit::field(ui, frame, rect, format_args!("{prompt}"), false, false),
-        _ => kit::field(
-            ui,
-            frame,
-            rect,
-            format_args!("{value}{}", if focused { "_" } else { "" }),
-            focused,
-            false,
-        ),
-    }
-    ui.hit_region(token, frame.rect(COLUMN_X, y, COLUMN_WIDTH, FIELD));
-}
-
 /// The Selected page: what the key or a click selected, what can be done to it, and its
-/// shader's remap.
-fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &Panel) {
+/// shader's remap: a search over the shaders, opened on its own shader's folder.
+fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
     let s = frame.s;
     let mut y = PAGE_Y;
     kit::heading(ui, frame, COLUMN_X, y, COLUMN_WIDTH, "Selected");
@@ -348,29 +323,66 @@ fn selected(ui: &mut MenuCanvas, frame: &Frame, panel: &Panel) {
         ),
         Picked::Other => {}
     }
-    if !selection.remappable {
+    if selection.shader.is_none() {
         return;
     }
     y += BUTTON + 34.0;
     kit::heading(ui, frame, COLUMN_X, y, COLUMN_WIDTH, "Draw another shader");
     y += 18.0;
-    field(
+    kit::search(
         ui,
         frame,
-        panel,
-        y,
-        REMAP_FIELD,
+        [COLUMN_X, y, COLUMN_WIDTH, FIELD],
         &panel.remap,
-        "Shader, as textures/...",
+        panel.focus == REMAP_FIELD,
+        "Search the shaders",
+        (!panel.remap.is_empty()).then_some(panel.shader_shown.len()),
+        REMAP_FIELD,
     );
-    y += FIELD + 10.0;
+    y += FIELD + 8.0;
+    let height = LIST_ROW * SHADER_ROWS as f32 + 16.0;
+    list_ground(ui, frame, [COLUMN_X, y, COLUMN_WIDTH, height]);
+    panel.shader_list = Some(frame.rect(COLUMN_X, y, COLUMN_WIDTH, height));
+    if panel.shader_shown.is_empty() {
+        let typed = panel.remap.trim();
+        let line_text = if typed.is_empty() || typed.ends_with('/') {
+            "No shader matches"
+        } else {
+            "None known: Remap tries the name as typed"
+        };
+        line(ui, frame, y + 16.0, line_text, color::MUTED);
+    }
+    let own = without_image_extension(selection.shader.as_deref().unwrap_or(""));
+    for slot in 0..SHADER_ROWS {
+        let index = panel.shader_first + slot;
+        let Some(shader) = panel.shown_shader(index) else {
+            break;
+        };
+        // The name without its textures/ or models/ prefix; its own shader quiet.
+        let shown = shader
+            .strip_prefix("textures/")
+            .or_else(|| shader.strip_prefix("models/"))
+            .unwrap_or(shader);
+        let token = SHADER_ROW + slot as u16;
+        list_row(
+            ui,
+            frame,
+            y + 8.0 + slot as f32 * LIST_ROW,
+            token,
+            shown,
+            index == panel.shader_row,
+            panel.focus == token,
+            shader.eq_ignore_ascii_case(own),
+        );
+    }
+    y += height + 8.0;
     buttons(
         ui,
         frame,
         panel,
         y,
         &[
-            (REMAP, "Remap", !panel.remap.trim().is_empty()),
+            (REMAP, "Remap", panel.has_remap_target()),
             (UNREMAP, "Remove remap", true),
         ],
     );
@@ -566,6 +578,19 @@ fn place(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
         panel,
         y,
         &[
+            (MOVE_LEFT, "Left", placed),
+            (MOVE_RIGHT, "Right", placed),
+            (FARTHER, "Away", placed),
+            (NEARER, "Closer", placed),
+        ],
+    );
+    y += BUTTON + GAP;
+    buttons(
+        ui,
+        frame,
+        panel,
+        y,
+        &[
             (SMALLER, "Smaller", placed),
             (BIGGER, "Bigger", placed),
             (GRAB, "Grab", placed),
@@ -610,7 +635,11 @@ fn edits(ui: &mut MenuCanvas, frame: &Frame, panel: &mut Panel) {
         frame,
         panel,
         y,
-        &[(DELETE, "Delete", any), (UNDO, "Undo newest", any)],
+        &[
+            (DELETE, "Delete", any),
+            (UNDO, "Undo", panel.facts.can_undo),
+            (REDO, "Redo", panel.facts.can_redo),
+        ],
     );
 }
 
@@ -652,6 +681,8 @@ fn foot(ui: &mut MenuCanvas, frame: &Frame, panel: &Panel) {
                 color::TEXT
             },
         ))
+    } else if let Some(problem) = &facts.hub_problem {
+        Some((problem.as_str(), color::EMBER))
     } else if facts.scope == Scope::ThisServer {
         Some((
             facts.server.as_deref().unwrap_or("Not on a server"),
@@ -735,19 +766,22 @@ fn keys(ui: &mut MenuCanvas, frame: &Frame, panel: &Panel) {
         ]
     } else {
         &[
-            (&["Up", "Down"], "choose"),
             (&["Enter"], "act"),
             (&["Ctrl", "Z"], "undo"),
+            (&["Ctrl", "Y"], "redo"),
         ]
     };
     hint_line(ui, frame, right, KEYS_Y, first);
-    hint_line(
-        ui,
-        frame,
-        right,
-        KEYS_Y + KEYS_PITCH,
-        &[(&["Click"], "the scene selects"), (&["Esc"], "aim")],
-    );
+    let second: &[Hint<'_>] = if panel.tab == Tab::Place {
+        &[
+            (&["Click"], "a spot"),
+            (&["Shift"], "fine steps"),
+            (&["Esc"], "aim"),
+        ]
+    } else {
+        &[(&["Click"], "the scene selects"), (&["Esc"], "aim")]
+    };
+    hint_line(ui, frame, right, KEYS_Y + KEYS_PITCH, second);
 }
 
 /// The strip's canvas, kept for the session.
@@ -824,6 +858,12 @@ pub(crate) fn build_strip(facts: &Facts, ui: &mut MenuCanvas, viewport: [f32; 2]
     let right = frame.point(x + width - 20.0, y + 8.0);
     let start = right[0] - key_hint_width(&caps, action, s);
     key_hint(ui, &caps, action, start, right[1], s);
+    if facts.grabbing {
+        let (caps, action) = (["Wheel"], "turn");
+        let below = frame.point(x + width - 20.0, y + 34.0);
+        let start = below[0] - key_hint_width(&caps, action, s);
+        key_hint(ui, &caps, action, start, below[1], s);
+    }
     ui.finish(0);
 }
 
@@ -866,7 +906,7 @@ mod tests {
                 detail:
                     "models/map_objects/yavin/tree, misc_model_static, a long detail that wraps"
                         .to_owned(),
-                remappable: true,
+                shader: Some("models/map_objects/yavin/tree".to_owned()),
             }),
             placed: Some(
                 "3: place models/items/shield.md3 at 1 2 3, yaw 90 [all servers]".to_owned(),
@@ -879,8 +919,20 @@ mod tests {
                 })
                 .collect(),
             select_key: "O".to_owned(),
+            can_undo: true,
             ..Facts::default()
         };
+        panel.set_shaders(&[
+            "textures/yavin/floor",
+            "textures/yavin/floor2",
+            "textures/yavin/stone",
+            "textures/yavin/wall",
+            "textures/yavin/wall2",
+            "textures/yavin/wall3",
+            "textures/korriban/wall",
+        ]);
+        panel.remap = "yavin".to_owned();
+        panel.refilter_shaders();
         panel.status =
             "Edit 14: surface 1043 (textures/yavin/floor) hidden, and a long answer that wraps"
                 .to_owned();
@@ -961,12 +1013,17 @@ mod tests {
         assert!(tokens("prop").contains(&HIDE) && tokens("prop").contains(&COPY));
         assert!(tokens("surface").contains(&HIDE_GROUP));
         assert!(!tokens("entity").contains(&HIDE) && tokens("entity").contains(&REMAP_FIELD));
+        let prop = tokens("prop");
+        assert!(prop.contains(&(SHADER_ROW + SHADER_ROWS as u16 - 1)) && prop.contains(&REMAP));
+        assert!(!prop.contains(&(SHADER_ROW + SHADER_ROWS as u16)));
         let place = tokens("place");
         assert!(place.contains(&SEARCH) && place.contains(&PLACE) && place.contains(&GRAB));
+        assert!(place.contains(&MOVE_LEFT) && place.contains(&NEARER));
         assert!(place.contains(&(MODEL_ROW + MODEL_ROWS as u16 - 1)));
         assert!(!place.contains(&(MODEL_ROW + MODEL_ROWS as u16)));
         let edits = tokens("edits");
         assert!(edits.contains(&(EDIT_ROW + EDIT_ROWS as u16 - 1)) && edits.contains(&DELETE));
+        assert!(edits.contains(&UNDO) && edits.contains(&REDO));
     }
 
     #[test]
@@ -982,7 +1039,7 @@ mod tests {
             delta: Vec2::new(0.0, -1.0),
         };
         assert_eq!(panel.pointer(&mut canvas, wheel), None);
-        assert_eq!(panel.model_first, 3, "ten models, seven rows");
+        assert_eq!(panel.model_first, 3, "ten models, six rows");
         // A click on a row chooses it; a second places it.
         build(&mut panel, &mut canvas, [1_920.0, 1_080.0]);
         let row = canvas.rect_for(MODEL_ROW).expect("a row");
@@ -1045,6 +1102,11 @@ mod tests {
                 let runs: Vec<&str> = canvas.text_runs().collect();
                 assert_eq!(runs[0], "Map editor");
                 assert!(runs.contains(&if grabbing { "put it down" } else { "edit" }));
+                assert_eq!(
+                    runs.contains(&"turn"),
+                    grabbing,
+                    "the wheel turns a grabbed model"
+                );
             }
         }
     }

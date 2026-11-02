@@ -9,7 +9,7 @@ pub(crate) mod browser;
 #[path = "changelog.rs"]
 pub(crate) mod changelog;
 #[path = "console_chat_log.rs"]
-mod chat_log;
+pub(crate) mod chat_log;
 #[path = "console_client_options.rs"]
 mod client_options;
 #[path = "clipboard.rs"]
@@ -359,6 +359,9 @@ pub(crate) struct ViewerConsole {
     /// The last line `viewpos` or `mark` answered, for Ctrl+C on an empty prompt.
     copied: String,
     pending_quit: bool,
+    /// The Profile page's Change name was pressed: the Profile screen shows its
+    /// Character tab with the Name field open ([`Self::take_name_edit`]).
+    pending_name_edit: bool,
     pending_input: Vec<String>,
     pending_chat: std::collections::VecDeque<(String, u16, u32)>,
     /// Sent whisper recipients paired with their eventual console echo.
@@ -662,6 +665,14 @@ impl ViewerConsole {
     /// Add text to the scrollback without showing it among the notify lines.
     pub(crate) fn push_log_quiet(&mut self, text: impl Into<String>) {
         self.shell.push_log_quiet(text);
+    }
+
+    /// Whether `cmdlist` lists command `name` (any case).
+    #[cfg(test)]
+    pub(crate) fn has_command(&self, name: &str) -> bool {
+        self.shell
+            .command_help()
+            .any(|(known, _, _)| known.eq_ignore_ascii_case(name))
     }
 
     /// Queue `text` to run as if typed, on the next command frame.

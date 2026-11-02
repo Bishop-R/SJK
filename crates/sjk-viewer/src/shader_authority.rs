@@ -2,6 +2,7 @@
 use sjk_shader::ShaderCatalog;
 use sjk_vfs::{AssetSource, VirtualFileSystem};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn authoritative(source: &AssetSource) -> bool {
     let path = Path::new(source.mount_name.as_ref());
@@ -22,20 +23,37 @@ fn authoritative(source: &AssetSource) -> bool {
 /// the game or an installed pack defines, nor one named after an installed
 /// texture (an implicit shader every map using that texture would pick up).
 pub(crate) fn load(vfs: &VirtualFileSystem, protect: bool) -> ShaderCatalog {
+    load_with(vfs, protect, || false).expect("an uncancelled shader load completes")
+}
+
+pub(crate) fn load_until(
+    vfs: &VirtualFileSystem,
+    protect: bool,
+    cancelled: &AtomicBool,
+) -> Option<ShaderCatalog> {
+    load_with(vfs, protect, || cancelled.load(Ordering::Acquire))
+}
+
+fn load_with(
+    vfs: &VirtualFileSystem,
+    protect: bool,
+    cancelled: impl Fn() -> bool + Copy,
+) -> Option<ShaderCatalog> {
     let downloads: Vec<_> = vfs
         .mounts()
         .filter(|mount| super::downloads::is_download(Path::new(mount.name.as_ref())))
         .map(|mount| mount.id)
         .collect();
     if downloads.is_empty() {
-        return load_installed(vfs, protect);
+        return load_installed(vfs, protect, cancelled);
     }
     let base = vfs.without_mounts(&downloads);
-    let mut catalog = load_installed(&base, protect);
+    let mut catalog = load_installed(&base, protect, cancelled)?;
     let mut refused: std::collections::BTreeMap<String, Vec<String>> = Default::default();
-    catalog.add_unclaimed(
+    if !catalog.add_unclaimed_until(
         vfs,
         |source| downloads.contains(&source.mount_id),
+        cancelled,
         |name| {
             let stem = ["tga", "png", "jpg"]
                 .iter()
@@ -53,7 +71,9 @@ pub(crate) fn load(vfs: &VirtualFileSystem, protect: bool) -> ShaderCatalog {
                 .or_default()
                 .push(name.to_owned())
         },
-    );
+    ) {
+        return None;
+    }
     for (pak, names) in refused {
         crate::log::progress(format_args!(
             "shader authority: download {pak} may not redefine {} shaders ({}{})",
@@ -62,21 +82,31 @@ pub(crate) fn load(vfs: &VirtualFileSystem, protect: bool) -> ShaderCatalog {
             if names.len() > 4 { ", ..." } else { "" }
         ));
     }
-    catalog
+    Some(catalog)
 }
 
 fn warning(path: &sjk_vfs::VirtualPath, error: &sjk_shader::ShaderError) {
     crate::log::progress(format_args!("warning: shader recovery in {path}: {error}"));
 }
 
-fn load_installed(vfs: &VirtualFileSystem, protect: bool) -> ShaderCatalog {
+fn load_installed(
+    vfs: &VirtualFileSystem,
+    protect: bool,
+    cancelled: impl Fn() -> bool + Copy,
+) -> Option<ShaderCatalog> {
     if !protect {
-        return ShaderCatalog::load_with_warnings(vfs, warning);
+        return ShaderCatalog::load_with_warnings_until(vfs, cancelled, warning);
     }
-    ShaderCatalog::load_with_authority(vfs, authoritative, warning, |name, winner, loser| {
-        crate::log::progress(format_args!(
-            "shader authority: suppressed {name}; winner={} [{}]; loser={} [{}]",
-            winner.asset.mount_name, winner.script, loser.asset.mount_name, loser.script,
-        ));
-    })
+    ShaderCatalog::load_with_authority_until(
+        vfs,
+        authoritative,
+        cancelled,
+        warning,
+        |name, winner, loser| {
+            crate::log::progress(format_args!(
+                "shader authority: suppressed {name}; winner={} [{}]; loser={} [{}]",
+                winner.asset.mount_name, winner.script, loser.asset.mount_name, loser.script,
+            ));
+        },
+    )
 }

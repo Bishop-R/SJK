@@ -68,6 +68,7 @@ impl ChatOverlay {
         }
         self.ui.begin_transparent(viewport);
         self.visible_people.fill(None);
+        self.visible_blades.fill(None);
         let mut g = self.options.geometry(viewport);
         if self.scoreboard_layout == crate::scoreboard::behavior::ChatLayout::SideColumn {
             place_beside_scoreboard(&mut g, viewport, self.options.font);
@@ -146,6 +147,8 @@ impl ChatOverlay {
             g.scale = feed_scale;
         }
         self.chat_text = [feed_text, (composer_start, self.ui.next_text_id())];
+        // A find's blade under the pointer shows large, over the feed and the composer.
+        self.build_find_blade(&g, viewport);
         // A name under the pointer shows its profile card, over everything.
         self.follow_card(self.is_typing(), ms);
         self.build_card(font, &g, viewport);
@@ -245,6 +248,7 @@ impl ChatOverlay {
                     body_row(
                         &mut self.ui,
                         BodyRow {
+                            forced: line.incoming_colour(self.options.incoming),
                             text: &line.body[range.clone()],
                             carry: line.wrap.carry[row],
                             marks: &line.emojis,
@@ -283,11 +287,17 @@ impl ChatOverlay {
                     emojis: self.options.emojis.then_some(&self.emojis),
                     hovered,
                     colour,
+                    forced: line.incoming_colour(self.options.incoming),
                     label_colour: if line.encrypted {
                         encrypted_pink(alpha * 0.85)
                     } else {
                         tint(line.channel, alpha * 0.75)
                     },
+                    prize: line
+                        .hub
+                        .as_ref()
+                        .and_then(|hub| hub.prize)
+                        .map(|prize| (prize.range(&line.body), prize.colour)),
                 },
                 &prefix,
                 font,
@@ -310,6 +320,16 @@ impl ChatOverlay {
             // Resting the pointer on the sender's name shows their profile card.
             if !active {
                 continue;
+            }
+            // Resting it on a find's blade shows the blade large (`find_blade.rs`).
+            if let (Some(skin), Some(rect)) = (prefix.blade, prefix.blade_rect(font, [x, y])) {
+                let colour = line
+                    .hub
+                    .as_ref()
+                    .and_then(|hub| hub.prize)
+                    .map_or(skin.tier.colour(), |prize| prize.colour);
+                self.visible_blades[token] = Some((skin, rect, colour));
+                self.ui.hit_region(find_blade::BLADE + token as u16, rect);
             }
             if let Some(hub) = &line.hub {
                 self.visible_people[token] = Some(card::Who::Hub(hub.id));
@@ -335,7 +355,8 @@ fn line_marks<'a>(
 ) -> Option<(&'a str, sjk_line::Marks<'a>)> {
     if let Some(hub) = &line.hub {
         let marks = sjk_line::Marks {
-            sjk: true,
+            // A drop starts with its holocron's picture, not SJK's emblem.
+            sjk: hub.tier.is_none(),
             icon: hub.client,
             mark: crate::ui_renderer::mark_texture(hub.verified, hub.tick, hub.trust),
             tier: hub.tier,
@@ -349,6 +370,7 @@ fn line_marks<'a>(
             },
             emoji: &hub.emoji,
             accent: hub.official,
+            blade: hub.prize.and_then(|prize| prize.skin),
         };
         return Some((&line.name, marks));
     }
@@ -398,6 +420,7 @@ fn line_marks<'a>(
         },
         emoji: mark.map_or("", |mark| mark.emoji.as_str()),
         accent: false,
+        blade: None,
     };
     let name = mark
         .and_then(|mark| mark.name.as_deref())
@@ -407,6 +430,7 @@ fn line_marks<'a>(
 
 /// One wrapped row of a message body and the emojis its marks stand for.
 struct BodyRow<'a> {
+    forced: Option<Color>,
     text: &'a str,
     /// The colour code in force where the row starts: a wrapped message goes on in
     /// the colour the row before it ended in, not in the base colour.
@@ -432,11 +456,21 @@ fn body_row(
     size: f32,
     color: Color,
 ) {
+    let color = super::incoming_color::colour(color, row.forced);
+    let carry = if row.forced.is_some() {
+        Carry::NONE
+    } else {
+        row.carry
+    };
     let ellipsis = if row.truncated { "..." } else { "" };
     let is_mark = |character: char| emoji::mark_index(character).is_some();
     if !row.text.contains(is_mark) {
         ui.text_fmt_aligned(
-            format_args!("{}{}{ellipsis}", row.carry, row.text),
+            format_args!(
+                "{}{}{ellipsis}",
+                carry,
+                super::incoming_color::Body(row.text, row.forced.is_some())
+            ),
             rect,
             size,
             color,
@@ -447,14 +481,17 @@ fn body_row(
         return;
     }
     let mut x = rect.x;
-    let mut colour = row.carry;
+    let mut colour = carry;
     let mut rest = row.text;
     loop {
         let (run, after) = rest.split_at(rest.find(is_mark).unwrap_or(rest.len()));
         let tail = if after.is_empty() { ellipsis } else { "" };
         if !run.is_empty() || !tail.is_empty() {
             ui.text_fmt_aligned(
-                format_args!("{colour}{run}{tail}"),
+                format_args!(
+                    "{colour}{}{tail}",
+                    super::incoming_color::Body(run, row.forced.is_some())
+                ),
                 Rect::new(x, rect.y, (rect.right() - x).max(1.0), rect.height),
                 size,
                 color,
@@ -469,7 +506,9 @@ fn body_row(
                 TextFace::Regular,
                 row.spacing,
             );
-            colour = colour.after(run);
+            if row.forced.is_none() {
+                colour = colour.after(run);
+            }
         }
         let Some(mark) = after.chars().next() else {
             break;
@@ -606,6 +645,7 @@ mod tests {
         body_row(
             &mut ui,
             BodyRow {
+                forced: None,
                 text: &text,
                 carry,
                 marks: &marks,

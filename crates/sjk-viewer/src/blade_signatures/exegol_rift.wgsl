@@ -101,7 +101,7 @@ fn sig_orbit(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let a = h11(k * 3.1);
         let from_ = around(3.5, a - t * 0.22, yc - 3.0 + 2.0 * h11(k * 5.3));
         let to = vec3(0.0, yc - 1.0 + 3.0 * h11(k * 7.7), 0.0);
-        let d = bolt3(ro, rd, from_, to, k * 1.7 + floor(t * 20.0) * 0.3, 0.45);
+        let d = bolt3(ro, rd, from_, to, k * 1.7 + floor(t * 20.0) * 0.3, 0.45, px);
         fx += boltLight(d, vec3<f32>(0.85, 0.45, 1.0), px) * (1.0 - q / 0.25) * 0.9;
     }
     return fx * uFx;

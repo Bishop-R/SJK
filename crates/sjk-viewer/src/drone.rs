@@ -215,6 +215,11 @@ pub(crate) struct Drone {
     /// The names over the drones, for the HUD pass.
     pub(crate) list: DrawList,
     last: Option<Instant>,
+    /// The player the own drone watches (Peek) at the last frame, and the last one it
+    /// watched with when it landed (the peek ended), for Eye in the Sky and Special
+    /// Delivery.
+    peeking: Option<u16>,
+    landed: Option<(u16, Instant)>,
     /// A world shot placed the drones: the frame leaves them be without a server.
     #[cfg(test)]
     shot: bool,
@@ -237,6 +242,8 @@ impl Default for Drone {
             sounds_registered: None,
             list: DrawList::new(SLOTS * 2 + 2),
             last: None,
+            peeking: None,
+            landed: None,
             #[cfg(test)]
             shot: false,
         }
@@ -244,6 +251,22 @@ impl Default for Drone {
 }
 
 impl Drone {
+    /// The player the own drone last watched, and when it landed.
+    pub(crate) fn landed(&self) -> Option<(u16, Instant)> {
+        self.landed
+    }
+
+    /// The own drone watches `watching` at `now`: a watch that ended (or moved to another
+    /// player) is a landing.
+    fn follow_peek(&mut self, watching: Option<u16>, now: Instant) {
+        if let Some(watched) = self.peeking
+            && watching != Some(watched)
+        {
+            self.landed = Some((watched, now));
+        }
+        self.peeking = watching;
+    }
+
     pub(crate) fn toggle(&mut self) {
         self.on = !self.on;
     }
@@ -302,14 +325,9 @@ impl GpuState {
         if !self.drone.on() {
             self.drone_send_away(self.drone.watchers);
         }
-        let words = if self.drone.on() {
-            "Drone: players may peek at you; their drone follows you"
-        } else {
-            "Drone: no drone may follow you"
-        };
         self.chat.receive(
             sjk_client::ServerEventKind::CenterPrint,
-            words.to_owned(),
+            crate::toy_switch_words::switched("Drone", self.drone.on()),
             None,
             Instant::now(),
         );
@@ -352,6 +370,7 @@ impl GpuState {
         let game_state = session.game_state();
         let own = u8::try_from(game_state.client_num).ok();
         let now = Instant::now();
+        self.drone.follow_peek(self.peek.watching(), now);
         // The relay's events: a sender counts only when the game shows the name they
         // claimed, and never one blocked on this PC.
         let heard: Vec<(u8, Event)> = relay_events

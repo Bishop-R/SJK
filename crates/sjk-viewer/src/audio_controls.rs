@@ -140,11 +140,15 @@ impl GameAudio {
         self.kill_sounds = console
             .and_then(|c| c.integer_cvar("cg_killsounds"))
             .unwrap_or(2);
+        self.quiet_chat = console
+            .and_then(|c| c.bool_cvar(crate::chat::quiet::CVAR))
+            .unwrap_or(false);
         self.pm_only_chat = console
             .and_then(|c| c.bool_cvar("cg_pmonlychat"))
             .unwrap_or(false);
         if let Some(adapter) = &mut self.legacy {
             adapter.set_pm_only_chat(self.pm_only_chat);
+            adapter.set_quiet_chat(self.quiet_chat);
             adapter.set_chat_sound_mode(
                 console
                     .and_then(|c| c.integer_cvar("cg_chatsounds"))
@@ -190,6 +194,13 @@ impl GameAudio {
         self.footsteps = console
             .and_then(|console| console.bool_cvar("cg_footsteps"))
             .unwrap_or(true);
+        let sonar = console
+            .and_then(|console| console.bool_cvar(crate::sound_sonar::CVAR))
+            .unwrap_or(false);
+        if self.output.sonar.enabled && !sonar {
+            self.output.sonar.clear();
+        }
+        self.output.sonar.enabled = sonar;
         let mode = console
             .and_then(|console| console.integer_cvar(SKIN_SOUNDS_CVAR))
             .unwrap_or(1);
@@ -200,6 +211,11 @@ impl GameAudio {
                 .and_then(|console| console.bool_cvar("s_doppler"))
                 .unwrap_or(true),
         ));
+    }
+
+    /// The world sounds sent lately, for the sound sonar (`sound_sonar.rs`).
+    pub(crate) fn sonar(&self) -> &crate::sound_sonar::Sonar {
+        &self.output.sonar
     }
 
     /// Keep background music fed while no live snapshot is producing loops.

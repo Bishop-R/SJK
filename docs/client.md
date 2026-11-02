@@ -526,7 +526,11 @@ A list (a choice of more than three values, the display mode) does not change
 on a click or Enter: they open a dropdown under the value, a rounded list over a
 soft shadow with the value in use in gold and marked with a dot, and nothing
 changes until a choice is applied with Enter or a click. Up and Down move in it;
-Escape, Backspace or a click elsewhere close it unchanged. Left and Right still
+Escape, Backspace or a click elsewhere close it unchanged. A list of more than
+eight choices (a PC's installed fonts run to hundreds) shows eight at a time with
+a thumb on its edge: the wheel scrolls it, Page Up, Page Down, Home and End jump,
+and the highlight stays in view; only the shown choices take click tokens, so a
+long list never reaches other controls' tokens. Left and Right still
 step the value directly. The rows the dropdown covers leave their values out
 while it is open, since text draws over every shape.
 
@@ -755,8 +759,16 @@ filters the grid as the classic profile's search does (see above).
 `forcepowers` is the player's own profile. On a server, every userinfo sends it
 fitted to the server's rules from `CS_SERVERINFO` (`g_maxForceRank`, free saber
 skills when every other weapon is off, the game type), as stock
-`BG_LegalizedForcePowers` would fit it, but keeping team powers and the powers
-`g_forcePowerDisable` turns off: the server drops unavailable powers from its own
+`BG_LegalizedForcePowers` would fit it. Whether saber skills are free is then
+taken from the server's own `EV_SET_FREE_SABER` event, which stock cgame keeps in
+`ui_freeSaber` for the Force menu, once one arrives, and kept through the same
+server's map changes (a disconnect or another address forgets it):
+`CS_SERVERINFO` may lack `g_weaponDisable` (keys past `MAX_INFO_STRING` are
+dropped). Until either tells, a profile that only fits with free saber skills is
+sent fitted with them, so the first life is not cut by a guess; stock sends the
+profile unfitted and the server fits it. An event that alters the profile sent
+has it sent again with `forcechanged`. The fitting keeps team
+powers and the powers `g_forcePowerDisable` turns off: the server drops unavailable powers from its own
 copy without calling the profile illegal, so sending them never parks the player in
 spectator, and a mod that gives them back in a full Force duel finds them
 (jaPRO lets the powers its `g_forcePowerDisableFFA` holds back work in duels).
@@ -913,7 +925,20 @@ SJK wears JoF EJK's free-choice cosmetics
 whichever hat and cape they like. A hat is any `.md3`
 in `models/cosmetics/hats/`, a cape any in `models/cosmetics/capes/`
 (`models/players/hats/` and `capes/` when the new folders are empty, as older
-packs used them); names of JoF's catalogue are found in either. A name is at
+packs used them); names of JoF's catalogue are found in either. Seven of JoF's hats
+(pumpkin, cap, cringe, fedora, santahat, sombrero, tophat) moved to the new folder but
+their models still name `models/players/hats/<name>` for their surfaces; JoF EJK finds
+those in jaPRO's `japro-assets.pk3`, which holds its own copies of their pictures and
+`japro_hats.shader`. SJK takes those files alone from the EternalJK folder, as it takes
+the crosshairs, and where that pack is not installed copies the same picture from the
+new folder under the old name (`cosmetics::old_folder_pictures`), so they draw as in
+JoF EJK (hub report #192, 28/10/2026: they drew grey; JoF's `jof_hats.shader` in the
+new folder, which no model names, is left unused as there: its pumpkin glows). Hats
+built inside out (JoF's McFox and McSnowFox, most of their triangles wound away from
+their middle) are drawn two-sided, their picture lit as an unscripted surface is
+(`cosmetics::inside_out_shaders`), as JoF EJK shows them solid; their file sorts before
+every other script, so a script defining the same name keeps its own culling. Each mount
+lists and parses the hats' models once for both (`cosmetics::piece_models`). A name is at
 most 13 letters, digits, `_` or `-` and does not start with a digit. JoF's
 launcher installs its pack (`zzz_jof_cosmetics.pk3`) in the `EternalJK` folder:
 SJK mounts every PK3 there that has models in `models/cosmetics/hats/` or
@@ -1091,6 +1116,16 @@ tauntaun rider holding attack, whose `BOTH_VT_ATR_S` restarts on both tracks eac
 many swing sounds (Slash, hub report #123). See
 [animation_selection.rs](../crates/sjk-client/src/animation_selection.rs).
 
+The local player's predicted animation also starts over when a held animation's timer
+ran out and came back up on the same clip and flip
+([local_actor_state.rs](../crates/sjk-viewer/src/local_actor_state.rs)). A frame shows
+the last command, so the one-command stand between two held melee kicks can go unseen,
+and a JA+ 2.5 server restarts the kick with no stand and no flip (a demo of 30/10/2026:
+`BOTH_A7_KICK_F` timer 4, then 692 a snapshot later, `legsFlip` never set). The torso
+then kept the finished kick's clock, the legs started their kick on its frame, and the
+kick stood frozen while the server kept kicking (Slash, 30/10/2026). Other players are
+shown the server's animation, which carries no timers, so this does not reach them.
+
 ## Tavion and Desann idle poses
 
 Tavion and Desann saber styles use their distinct JoF EJK standing poses by
@@ -1212,6 +1247,10 @@ the permanent ones the server sends only in its baselines, such as the `misc_bsp
 map pieces a server places in a map's void: stock `CG_BuildSolidList` adds them
 from `cg_permanents` (`cg_predict.c`), so the camera stops at their walls. The
 crosshair name trace uses the same list, so such a wall hides a player behind it.
+In a free spectator camera it still names the player under the crosshair, and a
+primary click while aimed at that player sends `follow <client>` to enter their
+view. The click is consumed instead of running the primary-button bind; a click
+with no visible player under the crosshair keeps its ordinary binding.
 Player and vehicle bodies do not obstruct this camera trace. When geometry
 collapses the camera onto its target, the view uses the intended forward direction
 instead of constructing an undefined look-at matrix.
@@ -1401,6 +1440,7 @@ is saved. They have no other menu entry.
 | `ghost play <name>` | Walks to the recorded start, then plays the run |
 | `ghost list` | Lists the saved runs with their maps and lengths |
 | `ghost info <name>` | A run's map, length, start (position and facing, to teleport there) and how much of it the server confirmed |
+| `ghost edit [name]` | Opens the [ghost editor](#ghost-editor) on `name` (else the first run of this map) |
 | `ghost` | Help and what it is doing |
 
 Runs are text files in `ghosts/` beside `config.cfg` (`<name>.ghost`, letters,
@@ -1459,6 +1499,53 @@ second takeoff's command and a command in the air, it lands every pillar and end
 0.4 units from the recording; shoved sideways at 60 units a second on the platform,
 it ends 7 units off where an unsteered replay ends 46 off. Not yet tried on a live
 server.
+
+### Ghost editor
+
+`ghost edit [name]` opens a column down the window's right edge, in a game or on an
+explored map, to cut a run and clear its chat bubble
+([ghost_replay/editor.rs](../crates/sjk-viewer/src/ghost_replay/editor.rs), its look in
+[sjk-ui.md](sjk-ui.md#ghost-editor)). Like `ghost`, it is for staff keys with the showcase
+tools on; switching them off, leaving the game or changing map closes it. Sol asked for it
+on 01/11/2026.
+
+- **Ghosts:** every `.ghost` file with its map and length, read from the header and the
+  last line only; another map's runs are quiet, an unreadable file says so. Up and Down
+  or a click open one; a cut not saved is dropped, and the answer line says so.
+- **Duplicate** writes the run as it is cut under the name in its field (the first free
+  `<name>_2`, `<name>_3`...) and opens the copy; the original is untouched. An existing
+  name is refused.
+- **Cut:** a timeline of the run in 104 slices (standing, moving, in the air, the bubble,
+  the loudest in each slice), a green strip under it where a replay can begin cleanly,
+  the cut parts dimmed, and Start and End rows with the times. A replay always begins
+  standing on the start ([the start](#ghost-replay)), so the start snaps to commands the
+  player stood still on the ground before (under one unit a second): Left and Right step
+  a tenth of a second to the next such command, Page Up and Page Down a second, a drag on
+  the timeline or a row's track lands on the nearest one. Shift places it anywhere (one
+  command a step), and the start then shows in ember with "Starts mid-move". The end goes
+  anywhere after the start. **First move** puts the start on the command where the player
+  first moves (a key, a pressed button, speed or the air), cutting the console's closing
+  and the wait; **Last move** puts the end on the command the player stops on; **Reset**
+  keeps the whole run.
+- **Clear the chat bubble** (on): the saved run has no `BUTTON_TALK`. It is set while the
+  console, chat or a menu is open (`CL_CmdButtons`), as when `ghost record` and `ghost stop`
+  are typed, and a replay sends it again, so the bubble showed over the replay. Clearing it
+  changes no movement: those commands carry no movement keys. The commands are kept, not
+  deleted, so the run's timing never changes (Sol's choice). A replay still shows the
+  bubble while the replaying player's own console is open.
+- **Save** overwrites the run with its cut after a second press (the first says so);
+  **Play** runs `ghost play` on the saved run and closes the editor, or shows why it
+  refuses (a cut not saved, the start too far); **Look** or Escape hides the column to move
+  about with the path drawn and a strip at the top, and Escape brings it back; **Close**
+  turns the editor off. Ctrl+S saves.
+
+The edited run keeps commands from the first to the last kept, their times begun again at
+zero, and its start is the state after the command before the first (position, view,
+speed, weapon), so `ghost play` walks to the new start. The path is the run's feet (24
+units under the origin), a point every 12 units or more (1200 at most), the kept part holo
+blue, the cut part grey, the bubble ember when it is kept; a gold ring of 16 units marks the
+new start with a line the way it faces, a white ring the end. It is drawn over the scene
+without depth (seen through walls), only for a run of the map the player is on.
 
 ## Mimic
 
@@ -1595,6 +1682,29 @@ sounds near the player differently from the others whenever they moved, and the 
 hum, a loop on the view, crackled (Toad's report). Unit test:
 `a_snapshot_leaves_the_listener_where_the_frame_put_it`; not yet heard in a game.
 
+## Sound sonar
+
+`cg_soundSonar` (Settings > Sound, Sound sonar; off by default; Dawson's idea for deaf
+and hard-of-hearing players) draws a short arc round the crosshair toward each world
+sound the client plays, ahead being up: light blue steps (`CHAN_BODY`), orange shots
+and swings (`CHAN_WEAPON`), green voices, yellow for the rest (explosions, clashes,
+Force, items, toys). Louder at the listener (the sound's own volume and falloff) is
+thicker and brighter; each fades over a second, and one source's sounds of a kind share
+an arc. It is fed where the audio output sends a positional one-shot
+(`AudioOutput::send`, [sound_sonar.rs](../crates/sjk-viewer/src/sound_sonar.rs), a
+24-entry ring), so it shows nothing the speakers do not get: muted players, `cg_footsteps
+0` and sounds past their falloff stay hidden, and the player's own, listener-relative,
+ambient, announcer, menu and music sounds and loops are left out. The volume cvars do
+not hide it, since it is for players who cannot hear. It needs an audio output: with
+`s_initsound 0` or no sound device nothing is sent, so the sonar shows nothing. Its
+memory is cleared when the setting goes off and when the output stops the effects (a
+new map's gamestate) or everything (`soundstop`); out of a game it draws nothing. A
+deliberate choice: the arcs give a sound's full direction round the player, ahead,
+behind and to either side, which stereo panning alone does not, as other games' sound
+visualisers do for accessibility; they add nothing the speakers do not get. Drawn with
+the HUD (`cg_drawHud`), following `cg_hudScale`. Unit tests: the bearing, the ring, the
+filters, the fade and falloff, the arc's place and scale.
+
 ## Voice volume
 
 `s_volumeVoice` (Settings > Sound, Voice volume; 0 to 1, default 1) is the loudness of
@@ -1707,6 +1817,11 @@ shares it too: the shutdown played at the reach pays for the toggle, and its wea
 switch copy, dropped there as the late one, gives back what it paid, so each
 put-away is paid once whichever comes first, and a staff weapon switch loop is
 capped like any other.
+
+Saber definitions are resolved in the game's file-list order, keeping the first
+case-insensitive name. Mounted replacements of the same `.sab` file still win
+through the VFS. The shared catalog supplies appearance, sounds and prediction;
+a later duplicate name must not replace its combat restrictions or special moves.
 
 `fd.saberAnimLevelBase` is no wire field, so the client works it out for every
 command it predicts, as `CG_PredictPlayerState` does before `Pmove`
@@ -1974,6 +2089,16 @@ EternalJK's). Reduce bright flashes wins over both. The viewer reads them once a
 ([saber_clash_flare.rs](../crates/sjk-viewer/src/saber_clash_flare.rs)); the effect
 spawner and submission read the reduce switch from an atomic the frame sets.
 
+**Blade core thickness** (`cg_saberCoreSize`, archived, 0.5 to 2, default 1; Settings >
+Game options, under Clash flare size) draws the white core down a lit blade thinner or
+thicker: retail's core radius (a third of the blade's, with its flicker, `CG_DoSaber`)
+times the setting, for every blade in the world, held or thrown, plain or skinned. The
+glow, its hilt sprite and a skin's glints keep their size, and 2 still keeps the core
+inside the glow. Previews in menus (Profile, the Collection, the forge) keep retail's
+core. JoF EJK's nearest is `cg_shaderSaberCore` (not archived, 0.625), which scales
+the core of its SFX blades only; SJK draws no SFX blades, so the setting has a name of
+its own ([saber_core.rs](../crates/sjk-viewer/src/saber_core.rs)).
+
 **Saber hit sparks** (`cg_fleshSparks`, archived, 0 to 7, default 7; Settings > Game
 options, Effects) is EternalJK's count of the red sparks a saber hit on a body plays
 (JoF EJK `cg_event.c`, `EV_SABER_HIT`, each `FX_PlayEffectID` behind
@@ -2021,8 +2146,8 @@ of VIDEO is gone (10/10/2026). The groups are:
 
 | Tab | Settings |
 | --- | --- |
-| IMAGE | HDR scene and exposure, eye adaptation (`r_autoExposure`) and its range in EV, filmic tone curve, bloom, dynamic glow (`r_DynamicGlow` 0-3) and its blur style (`r_dynamicGlowStyle`), FXAA, supersampling (`r_superSample`), render scale (`r_renderScale`, also in the SJK UI's Simple Display; see [Render scale](rendering.md#render-scale-and-supersampling)), soft particles, ambient occlusion (`r_ssao`), sunbeam dust (`r_dustMotes`), per-pixel model lighting, reflection probes (`r_cubeMapping`), floor mirrors (`r_floorReflections`), normal and specular maps (`r_normalMapping`, `r_specularMapping`), parallax mapping (`r_parallaxMapping`) and its depth (`r_parallaxStrength`), emission maps (`r_emissiveMaps`), their strength (`r_emissionStrength`) and glow halo (`r_emissiveGlow`) |
-| LIGHTING | Sun and sky (`r_dayNight`), live lighting tier, time of day, day length, sunlight brightness, ambient fill and its corner shading, indirect boost, emission-map lights (`r_emissiveLights`), light shafts (`r_volumetrics`) and their clarity |
+| IMAGE | HDR scene and exposure, eye adaptation (`r_autoExposure`) and its range in EV, filmic tone curve, bloom, dynamic glow (`r_DynamicGlow` 0-3), No glow on sabers (`r_dynamicGlowNoSabers`) and the glow's blur style (`r_dynamicGlowStyle`), FXAA, supersampling (`r_superSample`), render scale (`r_renderScale`, also in the SJK UI's Simple Display; see [Render scale](rendering.md#render-scale-and-supersampling)), soft particles, ambient occlusion (`r_ssao`), sunbeam dust (`r_dustMotes`), per-pixel model lighting, toon models (`r_toonModels`, see [Toon models](rendering.md#toon-models)), reflection probes (`r_cubeMapping`), floor mirrors (`r_floorReflections`), normal and specular maps (`r_normalMapping`, `r_specularMapping`), parallax mapping (`r_parallaxMapping`) and its depth (`r_parallaxStrength`), emission maps (`r_emissiveMaps`), their strength (`r_emissionStrength`) and glow halo (`r_emissiveGlow`) |
+| LIGHTING | Sun and sky (`r_dayNight`), live lighting tier, time of day, time of day from the PC's clock (`r_dayClock`), day length, sunlight brightness, ambient fill and its corner shading, indirect boost, emission-map lights (`r_emissiveLights`), light shafts (`r_volumetrics`) and their clarity |
 | SHADOWS | World and character sun shadows, shadow resolution, sharp and close cascade distances, filter taps, slit closing, contact shadows |
 | WEATHER | Weather (`r_weather`), its density (`r_weatherDensity`), quality (`r_weatherQuality`), forced weather (`r_weatherForce`), ground fog (`r_weatherFog`) and volumetric clouds (`r_clouds`); see [Weather](rendering.md#weather) |
 
@@ -2552,10 +2677,18 @@ target name, origin) and the outline is a box round its origin.
 ## Talk balloons
 
 Opening chat, the console or a menu sends the stock talk button and disables
-other movement input while that keyboard catcher is active. As in EternalJK, so
-does a window you alt-tab away from or minimise, so others see you are away:
-`cl_unfocusedChatbox` and `cl_minimizedChatbox` (archived, both 1) turn that off. Players carrying
-the talk flag have a chatbubble over their heads; the connection-trouble icon
+other movement input while that keyboard catcher is active. A window you alt-tab
+away from or minimize sends an automatic away bubble too. **Chat bubble while
+away** in SJK Settings > Chat (Advanced; classic menus: HUD) controls both away
+states through `cl_unfocusedChatbox` (archived, default 1). Set it to 0 to disable
+the automatic bubble in either state. Actual open chat, console and menu key
+catchers keep their normal talk flag.
+
+The separate `cl_minimizedChatbox` setting is removed. Old saved entries of that name
+are discarded on profile load; the saved `cl_unfocusedChatbox` choice is used
+for both states. The update's what's-new card offers this shared switch.
+
+Players carrying the talk flag have a chatbubble over their heads; the connection-trouble icon
 takes priority when the server marks a lost connection. These are upright frame
 billboards using the existing [sprite orientation](rendering.md#billboard-icons).
 Their texture opacity is preserved near walls even with soft particles enabled.
@@ -2629,6 +2762,25 @@ and returns when the switch is off; console history/logs, centre notices and
 SJK hub chat are independent. Moving to another map resets the choice; a graphics
 reload preserves it. Unmarked private formats from other mods are not guessed.
 
+`quiet` toggles **quiet mode** (`cg_quietMode`, not archived; Settings > Chat > Quiet
+mode, both styles; `quiet on`/`off` and 1/0), after Lex Deifaber's idea of 30/10/2026,
+and says ON or OFF in the console. Until it is turned off or the map changes, the chat box
+hides public, team, SJK and admin chat, their beeps and the SJK chat sound, and keeps
+them out of the console's alert words, but for whispers (server tells, encrypted SJK
+whispers), the player's own lines (the gamestate's slot, never a followed player's) and
+the private duel partner's (`ps.duelIndex` while the player's own `ps.duelInProgress`, kept
+10 seconds after the duel ends for the "gg", until they leave or rename; on the SJK chat,
+the key the hub knows in that slot). Lines no player's name starts (server notices) and the
+SJK team's announcements still show, and so do centre prints; a line two players' names fit
+is a player's and is hidden. A public line of a player whose name starts with the tell
+marker is not taken for a tell (this holds for `pmonly` too). The console scrollback keeps
+every line. Whether a line passes is decided when it arrives, so turning it off brings the
+hidden history back ([quiet.rs](../crates/sjk-viewer/src/chat/quiet.rs), the shared rules
+in [quiet_chat.rs](../crates/sjk-client/src/quiet_chat.rs)). The SJK scoreboard writes a muted
+"Quiet" after the player's own name while it is on; showing it on other players' rows
+needs the hub to relay the flag (for example a `quiet` field in the look of
+`POST /v1/look`, given back in presence and look events), which it does not yet.
+
 Chat remains connected to the real server during intermission, including
 global/team/private composer messages and console/bound chat commands. Messages
 received during background loading are retained; its loading notice hides the HUD. The scoreboard reserves a separate left column for messages and the
@@ -2675,6 +2827,26 @@ map changes. Missing snapshot data pauses the view; it resumes if data returns
 before expiry. Players outside the
 received snapshot cannot be watched. Player input and server authority remain
 unchanged. The command is bindable under Settings > Key bindings > Other.
+
+### Chat logs
+
+**Save game chat logs** in Settings > Chat (Advanced SJK UI; classic menus: HUD)
+controls archived `cl_logChat`. It defaults to 0, off, as in stock clients;
+saved choices are kept. The update's what's-new card also offers the
+switch. `cl_logChat 0` disables recording, `1` appends normally, and the console's
+`2` synchronizes each entry to disk. The Settings switch writes 0 or 1.
+
+Received game-server public, team and private chat is appended to
+`chatlogs/chat.log` beside the active profile's `config.cfg`, before display
+filters such as local player blocks. Each entry is one line prefixed with its
+Unix timestamp in seconds; numeric game colour codes and control bytes are removed,
+Unicode is preserved, and a restart appends to the same file. The file is created
+on the first received chat message. Other server console text, the separate SJK
+hub chat and encrypted whispers are outside this game-chat log.
+
+File I/O happens only when a chat event arrives. A write failure is reported once
+in the console and stops attempts until logging is switched off and back on;
+that retry works even when no chat arrives while the switch is off.
 
 ### Chat in other alphabets
 
@@ -2893,7 +3065,16 @@ Ctrl+arrows and Ctrl+Backspace/Delete, Shift-selection, Ctrl+A/C/X/V,
 Ctrl+Insert to copy and Shift+Insert to paste. Click places the caret, drag selects,
 and double-click selects a token. Selected text is highlighted; typing/pasting
 replaces it. Clipboard text keeps colour escapes, strips controls and obeys the
-existing chat byte limit. Pasting never sends a message. Dead keys type as in
+1,200-character storage bound and the smaller four-message submission bound. Pasting
+never sends a message. On submission, a draft that exceeds the game server's 149-byte
+escaped-message budget is sent completely as at most four messages, split at a word
+where possible and at a character boundary for one oversized word. A fifth piece is
+refused; commands entered outside the composer get a warning instead. This is shared
+by All, Team, Admin, whispers and declared mod-chat commands, including an encrypted
+whisper the player chooses to send unencrypted from its failure card. An encrypted
+whisper within the hub's 900-byte limit remains one message. The last `^` colour of
+each piece starts the next one, within its 149-byte budget.
+Dead keys type as in
 the console (see below): `^` then a digit is a colour code, `^` then `e` is `ê`.
 
 Actions use server-provided sender slots and current roster generations. Old
@@ -3135,14 +3316,22 @@ the menus are the SJK UI. A look chosen after that stays. The classic board
 - Columns are Name, Score, Ping, Time and, with `cg_showClientIDs` (on by
   default), the client ID; CTF shows Score, C, A, D, Ping and Time, and duels with
   a frag limit show wins/losses. Score shows score/deaths when `cg_scoreDeaths`
-  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, the
-  default 1 uses a JA+/jaPRO server's appended value, 2 falls back to the
-  session-local counter when the server sends none, and 3 always uses the local
-  counter. As in EJK, duels and CTF never show deaths, and the local counter
+  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, 1 uses a
+  JA+/jaPRO server's appended value only (the default, as EJK), 2 uses that value and
+  falls back to the session-local counter when the server sends none, so kills/deaths
+  show on every server, and 3 always uses the local counter. The local counter knows
+  only the deaths seen since you joined. As in EJK, duels and CTF never show deaths, and the local counter
   starts again for everyone on `map_restart` or a new level (a new
   `CS_LEVEL_START_TIME`), and for one player when they change team or leave
   (`scoreboard/deaths.rs`). Bots show `BOT` for their ping; clients still connecting show
   `-`, and connected clients the scores do not list yet show `N/A`.
+- **Rank by score - deaths** (`cg_scoreboardDeathsRank`, archived, off; Settings >
+  HUD > Scoreboard, both looks; #ideas recap of 29/10/2026): where the board shows
+  deaths, players are listed by their score minus their deaths, fewer deaths first on
+  a tie, then the server's order; rows without a count or still joining follow, and
+  away players stay below the others. The SJK board numbers its rows in that order, one
+  number each. Off, the server's order and places as before, ties sharing a place. Neither EternalJK nor JoF EJK has it
+  ([style.rs](../crates/sjk-viewer/src/scoreboard/style.rs) `rank_value`).
 - Team games list the leading team first over a translucent team band, then the
   spectators; free-for-all lists the players, then the spectators. Your row is
   highlighted in your rank's colour (1st blue, 2nd red, 3rd yellow, else grey) and
@@ -3268,6 +3457,42 @@ crosshair, its name, the timer and the rest of the HUD stay put. Both are 0 by d
 the layout as bundled ([hud.rs](../crates/sjk-viewer/src/hud.rs), `RadialPlacement`,
 which moves each widget of `RADIAL_STATUS` by its side: an arc's from its sweep, the
 rest from their offset).
+
+### Moving HUD elements
+
+The HUD edit mode moves the HUD's elements with the mouse (Lex's idea, #ideas
+29/10/2026). Settings > HUD "Move HUD elements" (or the `hud_edit` command, in a match
+or a demo) closes the menus and outlines every movable element that shows, with its
+name, over the game; a small "Move the HUD" panel holds Reset all and Done. Drag an
+element to move it; right-click it, or point at it and press Delete, to put it back;
+Escape, Enter or Done leave (back to the game menu when the mode was opened from it).
+`hud_edit reset <element>` and `hud_edit reset all` do the same from the console
+([hud_edit.rs](../crates/sjk-viewer/src/hud_edit.rs)).
+
+An element with position cvars of its own is moved by changing them, in their units,
+so the console and the mode agree: the lagometer (`cg_lagometerX`, `cg_lagometerY`),
+the movement keys (`cg_movementKeysX`, `cg_movementKeysY`), the speedometer
+(`cg_speedometerX`, `cg_speedometerY`), the kill feed (`cg_killfeedX`, `cg_killfeedY`),
+the personal score (`cg_drawScoreX`, `cg_drawScoreY`) and the chat (`cg_chatBoxX`,
+`cg_chatBoxHeight`); a reset sets their defaults. The others keep an offset in
+`cg_hudOffsets`, `id:x,y` pairs in 480-line units (the screen's height over 480 pixels a
+unit on both axes, right and down positive), an element left out being where its HUD
+puts it: `vitals` (health and armour), `force` (Force and saber style, and the radial
+look's ammo, which sits in its right pill), `weapon` (weapon name and ammo), `timer`,
+`vote`, `jetpack`, `vehicle`, `selection` (the weapon, Force and inventory selectors),
+`flags` (CTF flags and team scores) and `follow` (the followed player's name)
+([placement.rs](../crates/sjk-viewer/src/hud/placement.rs)). The layouts' widgets move
+in the layout pass, the rest by moving what they drew
+(`sjk_ui::DrawList::translate_from`); with the game-data HUD, `vitals` moves its left
+menu block and `force` its right one (Force, ammo and score line), whatever
+`cg_hudScale` is. Offsets apply on top of the radial sliders above.
+
+Not movable yet: the crosshair (`cg_crosshairX`/`Y` move it by hand), its name, the
+warm-up and interruption notices, the frame rate and timer in the upper right, the
+power-up and inventory icons, the text-only game HUD (`cg_hudFiles 1`), the stock
+vehicle HUD drawn from the game's pictures, centre prints and the scoreboard. Only
+what shows at the moment can be dragged: the vote panel during a vote, the lagometer
+with `cg_lagometer` on, the jetpack bar with a jetpack, and so on.
 
 The upper right stacks the readouts as JoF EJK's `CG_DrawUpperRight` does, in every
 HUD style ([console_overlay.rs](../crates/sjk-viewer/src/console_overlay.rs)): with
@@ -3465,8 +3690,44 @@ to read on busy backgrounds) chooses the edge: 0 Off, the drop shadow only
 halo at 38% and every other letter ringed by eight dark copies (0.45 opaque each)
 instead of its shadow (`Outlined`, `text::Edge`).
 
+**Styles** (31/10/2026, Sol's decision to let players choose among the designs SJK has
+had): `cg_nameplateStyle` (Settings "Nameplate style", and the Style row on the
+Collection's Nameplates tab, [sjk-ui.md](sjk-ui.md#collection)) picks the plates' look,
+`hud::nameplate::Style`: 0 Holo, the holo frame below (the default, the look since
+28/10/2026); 1 Capsule; 2 Classic. What a plate says is the same in all three (the
+name and its mark, the power icons, the duel badge, the bars and the sharing and duel
+rules below); only its shape differs, and the classic plate has no picture.
+
+- **Capsule** (design E of 28/10/2026, the look that morning,
+  [capsule.rs](../crates/sjk-viewer/src/hud/nameplate/capsule.rs)): every plate is a pill
+  26 design pixels tall (the design's name 13), dark navy 55% opaque, or the team's
+  colour made deep in team games (`capsule::team_fill`, 62%), edged gold for a sharer,
+  a pale grey otherwise, the duel's colour (1.5 pixels) in a duel, a paler gold on NPC
+  plates. Left to right it holds the round picture (20 design pixels near, smaller far;
+  the same pictures as the holo frame's), the name with its mark and, at its right end
+  in a duel, the duel badge. A sharer's bars stand on a tray 104 wide tucked under it
+  (shield 2, health 3 and Force 2 design pixels, rounded, on a faint track), the pill
+  widening and rising to hold it as the bars fade in; a player who does not share, and
+  a duellist, have the pill alone. Far away the pill fades, leaving the picture and the
+  name centred over the player. The power icons stand over the pill's middle in square
+  cells (22.5 design pixels).
+- **Classic** (the plates until 28/10/2026,
+  [classic.rs](../crates/sjk-viewer/src/hud/nameplate/classic.rs)): no picture. The
+  name is centred over the player, the duel badge before it and the mark after it,
+  level with its capitals. Nearer, a dark plate (62% opaque, 112 HUD pixels wide) fades
+  in under the name, which rises over it: rounded bars (shield 5, health 7, Force 4
+  pixels) on dark tracks, each outlined, the plate framed in gold for a sharer (a
+  team's colour as a thin line inside it) and in the team's colour otherwise. A player
+  who does not share gets grey bars the whole way, so they read as hidden rather than
+  empty, as before 28/10/2026; a duel opponent's bars never show. The power icons, as
+  tall as the name, stand over it. The weapon icon the classic plates had is not back:
+  it went in every style on 28/10/2026.
+
+The rest of this section describes the holo frame; the bars, badges, modes and rules
+hold in every style.
+
 **The holo frame** (28/10/2026, design C of the nameplate designs Sol chose from, in
-place of the capsule, design E, the same day): every plate, bars or not, is a hexagon
+place of the capsule, design E, the same day; `cg_nameplateStyle 0`): every plate, bars or not, is a hexagon
 holding the player's picture over the left end of a plate whose top-right corner is cut
 (`nameplate_math::Holo`), so a player who does not share still has a plate. The plate
 holds their name with its mark after it and, under it, the bars of a sharer, or a dim
@@ -3708,7 +3969,7 @@ seeing any of them means sharing your own, through the hub (Sol's rule, 15/10/20
   Every profile had saved nameplates on (the old default), so the release asks players
   to choose it again (`= cg_nameplate reset: ...` in the changelog): the what's-new card
   puts it back off and opens on it with its switch, and the player turns it on again
-  knowing that it shares ([sjk-ui.md](sjk-ui.md#whats-new-card)).
+  knowing that it shares ([sjk-ui.md](sjk-ui.md#news-panel)).
 - **Duels** (Milamber's rule, 18/10/2026): nobody sees a duel opponent's health,
   shield and Force, and a duellist sends nobody theirs, whatever either side's
   settings (`hud::nameplate::Duel`). In a private duel (`duelInProgress`) the opponent
@@ -3732,7 +3993,8 @@ seeing any of them means sharing your own, through the hub (Sol's rule, 15/10/20
   for everyone, bots and players without SJK too): no bars for any viewer, health,
   shield or Force. Nothing overrides it, not even a teammate's `tinfo`. Their plate
   stays, with its picture, name and power icons, and the dim dotted line under the name
-  instead of bars (until 28/10/2026 they had grey bars, full length and empty).
+  instead of bars (until 28/10/2026 they had grey bars, full length and empty, which
+  the classic style keeps; the capsule shows the pill alone).
   NPCs keep their bars.
 - **Sharers:** their health and shield bars are the estimates below, corrected with
   every value they share ([estimate.rs](../crates/sjk-viewer/src/hud/estimate.rs) `History`). A
@@ -3964,7 +4226,7 @@ the in-game pop-up box and title band, a retail list box of releases, a detail
 box with the release and its credits in gold, a Close button and the
 description line, in the menus' retail font. How the file is kept is in
 [SJK conventions](sjk.md#changelog). A release's `> Heading: sentence` recap lines are
-not drawn here: they feed the [what's-new card](sjk-ui.md#whats-new-card), the pop-up
+not drawn here: they feed the [News panel](sjk-ui.md#news-panel), the pop-up
 shown once after an update (`cl_whatsNewSeen` remembers the version; `whatsnew` previews
 the newest recap).
 
@@ -4302,7 +4564,8 @@ the server already publishes to every client (name with its colour codes, model 
 head icon, saber hilts with their blade colours, the hat and cape worn, bot skill; not
 the duel wins and losses), the saber shader they wear (a live swatch, as the Collection
 draws it, and its name; only when it draws on their blade on this PC: worn by their
-look, its pack loaded) and, when the hub knows the player, their profile picture in
+look, its pack loaded; a second saber's or a staff's other half's own shader, when it
+is not the first's, on a row of its own named "(2nd blade)" or "(other half)") and, when the hub knows the player, their profile picture in
 place of the head icon (the icon then sits small on its lower left corner), SJK's
 emblem, their hub name, a gold VERIFIED, a teal SJK TEAM pill for staff, a gem of the
 rarest holocron tier they hold with its name and the medallions of the medals the SJK
@@ -4540,7 +4803,11 @@ list: the `toy_illuminate` command lights it or puts it out, from a bind
 (Settings > Key bindings > Interaction > Toy: Illuminate, unbound until a key is
 picked), from the quick wheel's [Toys page](#toys-page), or from the switch on the
 Collection's Toys tab ([SJK UI](sjk-ui.md#collection)). Every toy is a
-`toy_<name>` command ([sjk.md](sjk.md#names)).
+`toy_<name>` command ([sjk.md](sjk.md#names)). Switching any toy says so on the centre of
+the screen, its name and ON in green or OFF in red ("Illuminate ON"), and `toy_help` lists
+every toy in the console, its name in yellow and what it does and how in white
+([toy_switch_words.rs](../crates/sjk-viewer/src/toy_switch_words.rs)); a toy restored at
+start, or taken off by the game, says nothing.
 
 **Other players' toys, hidden on request** (Sol's request, 29/10/2026): each toy other
 players are seen with has a second switch on its card in the Collection's Toys tab, and
@@ -4557,6 +4824,7 @@ The player's own toy still shows, and nothing changes for the toys' rules.
 | Boombox | See and hear others' boomboxes | `cg_toyBoomboxShow` | their stereo and its music |
 | Monitor | See monitors | `cg_toyMonitorShow` | every monitor and its sounds, yours too ([Monitor](#monitor)) |
 | Banana peel | See banana peels | `cg_toyBananaShow` | every peel and its sounds, yours too ([Banana peel](#banana-peel)) |
+| Prop gun | (console only) | `cg_toyPropGunShow` | their guns, bolts and sounds ([Prop gun](#prop-gun)) |
 
 Order 66, the Hax and Box hunt act only on players who have them on, so they have none.
 The holocron, the box and the boombox are hidden as if those players had them off here
@@ -4604,7 +4872,8 @@ The cardboard box is a toy, SJK's own and free for every player (Sol's idea,
 takes it off, from a bind (Settings > Key bindings > Interaction > Toy: Cardboard box,
 unbound until a key is picked), from the quick wheel's [Toys page](#toys-page) or from
 the Collection's Toys tab ([SJK UI](sjk-ui.md#collection)). It is off at every start.
-Putting it on plays its sound (one's own at once, in both ears; another's where they
+Switching it says "Cardboard box ON" or "OFF" ([Illuminate](#illuminate)); a box lifted by
+another player goes without it. Putting it on plays its sound (one's own at once, in both ears; another's where they
 stand when their look gains the box, but not for the boxes already in the looks in the
 first 5 seconds on a server).
 
@@ -4681,7 +4950,8 @@ It stays as last switched, across deaths, maps, servers and restarts of the game
 the player turns it off (since 22/10/2026: saved in the archived `cl_toyOrder66`,
 [toy_saved.rs](../crates/sjk-viewer/src/toy_saved.rs)). `order66` (Interaction > Execute
 Order 66, or the Toys page) gives the order; only a player whose own toy is on, alive in
-the match on a server, can give it.
+the match on a server, can give it. Switching the toy says "Order 66 ON" or "OFF"
+([Illuminate](#illuminate)).
 
 - **Who takes part:** the players whose toy is on. It is a toy in their look
   (`toys: ["order66"]`, [unlockables.md](unlockables.md); `looks::TOYS`), so every SJK
@@ -4750,7 +5020,8 @@ player who has it on hacks another who has it on, then steers them for a few sec
 Hax, unbound until a key is picked), from the quick wheel's [Toys page](#toys-page) or
 from the Collection's Toys tab ([SJK UI](sjk-ui.md#collection)). It stays as last
 switched, across maps, servers and restarts, until the player turns it off (saved in
-the archived `cl_toyHax`, as Order 66 in `cl_toyOrder66`).
+the archived `cl_toyHax`, as Order 66 in `cl_toyOrder66`). Switching it says "Hax ON" or "OFF"
+([Illuminate](#illuminate)).
 
 - **Who takes part:** the players whose toy is on. It is a toy in their look
   (`toys: ["hax"]`, [unlockables.md](unlockables.md); `looks::TOYS`), so the hacker's
@@ -5067,7 +5338,8 @@ close by. It works like emotes: the music is in pk3s, and SJK passes only its na
   away. `boombox` in the console lists the tracks; `boombox <id>`, `next`, `prev`, `play`
   and `stop` choose and play them (Settings > Key bindings > Interaction has "Boombox:
   next track"). When a track ends the next one plays, the first after the last. It is off
-  at every start and on every new server.
+  at every start and on every new server. Starting names the track on the centre of the
+  screen; putting it away says "Boombox OFF" in red.
 - **Verified players only** (Sol's rule, 25/10/2026): on a server only a player whose key
   the SJK hub verified may turn it on ("The boombox is for verified SJK players"), and every
   SJK client ignores the boombox, music and stereo, of a player the hub does not show as
@@ -5252,8 +5524,8 @@ onto it slips, cartoon style, and falls as a [ragdoll](#ragdoll).
   quick wheel's Toys group, Collection > Toys, "Slip on peels") is the switch, both the
   right to drop peels and the consent to slip on them (the Monitor's rule: always opt
   in). It stays as last switched, across maps, servers and restarts (`cl_toyBanana`,
-  archived), and says so on the centre of the screen. A player without it walks over
-  peels.
+  archived), and says "Banana peel ON" or "OFF" on the centre of the screen, as every
+  toy does ([Illuminate](#illuminate)). A player without it walks over peels.
 - **`banana_drop`** (Interaction > Drop banana peel, the Collection's Drop key, the quick
   wheel's Drop banana peel) drops one: standing (slower than 80 units a second along the
   floor) 20 units ahead of the feet the way the player looks, moving 72 units ahead the
@@ -5323,6 +5595,85 @@ a PK3 with the same paths replaces them
 [banana.rs](../crates/sjk-viewer/src/banana.rs) and
 [banana_frame.rs](../crates/sjk-viewer/src/banana_frame.rs).
 
+## Prop gun
+
+The Prop gun (Sol's idea, 01/11/2026) is a toy for every SJK player: a fake weapon held
+instead of the real one, whose bolts knock down the players who have the toy on too, as
+the [Monitor](#monitor) does. SJK ships no gun: each is a file in a pk3 the player adds
+themselves, and other players see and hear a gun only when they have the same file.
+
+- **The guns** are `propguns/<id>.gun` in any pk3 or the game folder; `<id>` is 1 to 24
+  of `a` to `z`, `0` to `9` and `_`. One setting a line, its name then its values (`//`
+  starts a comment):
+
+  | Setting | Values | Default |
+  | --- | --- | --- |
+  | `name` | the name said when it is taken out | the id |
+  | `view`, `world` | the first-person and third-person models (MD3), needed | |
+  | `viewOffset`, `worldOffset` | x y z on the model's own axes (X forward, Y left, Z up) | 0 0 0 |
+  | `viewAngles`, `worldAngles` | pitch yaw roll, degrees | 0 0 0 |
+  | `viewScale`, `worldScale` | how much bigger | 1 |
+  | `fire` | a shot others hear (several lines: one each shot in turn) | |
+  | `fireOwn` | the shooter's own shot, in both ears (else `fire`) | |
+  | `impact` | where a bolt meets the world or a body (several lines) | |
+  | `raise` | played when the gun is taken out | |
+  | `boltModel`, `boltScale` | the bolt's model along its way (none: its light only) | none, 1 |
+  | `boltColor`, `boltLight` | its light's colour (0 to 1) and reach | 0.4 1 0.3, 120 |
+  | `boltSpeed`, `boltLife` | units a second, milliseconds | 1800, 3000 |
+  | `impactEffect` | an effect where it meets the world or a body (`repeater/wall_impact`) | none |
+  | `fireEffect` | an effect where it leaves, along its way, at each shot | none |
+  | `boltEffect` | an effect started behind the bolt every 25 ms as it flies (a trail) | none |
+  | `boltSound` | a sound looped at the bolt as it flies (8 heard at once at most) | none |
+  | `refire` | milliseconds between two shots | 350 |
+  | `push` | how hard a bolt pushes the body it strikes, units a second | 900 |
+
+  A file with a fault is skipped and the console says which line. The models load with
+  the map, so a gun added during a match is drawn from the next one.
+- **`toy_propgun`** (a bind, the console) is the switch, both the right to fire and the
+  consent to be hit (always opt in). It stays as last switched, across maps, servers and
+  restarts (`cl_toyPropGun`, archived), and says the gun's name and ON, or "Prop gun OFF".
+  **`propgun`** lists the guns; `propgun <id>`, `next` and `prev` choose one (`cl_propGun`,
+  archived; the first gun at first).
+- **Held:** while it is on, the gun is drawn instead of whatever the player holds, saber
+  included. In first person it floats ahead, right and down of the eyes, moved by the
+  view bob and the view-model FOV (it does not follow a hand rig's animations), and
+  `cg_drawGun 0` hides it. In third person it hangs on the right hand (`*r_hand`), where
+  the real weapon would, turned as the game's own world guns are (the world model has the
+  view model's axes); the body keeps the animations the server plays (a saber stance
+  with a saber out).
+- **Firing:** attack and alt attack never reach the game server while a gun is held
+  ([live_session.rs](../crates/sjk-viewer/src/live_session.rs)); a press, or attack held,
+  fires once every `refire`. The bolt leaves from the first-person gun's muzzle (the view
+  model's `tag_flash`, as drawn), else from by the eyes (16 ahead, 5 right, 5 down), towards what the crosshair meets, and flies straight at its speed until it meets the
+  world (its impact sound and effect) or a body, or for its life. Nobody fires while limp,
+  dead, spectating, in a duel, held by the server or in a vehicle (the Ragdoll's rules).
+- **The hit** is decided by the struck player's client alone, against its own body (a
+  standing player's box, or a limp one's ragdoll points), when a bolt passes within 6
+  units of it, tried every 4 units of its way. The body falls limp as the Ragdoll's and
+  takes a blow at the point nearest, along the bolt's way at `push` with 220 upwards
+  (3,000 units a second at most). Not by the player's own bolts, not twice by one bolt, not
+  within 0.25 seconds of a blow, and not while typing or away (the Monitor's rules). The
+  fall travels as the Ragdoll's, its blow naming the shooter and no monitor
+  (`ragdoll::UNTHROWN`).
+- **Seen, or not:** `cg_toyPropGunShow` (archived, default 1) at 0 hides other players'
+  guns, bolts and their sounds on this PC; `s_toyPropGunSound` silences every Prop gun
+  sound. In a duel, or following one, no gun is drawn and no bolt flies.
+
+No game server knows of it, and the hub never carries a gun's files. What a player holds
+and fires goes through the [toy relay](hub-chat.md#toy-relay), one event every 30 ms,
+the player's newest shots first: `hold_<id>` (told to each SJK player, again every 15
+seconds; forgotten after 40 seconds untold), `put`, and
+`fire_<number>_<moment>_<x>_<y>_<z>_<dx>_<dy>_<dz>_<id>` (the shot's number among the
+player's, 0 to 99; the game server time; where it left, whole units; its way, in
+thousandths). Each client flies the same bolt from its moment and drops a shot heard more
+than 1.5 seconds late. A sender counts only when the game shows the name they claimed,
+and never one blocked here. Players on stock clients see nothing. Not in the Collection's
+Toys tab, the quick wheel or the settings yet. World shot:
+`world_shot::propgun_shots::propgun_on_a_demo` (with `SJK_TEST_DEMO` and
+`SJK_TEST_PROPGUN`, the id of a gun in the game data). See
+[propgun.rs](../crates/sjk-viewer/src/propgun.rs) and
+[propgun_frame.rs](../crates/sjk-viewer/src/propgun_frame.rs).
+
 ## Tag
 
 The Tag (Sol's idea, 27/10/2026, after TF2's sprays) is a toy for every SJK player: stick
@@ -5338,31 +5689,55 @@ sees it there.
   Players propose them in the Discord's `#tag-proposals` channel (28/10/2026; a pinned
   post says how: one idea per post, voted with reactions, a bold square PNG, nothing
   taken from another game), which the tag card in Collection > Tags points to.
-- **Choosing:** Collection > Tags shows every tag, the ones the player lacks dimmed;
-  Choose (or Enter) sets `cg_tag`, the tag `toy_tag` sticks (default `tag_sjk`).
+- **Finishes and credits cards** (31/10/2026, Sol's decisions): a tag a holocron drops
+  comes Holo (4 %) or Solar (0.5 %) now and then, whatever the holocron's tier
+  ([holocrons.md](holocrons.md)); the hub counts those copies apart. The credits cards the
+  player holds (SJK Alpha's kind `credits`, [cards.md](cards.md#faces-and-the-first-set))
+  stick as tags too: the card's picture as a sticker, its corners rounded and a rim of the
+  card's colour round it. A tag or a card sticks in a finish the player holds a copy in
+  (Normal needs any copy; a free tag is only Normal). Both need a hub whose profiles list
+  `tag_cards` (the card kinds it lets be tags); an older hub refuses them, so the client
+  offers neither there and Collection > Tags lists no cards.
+- **Choosing:** Collection > Tags shows every tag, then the credits cards under their own
+  heading, the ones the player lacks dimmed and the Holo and Solar copies held as badges;
+  the wall scrolls (the wheel, the arrows keeping the choice in view). The card on the right
+  offers Normal, Holo and Solar (the finishes held), shown over the picture; Choose (or
+  Enter) sets `cg_tag`, the tag or card `toy_tag` sticks (default `tag_sjk`), and
+  `cg_tagFinish`, its finish (`normal`, `holo` or `solar`; one not held sticks Normal). A
+  finish chip of the tag in use changes its finish at once.
 - **Sticking:** `toy_tag` (a bind, Settings > Key bindings > Interaction "Toy: Tag", the
   quick wheel's Toys page) traces the crosshair 128 units into the world and sticks the
   chosen tag where it lands: upright on a wall, its top away from the player on a floor,
   56 units wide. One tag a player: a new one replaces the last, at most one every 10
   seconds. `toy_tag clear` takes it off. A tag the player does not hold is refused.
 - **Others see it** through the player's look: the tag rides in it (`tag`, the tag's id,
-  map, point, surface normal and turn), so players who come later see it too, and the hub
-  refuses a tag the key does not hold (`tag_not_unlocked`). It stays until the player
+  map, point, surface normal and turn, and its finish when not Normal), so players who come
+  later see it too, and the hub refuses a tag the key does not hold, or not in that finish
+  (`tag_not_unlocked`). Clients from before 31/10/2026 draw a finished tag plain and a
+  card's nothing. It stays until the player
   sticks another, clears it, changes map or server, or leaves. A client draws it only on
   the same map. `cg_toyTags 0` hides other players' tags on this PC; a muted or blocked
   player's never show.
 
 A tag is a lasting decal with a slot of its own per player
 ([decal_store.rs](../crates/sjk-viewer/src/decal_store.rs)): projected once when it
-changes (as impact marks are, over corners and patches), drawn until it goes, never pushed
-out by impact marks, and kept with `cg_marks 0`. The pictures (`gfx/tags/<id>.png`) are
-art in the hub's `sjk_tags` pack, the first ones placeholders until Sol's art; their decal
-shaders (`shaders/sjk_tags.shader`, alpha-blended) and the toy's spray-can icon are
-bundled, made by [tag_assets.py](../scripts/tag_assets.py). The pictures are put into the
-UI atlas from the hub's packs for the Collection and the holocron opening
-([tag_icons.rs](../crates/sjk-viewer/src/tag_icons.rs)), 128 pixels a side. See
-[tags.rs](../crates/sjk-viewer/src/tags.rs) and
-[tags_frame.rs](../crates/sjk-viewer/src/tags_frame.rs).
+changes (as impact marks are, over corners and patches), kept until it goes, never pushed
+out by impact marks, and kept with `cg_marks 0`. Since 31/10/2026 (Sol: tags were blurry in
+the game) tags are drawn by a pass of their own
+([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs), [rendering.md](rendering.md#tags)),
+each picture at its full size (a tag enlarged to 512 pixels, a card's sticker 1024), not as
+a 128-pixel tile of the effects' atlas, with its finish shaded per pixel: Holo a rainbow foil
+whose light follows the viewer's angle, with a glitter, and Solar the Sun's corona burning
+round the picture's own outline. The pictures (`gfx/tags/<id>.png`) are art in the hub's
+`sjk_tags` pack, the first ones placeholders until Sol's art (256 pixels: the pass takes
+any square up to 1024, so a sharper cut shows sharper); a card's is its picture in the card
+packs. The toy's spray-can icon is bundled, made by
+[tag_assets.py](../scripts/tag_assets.py). The pictures are put into the UI atlas from the
+hub's packs for the Collection and the holocron opening
+([tag_icons.rs](../crates/sjk-viewer/src/tag_icons.rs)), 128 pixels a side; a card's shows
+from the card faces' textures. See [tags.rs](../crates/sjk-viewer/src/tags.rs),
+[tags_frame.rs](../crates/sjk-viewer/src/tags_frame.rs) and
+[collection_tags.rs](../crates/sjk-viewer/src/collection_tags.rs).
 
 ## Fishing
 
@@ -5424,8 +5799,9 @@ toy's sounds, and a switch per toy silences that toy's sounds alone, the player'
 and everyone else's (`s_toyBoxSound`, `s_toyOrder66Sound`, `s_toyHaxSound`,
 `s_toyRagdollSound`, `s_toyDroneSound`, `s_toyBoomboxSound`, `s_toyMonitorSound`,
 `s_toyMysteryBoxSound` (the [mystery boxes](mystery-boxes.md)), `s_toyBananaSound` (the
-[Banana peel](#banana-peel), 29/10/2026), `s_toyFishingSound` (the [Fishing](#fishing)
-toy), all
+[Banana peel](#banana-peel), 29/10/2026), `s_toyMasterSound` (the toys [the Toy
+Master](toy-master.md) hides, 30/10/2026), `s_toyFishingSound`
+(the [Fishing](#fishing) toy), all
 on by default,
 archived). The toy still
 runs and is still seen; nothing is sent to anyone. The Illuminate holocron makes no
@@ -5736,7 +6112,9 @@ by its groups in Settings:
 | Votes, demos and server | Vote yes, Vote no, Record demo (`record`), Stop recording (`stoprecord`), Reconnect |
 
 A custom choice is a name (up to 24 characters) and any console command (up to
-200), several separated by `;`.
+200), several separated by `;`, run with all its arguments (`japlus.guntele 300`,
+`amtele 3`) as typing it would; the tests pin that it keeps them through the form,
+`wheel.json` and `wheel_commands.json`.
 
 ### Settings
 
@@ -5765,12 +6143,20 @@ returning to the row ([wheel_editor.rs](../crates/sjk-viewer/src/settings/wheel_
 - **Right column:** a live preview of the page's ring, the focused choice
   highlighted, then the page's key and bind (`+wheel <id>`) or what the choice
   runs. Picking a choice shows the catalogue there instead (Up and Down, Enter,
-  Escape; actions already on the page say so), Custom command last, with a
-  search field right of its title that has the keyboard as it opens: typing keeps the actions and
-  emotes whose name or group holds every word (Custom command always stays),
+  Escape; actions already on the page say so), then under Your own the custom
+  commands named before and Custom command last, with a
+  search field right of its title that has the keyboard as it opens: typing keeps the actions,
+  emotes and named commands whose name or group (a named command's command too)
+  holds every word (Custom command always stays),
   held letters and Backspace repeat, Ctrl+A, Ctrl+C and Ctrl+V work as in every
   field, Backspace on an empty search closes it; a custom
   choice's form has its name and command fields, Save and Cancel.
+- **Named commands** (after Dante's idea): a custom command saved from its form is
+  remembered and offered under Your own in every page's catalogue, newest first,
+  one per command (the same command saved again takes its new name and moves
+  first), 24 at most (the oldest go). Delete on the highlighted one, or its cross,
+  forgets it; choices already on pages keep it. They are kept in
+  `wheel_commands.json` beside `wheel.json` (see below).
 - The pointer: hovering a row focuses it (a page row without showing that page,
   which a click does), the focused row's small controls act (Rename, up, down,
   remove), a click on a choice or Add a choice opens the catalogue, a click on a
@@ -5818,6 +6204,19 @@ as version 3; a Toys page removed afterwards stays removed, a wheel of 8 pages i
 left alone (the file is not rewritten) and a page of the player's own called Toys
 keeps its id, the new one taking `toys2`.
 
+The named custom commands are kept apart, in `wheel_commands.json` in the same
+folder, so Restore the default pages (which removes `wheel.json`) keeps them:
+
+```json
+{ "version": 1, "commands": [ {"name": "Ready", "command": "ready"} ] }
+```
+
+Newest first, one per command, 24 at most; an entry that is not a complete
+`{name, command}` object is left out. Without the file, the custom choices already
+on the pages are remembered as it is first read (installed emotes, `sjkemote <id>`,
+aside: the catalogue lists them already) and the file is written; once it exists,
+even empty, it is what is remembered.
+
 ## Configuration and content
 
 The default writable client folder is `GameData/SJK/`, under the selected game
@@ -5832,6 +6231,7 @@ is independent of the executable's location and working directory. The client cr
 | `jakey` | Persistent client identity key |
 | `hud.json` | Optional custom HUD |
 | `wheel.json` | The quick wheel's pages, once changed ([Quick wheels](#kept-in-wheeljson)) |
+| `wheel_commands.json` | The quick wheel's named custom commands ([Quick wheels](#kept-in-wheeljson)) |
 | `screenshots/`, `demos/` | Screenshots and recordings |
 | `chatlogs/`, `qconsole.log` | Logs when enabled |
 
@@ -5853,8 +6253,19 @@ the console's `path` command also lists it. The fallback uses the profile in
 that per-user folder; the per-user and portable profiles are not synced.
 See [platform.rs](../crates/sjk-viewer/src/platform.rs) and
 [storage.rs](../crates/sjk-viewer/src/platform/storage.rs).
-Edit settings through the client, or edit the file while the client is stopped
-so autosaving cannot overwrite your changes.
+Settings can be changed in the client, or `config.cfg` edited in a text editor, even
+while the client runs. The shell remembers the texts it loaded and wrote
+([config_watch.rs](../crates/sjk-shell/src/config_watch.rs)) and looks at the file's
+size and time once a second, and again before each save and at exit, once its own
+writes have landed. A file holding a text the client did not write was changed from
+outside: it is loaded as at start (its cvars, and its bindings replace the table), the
+console says so, and later saves build on it. A file deleted while the client runs
+stays deleted: nothing is written for the rest of that run, so the next start is on
+the defaults (the console says so, and settings changed before the restart are not
+kept); `writeconfig` still writes it on request. Until 29/10/2026 the client wrote
+the values it held over such an edit at its next save or at exit, so an edited or
+deleted config came back with the old name, field of view or camera at the next start
+(hub report #199, and Kushina's `autoexec.cfg` workaround for it).
 
 Autosaving writes `config.cfg` only when an archived cvar or a binding changed:
 key presses, `+`/`-` buttons and unarchived cvars never touch the file. A change
@@ -6876,11 +7287,11 @@ byte 0xB0) and `"` as `''`. The chat box shows those back as `%` and `"`, as
 EternalJK's `CG_ChatBox_AddString` does (`cg_draw.c:9897-9916`), so SJK and
 EternalJK players see each other's `%` and quotes; a client without this shows
 `°/.` and `''`. As in EternalJK, the console's copy of a chat line keeps the
-escapes, and two apostrophes typed together show as a quote. The composer counts
-a draft's length as it will be sent (`%` takes four bytes, `"` two), so it stops
-accepting characters where the sent message would otherwise be cut
-([chat.rs](../crates/sjk-client/src/chat.rs) `chat_command`, `chat_unescape`,
-`chat_input_cost`).
+escapes, and two apostrophes typed together show as a quote. Each piece of a long
+draft counts its escaped legacy bytes (`%` takes three bytes, `"` two) and stays at
+or below 149 bytes; neither a Unicode character nor either escape is cut, and the
+active colour is repeated at the start of the next piece
+([chat.rs](../crates/sjk-client/src/chat.rs) `chat_commands`, `chat_unescape`).
 
 ### Chat emojis
 
@@ -7010,3 +7421,30 @@ the server; the world draws its own shaders until the server sends new remaps (a
 shader-state change or a `remapShader` command) or a new map loads. As in
 EternalJK, destination time offsets are kept. See [rendering](rendering.md#server-shader-remaps)
 for scope and remaining limitations. These controls do not edit map geometry.
+
+### Incoming chat colour
+
+`cg_chatColor` forces only the game server's public **All** message bodies.
+Team chat, plain/encrypted whispers, admin chat and the separate SJK chat channel
+(including reward drops and official notices) retain their original colours,
+even when they appear together in the All feed. The setting is local and archived:
+it never changes sent text or the chat log. Sender names keep their own colours,
+and emoji pictures, channel marks, timestamps, centre prints and the composer
+keep their normal appearance. Existing public history changes without reconnecting.
+
+The default 0 keeps original colours; 1 red, 2 green, 3 yellow, 4 blue, 5 cyan,
+6 magenta, 7 white, 8 orange, 9 grey and 10 black force one colour, ignoring inline
+colour codes in the body while retaining message fading. Invalid values fall back
+to original colours. Settings > Chat offers the same named choices (also in classic
+HUD settings). It is independent of outgoing `cl_colorstring` and chat cleaning.
+
+### Copying a server address
+
+The SJK and classic server browsers offer **Copy IP** for the selected server.
+Ctrl+C copies the selection while no text field or dialog is open; in a field it
+still copies that field. The copied endpoint includes the port (and brackets for
+IPv6), with no password or command. The browser reports success or clipboard failure.
+`copyServerIP` copies the connected server's endpoint from the console; disconnected
+clients report that no server is connected.
+
+[SJK browser with Copy IP](images/copy-server-ip.png).

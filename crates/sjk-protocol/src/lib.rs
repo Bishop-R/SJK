@@ -31,7 +31,7 @@ pub use byte_direction::{legacy_byte_to_direction, legacy_direction_to_byte};
 pub use demo::{DemoError, DemoReader, DemoRecord, MAX_LEGACY_MESSAGE_BYTES};
 pub use dialect::{
     JaPlusCapabilities, JaProCapabilities, ServerDialect, ServerProfile, TaystJkCapabilities,
-    is_ja_plus_game_name,
+    is_ja_plus_game_name, is_lugormod_v3_game_name,
 };
 pub use entity::{
     ENTITY_NUMBER_NONE, EntityDeltaError, EntityField, EntityFieldEncoding, EntityState,

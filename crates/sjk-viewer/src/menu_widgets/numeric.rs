@@ -5,11 +5,15 @@ use crate::console::line_edit::{LineEdit, Motion};
 use sjk_ui::{Color, FontWeight, Rect, TextAlign};
 use winit::keyboard::KeyCode;
 
-/// Separate targets keep clicks on a value from moving its slider.
-pub(crate) const VALUE_BASE: u16 = 700;
+/// Separate targets keep clicks on a value from moving its slider. Row `row`'s
+/// value answers to `VALUE_BASE + row`, clear of every other token of the
+/// screens that use it: Settings' search lists all its rows (over 300) at once.
+pub(crate) const VALUE_BASE: u16 = 20_000;
+/// Most rows a screen gives typed values to.
+pub(crate) const VALUE_ROWS: u16 = 1_000;
 
 pub(crate) fn value_row(token: u16) -> Option<usize> {
-    (VALUE_BASE..VALUE_BASE + 100)
+    (VALUE_BASE..VALUE_BASE + VALUE_ROWS)
         .contains(&token)
         .then(|| usize::from(token - VALUE_BASE))
 }

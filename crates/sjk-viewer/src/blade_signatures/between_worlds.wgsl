@@ -72,10 +72,16 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
     }
     // voices of light: soft streams winding loosely along the blade, two rising from the hilt and
     // two falling from the tip, glowing pulses travelling along them
+    // 31/10/2026: a stream keeps within rr + 0.1 of the axis from the hilt to the tip, and draws
+    // only where a ray passes within 2 of it: a ray further off skips its sixteen pieces
+    let nearAxis = fxNear(ro, rd, 0.0, L);
     for (var k = 0; k < 4; k++) {
         let fk = f32(k);
         let dir = select(-1.0, 1.0, k < 2);
         let rr = 0.75 + 0.35 * fk;
+        if nearAxis > rr + 0.1 + 2.0 {
+            continue;
+        }
         let turns = (0.55 + 0.18 * fk) * dir;
         let ph = fk * 0.31 + uTime * 0.04 * dir;
         var prev = around(rr * 0.4, ph, 0.0);

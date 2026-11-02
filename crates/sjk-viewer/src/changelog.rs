@@ -46,7 +46,7 @@ const CHIP_BASE: u16 = 3_000;
 /// Releases the what's-new card pages through at most, newest first.
 pub(crate) const DIGEST_LIMIT: usize = 5;
 
-/// A release as the what's-new card (`whats_new_card.rs`) shows it.
+/// A release as the News panel (`news_panel.rs`) shows it.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Digest {
     /// "2026.1011.3 (Alpha)", or "Unreleased".
@@ -156,6 +156,26 @@ fn merged_reviews(releases: &[data::Release]) -> Vec<Review> {
 pub(crate) fn digests(installed: &str, seen: &str) -> Vec<Digest> {
     data::parse(data::EMBEDDED)
         .map(|releases| digests_of(&releases, installed, seen))
+        .unwrap_or_default()
+}
+
+/// The recaps of the `count` newest dated releases from `installed` down (from the
+/// newest when `installed` is not listed, a local build), newest first: the News panel's
+/// releases.
+pub(crate) fn recent_digests(installed: &str, count: usize) -> Vec<Digest> {
+    data::parse(data::EMBEDDED)
+        .map(|releases| {
+            let from = releases
+                .iter()
+                .position(|release| release.version() == Some(installed))
+                .unwrap_or(0);
+            releases[from..]
+                .iter()
+                .filter(|release| release.version().is_some())
+                .take(count)
+                .map(digest)
+                .collect()
+        })
         .unwrap_or_default()
 }
 

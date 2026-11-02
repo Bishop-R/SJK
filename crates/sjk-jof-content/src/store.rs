@@ -54,6 +54,10 @@ pub struct Snapshot {
     /// Lower-case names of the PK3s in SJK's JoF folder that SJK downloaded:
     /// the only files a sync deletes. A file put there by hand stays.
     pub downloaded: BTreeSet<String>,
+    /// The group each downloaded PK3 was fetched for, by lower-case name, when
+    /// the record says (files fetched before SJK noted it have none): an
+    /// automatic update removes only the files of its own groups.
+    pub origins: BTreeMap<String, u32>,
 }
 
 impl Snapshot {
@@ -75,6 +79,9 @@ struct Measured {
     /// SJK wrote it (a download); only such files are ever deleted.
     #[serde(default)]
     downloaded: bool,
+    /// The manifest group it was downloaded for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    group: Option<u32>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -146,9 +153,10 @@ impl Store {
         }
     }
 
-    /// Remember a file SJK just downloaded and checked: it is not hashed
-    /// again, and a later sync may delete it.
-    pub fn remember(&mut self, path: &Path, md5: &[u8; 16]) {
+    /// Remember a file SJK just downloaded and checked, for the manifest
+    /// `group` it was fetched for: it is not hashed again, and a later sync may
+    /// delete it.
+    pub fn remember(&mut self, path: &Path, md5: &[u8; 16], group: Option<u32>) {
         if let Some((size, modified)) = stamp(path) {
             self.record.files.insert(
                 key(path),
@@ -157,6 +165,7 @@ impl Store {
                     modified,
                     md5: crate::md5_hex(md5),
                     downloaded: true,
+                    group,
                 },
             );
         }
@@ -183,11 +192,11 @@ impl Store {
             return crate::parse_md5(&known.md5);
         }
         let digest = hash_file(path, cancel, on_bytes)?;
-        let downloaded = self
+        let (downloaded, group) = self
             .record
             .files
             .get(&key(path))
-            .is_some_and(|known| known.downloaded);
+            .map_or((false, None), |known| (known.downloaded, known.group));
         self.record.files.insert(
             key(path),
             Measured {
@@ -195,6 +204,7 @@ impl Store {
                 modified,
                 md5: crate::md5_hex(&digest),
                 downloaded,
+                group,
             },
         );
         Some(digest)
@@ -280,6 +290,13 @@ impl Store {
             })
             .map(|(name, _)| name.clone())
             .collect();
+        let origins: BTreeMap<String, u32> = ours
+            .iter()
+            .filter_map(|(name, path)| {
+                let known = self.record.files.get(&key(path))?;
+                Some((name.clone(), known.group.filter(|_| known.downloaded)?))
+            })
+            .collect();
         let mut strays: Vec<(String, u64)> = ours
             .iter()
             .filter(|(name, _)| !wanted_here.contains(*name) && downloaded.contains(*name))
@@ -295,6 +312,7 @@ impl Store {
             states,
             strays,
             downloaded,
+            origins,
         }
     }
 
@@ -408,7 +426,11 @@ pub(crate) mod tests {
         std::fs::write(root.join("base/old.pk3"), "zz").unwrap();
         std::fs::write(root.join("base/mine.pk3"), "by hand").unwrap();
         let mut store = Store::open(&root, Some(game.clone()));
-        store.remember(&root.join("base/old.pk3"), &Md5::digest(b"zz").into());
+        store.remember(
+            &root.join("base/old.pk3"),
+            &Md5::digest(b"zz").into(),
+            Some(7),
+        );
         let cancel = AtomicBool::new(false);
         let mut seen = 0;
         let snapshot = store.scan(manifest(), &cancel, &mut |done, total| {
@@ -423,6 +445,11 @@ pub(crate) mod tests {
             snapshot.strays,
             [("old.pk3".to_owned(), 2)],
             "mine.pk3 was not downloaded by SJK, so it stays"
+        );
+        assert_eq!(
+            snapshot.origins,
+            [("old.pk3".to_owned(), 7)].into(),
+            "the group it was downloaded for is kept"
         );
 
         assert!(!store.is_game_folder());

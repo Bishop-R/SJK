@@ -86,16 +86,20 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
     }
     // ---- the plasma surface: granules of star-stuff boiling up round the blade ----
     var ta: f32;
-    for (var i = 0; i < 26; i++) {
-        let fi = f32(i);
-        let f = fract(t * (0.22 + 0.12 * h11(fi * 1.7)) + h11(fi * 4.3));
-        let yy = -0.3 + f * (top + 0.3);
-        let p = around(0.55 + 0.35 * h11(fi * 2.9 + floor(t * 0.22 + h11(fi * 4.3))), h11(fi * 6.1) + t * 0.05, yy);
-        let dd = rayPt(ro, rd, p, &ta);
-        let life = sin(3.1416 * f);
-        let spt = exp(-pow((yy - ys) / 2.0, 2.0)) * exp(-ph * 1.8);
-        let g = 0.5 + 0.5 * sin(t * 6.0 + fi * 2.7);
-        col += sf_heat(0.55 + 0.4 * g + spt) * (halo(dd, max(0.16 + 0.1 * g, px)) * 1.1 + halo(dd, 0.6) * 0.2) * life * (1.0 + 0.5 * st + spt) * fx;
+    // 31/10/2026: the granules keep within 0.9 of the axis from just under the hilt to the top,
+    // their widest glow 0.6 (and a pixel's): a ray further off than three of them skips them
+    if raySegRaw(ro, rd, vec3<f32>(0.0, -0.3, 0.0), vec3(0.0, top, 0.0), &s) - 0.9 <= 1.8 + 3.0 * px {
+        for (var i = 0; i < 26; i++) {
+            let fi = f32(i);
+            let f = fract(t * (0.22 + 0.12 * h11(fi * 1.7)) + h11(fi * 4.3));
+            let yy = -0.3 + f * (top + 0.3);
+            let p = around(0.55 + 0.35 * h11(fi * 2.9 + floor(t * 0.22 + h11(fi * 4.3))), h11(fi * 6.1) + t * 0.05, yy);
+            let dd = rayPt(ro, rd, p, &ta);
+            let life = sin(3.1416 * f);
+            let spt = exp(-pow((yy - ys) / 2.0, 2.0)) * exp(-ph * 1.8);
+            let g = 0.5 + 0.5 * sin(t * 6.0 + fi * 2.7);
+            col += sf_heat(0.55 + 0.4 * g + spt) * (halo(dd, max(0.16 + 0.1 * g, px)) * 1.1 + halo(dd, 0.6) * 0.2) * life * (1.0 + 0.5 * st + spt) * fx;
+        }
     }
     // the rest is out of the hilt's way: skip rays far from the blade
     let far = raySegRaw(ro, rd, vec3<f32>(0.0, -1.0, 0.0), vec3(0.0, top + 1.0, 0.0), &s);
@@ -178,14 +182,18 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         }
     }
     // ---- embers drifting round in the heat ----
-    for (var i = 0; i < 12; i++) {
-        let fi = f32(i);
-        let f = fract(t * (0.05 + 0.03 * h11(fi * 2.9)) + h11(fi * 5.1));
-        let yy = f * (top + 3.0) - 1.0;
-        let p = around(1.3 + 3.0 * h11(fi * 3.7), h11(fi * 1.9) + t * 0.03 + 0.1 * sin(t * 0.7 + fi), yy);
-        let dd = rayPt(ro, rd, p, &ta);
-        let tw = 0.6 + 0.4 * sin(t * 5.0 + fi * 2.3);
-        col += hot * (halo(dd, max(0.06, px)) * 1.6 + halo(dd, 0.3) * 0.15) * tw * smoothstep(0.0, 0.1, f) * (1.0 - smoothstep(0.75, 1.0, f)) * (1.0 + st) * fx;
+    // 31/10/2026: within 4.3 of the axis, from under the hilt to past the top, their widest glow
+    // 0.3 (and a pixel's)
+    if fxNear(ro, rd, -1.0, top + 2.0) - 4.3 <= 0.9 + 3.0 * px {
+        for (var i = 0; i < 12; i++) {
+            let fi = f32(i);
+            let f = fract(t * (0.05 + 0.03 * h11(fi * 2.9)) + h11(fi * 5.1));
+            let yy = f * (top + 3.0) - 1.0;
+            let p = around(1.3 + 3.0 * h11(fi * 3.7), h11(fi * 1.9) + t * 0.03 + 0.1 * sin(t * 0.7 + fi), yy);
+            let dd = rayPt(ro, rd, p, &ta);
+            let tw = 0.6 + 0.4 * sin(t * 5.0 + fi * 2.3);
+            col += hot * (halo(dd, max(0.06, px)) * 1.6 + halo(dd, 0.3) * 0.15) * tw * smoothstep(0.0, 0.1, f) * (1.0 - smoothstep(0.75, 1.0, f)) * (1.0 + st) * fx;
+        }
     }
     // ---- clash: a huge blow and a ring of sparks ----
     if cl > 0.01 {

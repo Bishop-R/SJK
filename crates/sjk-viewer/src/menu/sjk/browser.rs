@@ -16,8 +16,8 @@ use crate::console::ViewerConsole;
 use crate::menu::browser_filters::BASE as FILTER_BASE;
 use crate::menu::browser_table::TABLE_TOKEN;
 use crate::menu::browser_view::{
-    ADD_FAVOURITE_TOKEN, ADDRESS_TOKEN, BACK_TOKEN, FAVOURITE_TOKEN, FILTER_TOKEN, HEADER_TOKEN,
-    JOIN_TOKEN, REFRESH_TOKEN, ROW_TOKEN, SCROLLBAR_TOKEN,
+    ADD_FAVOURITE_TOKEN, ADDRESS_TOKEN, BACK_TOKEN, COPY_IP_TOKEN, FAVOURITE_TOKEN, FILTER_TOKEN,
+    HEADER_TOKEN, JOIN_TOKEN, REFRESH_TOKEN, ROW_TOKEN, SCROLLBAR_TOKEN,
 };
 use crate::menu::levelshot::{Preview, cover_uv};
 use crate::menu::{ClientMenu, MenuAction};
@@ -1322,7 +1322,7 @@ fn draw_detail(
     kit::button(
         ui,
         frame,
-        [DETAIL_X, BUTTONS_TOP, 200.0, 46.0],
+        [DETAIL_X, BUTTONS_TOP, 114.0, 46.0],
         "Join",
         true,
         true,
@@ -1332,7 +1332,7 @@ fn draw_detail(
     kit::button(
         ui,
         frame,
-        [DETAIL_X + 214.0, BUTTONS_TOP, DETAIL_WIDTH - 214.0, 46.0],
+        [DETAIL_X + 252.0, BUTTONS_TOP, DETAIL_WIDTH - 252.0, 46.0],
         if browser.is_favorite(entry.address) {
             "Remove favourite"
         } else {
@@ -1344,6 +1344,16 @@ fn draw_detail(
         FAVOURITE_TOKEN,
     );
 
+    kit::button(
+        ui,
+        frame,
+        [DETAIL_X + 126.0, BUTTONS_TOP, 114.0, 46.0],
+        "Copy IP",
+        false,
+        true,
+        false,
+        COPY_IP_TOKEN,
+    );
     kit::heading(ui, frame, DETAIL_X, PLAYERS_Y, DETAIL_WIDTH, "Playing now");
     let mut line_y = PLAYERS_Y + 22.0;
     let note = |ui: &mut MenuCanvas, message: &str| {
@@ -1491,7 +1501,7 @@ fn draw_status(ui: &mut MenuCanvas, frame: &Frame, status: &str) {
 /// The keys of what has the keyboard, right-aligned at the bottom.
 fn draw_keys(ui: &mut MenuCanvas, frame: &Frame, focus: &Focus) {
     let s = frame.s;
-    let mut keys: Vec<(&[&str], &str)> = Vec::with_capacity(5);
+    let mut keys: Vec<(&[&str], &str)> = Vec::with_capacity(8);
     match focus {
         Focus::Password => keys.extend([(&["Enter"][..], "join"), (&["Esc"][..], "cancel")]),
         Focus::Address { favourite } => keys.extend([
@@ -1513,6 +1523,7 @@ fn draw_keys(ui: &mut MenuCanvas, frame: &Frame, focus: &Focus) {
             favourites,
         } => {
             keys.extend([(&["Enter"][..], "join"), (&["F"][..], "favourite")]);
+            keys.push((&["Ctrl", "C"][..], "copy IP"));
             keys.push((&["A"][..], "add by address"));
             if !searched {
                 keys.push((
@@ -1784,6 +1795,7 @@ mod tests {
             FILTER_TOKEN,
             JOIN_TOKEN,
             FAVOURITE_TOKEN,
+            COPY_IP_TOKEN,
             REFRESH_TOKEN,
             ADDRESS_TOKEN,
             ADD_FAVOURITE_TOKEN,
@@ -1976,6 +1988,7 @@ mod tests {
             FILTER_TOKEN,
             JOIN_TOKEN,
             FAVOURITE_TOKEN,
+            COPY_IP_TOKEN,
             REFRESH_TOKEN,
             ADDRESS_TOKEN,
             ADD_FAVOURITE_TOKEN,

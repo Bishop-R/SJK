@@ -21,9 +21,9 @@ general contributor rules.
 - A client mod's commands and settings start with its id and a dot
   (`japlus.guntele`, `jof.commands`), and its switch is `mod_<id>`
   ([mods.md](mods.md)).
-- Every toy is a `toy_<name>` command (`toy_illuminate`, `toy_box`, `toy_order66`,
-  `toy_hax`, `toy_ragdoll`, `toy_drone`, `toy_boombox`, `toy_monitor`, `toy_boxhunt`,
-  `toy_banana`); a
+- Every toy is a `toy_<name>` command (`toy_help` lists them all; `toy_illuminate`, `toy_box`,
+  `toy_order66`, `toy_hax`, `toy_ragdoll`, `toy_drone`, `toy_boombox`, `toy_monitor`,
+  `toy_boxhunt`, `toy_banana`); a
   toy has no Force wheel entry, and one with a setting names it `cg_toy<Name>...`.
   Illuminate, the cardboard box and Order 66 have none: they are always available and
   on only for the client's run. A toy others see has an id in the look's `toys`
@@ -51,6 +51,11 @@ general contributor rules.
 
 ## Defaults
 
+New settings default to the stock base Jedi Academy experience (Sol's rule,
+30/10/2026; [AGENTS.md](../AGENTS.md)): what changes how the game looks, sounds or
+plays compared with stock JKA is opt-in, and only Sol moves a default away from stock
+(the table below). #292, server remaps on by default, was declined under it.
+
 A new profile starts with Sol's own choices. Defaults apply only to settings a
 `config.cfg` has not saved: an existing profile keeps its values and nothing is
 migrated, except where the table says so. Where each is documented:
@@ -71,6 +76,7 @@ migrated, except where the table says so. Where each is documented:
 | `cg_shieldBrightness` | 2 passes, old defaults 1 and 4 moved to 2 once | [Client](client.md#launch) |
 | `cg_duelGhost` | on: duellists as JoF EJK's blue figures (off: dark under the bubble) | [Rendering](rendering.md#entity-render-effects) |
 | `cg_duelHideOthers` | 1, Auto: in a private duel, players outside it hidden on JA+ (unless `cp_pluginDisable` bit 1) and jaPRO, as JoF EJK | [Client](client.md#nameplates) |
+| `cg_nameplateStyle` | 0, Holo (the holo frame; 1 the capsule, 2 the classic plate) | [Nameplates](client.md#nameplates) |
 | `cg_dismember` | 2 | [Dismemberment](client.md#dismemberment-and-disintegration) |
 | `snaps` | 120 (slider to 125) | [status.md](status.md#gameplay-and-interface-defaults) |
 | `com_maxfpsUnfocused` | 30 | [Configuration](client.md#configuration-and-content) |
@@ -324,8 +330,8 @@ words, each heading at most 28 characters and each sentence at most 160, grouped
 what a player notices (servers, gameplay, tools, cards) rather than commit by commit.
 Put a command or cvar the player can type in backticks (`` `whatsnew` ``), in a recap
 or a change: the card and the changelog page draw it in a chip the player can click.
-The client's what's-new card shows them to a player the first time they open the game
-after updating ([sjk-ui.md](sjk-ui.md#whats-new-card)). Write the recap when the
+The client's News panel shows them to a player the first time they open the game
+after updating ([sjk-ui.md](sjk-ui.md#news-panel)). Write the recap when the
 release is cut, from the "Unreleased" lines, in the same commit that renames the
 section; the tests reject a dated release from 12/10/2026 on without one, and the
 release notes' introduction may repeat it. A player who skips releases sees the recaps
@@ -341,10 +347,10 @@ download is live. Staff tools stay out of it, as they stay out of the changelog.
 
 A release that changes what a setting does, or its default, asks players to choose it
 again with a line `= <cvar>: <one sentence>` beside the recap, before the changes
-(17/10/2026), in place of a migration marker cvar of its own: the what's-new card
+(17/10/2026), in place of a migration marker cvar of its own: the News panel
 opens on a "Settings to review" page listing every such setting of the releases the
 player has not seen, each with its Settings name, the sentence and a switch
-([sjk-ui.md](sjk-ui.md#whats-new-card)). `= <cvar> reset: ...` also puts the setting back
+([sjk-ui.md](sjk-ui.md#news-panel)). `= <cvar> reset: ...` also puts the setting back
 to its default when the card is offered (once per version, `cl_whatsNewReset`), so a value every profile saved under the old
 meaning does not carry over unchosen (`cg_nameplate`, when it became See & share
 nameplates). The cvar must be an on/off row in Settings, and the sentence at most 160

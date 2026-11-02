@@ -18,6 +18,8 @@ const PW_CLOAKED: u32 = 1 << 11;
 #[derive(Default)]
 pub(crate) struct State {
     client: Option<u16>,
+    /// Player directly hit by the most recent scan, without the name fade.
+    aimed_client: Option<u16>,
     acquired_at: i32,
     /// Time of the last [`State::scan`].
     scanned_at: i32,
@@ -60,6 +62,13 @@ impl State {
         self.client.filter(|_| self.acquired_at == now)
     }
 
+    /// Player directly under the crosshair at the last scan, if it ran within a second
+    /// of `now` (no crosshair drawn since: nobody is aimed at).
+    pub(crate) fn aimed_client(&self, now: i32) -> Option<u16> {
+        self.aimed_client
+            .filter(|_| self.scanned_at != 0 && now.abs_diff(self.scanned_at) <= 1_000)
+    }
+
     /// Where the last trace ended, if a scan ran within a second of `now`
     /// (`cg_crosshairPos`, which JoF EternalJK's `teleGun` reads).
     pub(crate) fn endpoint_near(&self, now: i32) -> Option<Vec3> {
@@ -87,6 +96,7 @@ impl State {
         suppression: Suppression,
     ) -> Option<CrosshairName> {
         self.scanned_at = now;
+        self.aimed_client = None;
         let start = ray.start;
         let direction = ray.forward.normalize_or_zero();
         let end = start + direction * ray.distance;
@@ -140,6 +150,7 @@ impl State {
                 && entity.number() < 32
             {
                 self.client = Some(entity.number());
+                self.aimed_client = Some(entity.number());
                 self.acquired_at = now;
             }
         }
@@ -155,7 +166,6 @@ impl State {
             target_team: client_team(game, client),
             now,
             acquired_at: self.acquired_at,
-            spectator: snapshot.player.is_spectator(),
             intermission: suppression.intermission,
             scoreboard: suppression.scoreboard,
             in_fog: false,

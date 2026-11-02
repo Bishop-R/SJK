@@ -4,8 +4,8 @@
 //! ([`super::wall_moves`]) and the ordinary jump.
 //!
 //! Jumping observes the respawn latch before Force-jump upkeep. The
-//! zero-gravity branch preserves codemp's `fraction <= 1` test, including
-//! its impulse on a clear backward trace.
+//! zero-gravity push-off is not predicted: snapshot initialization can temporarily
+//! supply zero gravity, so applying its impulse there corrupts ordinary movement.
 
 use super::wall_moves::JumpRules;
 #[cfg(test)]
@@ -141,7 +141,9 @@ impl Predictor {
         }
         // `PM_CheckJump`, before Force-jump upkeep: attack/use must first release
         // PmoveSingle's respawn latch, even if jump itself has already been released.
-        if state.movement_flags & PMF_RESPAWNED != 0 {
+        if state.movement_flags & PMF_RESPAWNED != 0
+            && !self.legacy_prediction(crate::pmove::predict_legacy::RESPAWN_JUMP)
+        {
             return false;
         }
         // Knocked down, getting up or rolling, there is no jumping (`bg_pmove.c:1790-1793`).
@@ -182,36 +184,8 @@ impl Predictor {
             command.up_move = 0;
             return false;
         }
-        // PM_CheckJump, codemp/bg_pmove.c:2070-2085. Preserve the reference's
-        // <= 1 test: even a clear trace adds the impulse, once per eligible slice.
-        if self.state.gravity <= 0.0 {
-            let (forward, _) = super::flight::flight_axes(self.state.view_angles);
-            let back = (glam::Vec3::from_array(self.state.origin) - forward * 8.0).to_array();
-            let trace = collision.trace(
-                self.state.origin,
-                bounds.minimums,
-                bounds.maximums,
-                back,
-                super::PLAYER_CONTENT_MASK,
-            );
-            if trace.fraction <= 1.0 {
-                self.state.velocity = (glam::Vec3::from_array(self.state.velocity)
-                    + forward * (JUMP_VELOCITY * 2.0))
-                    .to_array();
-                if let Some(lengths) = self.animation_lengths.as_deref() {
-                    crate::pmove_anim::set_animation(
-                        &mut self.state,
-                        crate::pmove_anim::SETANIM_LEGS,
-                        super::wall_moves::BOTH_FORCEJUMP1,
-                        crate::pmove_anim::SETANIM_FLAG_OVERRIDE
-                            | crate::pmove_anim::SETANIM_FLAG_HOLD
-                            | crate::pmove_anim::SETANIM_FLAG_RESTART,
-                        lengths,
-                    );
-                }
-            }
-            command.up_move = 0;
-        } else if command.up_move > 0
+        if self.state.gravity > 0.0
+            && command.up_move > 0
             && ja_pro_jump.is_none_or(|rules| {
                 rules.force_special && self.state.movement_flags & PMF_JUMP_HELD == 0
             })
@@ -260,121 +234,8 @@ impl Predictor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pmove::{MovementState, MovementTrace};
-    use crate::pmove_anim::{AnimationLengths, AnimationTiming};
-    use std::cell::Cell;
+    use crate::pmove::{MovementConfig, MovementState, MovementTrace};
 
-    struct BackTrace {
-        fraction: f32,
-        calls: Cell<usize>,
-    }
-    impl MovementCollision for BackTrace {
-        fn trace(
-            &self,
-            start: [f32; 3],
-            mins: [f32; 3],
-            maxs: [f32; 3],
-            end: [f32; 3],
-            _: u32,
-        ) -> MovementTrace {
-            self.calls.set(self.calls.get() + 1);
-            assert_eq!(mins, [-15.0, -15.0, -24.0]);
-            assert_eq!(maxs, [15.0, 15.0, 40.0]);
-            assert!((glam::Vec3::from_array(end).distance(start.into()) - 8.0).abs() < 0.0001);
-            MovementTrace {
-                fraction: self.fraction,
-                ..MovementTrace::miss(end)
-            }
-        }
-    }
-    #[derive(Debug)]
-    struct Timings;
-    impl AnimationLengths for Timings {
-        fn length_ms(&self, _: u16) -> Option<i32> {
-            Some(500)
-        }
-
-        fn timing(&self, _: u16) -> Option<AnimationTiming> {
-            Some(AnimationTiming {
-                frame_count: 10,
-                frame_lerp_ms: 50,
-            })
-        }
-    }
-
-    #[test]
-    fn zero_gravity_push_preserves_the_clear_trace_quirk_and_jump_gates() {
-        // OpenJK bg_pmove.c:2070-2085: +450 along the aim, even fraction == 1.
-        for step in [8, 7, 4, 3] {
-            for gravity in [0.0, -100.0] {
-                for fraction in [0.25, 1.0] {
-                    for (grounded, up, held, pushes) in [
-                        (false, 0, false, true),
-                        (false, 127, false, true),
-                        (false, 127, true, false),
-                        (true, 0, false, false),
-                        (true, 127, false, true),
-                    ] {
-                        let mut predictor = Predictor::from_state(
-                            MovementState {
-                                health: 100,
-                                gravity,
-                                command_time: step,
-                                view_angles: [-30.0, 90.0, 0.0],
-                                velocity: [10.0, 20.0, 30.0],
-                                ground_entity_number: if grounded {
-                                    1022
-                                } else {
-                                    ENTITY_NUMBER_NONE
-                                },
-                                movement_flags: if held { PMF_JUMP_HELD } else { 0 },
-                                ..Default::default()
-                            },
-                            Default::default(),
-                        );
-                        predictor.set_animation_lengths(std::sync::Arc::new(Timings));
-                        let world = BackTrace {
-                            fraction,
-                            calls: Cell::new(0),
-                        };
-                        let mut command = UserCommand {
-                            server_time: step,
-                            up_move: up,
-                            ..Default::default()
-                        };
-                        let mut ground = GroundState::air(MovementTrace::miss([0.0; 3]));
-                        predictor.check_jump(
-                            &mut command,
-                            Bounds {
-                                minimums: [-15.0, -15.0, -24.0],
-                                maximums: [15.0, 15.0, 40.0],
-                            },
-                            &mut ground,
-                            &world,
-                            &MoveContext::CLIENT,
-                        );
-                        assert_eq!(world.calls.get(), usize::from(pushes));
-                        let expected = if pushes {
-                            let (forward, _) =
-                                super::super::flight::flight_axes([-30.0, 90.0, 0.0]);
-                            (glam::Vec3::new(10.0, 20.0, 30.0) + forward * 450.0).to_array()
-                        } else {
-                            [10.0, 20.0, 30.0]
-                        };
-                        assert_eq!(predictor.state().velocity, expected);
-                        if pushes {
-                            assert_eq!(command.up_move, 0);
-                            assert_eq!(
-                                predictor.state().legs_anim,
-                                super::super::wall_moves::BOTH_FORCEJUMP1
-                            );
-                            assert!(predictor.state().legs_timer > 0);
-                        }
-                    }
-                }
-            }
-        }
-    }
     struct Empty;
     impl MovementCollision for Empty {
         fn trace(
@@ -390,36 +251,40 @@ mod tests {
     }
 
     #[test]
-    fn airborne_zero_gravity_push_runs_on_each_unlatched_command() {
+    fn uninitialized_spawn_does_not_accumulate_zero_gravity_impulses() {
+        // Initial JA+ spawn snapshot: gravity/base speed zero, PMF_RESPAWNED |
+        // PMF_TIME_KNOCKBACK. The next initialized snapshot has gravity 800.
         for step in [8, 7, 4, 3] {
             let mut predictor = Predictor::from_state(
                 MovementState {
-                    health: 100,
+                    health: 125,
+                    weapon: WP_SABER,
                     gravity: 0.0,
-                    speed: 250.0,
-                    weapon: 2,
-                    origin: [0.0, 0.0, 100.0],
-                    standing_height: 40.0,
-                    crouching_height: 16.0,
+                    speed: 0.0,
+                    base_speed: 0.0,
+                    origin: [0.0, 0.0, 33.0],
+                    movement_flags: 576,
                     ground_entity_number: ENTITY_NUMBER_NONE,
-                    ..Default::default()
+                    ..MovementState::default()
                 },
-                Default::default(),
+                MovementConfig::default(),
             );
-            for n in 1..=2 {
+            for slice in 1..=8 {
                 predictor.predict_command(
                     UserCommand {
-                        server_time: n * step,
-                        ..Default::default()
+                        server_time: step * slice,
+                        weapon: WP_SABER,
+                        ..UserCommand::default()
                     },
                     &Empty,
                 );
-                assert_eq!(predictor.state().velocity, [450.0 * n as f32, 0.0, 0.0]);
+                assert_eq!(
+                    predictor.state().velocity,
+                    [0.0; 3],
+                    "{step} ms, slice {slice}"
+                );
+                assert_eq!(predictor.state().origin, [0.0, 0.0, 33.0]);
             }
-            assert!(
-                (predictor.state().origin[0] - 1350.0 * super::super::frame_seconds(step)).abs()
-                    < 0.0001
-            );
         }
     }
 }

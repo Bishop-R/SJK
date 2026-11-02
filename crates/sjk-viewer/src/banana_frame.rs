@@ -26,11 +26,10 @@ impl GpuState {
     /// `toy_banana`: on or off, said on the centre of the screen.
     pub(crate) fn toggle_banana(&mut self) {
         self.banana.toggle();
-        self.banana_centre(if self.banana.on() {
-            "Banana peel: drop peels with your drop key; walk onto one and you slip"
-        } else {
-            "Banana peel off: you walk over peels, and yours are picked up"
-        });
+        self.banana_centre(&crate::toy_switch_words::switched(
+            "Banana peel",
+            self.banana.on(),
+        ));
     }
 
     /// `banana_drop`: drop a peel at the next frame.

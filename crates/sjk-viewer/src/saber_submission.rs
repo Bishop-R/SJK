@@ -15,7 +15,8 @@ pub(crate) mod lights;
 /// `None` with `cg_saberTrail 0`; `skins` are the blade skins the actor wears on its first
 /// and second saber, which replace those sabers' colours. `hands` are the bolts already at
 /// the actor's `scale` ([`saber::Attachment::scaled`]); the hilts are drawn at it too, as
-/// stock draws the bolted saber model with the wearer's `modelScale`.
+/// stock draws the bolted saber model with the wearer's `modelScale`. `core_scale` is
+/// `cg_saberCoreSize` ([`crate::saber_core`]).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn submit(
     entity_id: u64,
@@ -35,6 +36,7 @@ pub(crate) fn submit(
     mut trails: Option<&mut Edges<'_>>,
     lights: &mut crate::dynamic_lights::PointLightList,
     attacking: Option<bool>,
+    core_scale: f32,
 ) -> bool {
     if equipment.kind != HeldItemKind::EnergyBlade {
         return false;
@@ -133,7 +135,8 @@ pub(crate) fn submit(
                 };
                 let key = entity_id.wrapping_mul(24) + (saber_index * 8 + blade_index) as u64;
                 saber_instances.extend(Instance::pair(whole, color).map(|i| {
-                    i.with_animation(presentation_time as f64 * 0.001, key as u32)
+                    i.with_core_scale(core_scale)
+                        .with_animation(presentation_time as f64 * 0.001, key as u32)
                         .with_motion(motion)
                 }));
             }
@@ -194,16 +197,17 @@ pub(crate) fn submit(
             let across = (square + own * 0.15).normalize_or(own).to_array();
             saber_instances.extend(
                 Instance::pair_flickering(blade, color, hilt_blade.length, flicker).map(|i| {
-                    i.with_contact(
-                        entity_id,
-                        saber_index,
-                        blade_index,
-                        !hilt.no_wall_marks,
-                        hilt.no_dlight,
-                    )
-                    .with_animation(presentation_time as f64 * 0.001, key as u32)
-                    .with_motion(motion)
-                    .with_frame(across, hilt_blade.length)
+                    i.with_core_scale(core_scale)
+                        .with_contact(
+                            entity_id,
+                            saber_index,
+                            blade_index,
+                            !hilt.no_wall_marks,
+                            hilt.no_dlight,
+                        )
+                        .with_animation(presentation_time as f64 * 0.001, key as u32)
+                        .with_motion(motion)
+                        .with_frame(across, hilt_blade.length)
                 }),
             );
             saber_instances.extend(saber::skin_extras(

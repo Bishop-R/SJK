@@ -36,6 +36,9 @@ use std::sync::{
 pub(crate) const MAX_PASSES: u32 = 32;
 /// rd-vulkan `VK_NUM_BLUR_PASSES` (`vk_local.h:76`).
 const LEVELS: usize = 4;
+/// SJK's switch that keeps saber blades and trails out of the glow image (g0dchris'
+/// idea): off by default, so every glowing stage glows as in stock.
+pub(crate) const NO_SABERS_CVAR: &str = "r_dynamicGlowNoSabers";
 /// Format of the glow image and every blur image: stock's 8-bit framebuffer.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
@@ -82,6 +85,8 @@ pub(crate) struct Live {
     pub(crate) delta: f32,
     pub(crate) intensity: f32,
     pub(crate) soft: bool,
+    /// `r_dynamicGlowNoSabers`: saber blades and trails stay out of the glow image.
+    pub(crate) no_sabers: bool,
 }
 
 impl Default for Live {
@@ -92,6 +97,44 @@ impl Default for Live {
             delta: 0.8,
             intensity: 1.13,
             soft: true,
+            no_sabers: false,
+        }
+    }
+}
+
+/// Which of the frame's glow sources the glow pass draws (`glow_pass.rs`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Sources {
+    /// Glowing world surfaces, entities, billboards and effect geometry.
+    pub(crate) scene: bool,
+    /// Saber blades' glow capsules (and skins' glints and horizons).
+    pub(crate) blades: bool,
+    /// Saber trails (`saberBlur` / `swordTrail` glow).
+    pub(crate) trails: bool,
+}
+
+impl Live {
+    /// What glows: everything for `r_DynamicGlow 1` and 3, only the blades for 2 (stock's
+    /// `RT_SABER_GLOW` test), and no saber part at all with `r_dynamicGlowNoSabers 1`,
+    /// which leaves the sabers' own drawing untouched.
+    pub(crate) fn sources(&self) -> Sources {
+        let sabers = !self.no_sabers;
+        match self.mode {
+            Mode::Off => Sources {
+                scene: false,
+                blades: false,
+                trails: false,
+            },
+            Mode::Sabers => Sources {
+                scene: false,
+                blades: sabers,
+                trails: false,
+            },
+            Mode::On | Mode::GlowOnly => Sources {
+                scene: true,
+                blades: sabers,
+                trails: sabers,
+            },
         }
     }
 }
@@ -123,7 +166,7 @@ impl Mode {
 #[derive(Clone)]
 pub(crate) struct Settings(Arc<[AtomicU32; SLOTS]>);
 
-const SLOTS: usize = 9;
+const SLOTS: usize = 10;
 /// `(name, default, slot, description)`; integers and floats are stored as `f32` bits.
 const CVARS: [(&str, Seed, usize, &str); SLOTS] = [
     (
@@ -180,6 +223,12 @@ const CVARS: [(&str, Seed, usize, &str); SLOTS] = [
         8,
         "Glow blur: 0 retail (rd-vanilla), 1 EternalJK Vulkan pyramid",
     ),
+    (
+        NO_SABERS_CVAR,
+        Seed::Integer(0),
+        9,
+        "1: saber blades and trails get no dynamic glow, everything else keeps it; live",
+    ),
 ];
 
 /// A cvar's registered default.
@@ -218,7 +267,8 @@ fn number(value: &CvarValue) -> Option<f32> {
 
 impl Settings {
     /// Register the retail glow cvars (archived, stock names and defaults except
-    /// `r_DynamicGlow`, on here) and SJK's `r_dynamicGlowStyle`, and follow their edits.
+    /// `r_DynamicGlow`, on here) and SJK's `r_dynamicGlowStyle` and
+    /// `r_dynamicGlowNoSabers`, and follow their edits.
     pub(crate) fn bind(cvars: &mut CvarRegistry) -> Result<Self, CvarError> {
         let settings = Self::default();
         for (name, seed, slot, description) in CVARS {
@@ -273,6 +323,7 @@ impl Settings {
             delta: self.value(2),
             intensity: self.value(3),
             soft: self.value(4) as i64 != 0,
+            no_sabers: self.value(9) as i64 != 0,
         }
     }
 }

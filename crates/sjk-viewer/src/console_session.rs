@@ -161,7 +161,7 @@ impl ViewerConsole {
         let ssao = crate::world_materials::ssao::settings::Settings::bind(&mut cvars)?;
         crate::world_materials::shadows::settings::register(&mut cvars)?;
         let window_options = window_options::Options::register(&mut cvars)?;
-        chat_log::register(&mut cvars)?;
+        let chat_log = chat_log::register(&mut cvars)?;
         let qcommon = qcommon::Settings::register(&mut cvars)?;
         crate::hud::targeting::register(&mut cvars)?;
         crate::input::settings::register(&mut cvars)?;
@@ -332,6 +332,7 @@ impl ViewerConsole {
                 "could not load config: {error}; settings will NOT be saved until it loads cleanly"
             ));
         }
+        window_options::discard_retired(&mut shell.cvars);
         // Sensitivity used to be counts-to-radians at 0.001; it is now stock's
         // degrees-per-count through `m_yaw`/`m_pitch`. Rescale a value saved
         // under the old units once, so an existing profile keeps the aim it
@@ -694,6 +695,7 @@ impl ViewerConsole {
             marks: config_directory.join("marks.txt"),
             copied: String::new(),
             pending_quit: false,
+            pending_name_edit: false,
             pending_input: Vec::with_capacity(64),
             pending_chat: std::collections::VecDeque::with_capacity(16),
             whisper_hover: Default::default(),
@@ -707,7 +709,7 @@ impl ViewerConsole {
             saber_change: sjk_client::SaberChangeNotifier::default(),
             movement_policy_log: None,
             window_options,
-            chat_log: chat_log::ChatLog::default(),
+            chat_log,
             qcommon,
             control: false,
             edit: super::line_edit::LineEdit::default(),
@@ -844,6 +846,35 @@ impl ViewerConsole {
     /// in a demo), `g_forcePowerDisable` included.
     pub(crate) fn server_force_rules(&self) -> Option<ForceLegalizeRules> {
         self.force_profile.server_rules()
+    }
+
+    /// Play as on a server with `rules`, for tests.
+    #[cfg(test)]
+    pub(crate) fn set_server_force_rules(&mut self, rules: ForceLegalizeRules) {
+        self.force_profile.set_server_rules(Some(rules));
+    }
+
+    /// The server said whether its saber skills come free (`EV_SET_FREE_SABER`,
+    /// stock cgame's `ui_freeSaber`): adopt it, and when the profile sent for
+    /// the player's own changes with it, send that and have the server read it.
+    pub(crate) fn note_free_saber(&mut self, free_saber: bool) {
+        if !self.force_profile.free_saber_news(free_saber) {
+            // Nothing new (or off a server): no profile work per snapshot.
+            self.force_profile.note_free_saber(free_saber);
+            return;
+        }
+        let preferred = self.text_value("forcepowers").map(str::to_owned);
+        let before = preferred
+            .as_deref()
+            .map(|preferred| self.force_profile.sent_forcepowers(preferred));
+        self.force_profile.note_free_saber(free_saber);
+        let after = preferred
+            .as_deref()
+            .map(|preferred| self.force_profile.sent_forcepowers(preferred));
+        if before != after {
+            self.userinfo_dirty.store(true, Ordering::Release);
+            self.force_profile.profile_applied();
+        }
     }
 
     /// Make `value` the player's Force profile; on a server, have it read it
@@ -993,7 +1024,8 @@ impl ViewerConsole {
             ));
         }
         self.input_health.reset();
-        self.force_profile.reset();
+        // The same server's free-saber word survives its map changes.
+        self.force_profile.begin_server(&server_info.address);
         self.saber_change.reset();
         let value = format!("profile={profile} server={server} CS_SERVERINFO={raw}");
         if let Ok(mut status) = self.server_status.write() {
@@ -1043,13 +1075,17 @@ impl ViewerConsole {
         // player to) become the rules the sent profile is fitted to.
         let rules = force_rules_from_serverinfo(game_state, update.rank, update.team);
         self.force_profile.set_server_rules(Some(rules));
+        // With the server's own free-saber word, when it has given it.
+        let rules = self.force_profile.server_rules().unwrap_or(rules);
         let current = self
             .text_value("forcepowers")
             .unwrap_or_default()
             .to_owned();
         let reply = force_rank_reply(
             &current,
-            rules.for_sent_profile(),
+            self.force_profile
+                .sent_rules()
+                .unwrap_or_else(|| rules.for_sent_profile()),
             self.force_profile.rejoin_team(),
         );
         // The reply waits for this userinfo, carrying the fitted profile.
@@ -1525,6 +1561,39 @@ mod tests {
         );
         let naive = legalize_force_powers(preferred, rules).allocation;
         assert_ne!(own, naive, "the player's own profile would be granted more");
+    }
+
+    /// An `EV_SET_FREE_SABER` that changes the profile sent sends it again with
+    /// one `forcechanged`; the same word again, or one that changes nothing
+    /// sent, sends nothing.
+    #[test]
+    fn a_changing_free_saber_event_resends_the_profile_once() {
+        use sjk_client::ForceLegalizeRules;
+        use std::sync::atomic::Ordering;
+        use std::time::Instant;
+        let directory = tempfile::tempdir().unwrap();
+        let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(console.set_cvar("forcepowers", "7-1-331330000330001133"));
+        console
+            .force_profile
+            .set_server_rules(Some(ForceLegalizeRules::default()));
+        let now = Instant::now();
+        let poll = |console: &mut ViewerConsole| console.force_profile.poll(now, true, false);
+        console.userinfo_dirty.store(false, Ordering::Release);
+        console.note_free_saber(true);
+        assert!(console.userinfo_dirty.load(Ordering::Acquire));
+        assert_eq!(poll(&mut console).commands, vec![b"forcechanged".to_vec()]);
+        console.userinfo_dirty.store(false, Ordering::Release);
+        console.note_free_saber(true);
+        assert!(!console.userinfo_dirty.load(Ordering::Acquire));
+        assert!(poll(&mut console).commands.is_empty(), "repeated");
+        // The stock profile fits either way: nothing to send.
+        assert!(console.set_cvar("forcepowers", "7-1-032330000000001333"));
+        console.userinfo_dirty.store(false, Ordering::Release);
+        poll(&mut console);
+        console.note_free_saber(false);
+        assert!(!console.userinfo_dirty.load(Ordering::Acquire));
+        assert!(poll(&mut console).commands.is_empty(), "unchanged profile");
     }
 
     /// A `forcepowers` typed in the console, or set by a config, on a server

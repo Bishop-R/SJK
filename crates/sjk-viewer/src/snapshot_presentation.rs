@@ -115,6 +115,9 @@ pub(crate) fn observe(
         }
     }
     if let Some(console) = sinks.console.as_mut() {
+        if let Some(free_saber) = sjk_client::free_saber_event(snapshot) {
+            console.note_free_saber(free_saber);
+        }
         for offset in (0..obituary_count as usize).rev() {
             if let Some(event) = sinks.obituaries.feed().newest(offset) {
                 console.push_log(format_obituary(event, game_state, sinks.localization));
@@ -380,6 +383,7 @@ impl GpuState {
                     trace_scratch: &mut self.trace_scratch,
                 },
             );
+            let toys = self.toy_moments();
             crate::achievements_frame::observe(
                 &mut self.achievement_tracker,
                 &self.obituaries,
@@ -387,6 +391,7 @@ impl GpuState {
                 snapshot,
                 obituaries_before,
                 self.cardboard_box.hiding(),
+                toys,
                 visual_now,
             );
         }

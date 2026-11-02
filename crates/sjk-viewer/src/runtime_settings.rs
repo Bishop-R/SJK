@@ -67,6 +67,11 @@ impl GpuState {
             .set_free_knockdown_view(crate::held_view::free_knockdown_view(Some(console)));
         self.local_prediction
             .set_ja_pro_plugin_disable(console.plugin_disable_bits());
+        self.local_prediction.set_predict_legacy(
+            console
+                .integer_cvar("cg_predictLegacy")
+                .map_or(0, |bits| bits.clamp(0, i64::from(u32::MAX)) as u32),
+        );
         if let Some(adapter) = &mut self.legacy_world_adapter {
             adapter.set_smooth_clients(console.smooth_clients());
             let corpses_changed = adapter.set_hide_corpses_in_duel(console.hide_corpses_in_duel());

@@ -1,5 +1,7 @@
-//! The Collection's Achievements tab: a wall of medallions in bands, each category's
-//! run under its name and count (two short categories share a band), each medallion
+//! The Collection's Achievements tab: two pages, General and Fun (the toys, Sol,
+//! 30/10/2026), switched at the wall's top right or with F. Each is a wall of medallions
+//! in bands, each category's run under its name and count (short categories share a
+//! band), each medallion
 //! ringed by the count in the category's colour, filled and gold once unlocked, the
 //! goal inside and the name under it; the one chosen is shown up close on the right with
 //! what to do and how far the player is, and under it the three nearest to unlocking.
@@ -8,22 +10,17 @@
 
 use super::view::{LEAD_Y, LEFT_X, SHOWCASE_WIDTH, SHOWCASE_X, centred_lines, glow};
 use super::*;
-use crate::achievements::Category;
 use crate::achievements::medallion::{self, Medallion, tint};
+use crate::achievements::{Category, Page};
 use crate::menu::sjk::{Frame, color, kit, text, wrap};
 use crate::menu_widgets::TextFamily;
 use sjk_ui::{DrawCommand, FontWeight, TextAlign};
 
-/// The wall: where its first band starts, the room a band takes and how far below its
-/// heading the medallions stand (four bands, then five a little closer, which still end
-/// over the keys), the medallions a band holds, a medallion's cell and its radius, and
-/// how many characters a line of a name under one holds.
+/// The wall: where its first band starts, the room a band takes, the medallions a band
+/// holds, a medallion's cell and its radius, and how many characters a line of a name
+/// under one holds.
 const WALL_TOP: f32 = 286.0;
 const BAND_STEP: f32 = 172.0;
-const BAND_INSET: f32 = 40.0;
-const FIVE_TOP: f32 = 272.0;
-const FIVE_STEP: f32 = 146.0;
-const FIVE_INSET: f32 = 36.0;
 const COLUMNS: usize = 12;
 const CELL: f32 = 85.0;
 const RADIUS: f32 = 28.0;
@@ -53,13 +50,19 @@ pub(super) struct Slot {
     pub(super) column: usize,
 }
 
-/// The wall's runs, of the achievements listed ([`Standing::listed`]): the categories in
-/// the catalogue's order, each after the one before on its band when it fits there with
-/// a column between them, else on the next band.
-pub(super) fn groups(standings: &[Standing]) -> Vec<Group> {
+/// Whether `standing` is on `page` of the board.
+fn on_page(standing: &Standing, page: Page) -> bool {
+    standing.kind.category.page() == page
+}
+
+/// The wall's runs on `page`, of the achievements listed ([`Standing::listed`]): the
+/// categories in their own order ([`Category`]), each's achievements in the catalogue's,
+/// each after the one before on its band when it fits there with a column between
+/// them, else on the next band.
+pub(super) fn groups(standings: &[Standing], page: Page) -> Vec<Group> {
     let mut categories: Vec<(Category, Vec<usize>)> = Vec::with_capacity(8);
-    for (index, standing) in standings.iter().enumerate() {
-        if !standing.listed() {
+    for (index, standing) in standings.iter().enumerate().take(WALL_MAX) {
+        if !standing.listed() || !on_page(standing, page) {
             continue;
         }
         let category = standing.kind.category;
@@ -68,25 +71,50 @@ pub(super) fn groups(standings: &[Standing]) -> Vec<Group> {
             None => categories.push((category, vec![index])),
         }
     }
+    categories.sort_by_key(|(category, _)| *category);
     let mut groups = Vec::with_capacity(categories.len() + 1);
     let (mut band, mut column) = (0, 0);
+    // Where each band's last run ends.
+    let mut ends: Vec<usize> = Vec::with_capacity(8);
     for (category, members) in categories {
         for (run, chunk) in members.chunks(COLUMNS).enumerate() {
-            let mut start = if column == 0 { 0 } else { column + 1 };
-            if start + chunk.len() > COLUMNS {
-                band += 1;
-                start = 0;
+            // The Toy Master's (`achievements::secret_kind`), found one by one, take the
+            // first band with room for them rather than one of their own below the rest.
+            let earlier = (category == Category::ToyMaster)
+                .then(|| {
+                    ends.iter().enumerate().find_map(|(at, end)| {
+                        let start = if *end == 0 { 0 } else { end + 1 };
+                        (start + chunk.len() <= COLUMNS).then_some((at, start))
+                    })
+                })
+                .flatten();
+            let (at, start) = match earlier {
+                Some(place) => place,
+                None => {
+                    let mut start = if column == 0 { 0 } else { column + 1 };
+                    if start + chunk.len() > COLUMNS {
+                        band += 1;
+                        start = 0;
+                    }
+                    column = start + chunk.len();
+                    (band, start)
+                }
+            };
+            if ends.len() <= at {
+                ends.resize(at + 1, 0);
             }
+            ends[at] = start + chunk.len();
             groups.push(Group {
                 category,
                 members: chunk.to_vec(),
-                band,
+                band: at,
                 column: start,
                 first: run == 0,
             });
-            column = start + chunk.len();
         }
     }
+    // Reading order: band by band, left to right.
+    groups.sort_by_key(|group| (group.band, group.column));
     groups
 }
 
@@ -144,26 +172,29 @@ fn open(standing: &Standing) -> bool {
     standing.listed() && standing.unlocked.is_none() && !standing.secret()
 }
 
-/// The one to show first: the open one nearest to unlocking, else the first listed.
-fn first_choice(standings: &[Standing]) -> usize {
+/// The one of `page` to show first: the open one nearest to unlocking, else the first
+/// listed.
+fn first_choice(standings: &[Standing], page: Page) -> usize {
     standings
         .iter()
         .enumerate()
-        .filter(|(_, standing)| open(standing))
+        .filter(|(_, standing)| open(standing) && on_page(standing, page))
         .max_by(|a, b| a.1.fraction().total_cmp(&b.1.fraction()))
         .or_else(|| {
             standings
                 .iter()
                 .enumerate()
-                .find(|(_, standing)| standing.listed())
+                .find(|(_, standing)| standing.listed() && on_page(standing, page))
         })
         .map_or(0, |(index, _)| index)
 }
 
-/// The open ones nearest to unlocking but `chosen`, nearest first.
-fn next_up(standings: &[Standing], chosen: usize) -> Vec<usize> {
+/// The open ones of `page` nearest to unlocking but `chosen`, nearest first.
+fn next_up(standings: &[Standing], chosen: usize, page: Page) -> Vec<usize> {
     let mut locked: Vec<usize> = (0..standings.len())
-        .filter(|index| *index != chosen && open(&standings[*index]))
+        .filter(|index| {
+            *index != chosen && open(&standings[*index]) && on_page(&standings[*index], page)
+        })
         .collect();
     locked.sort_by(|a, b| {
         standings[*b]
@@ -182,7 +213,8 @@ impl Panel {
             self.lead(frame, "No achievements", "");
             return;
         }
-        let groups = groups(standings);
+        let page = self.achievement_page;
+        let groups = groups(standings, page);
         self.achievement_slots.clear();
         self.achievement_slots.extend(slots(&groups));
         if !self
@@ -190,7 +222,7 @@ impl Panel {
             .iter()
             .any(|slot| slot.index == self.achievement)
         {
-            self.achievement = first_choice(standings);
+            self.achievement = first_choice(standings, page);
         }
         let s = frame.s;
         let (unlocked, total) = crate::achievements::tally(standings);
@@ -203,14 +235,23 @@ impl Panel {
             fraction,
             color::GOLD,
         );
-        let bands = groups.last().map_or(0, |group| group.band + 1);
-        let (wall_top, step, inset) = if bands > 4 {
-            (FIVE_TOP, FIVE_STEP, FIVE_INSET)
-        } else {
-            (WALL_TOP, BAND_STEP, BAND_INSET)
-        };
+        // The pages' switch, at the wall's top right.
+        let labels = Page::ALL.map(Page::name);
+        kit::segments(
+            &mut self.ui,
+            frame,
+            LEFT_X + COLUMNS as f32 * CELL - 8.0,
+            LEAD_Y + 19.0,
+            &labels,
+            Page::ALL
+                .iter()
+                .position(|other| *other == page)
+                .unwrap_or(0),
+            false,
+            ACHIEVEMENT_PAGE_BASE,
+        );
         for group in &groups {
-            let top = wall_top + group.band as f32 * step;
+            let top = WALL_TOP + group.band as f32 * BAND_STEP;
             let left = LEFT_X + group.column as f32 * CELL;
             let right = left + group.members.len() as f32 * CELL - 8.0;
             let hue = tint(group.category);
@@ -222,18 +263,31 @@ impl Panel {
                     .filter_map(|index| standings.get(*index))
                     .collect();
                 let held = members.iter().filter(|s| s.unlocked.is_some()).count();
+                // The heading may take the band's room after a short run, up to the next.
+                let next = groups
+                    .iter()
+                    .filter(|other| other.band == group.band && other.column > group.column)
+                    .map(|other| other.column - 1)
+                    .min()
+                    .unwrap_or(COLUMNS);
+                let heading_right = (LEFT_X + next as f32 * CELL - 8.0).max(right);
                 text(
                     &mut self.ui,
                     TextFamily::Display,
                     format_args!("{}", group.category.name()),
-                    frame.rect(left, top, right - left, 28.0),
+                    frame.rect(left, top, heading_right - left, 28.0),
                     22.0 * s,
                     hue,
                     FontWeight::Semibold,
                     TextAlign::Start,
                 );
                 let name_width = crate::text::display_width(group.category.name(), 22.0);
-                let count = format!("{held} of {}", members.len());
+                // The Toy Master's are listed only once found: their count is all held.
+                let count = if group.category == Category::ToyMaster {
+                    format!("{held} found")
+                } else {
+                    format!("{held} of {}", members.len())
+                };
                 text(
                     &mut self.ui,
                     TextFamily::Body,
@@ -255,7 +309,7 @@ impl Panel {
             for (offset, index) in group.members.iter().enumerate() {
                 if let Some(standing) = standings.get(*index) {
                     let x = left + offset as f32 * CELL;
-                    self.wall_medallion(frame, standing, *index, x, top + inset);
+                    self.wall_medallion(frame, standing, *index, x, top + 40.0);
                 }
             }
         }
@@ -496,7 +550,7 @@ impl Panel {
         let s = frame.s;
         let width = 560.0;
         let x = SHOWCASE_X + (SHOWCASE_WIDTH - width) * 0.5;
-        let near = next_up(standings, self.achievement);
+        let near = next_up(standings, self.achievement, self.achievement_page);
         if near.is_empty() {
             return;
         }
@@ -598,46 +652,109 @@ mod tests {
                 goal: 1,
                 unlocked: 1_791_336_225,
                 reward: None,
+                name: None,
+                description: None,
+                group: None,
             })
             .collect();
         crate::achievements::Record::default().standings(&held)
     }
 
-    /// The six categories fit five bands of twelve: Combat alone, Duels and flags alone
-    /// (with the five style masters), Journeys beside Community, Collection alone, Toys
-    /// alone (with the five Fishing ones);
-    /// a retired achievement not held is left out and one held takes its place.
+    /// The Toy Master's found ones are on the Fun page and take its first band with room
+    /// (beside Order 66), not a fifth band below the wall, and the wall still reads band
+    /// by band.
+    #[test]
+    fn the_toy_masters_take_the_first_band_with_room() {
+        let found = |id: &str| sjk_identity::Achievement {
+            id: id.to_owned(),
+            progress: 1,
+            goal: 1,
+            unlocked: 1_791_336_225,
+            reward: None,
+            name: Some(id.to_owned()),
+            description: Some("Found.".to_owned()),
+            group: Some(sjk_identity::wire::TOY_MASTER.to_owned()),
+        };
+        let standings = crate::achievements::Record::default()
+            .standings(&[found("secret_wall_a"), found("secret_wall_b")]);
+        let groups = groups(&standings, Page::Fun);
+        let master = groups
+            .iter()
+            .find(|group| group.category == Category::ToyMaster)
+            .expect("on the wall");
+        let order66 = groups
+            .iter()
+            .find(|group| group.category == Category::Order66)
+            .unwrap();
+        assert_eq!(master.band, order66.band);
+        assert_eq!(master.column, order66.column + order66.members.len() + 1);
+        assert_eq!(master.members.len(), 2);
+        assert!(groups.iter().all(|group| group.band <= 3));
+        assert!(
+            groups
+                .windows(2)
+                .all(|pair| (pair[0].band, pair[0].column) < (pair[1].band, pair[1].column))
+        );
+    }
+
+    /// General's five categories fit four bands of twelve: Combat alone, Duels and flags
+    /// alone (with the five style masters), Journeys beside Community, Collection alone;
+    /// a retired achievement not held is left out and one held takes its place. Fun's
+    /// eight toys fit four too, two to a band. Every listed achievement is on one page.
     #[test]
     fn the_wall_packs_the_categories_into_bands() {
         let standings = standings_holding(&[]);
-        let groups = groups(&standings);
-        let layout: Vec<(&str, usize, usize, usize)> = groups
-            .iter()
-            .map(|g| (g.category.name(), g.band, g.column, g.members.len()))
-            .collect();
+        let layout = |page: Page| -> Vec<(&str, usize, usize, usize)> {
+            groups(&standings, page)
+                .iter()
+                .map(|g| (g.category.name(), g.band, g.column, g.members.len()))
+                .collect()
+        };
         assert_eq!(
-            layout,
+            layout(Page::General),
             [
                 ("Combat", 0, 0, 11),
                 ("Duels and flags", 1, 0, 11),
                 ("Journeys", 2, 0, 5),
                 ("Community", 2, 6, 3),
                 ("Collection", 3, 0, 7),
-                ("Toys", 4, 0, 9),
             ]
         );
-        let slots: Vec<Slot> = slots(&groups).collect();
+        assert_eq!(
+            layout(Page::Fun),
+            [
+                ("Cardboard box", 0, 0, 5),
+                ("Order 66", 0, 6, 3),
+                ("Hax", 1, 0, 7),
+                ("Drone", 1, 8, 2),
+                ("Boombox", 2, 0, 3),
+                ("Monitor", 2, 4, 6),
+                ("Box hunt", 3, 0, 4),
+                ("Fishing", 3, 5, 5),
+            ]
+        );
+        let all = |standings: &[Standing]| -> Vec<Slot> {
+            Page::ALL
+                .iter()
+                .flat_map(|page| slots(&groups(standings, *page)).collect::<Vec<_>>())
+                .collect()
+        };
+        let slots = all(&standings);
         assert_eq!(slots.len(), crate::achievements::ALL.len() - 1);
         assert!(!slots.iter().any(|slot| slot.index == index_of("surveyor")));
-        assert!(slots.iter().all(|slot| slot.column < COLUMNS));
+        assert!(
+            slots
+                .iter()
+                .all(|slot| slot.column < COLUMNS && slot.band < 4)
+        );
         let holder = standings_holding(&["surveyor"]);
-        let slots: Vec<Slot> = slots_of(&holder);
+        let slots = all(&holder);
         assert_eq!(slots.len(), crate::achievements::ALL.len());
         assert!(slots.iter().any(|slot| slot.index == index_of("surveyor")));
     }
 
     fn slots_of(standings: &[Standing]) -> Vec<Slot> {
-        slots(&groups(standings)).collect()
+        slots(&groups(standings, Page::General)).collect()
     }
 
     #[test]
@@ -651,8 +768,8 @@ mod tests {
         assert_eq!(vertical(&slots, below.index, false), arsenal.index);
         // Up from the first band and Down from the last stay.
         assert_eq!(vertical(&slots, arsenal.index, false), arsenal.index);
-        let toys = index_of("box_minutes_10");
-        assert_eq!(vertical(&slots, toys, true), toys);
+        let last_band = index_of("full_set");
+        assert_eq!(vertical(&slots, last_band, true), last_band);
         // Left and right read the wall in order, Tab wraps round.
         let first = slots[0].index;
         let last = slots.last().unwrap().index;
@@ -675,12 +792,18 @@ mod tests {
         let standings = standings_holding(&[]);
         let secret = index_of("mythical_find");
         assert!(standings[secret].secret());
-        assert_ne!(first_choice(&standings), secret);
-        for chosen in 0..standings.len() {
-            let near = next_up(&standings, chosen);
-            assert!(!near.contains(&secret));
-            assert!(!near.contains(&index_of("surveyor")));
+        assert_ne!(first_choice(&standings, Page::General), secret);
+        for page in Page::ALL {
+            for chosen in 0..standings.len() {
+                let near = next_up(&standings, chosen, page);
+                assert!(!near.contains(&secret));
+                assert!(!near.contains(&index_of("monitor_triple")));
+                assert!(!near.contains(&index_of("surveyor")));
+                assert!(near.iter().all(|index| on_page(&standings[*index], page)));
+            }
         }
+        let fun = first_choice(&standings, Page::Fun);
+        assert_eq!(standings[fun].kind.category.page(), Page::Fun);
     }
 
     #[test]
@@ -691,11 +814,14 @@ mod tests {
             goal: 1,
             unlocked: 1_791_336_225,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         }];
         let standings = crate::achievements::standings(&held);
-        let chosen = first_choice(&standings);
+        let chosen = first_choice(&standings, Page::General);
         assert!(standings[chosen].unlocked.is_none());
-        let near = next_up(&standings, chosen);
+        let near = next_up(&standings, chosen, Page::General);
         assert!(near.len() <= NEXT_UP && !near.contains(&chosen));
         assert!(
             near.iter()
@@ -703,8 +829,9 @@ mod tests {
         );
     }
 
-    /// Every medallion listed stands in the canvas over the keys and answers the pointer,
-    /// at 1080 lines, 4K, 4:3 and 21:9, and a retired one not held has no place.
+    /// Every medallion listed on each page stands in the canvas over the keys and
+    /// answers the pointer, at 1080 lines, 4K, 4:3 and 21:9, and a retired one not held
+    /// has no place; the pages' switch answers too.
     #[test]
     fn the_wall_fits_and_answers_the_pointer() {
         let standings = crate::achievements::standings(&[]);
@@ -719,25 +846,34 @@ mod tests {
             [1_440.0, 1_080.0],
             [2_560.0, 1_080.0],
         ] {
-            let mut panel = Panel::new();
-            panel.open(Tab::Achievements, true, true, ReturnTarget::InGame);
-            panel.build(&inputs, &font, viewport);
-            assert!(!panel.ui.overflowed(), "{viewport:?}");
-            let frame = Frame::new(viewport);
-            let keys = frame.point(0.0, super::super::view::KEYS_Y)[1];
-            for index in (0..standings.len()).filter(|index| standings[*index].listed()) {
-                let rect = panel
-                    .ui
-                    .rect_for(ACHIEVEMENT_BASE + index as u16)
-                    .expect("a medallion's area");
-                assert!(rect.bottom() <= keys, "{index} {viewport:?}");
-                assert!(rect.right() <= frame.point(SHOWCASE_X, 0.0)[0]);
-            }
-            let surveyor = index_of("surveyor") as u16;
-            assert!(panel.ui.rect_for(ACHIEVEMENT_BASE + surveyor).is_none());
-            for command in panel.ui.draw_list().commands() {
-                if let DrawCommand::Text { rect, .. } = command {
-                    assert!(rect.bottom() <= keys || rect.y >= keys, "{rect:?}");
+            for page in Page::ALL {
+                let mut panel = Panel::new();
+                panel.open(Tab::Achievements, true, true, ReturnTarget::InGame);
+                panel.achievement_page = page;
+                panel.build(&inputs, &font, viewport);
+                assert!(!panel.ui.overflowed(), "{viewport:?}");
+                let frame = Frame::new(viewport);
+                let keys = frame.point(0.0, super::super::view::KEYS_Y)[1];
+                for token in ACHIEVEMENT_PAGE_BASE..ACHIEVEMENT_PAGE_BASE + Page::ALL.len() as u16 {
+                    let rect = panel.ui.rect_for(token).expect("a page's switch");
+                    assert!(rect.right() <= frame.point(SHOWCASE_X, 0.0)[0]);
+                }
+                for index in (0..standings.len())
+                    .filter(|index| standings[*index].listed() && on_page(&standings[*index], page))
+                {
+                    let rect = panel
+                        .ui
+                        .rect_for(ACHIEVEMENT_BASE + index as u16)
+                        .expect("a medallion's area");
+                    assert!(rect.bottom() <= keys, "{index} {viewport:?}");
+                    assert!(rect.right() <= frame.point(SHOWCASE_X, 0.0)[0]);
+                }
+                let surveyor = index_of("surveyor") as u16;
+                assert!(panel.ui.rect_for(ACHIEVEMENT_BASE + surveyor).is_none());
+                for command in panel.ui.draw_list().commands() {
+                    if let DrawCommand::Text { rect, .. } = command {
+                        assert!(rect.bottom() <= keys || rect.y >= keys, "{rect:?}");
+                    }
                 }
             }
         }

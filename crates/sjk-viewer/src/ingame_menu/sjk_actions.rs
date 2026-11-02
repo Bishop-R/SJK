@@ -96,6 +96,14 @@ impl GpuState {
                 self.open_bug_report();
                 return;
             }
+            Icon::MapEditor => {
+                // Its panel takes the in-game menu's place, as Camera control's does.
+                self.in_game_menu.focus = Focus::List;
+                if let Err(error) = self.map_edit_command("mapedit_panel", &[]) {
+                    crate::log::progress(format_args!("map editor: {error}"));
+                }
+                return;
+            }
             Icon::WhatsNew | Icon::Credits | Icon::Chat | Icon::Staff => {}
         }
         if let Some(console) = &mut self.console {
@@ -104,7 +112,7 @@ impl GpuState {
                 Icon::Credits => console.open_credits(),
                 Icon::Chat => console.open_sjk_chat_panel(),
                 Icon::Staff => console.open_staff_panel(),
-                Icon::Camera | Icon::ReportBug => {}
+                Icon::Camera | Icon::ReportBug | Icon::MapEditor => {}
             }
         }
         self.sync_cursor_policy();
@@ -320,9 +328,10 @@ impl GpuState {
         };
         let snapshot = session.latest_snapshot();
         let player = &snapshot.player;
+        let own = super::OwnSide::of(session.game_state(), player);
         let local = Local {
-            team: player.team(),
-            spectator: player.is_spectator(),
+            team: own.team,
+            spectator: own.watching,
             score: player.persistent[PERS_SCORE] as i32,
             rank: player.persistent[PERS_RANK],
         };

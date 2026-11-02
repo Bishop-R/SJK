@@ -801,6 +801,16 @@ impl ClientMenu {
         }
     }
 
+    /// Close Settings (or Key bindings) when they were opened from the game menu, for
+    /// the game to show (the HUD edit mode); whether they were.
+    pub(crate) fn leave_settings_for_game(&mut self) -> bool {
+        if !self.opened_from_game() {
+            return false;
+        }
+        let _ = self.close_settings();
+        true
+    }
+
     /// Whether the screen on show was opened from the game menu, over a
     /// live match rather than the menu map.
     fn opened_from_game(&self) -> bool {
@@ -1118,6 +1128,15 @@ impl ClientMenu {
         let PhysicalKey::Code(key) = event.physical_key else {
             return MenuAction::None;
         };
+        if matches!(self.state.phase(), ClientPhase::Browser)
+            && !field_open
+            && control
+            && key == KeyCode::KeyC
+            && !self.classic_info
+        {
+            self.copy_selected_server_address();
+            return MenuAction::None;
+        }
         match self.state.phase() {
             ClientPhase::MainMenu if self.menu_style == MenuStyle::Sjk => {
                 self.sjk_home_key(key, console)
@@ -1397,6 +1416,13 @@ impl ClientMenu {
     /// Turn the player screen to page `index` (Character, Saber, Force).
     pub(crate) fn show_player_hub_page(&mut self, index: usize) {
         self.player.show_page(index);
+    }
+
+    /// The Profile screen's Character tab with its Name field open for typing.
+    pub(crate) fn edit_player_hub_name(&mut self) {
+        if self.player_hub_shown() {
+            self.player.open_name_field();
+        }
     }
 
     /// Whether a field of the Profile screen's player pages takes the keys, so Tab

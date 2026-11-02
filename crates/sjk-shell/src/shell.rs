@@ -92,6 +92,10 @@ pub struct Shell {
     config_path: Option<PathBuf>,
     config_load_failed: bool,
     config_saver: crate::config_saver::ConfigSaver,
+    /// Tells the shell's own saves from another program's edit of the file.
+    config_watch: crate::config_watch::ConfigWatch,
+    /// The file was deleted while running: the stale state is not written back.
+    config_removed: bool,
     file_log: file_log::FileLog,
     /// Sees every line as it is kept ([`Shell::set_line_tap`]).
     line_tap: Option<fn(&str)>,
@@ -114,6 +118,8 @@ impl Shell {
             config_path: None,
             config_load_failed: false,
             config_saver: Default::default(),
+            config_watch: Default::default(),
+            config_removed: false,
             file_log: file_log::FileLog::default(),
             line_tap: None,
             lines: VecDeque::with_capacity(DEFAULT_LOG_CAPACITY),
@@ -142,6 +148,10 @@ impl Shell {
             .ok_or(ShellError::NoConfigPath)?;
         let result = load_config(path, &mut self.cvars, &mut self.binds);
         self.config_load_failed = result.is_err();
+        // Watched even after a failed load, so a file fixed while running loads.
+        let bytes = std::fs::read(path).ok();
+        self.config_watch.loaded(path, bytes.as_deref());
+        self.config_removed = false;
         result?;
         // The file now holds exactly this state: nothing to save yet.
         self.config_saver.mark_saved(self.config_revision());
@@ -163,18 +173,21 @@ impl Shell {
     pub fn save(&mut self) -> Result<(), ShellError> {
         // A failed earlier write is moot once this one lands.
         let _ = self.config_saver.wait_idle();
+        self.follow_external_config(None);
         if self.config_load_failed {
             return Err(ShellError::ConfigLoadFailed);
+        }
+        if self.config_removed {
+            return Ok(());
         }
         let path = self
             .config_path
             .as_deref()
             .ok_or(ShellError::NoConfigPath)?;
         let current = self.config_revision();
-        crate::config::write_config_text(
-            path,
-            &crate::config::config_text(&self.cvars, &self.binds)?,
-        )?;
+        let contents = crate::config::config_text(&self.cvars, &self.binds)?;
+        self.config_watch.writing(&contents);
+        crate::config::write_config_text(path, &contents)?;
         self.config_saver.mark_saved(current);
         Ok(())
     }
@@ -182,6 +195,7 @@ impl Shell {
     /// Save only if something saved changed, now, on this thread: [`Self::save`]
     /// when [`Self::config_dirty`].
     pub fn save_if_dirty(&mut self) -> Result<(), ShellError> {
+        self.follow_external_config(None);
         if self.config_dirty() {
             self.save()
         } else {
@@ -199,6 +213,7 @@ impl Shell {
         if let Some(error) = self.config_saver.take_error() {
             return Err(error.into());
         }
+        self.follow_external_config(Some(now));
         let current = self.config_revision();
         if !self.config_saver.due(current, now) {
             return Ok(());
@@ -211,9 +226,53 @@ impl Shell {
             self.config_saver.mark_saved(current);
             return Err(ShellError::ConfigLoadFailed);
         }
+        if self.config_removed {
+            self.config_saver.mark_saved(current);
+            return Ok(());
+        }
         let contents = crate::config::config_text(&self.cvars, &self.binds)?;
+        self.config_watch.writing(&contents);
         self.config_saver.queue(current, path, contents)?;
         Ok(())
+    }
+
+    /// Take in a config file another program changed while the game ran
+    /// (checked every [`crate::config_watch::CHECK_INTERVAL`] at `now`, or at once
+    /// with `None`) instead of writing the values from before over it: an edited
+    /// file is loaded as at start, and after a deletion nothing more is saved this
+    /// run, so the next start begins on the defaults the player asked for.
+    fn follow_external_config(&mut self, now: Option<Instant>) {
+        use crate::config_watch::External;
+        let Some(path) = self.config_path.clone() else {
+            return;
+        };
+        // The disk is compared with this shell's own writes once they landed.
+        if now.is_none() {
+            self.config_saver.wait_writes();
+        } else if self.config_saver.writing() {
+            return;
+        }
+        match self.config_watch.check(&path, now) {
+            None => {}
+            Some(External::Edited) => match self.load() {
+                Ok(()) => self.push_log(format!(
+                    "^3{} was changed outside SJK: its settings are loaded",
+                    path.display()
+                )),
+                Err(error) => self.push_log(format!(
+                    "^1{} was changed outside SJK and could not be loaded: {error}",
+                    path.display()
+                )),
+            },
+            Some(External::Removed) => {
+                self.config_removed = true;
+                self.config_saver.mark_saved(self.config_revision());
+                self.push_log(format!(
+                    "^3{} was deleted while SJK ran: it is not written again, so SJK starts on its defaults next time (settings changed before then are not kept)",
+                    path.display()
+                ));
+            }
+        }
     }
 
     /// Iterate bounded scrollback from oldest to newest.
@@ -710,5 +769,92 @@ mod secret_tests {
                 assert!(!line.contains(secret), "{line}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod external_config_tests {
+    use super::*;
+    use crate::{CvarDefinition, CvarFlags};
+
+    fn shell_on(path: &Path) -> Shell {
+        let mut cvars = CvarRegistry::new();
+        for (name, value) in [("name", "Padawan"), ("cg_fov", "90")] {
+            cvars
+                .register(CvarDefinition::new(name, value, CvarFlags::ARCHIVE, ""))
+                .unwrap();
+        }
+        let mut shell = Shell::new(cvars, BindTable::new());
+        shell.set_config_path(path);
+        shell.load().unwrap();
+        shell
+    }
+
+    fn saved(path: &Path, name: &str) -> Option<String> {
+        let text = std::fs::read_to_string(path).ok()?;
+        text.lines()
+            .find_map(|line| line.strip_prefix(&format!("seta {name} \"")))
+            .map(|value| value.trim_end_matches('"').to_owned())
+    }
+
+    /// A config edited while the game runs is read, not overwritten with the
+    /// values from before at the next save or at exit.
+    #[test]
+    fn a_file_edited_while_running_is_loaded_and_kept() {
+        let directory = crate::config_watch::TestFolder::new();
+        let path = directory.path().join("config.cfg");
+        std::fs::write(&path, "seta name \"Old\"\nseta cg_fov \"90\"\n").unwrap();
+        let mut shell = shell_on(&path);
+        std::fs::write(&path, "seta name \"New\"\nseta cg_fov \"110\"\n").unwrap();
+        // Something else archived changes in the meantime, as a game does.
+        shell.execute_line("seta sjk_other 1").unwrap();
+        shell.save_if_dirty().unwrap();
+        assert_eq!(shell.cvars.get("name").unwrap().value.as_text(), "New");
+        assert_eq!(saved(&path, "name").as_deref(), Some("New"));
+        assert_eq!(saved(&path, "cg_fov").as_deref(), Some("110"));
+        assert!(saved(&path, "sjk_other").is_none(), "the edit came last");
+        // Changes after the edit save as before.
+        shell.execute_line("seta cg_fov 100").unwrap();
+        shell.save().unwrap();
+        assert_eq!(saved(&path, "cg_fov").as_deref(), Some("100"));
+        assert_eq!(saved(&path, "name").as_deref(), Some("New"));
+    }
+
+    /// Deleting the config while the game runs leaves it deleted, so the next
+    /// start is on the defaults; `writeconfig` still writes it on request.
+    #[test]
+    fn a_file_deleted_while_running_is_not_written_back() {
+        let directory = crate::config_watch::TestFolder::new();
+        let path = directory.path().join("config.cfg");
+        std::fs::write(&path, "seta name \"Old\"\n").unwrap();
+        let mut shell = shell_on(&path);
+        std::fs::remove_file(&path).unwrap();
+        shell.execute_line("seta cg_fov 120").unwrap();
+        shell.save_if_dirty().unwrap();
+        shell.save().unwrap();
+        assert!(!path.exists());
+        assert!(
+            shell.lines().any(|line| line.text.contains("deleted")),
+            "the console says why"
+        );
+        shell.execute_line("writeconfig").unwrap();
+        assert_eq!(saved(&path, "cg_fov").as_deref(), Some("120"));
+    }
+
+    /// The shell's own background saves are not taken for someone else's.
+    #[test]
+    fn its_own_saves_are_not_external() {
+        let directory = crate::config_watch::TestFolder::new();
+        let path = directory.path().join("config.cfg");
+        let mut shell = shell_on(&path);
+        let start = Instant::now();
+        shell.execute_line("seta name Mine").unwrap();
+        shell.autosave(start).unwrap();
+        shell.autosave(start + crate::CONFIG_SAVE_DELAY).unwrap();
+        shell.save_if_dirty().unwrap();
+        shell.execute_line("seta cg_fov 105").unwrap();
+        shell.save().unwrap();
+        assert_eq!(saved(&path, "cg_fov").as_deref(), Some("105"));
+        assert!(!shell.lines().any(|line| line.text.contains("outside SJK")));
     }
 }

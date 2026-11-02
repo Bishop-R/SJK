@@ -1,16 +1,25 @@
 //! MMO-style nameplates over players (and, optionally, NPCs).
 //!
-//! Every plate is a holo frame (design C, Sol's pick of 28/10/2026, after the capsule of
-//! design E): a hexagon holding the player's picture (their SJK hub picture, else their
-//! initial on their colour, or for a player without SJK their model's head icon) over
-//! the left end of a plate with a cut corner, which holds their name; no weapon since
-//! 28/10/2026. The frame's colour tells an SJK player (holo blue) from one without SJK
-//! (grey), a team or a duel; a sharer's plate has a gold corner. Closer, a sharer's
-//! health, shield and Force bars fade in under the name (a dotted line without them),
-//! and the Force powers they have on stand over the plate in square cells; far away the
-//! plate fades and a small hexagon and the name stay over a hairline. A dark name (black
-//! `^0`) is edged in a light halo so it reads on the see-through plate
-//! ([`crate::text::CodePalette::Haloed`]).
+//! Players choose how a plate looks (`cg_nameplateStyle`, [`Style`], 31/10/2026): the
+//! holo frame, the capsule or the classic plate, the three designs SJK has had. All
+//! three share what a plate says; only its shape differs.
+//!
+//! - **Holo frame** (the default, design C, Sol's pick of 28/10/2026): a hexagon holding
+//!   the player's picture (their SJK hub picture, else their initial on their colour, or
+//!   for a player without SJK their model's head icon) over the left end of a plate with
+//!   a cut corner, which holds their name. The frame's colour tells an SJK player (holo
+//!   blue) from one without SJK (grey), a team or a duel; a sharer's plate has a gold
+//!   corner. Closer, a sharer's health, shield and Force bars fade in under the name (a
+//!   dotted line without them); far away the plate fades and a small hexagon and the
+//!   name stay over a hairline.
+//! - **Capsule** ([`capsule`], design E of 28/10/2026): a pill holding the picture and
+//!   the name, with a sharer's bars on a tray tucked under it.
+//! - **Classic** ([`classic`], the plates before 28/10/2026): the name over a framed plate
+//!   of rounded bars, gold-edged for a sharer, grey bars for a player who does not share.
+//!
+//! No weapon since 28/10/2026. The Force powers a player has on stand over the plate in
+//! square cells. A dark name (black `^0`) is edged in a light halo so it reads on the
+//! see-through plate ([`crate::text::CodePalette::Haloed`]).
 //! Names come from the chat roster and are drawn in the classic HUD font with
 //! their colour codes; the layout maths is in [`super::nameplate_math`]. A sharer's
 //! health and shield are estimated between the values they share, once per snapshot,
@@ -34,6 +43,9 @@ use sjk_ui::{
     Color, DrawCommand, DrawList, FontWeight, Gradient, Rect, TextAlign, TextId, TextOverflow,
     TextureId,
 };
+
+pub(crate) mod capsule;
+pub(crate) mod classic;
 
 /// Text ids below this are player slots; above it, `NPC_TEXT + class_t`.
 const NPC_TEXT: u32 = 1024;
@@ -125,6 +137,52 @@ impl Mode {
         }
     }
 }
+
+/// The nameplates' look (`cg_nameplateStyle`, 31/10/2026): the three designs SJK has
+/// had, for players to choose from. Out-of-range values read as the holo frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Style {
+    /// The holo frame (design C, 28/10/2026), the default.
+    #[default]
+    Holo,
+    /// The capsule (design E, 28/10/2026): a pill with the picture, a tray of bars.
+    Capsule,
+    /// The plates before 28/10/2026: the name over a framed plate of bars.
+    Classic,
+}
+
+impl Style {
+    /// Every style, in `cg_nameplateStyle`'s order.
+    pub(crate) const ALL: [Self; 3] = [Self::Holo, Self::Capsule, Self::Classic];
+
+    /// The style `cg_nameplateStyle` names.
+    pub(crate) fn of(value: i64) -> Self {
+        match value {
+            1 => Self::Capsule,
+            2 => Self::Classic,
+            _ => Self::Holo,
+        }
+    }
+
+    /// Its `cg_nameplateStyle` value.
+    pub(crate) fn value(self) -> i64 {
+        match self {
+            Self::Holo => 0,
+            Self::Capsule => 1,
+            Self::Classic => 2,
+        }
+    }
+
+    /// Its name in Settings and the Collection.
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Holo => "Holo",
+            Self::Capsule => "Capsule",
+            Self::Classic => "Classic",
+        }
+    }
+}
+
 /// A health or shield range this wide (shares of a full bar) is too unsure to show:
 /// the bar dims and a "?" stands over it until something narrows it.
 const UNSURE_WIDTH: f32 = 0.6;
@@ -320,6 +378,9 @@ fn head_key(model: &[u8]) -> u64 {
     })
 }
 
+/// The nameplates' look ([`Style`]).
+pub(crate) const STYLE_CVAR: &str = "cg_nameplateStyle";
+
 /// Register the nameplate settings.
 pub(super) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarError> {
     cvars.register(CvarDefinition::new(
@@ -364,6 +425,12 @@ pub(super) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         true,
         CvarFlags::ARCHIVE,
         "Crossed-sabers badge before the name of a player in a private duel",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        STYLE_CVAR,
+        0_i64,
+        CvarFlags::ARCHIVE,
+        "Nameplate look: 0 the holo frame, 1 the capsule, 2 the classic plate",
     ))?;
     cvars.register(CvarDefinition::new(
         "cg_nameplateOutline",
@@ -428,6 +495,8 @@ struct Settings {
     duel_badge: bool,
     /// How the names are set off from the plate (`cg_nameplateOutline`).
     outline: crate::text::CodePalette,
+    /// The plates' look (`cg_nameplateStyle`).
+    style: Style,
     friends: bool,
     /// The local player's own plate, in third person.
     own: bool,
@@ -452,6 +521,7 @@ impl Default for Settings {
             icons: true,
             duel_badge: true,
             outline: crate::text::CodePalette::Haloed,
+            style: Style::Holo,
             friends: true,
             own: false,
             hide_duelers: false,
@@ -633,6 +703,11 @@ impl State {
                 console
                     .and_then(|c| c.integer_cvar("cg_nameplateoutline"))
                     .unwrap_or(1),
+            ),
+            style: Style::of(
+                console
+                    .and_then(|c| c.integer_cvar("cg_nameplatestyle"))
+                    .unwrap_or(0),
             ),
             friends: flag("cg_drawfriend", true),
             own: flag("cg_nameplateself", false),
@@ -1527,7 +1602,7 @@ impl State {
         }
     }
 
-    /// Lay the collected plates out as shapes and text commands.
+    /// Lay the collected plates out as shapes and text commands, in the chosen style.
     fn build<'a>(
         &mut self,
         label: &dyn Fn(TextId) -> &'a str,
@@ -1543,8 +1618,6 @@ impl State {
                 continue;
             }
             let u = unit * entry.scale;
-            let size = 36.0 * self.settings.scale * u;
-            let id = Self::text_id(&entry);
             let [x, y] = entry.point;
             // Over a team logo (drawn by `super::team_logo` at the same anchor).
             let logo_top = if entry.npc_class == 0 {
@@ -1555,92 +1628,170 @@ impl State {
             } else {
                 None
             };
-            let bottom = logo_top.map_or(y, |top| top.min(y)) - 2.0 * u;
-            let scale = size / font.height.max(1.0);
-            // The duel badge stands on the picture's corner.
-            let duel_badge = entry.duelling && self.settings.duel_badge;
-            // A sharer's bars: a player who does not share has a dotted line under
-            // their name instead (28/10/2026, no grey bars), and a duel shows none.
-            let rows = if entry.withheld || duel_badge {
-                Rows::default()
-            } else {
-                entry.rows()
+            let place = Place {
+                index,
+                id: Self::text_id(&entry),
+                x,
+                bottom: logo_top.map_or(y, |top| top.min(y)) - 2.0 * u,
+                size: 36.0 * self.settings.scale * u,
+                u,
+                unit,
             };
-            let holo = Holo::new(&HoloSpec {
-                centre_x: x,
-                bottom,
-                size,
-                name_width: crate::text::visible_text_width(font, label(id), scale),
-                picture: entry.picture != Picture::Nothing,
-                mark: entry.mark.is_some(),
-                duel: duel_badge,
-                rows,
-                detail: entry.detail,
-                proximity: entry.proximity,
-                least_bar: 2.0 * unit,
-                viewport,
-            });
-            let frame = Frame::of(&entry, duel_badge);
-            let opacity = FAR_NAME_OPACITY + (1.0 - FAR_NAME_OPACITY) * entry.proximity;
             let _ = self.list.push(DrawCommand::PushOpacity(entry.alpha));
-            // The plate fades out with distance: far away the hexagon and the name stay,
-            // over a hairline.
-            if entry.proximity > 0.01 {
-                let _ = self.list.push(DrawCommand::PushOpacity(entry.proximity));
-                self.plate(&entry, &holo, &frame, rows, duel_badge);
-                let _ = self.list.push(DrawCommand::PopOpacity);
-            }
-            if entry.proximity < 0.99 {
-                let _ = self
-                    .list
-                    .push(DrawCommand::PushOpacity(1.0 - entry.proximity));
-                let _ = self.list.push(DrawCommand::SolidRect {
-                    rect: holo.hairline,
-                    color: frame.hairline,
-                });
-                let _ = self.list.push(DrawCommand::PopOpacity);
-            }
-            self.picture(&entry, &holo, &frame, index, font, opacity);
-            let tint = if entry.npc_class == 0 {
-                Color::new(1.0, 1.0, 1.0, opacity)
-            } else {
-                Color::new(1.0, 0.95, 0.75, opacity)
-            };
-            let _ = self.list.push(DrawCommand::Text {
-                rect: Rect::new(
-                    holo.name.x,
-                    holo.middle - font.capital_middle(scale),
-                    holo.name.width + 0.5,
-                    size * 1.15,
-                ),
-                text: id,
-                size,
-                color: tint,
-                align: TextAlign::Start,
-                overflow: TextOverflow::Ellipsis,
-                weight: FontWeight::Regular,
-                letter_spacing: 0.0,
-            });
-            if let (Some(rect), Some(mark)) = (holo.mark, entry.mark) {
-                let _ = self.list.push(DrawCommand::TexturedQuad {
-                    rect,
-                    texture: mark,
-                    color: Color::new(1.0, 1.0, 1.0, opacity),
-                });
-            }
-            if let Some(rect) = holo.badge {
-                let _ = self.list.push(DrawCommand::TexturedQuad {
-                    rect,
-                    texture: crate::ui_renderer::duel_texture(usize::from(entry.duel_colour)),
-                    color: Color::new(1.0, 1.0, 1.0, opacity.max(DUEL_BADGE_OPACITY)),
-                });
-            }
-            if entry.power_count > 0 && entry.proximity > 0.01 {
-                self.power_row(&entry, icons, &holo, &frame, viewport);
+            match self.settings.style {
+                Style::Holo => self.holo(&entry, place, label, icons, font, viewport),
+                Style::Capsule => self.capsule(&entry, place, label, icons, font, viewport),
+                Style::Classic => self.classic(&entry, place, label, icons, font, viewport),
             }
             let _ = self.list.push(DrawCommand::PopOpacity);
         }
         self.mode_label(label, font, unit, viewport);
+    }
+
+    /// One holo frame plate (design C).
+    fn holo<'a>(
+        &mut self,
+        entry: &Entry,
+        place: Place,
+        label: &dyn Fn(TextId) -> &'a str,
+        icons: &[Option<TextureId>],
+        font: &UiFont,
+        viewport: [f32; 2],
+    ) {
+        let Place {
+            index,
+            id,
+            x,
+            bottom,
+            size,
+            unit,
+            ..
+        } = place;
+        let scale = size / font.height.max(1.0);
+        // The duel badge stands on the picture's corner.
+        let duel_badge = entry.duelling && self.settings.duel_badge;
+        // A sharer's bars: a player who does not share has a dotted line under
+        // their name instead (28/10/2026, no grey bars), and a duel shows none.
+        let rows = if entry.withheld || duel_badge {
+            Rows::default()
+        } else {
+            entry.rows()
+        };
+        let holo = Holo::new(&HoloSpec {
+            centre_x: x,
+            bottom,
+            size,
+            name_width: crate::text::visible_text_width(font, label(id), scale),
+            picture: entry.picture != Picture::Nothing,
+            mark: entry.mark.is_some(),
+            duel: duel_badge,
+            rows,
+            detail: entry.detail,
+            proximity: entry.proximity,
+            least_bar: 2.0 * unit,
+            viewport,
+        });
+        let frame = Frame::of(entry, duel_badge);
+        let opacity = name_opacity(entry);
+        // The plate fades out with distance: far away the hexagon and the name stay,
+        // over a hairline.
+        if entry.proximity > 0.01 {
+            let _ = self.list.push(DrawCommand::PushOpacity(entry.proximity));
+            self.plate(entry, &holo, &frame, rows, duel_badge);
+            let _ = self.list.push(DrawCommand::PopOpacity);
+        }
+        if entry.proximity < 0.99 {
+            let _ = self
+                .list
+                .push(DrawCommand::PushOpacity(1.0 - entry.proximity));
+            let _ = self.list.push(DrawCommand::SolidRect {
+                rect: holo.hairline,
+                color: frame.hairline,
+            });
+            let _ = self.list.push(DrawCommand::PopOpacity);
+        }
+        self.picture(entry, &holo, &frame, index, font, opacity);
+        self.name_line(
+            entry,
+            id,
+            [holo.name.x, holo.middle],
+            holo.name.width,
+            size,
+            font,
+        );
+        self.badges(entry, holo.mark, holo.badge, opacity);
+        if entry.power_count > 0 && entry.proximity > 0.01 {
+            self.power_row(entry, icons, &holo, &frame, viewport);
+        }
+    }
+
+    /// A plate's name, left-aligned from `x` with its capitals centred on `middle`, at
+    /// most `width` wide: white for a player, a pale gold for an NPC.
+    fn name_line(
+        &mut self,
+        entry: &Entry,
+        id: TextId,
+        [x, middle]: [f32; 2],
+        width: f32,
+        size: f32,
+        font: &UiFont,
+    ) {
+        let scale = size / font.height.max(1.0);
+        let _ = self.list.push(DrawCommand::Text {
+            rect: Rect::new(
+                x,
+                middle - font.capital_middle(scale),
+                width + 0.5,
+                size * 1.15,
+            ),
+            text: id,
+            size,
+            color: name_tint(entry),
+            align: TextAlign::Start,
+            overflow: TextOverflow::Ellipsis,
+            weight: FontWeight::Regular,
+            letter_spacing: 0.0,
+        });
+    }
+
+    /// The mark after the name in `mark`, and the duel badge in `badge`, at the name's
+    /// `opacity` (the badge never under [`DUEL_BADGE_OPACITY`]).
+    fn badges(&mut self, entry: &Entry, mark: Option<Rect>, badge: Option<Rect>, opacity: f32) {
+        if let (Some(rect), Some(texture)) = (mark, entry.mark) {
+            let _ = self.list.push(DrawCommand::TexturedQuad {
+                rect,
+                texture,
+                color: Color::new(1.0, 1.0, 1.0, opacity),
+            });
+        }
+        if let Some(rect) = badge {
+            let _ = self.list.push(DrawCommand::TexturedQuad {
+                rect,
+                texture: crate::ui_renderer::duel_texture(usize::from(entry.duel_colour)),
+                color: Color::new(1.0, 1.0, 1.0, opacity.max(DUEL_BADGE_OPACITY)),
+            });
+        }
+    }
+
+    /// The yellow "?" over a bar too unsure to show, sized to it so the marks of two
+    /// unsure bars do not meet. `k` is the plate's pixel.
+    fn unknown_mark(&mut self, rect: Rect, k: f32) {
+        let size = rect.height * 1.3 + 2.5 * k;
+        let _ = self.list.push(DrawCommand::Text {
+            rect: Rect::new(
+                rect.x,
+                rect.y + (rect.height - size * 1.15) * 0.5,
+                rect.width,
+                size * 1.15,
+            ),
+            text: TextId(UNKNOWN_TEXT),
+            size,
+            color: math::UNKNOWN_MARK,
+            align: TextAlign::Center,
+            overflow: TextOverflow::Ellipsis,
+            weight: FontWeight::Semibold,
+            letter_spacing: 0.0,
+        });
     }
 
     /// A filled convex polygon, the first [`sjk_ui::POLYGON_POINTS`] of `points`.
@@ -1977,23 +2128,7 @@ impl State {
         }
         let _ = self.list.push(DrawCommand::PopOpacity);
         if unsure {
-            // Sized to its bar, so the marks of two unsure bars do not meet.
-            let size = rect.height * 1.3 + 2.5 * k;
-            let _ = self.list.push(DrawCommand::Text {
-                rect: Rect::new(
-                    rect.x,
-                    rect.y + (rect.height - size * 1.15) * 0.5,
-                    rect.width,
-                    size * 1.15,
-                ),
-                text: TextId(UNKNOWN_TEXT),
-                size,
-                color: math::UNKNOWN_MARK,
-                align: TextAlign::Center,
-                overflow: TextOverflow::Ellipsis,
-                weight: FontWeight::Semibold,
-                letter_spacing: 0.0,
-            });
+            self.unknown_mark(rect, k);
         }
     }
 
@@ -2382,6 +2517,38 @@ impl Frame {
     }
 }
 
+/// Where one plate stands this frame, worked out once for every [`Style`].
+#[derive(Clone, Copy, Debug)]
+struct Place {
+    /// The plate's place in the frame's entries (its stand-in initial's text), and its
+    /// name's text.
+    index: usize,
+    id: TextId,
+    /// The point over the head the plate is centred on, and the plate's bottom (over a
+    /// team logo).
+    x: f32,
+    bottom: f32,
+    /// The name's text size; the HUD's pixel at the plate's distance, and unscaled.
+    size: f32,
+    u: f32,
+    unit: f32,
+}
+
+/// How opaque a plate's name is: dimmer far away.
+fn name_opacity(entry: &Entry) -> f32 {
+    FAR_NAME_OPACITY + (1.0 - FAR_NAME_OPACITY) * entry.proximity
+}
+
+/// A plate's name's colour: white for a player, a pale gold for an NPC.
+fn name_tint(entry: &Entry) -> Color {
+    let opacity = name_opacity(entry);
+    if entry.npc_class == 0 {
+        Color::new(1.0, 1.0, 1.0, opacity)
+    } else {
+        Color::new(1.0, 0.95, 0.75, opacity)
+    }
+}
+
 /// Which bar [`State::meter`] draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Meter {
@@ -2501,6 +2668,11 @@ impl State {
         };
         self.build(&label, power_icons, font, viewport);
         self.append_text(label, vertices, font, viewport);
+    }
+
+    /// Draw the previews in `style`.
+    pub(crate) fn set_style(&mut self, style: Style) {
+        self.settings.style = style;
     }
 }
 
@@ -2660,6 +2832,87 @@ mod tests {
             [800.0, 600.0],
         );
         (state, font)
+    }
+
+    /// `plate`, named Hello, laid out in `style`.
+    fn laid_out_in(style: Style, plate: PreviewPlate) -> State {
+        let font = crate::text::load_classic().expect("the HUD font");
+        let mut state = State::default();
+        state.set_style(style);
+        state.preview(
+            &[plate],
+            &["Hello"],
+            &[],
+            &font.font,
+            &mut Vec::new(),
+            [800.0, 600.0],
+        );
+        state
+    }
+
+    /// The shapes of a laid out plate drawn in `colour`.
+    fn painted(state: &State, colour: Color) -> usize {
+        state
+            .list
+            .commands()
+            .iter()
+            .filter(|command| match command {
+                DrawCommand::SolidRect { color, .. } | DrawCommand::RoundedRect { color, .. } => {
+                    *color == colour
+                }
+                _ => false,
+            })
+            .count()
+    }
+
+    /// `cg_nameplateStyle` names the three looks, and any other value is the holo frame.
+    #[test]
+    fn the_style_setting_names_the_three_looks() {
+        for style in Style::ALL {
+            assert_eq!(Style::of(style.value()), style);
+        }
+        assert_eq!(Style::of(7), Style::Holo);
+        assert_eq!(Style::of(-1), Style::Holo);
+        assert_eq!(Style::default(), Style::Holo);
+    }
+
+    /// Every style shows a sharer's bars; a player who does not share has grey bars on
+    /// the classic plate only, and the capsule a tray only for a sharer.
+    #[test]
+    fn each_style_draws_a_sharers_bars_and_only_the_classic_greys_the_rest() {
+        let sharer = || PreviewPlate {
+            health: Some([0.8, 0.8, 0.8]),
+            shield: Some([0.5, 0.5, 0.5]),
+            force: Some([0.6, 0.6, 0.6]),
+            duelling: false,
+            shared: true,
+            ..plate()
+        };
+        let withheld = || PreviewPlate {
+            health: Some([0.0, 0.0, 0.0]),
+            shield: Some([0.0, 0.0, 0.0]),
+            force: Some([0.0, 0.0, 0.0]),
+            shared: false,
+            withheld: true,
+            ..sharer()
+        };
+        for style in Style::ALL {
+            let state = laid_out_in(style, sharer());
+            assert!(painted(&state, math::HEALTH_COLOR) > 0, "{style:?}");
+            let grey = painted(&laid_out_in(style, withheld()), classic::WITHHELD_BAR);
+            assert_eq!(grey > 0, style == Style::Classic, "{style:?}");
+            let holo = !polygons(&state).is_empty();
+            assert_eq!(holo, style == Style::Holo, "{style:?}");
+        }
+        let tray = |state: &State| {
+            state
+                .list
+                .commands()
+                .iter()
+                .any(|command| matches!(command, DrawCommand::PushRoundedClip { .. }))
+        };
+        assert!(tray(&laid_out_in(Style::Capsule, sharer())));
+        assert!(!tray(&laid_out_in(Style::Capsule, withheld())));
     }
 
     fn plate() -> PreviewPlate {

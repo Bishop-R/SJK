@@ -154,6 +154,7 @@ impl ViewerConsole {
                     self.staff_panel_owns_console();
                 }
             }
+            PanelAction::EditName => self.pending_name_edit = true,
             PanelAction::Hub(tab) if self.profile_panel.mode() == Mode::Hub => {
                 let target = self.profile_hub_return;
                 self.open_profile_hub_page(tab, target);

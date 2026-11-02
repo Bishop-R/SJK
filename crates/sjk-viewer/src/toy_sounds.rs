@@ -23,11 +23,14 @@ pub(crate) enum Toy {
     Monitor,
     MysteryBox,
     Banana,
+    /// The Toy Master's hidden toys (`toy_master.rs`).
+    Master,
+    PropGun,
     Fishing,
 }
 
 impl Toy {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 12] = [
         Self::Box,
         Self::Order66,
         Self::Hax,
@@ -37,6 +40,8 @@ impl Toy {
         Self::Monitor,
         Self::MysteryBox,
         Self::Banana,
+        Self::Master,
+        Self::PropGun,
         Self::Fishing,
     ];
 
@@ -52,6 +57,8 @@ impl Toy {
             Self::Monitor => "s_toyMonitorSound",
             Self::MysteryBox => "s_toyMysteryBoxSound",
             Self::Banana => "s_toyBananaSound",
+            Self::Master => "s_toyMasterSound",
+            Self::PropGun => "s_toyPropGunSound",
             Self::Fishing => "s_toyFishingSound",
         }
     }

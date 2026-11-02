@@ -156,6 +156,9 @@ impl Shell {
         }
         // The profile's own file goes through the saver, after its queued writes.
         if self.config_path.as_deref() == Some(path.as_path()) {
+            // Asked for by name: written even after the file was deleted.
+            self.follow_external_config(None);
+            self.config_removed = false;
             self.save()?;
         } else {
             save_config(&path, &self.cvars, &self.binds)?;

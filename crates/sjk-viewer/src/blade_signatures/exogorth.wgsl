@@ -128,6 +128,12 @@ fn ex_fangs(ro: vec3<f32>, rd: vec3<f32>, px: f32, th: ptr<function, f32>, k: pt
         let p0 = around(r0, a, 0.2);
         let pm = around(r0 + lean * 0.5 - 0.12 * len, a, 0.2 + len * 0.55);
         let p1 = around(r0 + lean, a, 0.2 + len);
+        // 31/10/2026: a fang covers only what lies within its thickness (0.2 at most) and half a
+        // pixel of its two pieces, all within reach of its middle point: a ray further off skips it
+        var tm: f32;
+        if rayPtRaw(ro, rd, pm, &tm) - max(length(p0 - pm), length(p1 - pm)) > 0.25 + px {
+            continue;
+        }
         var s0: f32;
         var s1: f32;
         let d0 = raySeg(ro, rd, p0, pm, &s0);
@@ -262,7 +268,11 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let q = around(R + 0.5 * (1.0 - f) + 0.05, a - 0.03, y + 1.5 * (1.0 - f) * sin(fi));
         let dd = raySeg(ro, rd, p, q, &s);
         fx += vec3<f32>(1.0, 0.75, 0.45) * halo(dd, max(0.05, px)) * (0.9 + 1.2 * h11(fi * 7.7)) * smoothstep(0.0, 0.3, f) * s;
-        fx += vec3<f32>(1.0, 0.7, 0.3) * halo(rayPt(ro, rd, around(ex_w(y) + 0.1, a, y), &tq), 0.3) * smoothstep(0.9, 1.0, f) * 1.4;
+        // 31/10/2026: its flash at the throat only shows in the last tenth of its way in, so it is
+        // only worked out then (the same picture)
+        if f > 0.9 {
+            fx += vec3<f32>(1.0, 0.7, 0.3) * halo(rayPt(ro, rd, around(ex_w(y) + 0.1, a, y), &tq), 0.3) * smoothstep(0.9, 1.0, f) * 1.4;
+        }
     }
     // crushed rock: sparks spraying out of the throat where each rock is swallowed
     for (var i = 0; i < 12; i++) {
@@ -308,7 +318,16 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
     if top > 3.0 {
         for (var i = 0; i < 6; i++) {
             let fi = f32(i);
-            var prev = ex_strand(fi, 0.0);
+            // 31/10/2026: a strand keeps within half its chord, its sag (0.75) and sway (0.08) of its
+            // chord's middle, its drop 0.12 under it; its widest glow is 0.2 (and a pixel's): a ray
+            // further off than three of them skips its four pieces and its drop
+            let e0 = ex_strand(fi, 0.0);
+            let e1 = ex_strand(fi, 1.0);
+            var tm: f32;
+            if rayPtRaw(ro, rd, 0.5 * (e0 + e1), &tm) - 0.5 * length(e1 - e0) - 0.95 > 0.6 + 3.0 * px {
+                continue;
+            }
+            var prev = e0;
             var best: f32 = 1.0e3;
             for (var k = 1; k <= 4; k++) {
                 let nx = ex_strand(fi, f32(k) / 4.0);

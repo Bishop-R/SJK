@@ -73,13 +73,17 @@ fn surface_radiance(point: vec3<f32>, normal: vec3<f32>) -> array<vec3<f32>, 3> 
     let offset = group.x + group.y*groups.x;
     if offset >= u32(probes.origin_index.w) { return; }
     let slot = (probes.window.x + offset) % probes.window.y;
-    if probe_state[slot].w < 0 { return; }
+    // A dead probe does no work, but no lane returns on what a storage buffer holds:
+    // FXC (DX12 without dxcompiler.dll) refuses a barrier after such a return, as flow
+    // control it cannot prove uniform (X4026), and fails the whole program.
+    let live = probe_state[slot].w >= 0;
     let index = probe_index(slot);
     let position = probe_position(index);
     let refreshes = probe_state[slot].w;
     let fresh = refreshes <= 0;
     let seed = hash(slot*7919u + 104729u);
     for (var r = 0u; r < RAYS_PER_LANE; r++) {
+        if !live { break; }
         let ray = lane*RAYS_PER_LANE + r;
         let d = ray_dir(ray, seed);
         var radiance = array<vec3<f32>, 3>(vec3(0.0), vec3(1.0), vec3(0.0));
@@ -100,7 +104,7 @@ fn surface_radiance(point: vec3<f32>, normal: vec3<f32>) -> array<vec3<f32>, 3> 
         ray_distance[ray] = distance;
     }
     workgroupBarrier();
-    if lane < 3u {
+    if live && lane < 3u {
         // Lanes 0..2 each project one component onto L0..L1.
         var c0 = vec3(0.0); var c1 = vec3(0.0); var c2 = vec3(0.0); var c3 = vec3(0.0);
         for (var i = 0u; i < RAYS; i++) {
@@ -136,6 +140,7 @@ fn surface_radiance(point: vec3<f32>, normal: vec3<f32>) -> array<vec3<f32>, 3> 
         probe_sh[base+3u] = mix(vec4(c3, 0.0), probe_sh[base+3u], keep);
     }
     workgroupBarrier();
+    if !live { return; }
     // Depth moments follow the same running average (lane 0 decided its weight).
     let depth_weight = keep_weight;
     // Every lane owns one octahedral texel: distance moments from nearby ray directions.

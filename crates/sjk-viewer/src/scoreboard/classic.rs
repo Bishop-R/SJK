@@ -93,6 +93,9 @@ pub(super) struct LocalStatus {
     /// `stats[STAT_CLIENTS_READY]`.
     pub(super) ready: u32,
     pub(super) intermission: bool,
+    /// Client slots (bits) in quiet mode (`chat/quiet.rs`): today the player's own
+    /// alone, while it is on; others' would need the hub to share it.
+    pub(super) quiet: u32,
 }
 
 /// Flag icons from the HUD's item icons.

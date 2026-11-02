@@ -254,8 +254,8 @@ vec3 r8_vol(vec3 ro, vec3 rd, float px){
       vec3 a, c, m, e; float seed;
       float live = ae_crack(float(i), a, c, m, e, seed);
       if (live <= 0.0) continue;
-      float d = bolt3(ro, rd, a, c, seed, 0.3);
-      d = min(d, bolt3(ro, rd, m, e, seed + 3.0, 0.35));
+      float d = bolt3(ro, rd, a, c, seed, 0.3, px);
+      d = min(d, bolt3(ro, rd, m, e, seed + 3.0, 0.35, px));
       float nr = 0.5 + 0.9*halo(abs(a.y - gazeY), 5.0)*o;
       vec3 cc = vec3(1.0, 0.55, 0.4)*halo(d, max(px, 0.03))*1.2 + red*halo(d, 0.2)*1.2 + vec3(0.6, 0.0, 0.05)*halo(d, 0.9)*0.45;
       fx += cc*live*beat*nr;

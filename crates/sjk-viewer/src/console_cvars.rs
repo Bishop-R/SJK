@@ -324,6 +324,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             archive,
             "Lock wall-grab look even when the server allows free look; off follows the server profile",
         ),
+        CvarDefinition::new(
+            "cg_predictLegacy",
+            0_i64,
+            archive,
+            "Prediction changes since 2026.1028.1 turned back off, one bit each (255 all): 1 saber files, 2 saber-lock facing, 4 respawn jump, 8 trigger box, 16 gesture, 32 held, 64 other players, 128 history gap",
+        ),
         // EternalJK's: write prediction misses to the log (`cg_predict.c:1534`).
         CvarDefinition::new(
             "cg_showMiss",
@@ -354,6 +360,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             0.0_f64,
             archive,
             "SJK radial HUD: how much higher its meters sit, in per cent of the screen (-20 lower to 40 higher)",
+        ),
+        CvarDefinition::new(
+            crate::hud::placement::OFFSETS_CVAR,
+            "",
+            archive,
+            "Where hud_edit moved the HUD's elements: id:x,y pairs in 480-line units, right and down positive (vitals:0,-20 timer:40,0)",
         ),
         CvarDefinition::new(
             "cg_thirdPersonRange",
@@ -501,6 +513,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
         ),
         CvarDefinition::new("cg_footsteps", true, archive, "Play footstep sounds"),
         CvarDefinition::new(
+            crate::sound_sonar::CVAR,
+            false,
+            archive,
+            "Sound sonar: arcs round the crosshair point toward the sounds you hear",
+        ),
+        CvarDefinition::new(
             crate::team_sabers::TEAM_COLORS_CVAR,
             true,
             archive,
@@ -601,6 +619,18 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             true,
             archive,
             "Play Banana peel sounds (SJK)",
+        ),
+        CvarDefinition::new(
+            crate::toy_sounds::Toy::PropGun.cvar(),
+            true,
+            archive,
+            "Play Prop gun sounds (SJK)",
+        ),
+        CvarDefinition::new(
+            crate::toy_sounds::Toy::Master.cvar(),
+            true,
+            archive,
+            "Play the sounds of the Toy Master's hidden toys (SJK)",
         ),
         CvarDefinition::new(
             crate::toy_sounds::Toy::Fishing.cvar(),
@@ -871,6 +901,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             archive,
             "Saber clash flare size, 0 to 2",
         ),
+        CvarDefinition::new(
+            crate::saber_core::CVAR,
+            1.0_f64,
+            archive,
+            "Blade core thickness: the white line down a lit blade, 0.5 to 2 (1 as in the original game)",
+        ),
         // EternalJK's (JoF EJK `cg_xcvar.h`, `cg_event.c` `EV_SABER_HIT`): the red sparks
         // of a saber hit on a body ([`crate::impacts::flesh_sparks`]).
         CvarDefinition::new(
@@ -939,6 +975,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             archive,
             "The Banana peel toy is on: you may drop banana peels (banana_drop) and slip on the ones you walk onto (toy_banana switches it)",
         ),
+        CvarDefinition::new(
+            crate::toy_saved::PROPGUN_CVAR,
+            false,
+            archive,
+            "The Prop gun toy is on: you hold the chosen prop gun instead of your weapon, attack fires it, and others' bolts knock you down (toy_propgun switches it)",
+        ),
         // Other players' toys seen (Collection > Toys).
         CvarDefinition::new(
             crate::toy_sight::CVARS[0].0,
@@ -977,6 +1019,18 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Monitors are seen (0: no Monitor toy monitor is drawn, nor its sounds in the world heard, on this PC; SJK)",
         ),
         CvarDefinition::new(
+            crate::propgun::SHOW_CVAR,
+            true,
+            archive,
+            "Other players' prop guns are seen (0: their Prop gun toy guns, bolts and sounds are not drawn or heard on this PC; SJK)",
+        ),
+        CvarDefinition::new(
+            crate::propgun::GUN_CVAR,
+            "",
+            archive,
+            "The gun the Prop gun toy holds: the name of a propguns/<name>.gun file (propgun lists them; SJK)",
+        ),
+        CvarDefinition::new(
             crate::banana::SHOW_CVAR,
             true,
             archive,
@@ -986,7 +1040,13 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             crate::tags::CVAR,
             crate::tags::DEFAULT,
             archive,
-            "The tag toy_tag sticks, by id (tag_gg); one you do not hold is not stuck (the Collection's Tags tab chooses it; SJK)",
+            "The tag toy_tag sticks, by id (tag_gg), or a credits card you hold (sjk_alpha_001); one you do not hold is not stuck (the Collection's Tags tab chooses it; SJK)",
+        ),
+        CvarDefinition::new(
+            crate::tags::FINISH_CVAR,
+            "normal",
+            archive,
+            "The finish toy_tag sticks your tag in: normal, holo or solar; one you hold no copy in sticks normal (the Collection's Tags tab chooses it; SJK)",
         ),
         CvarDefinition::new(
             crate::tags::SHOW_CVAR,
@@ -1165,16 +1225,16 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Internal migration marker for the two-pass shield flash default",
         ),
         CvarDefinition::new(
-            crate::whats_new_card::SEEN_CVAR,
+            crate::news_panel::SEEN_CVAR,
             "",
             archive,
-            "The SJK version whose update recap (the what's-new card) you closed; empty shows the current one once",
+            "The SJK version whose update recap (the News panel) you closed; empty shows the current one once",
         ),
         CvarDefinition::new(
-            crate::whats_new_card::RESET_CVAR,
+            crate::news_panel::RESET_CVAR,
             "",
             archive,
-            "The SJK version whose update put the settings it changed back to their default (the what's-new card's Settings to review), so they are reset once",
+            "The SJK version whose update put the settings it changed back to their default (the News panel's Settings to review), so they are reset once",
         ),
         CvarDefinition::new(
             crate::settings::slider_peek::CVAR,
@@ -1484,10 +1544,22 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Classic scoreboard: always use the small rows",
         ),
         CvarDefinition::new(
-            "cg_showClientIDs",
+            crate::scoreboard::style::IDS_CVAR,
             true,
             archive,
             "Classic scoreboard: show each player's client ID",
+        ),
+        CvarDefinition::new(
+            crate::scoreboard::style::SJK_IDS_CVAR,
+            false,
+            archive,
+            "SJK scoreboard: show each player's client number before the name",
+        ),
+        CvarDefinition::new(
+            crate::scoreboard::style::DEATHS_RANK_CVAR,
+            false,
+            archive,
+            "Scoreboard: rank players by score minus deaths where deaths are shown, fewer deaths first on a tie",
         ),
         CvarDefinition::new(
             crate::jof_tag::CVAR,

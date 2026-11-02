@@ -204,6 +204,8 @@ mod tests {
         assert_eq!(peek.show(start + ms(1_003)), None);
     }
 
+    // `violation_count` exists only in debug builds (`warn_debug`).
+    #[cfg(debug_assertions)]
     #[test]
     fn peeking_allocates_nothing() {
         let start = Instant::now();

@@ -4,6 +4,10 @@
 use sjk_client::{legacy_evaluate_trajectory, legacy_evaluate_trajectory_angles};
 use sjk_protocol::{ENTITY_NUMBER_NONE, EntityState, Snapshot};
 
+#[path = "prediction_vehicle_clip.rs"]
+mod vehicle_clip;
+pub(crate) use vehicle_clip::ClipActor;
+
 const ENTITY_SLOTS: usize = ENTITY_NUMBER_NONE as usize + 1;
 const SOLID_BMODEL: u32 = 0x00ff_ffff;
 const ET_MOVER: u8 = 6;
@@ -55,6 +59,7 @@ pub(crate) struct Collider {
     pub(crate) rocket_target: sjk_game_jka::pmove::RocketLockTarget,
     vehicle_bounds: Option<sjk_game_jka::vehicle_bounds::VehicleBounds>,
     vehicle: bool,
+    pub(crate) clip_actor: ClipActor,
     pub(crate) entity: u16,
     pub(crate) model: usize,
     pub(crate) bounds: Option<sjk_bsp::Aabb>,
@@ -100,6 +105,7 @@ impl Collider {
             },
             vehicle_bounds: None,
             vehicle: false,
+            clip_actor: ClipActor::player(mover.entity_number, 0),
             model: mover.model_index,
             bounds: None,
             origin: mover.origin,
@@ -165,6 +171,7 @@ impl Collider {
             },
             vehicle_bounds: None,
             vehicle: state.entity_type() == ET_NPC && state.npc_class() == CLASS_VEHICLE,
+            clip_actor: ClipActor::from_entity(state),
             model: state.model_index() as usize,
             bounds,
             origin: position.position(physics_time),
@@ -252,6 +259,8 @@ mod rocket_target_tests {
 pub(crate) struct Movers {
     vehicle_models: Vec<Option<sjk_game_jka::vehicle_bounds::VehicleBounds>>,
     vehicle_models_revision: Option<u64>,
+    pub(crate) local_actor: ClipActor,
+    pub(crate) vehicle_actor: Option<ClipActor>,
     /// CG_BuildSolidList's separate trigger list (cg_predict.c:68-80).
     pub(crate) triggers: Vec<sjk_client::prediction_items::PredictionTrigger>,
     pub(crate) colliders: Vec<Collider>,
@@ -271,6 +280,8 @@ impl Movers {
             triggers: Vec::with_capacity(ENTITY_SLOTS),
             vehicle_models: Vec::new(),
             vehicle_models_revision: None,
+            local_actor: ClipActor::player(0, 0),
+            vehicle_actor: None,
             colliders: Vec::with_capacity(ENTITY_SLOTS),
             by_entity: vec![None; ENTITY_SLOTS].into_boxed_slice(),
             sequence: None,
@@ -291,6 +302,12 @@ impl Movers {
         self.triggers.clear();
         self.by_entity.fill(None);
         let local = snapshot.player.client_num();
+        self.local_actor = snapshot
+            .entities
+            .iter()
+            .find(|state| state.number() == local)
+            .map(ClipActor::from_entity)
+            .unwrap_or_else(|| ClipActor::player(local, snapshot.player.vehicle_entity_num()));
         let piloting = snapshot
             .vehicle_player
             .as_ref()
@@ -302,6 +319,14 @@ impl Movers {
                         .iter()
                         .any(|state| state.number() == number && state.owner() == local)
             });
+        self.vehicle_actor = piloting
+            .and_then(|number| {
+                snapshot
+                    .entities
+                    .iter()
+                    .find(|state| state.number() == number)
+            })
+            .map(ClipActor::from_entity);
         for state in snapshot
             .entities
             .iter()

@@ -60,7 +60,7 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         let y0 = (0.08 + 0.8 * h11(k * 2.3 + fi)) * top;
         let a = h11(k * 4.7 + fi);
         let reach = 2.5 + 2.5 * h11(k * 1.1 + fi);
-        let bd = bolt3(ro, rd, around(0.4, a, y0), around(reach, a + 0.08, y0 + 2.0 * (h11(k * 3.3) - 0.3)), k + fi * 13.0, 0.4);
+        let bd = bolt3(ro, rd, around(0.4, a, y0), around(reach, a + 0.08, y0 + 2.0 * (h11(k * 3.3) - 0.3)), k + fi * 13.0, 0.4, px);
         col += boltLight(bd, green, px) * 1.2;
     }
     // dark-green vapour coiling round it and gold dust in the air

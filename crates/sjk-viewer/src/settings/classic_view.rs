@@ -27,11 +27,11 @@ use std::fmt::Write as _;
 use winit::keyboard::KeyCode;
 
 /// The rows' wheel target over the panel and the scrollbar beside it, clear
-/// of the row (0-499), tab (500), slider value (700), chrome (800) and back
-/// (900) tokens.
+/// of the row (0-499), tab (500), chrome (800), back (900) and slider value
+/// (`VALUE_BASE`) tokens.
 pub(super) const CLASSIC_SCROLL_TOKEN: u16 = 911;
 pub(super) const CLASSIC_SCROLLBAR_TOKEN: u16 = 912;
-/// Choice `i` of an open dropdown answers to `DROPDOWN_BASE + i`.
+/// The `i`-th shown choice of an open dropdown answers to `DROPDOWN_BASE + i`.
 pub(super) const DROPDOWN_BASE: u16 = 1_000;
 /// Rows one wheel notch scrolls, as the settings form steps.
 pub(super) const CLASSIC_WHEEL_ROWS: i32 = 1;
@@ -70,7 +70,9 @@ impl RowControl {
                     index: offset % MAX_SEGMENTS,
                 })
             }
-            RESET_BASE.. => Some(Self::Reset(usize::from(token - RESET_BASE))),
+            RESET_BASE..crate::menu_widgets::numeric::VALUE_BASE => {
+                Some(Self::Reset(usize::from(token - RESET_BASE)))
+            }
             _ => None,
         }
     }
@@ -239,7 +241,7 @@ impl SettingsMenu {
         let row = self.selected;
         assert!(self.open_dropdown(console, row), "no dropdown on row {row}");
         if let Some(dropdown) = &mut self.dropdown {
-            dropdown.highlighted = (dropdown.current + 1) % dropdown.picks.len();
+            dropdown.highlight((dropdown.current + 1) % dropdown.picks.len());
         }
     }
 
@@ -353,7 +355,11 @@ impl SettingsMenu {
                 let value = super::choice_value(console, setting.cvar);
                 values
                     .iter()
-                    .position(|candidate| Some(*candidate) == value.as_deref())
+                    .position(|candidate| {
+                        value
+                            .as_deref()
+                            .is_some_and(|value| candidate.eq_ignore_ascii_case(value))
+                    })
                     .unwrap_or(0)
             }
             ValueKind::Quality => {
@@ -372,17 +378,13 @@ impl SettingsMenu {
             }
         };
         self.selected = row;
-        self.dropdown = Some(Dropdown {
-            row,
-            picks,
-            highlighted: current,
-            current,
-        });
+        self.dropdown = Some(Dropdown::new(row, picks, current));
         true
     }
 
-    /// A key while a dropdown is open: Up and Down choose, Enter or Space
-    /// apply, Escape (or Backspace) closes it with nothing changed.
+    /// A key while a dropdown is open: Up and Down choose, Page Up and Page
+    /// Down a page at a time, Home and End the ends, Enter or Space apply,
+    /// Escape (or Backspace) closes it with nothing changed.
     pub(super) fn dropdown_key(&mut self, key: KeyCode, console: &mut ViewerConsole) {
         let Some(dropdown) = &mut self.dropdown else {
             return;
@@ -390,11 +392,17 @@ impl SettingsMenu {
         let count = dropdown.picks.len();
         match key {
             KeyCode::ArrowUp | KeyCode::KeyW => {
-                dropdown.highlighted = (dropdown.highlighted + count - 1) % count;
+                dropdown.highlight((dropdown.highlighted + count - 1) % count);
             }
             KeyCode::ArrowDown | KeyCode::KeyS => {
-                dropdown.highlighted = (dropdown.highlighted + 1) % count;
+                dropdown.highlight((dropdown.highlighted + 1) % count);
             }
+            KeyCode::PageUp => {
+                dropdown.highlight(dropdown.highlighted.saturating_sub(Dropdown::ROWS));
+            }
+            KeyCode::PageDown => dropdown.highlight(dropdown.highlighted + Dropdown::ROWS),
+            KeyCode::Home => dropdown.highlight(0),
+            KeyCode::End => dropdown.highlight(count),
             KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => {
                 let pick = dropdown.highlighted;
                 self.apply_pick(console, pick);
@@ -570,7 +578,7 @@ impl SettingsMenu {
             let slot = lines[shown_lines.clone()]
                 .iter()
                 .position(|line| *line == Line::Row(dropdown.row))?;
-            Some((slot, dropdown.picks.len()))
+            Some((slot, dropdown.shown().len()))
         });
         let covered = |slot: usize| {
             dropdown_slot.is_some_and(|(open, count)| place.dropdown_covers(open, count, slot))
@@ -654,6 +662,7 @@ impl SettingsMenu {
                 | ValueKind::ImportPage
                 | ValueKind::AssetBrowser
                 | ValueKind::ContentCard
+                | ValueKind::HudEdit
                 | ValueKind::SoundPreview
                 | ValueKind::GameplayFps
                 | ValueKind::Quality => {
@@ -739,8 +748,8 @@ impl SettingsMenu {
             match slots.iter().find(|(row, _)| *row == dropdown.row) {
                 Some(&(_, slot)) => {
                     let cvar = self.rows().get(dropdown.row).map_or("", |row| row.cvar);
-                    let labels: Vec<&str> = dropdown
-                        .picks
+                    let shown = dropdown.shown();
+                    let labels: Vec<&str> = dropdown.picks[shown.clone()]
                         .iter()
                         .map(|pick| Self::pick_label(cvar, *pick))
                         .collect();
@@ -748,9 +757,10 @@ impl SettingsMenu {
                         &mut self.ui,
                         slot,
                         &labels,
-                        dropdown.highlighted,
-                        dropdown.current,
+                        dropdown.highlighted.wrapping_sub(shown.start),
+                        dropdown.current.wrapping_sub(shown.start),
                         DROPDOWN_BASE,
+                        (shown.start, dropdown.picks.len()),
                     );
                 }
                 None => self.dropdown = None,
@@ -840,7 +850,9 @@ impl SettingsMenu {
             return;
         }
         if self.dropdown.is_some() {
-            hint.push_str("UP or DOWN to choose, ENTER to apply, ESC to keep it as it is");
+            hint.push_str(
+                "UP or DOWN to choose, the wheel or PAGE UP/DOWN to scroll, ENTER to apply, ESC to keep it as it is",
+            );
             return;
         }
         if self.searching {
@@ -882,6 +894,7 @@ impl SettingsMenu {
                 "ENTER to enable or disable installed PK3 packs for the next start"
             }
             ValueKind::ContentCard => "ENTER to choose and download",
+            ValueKind::HudEdit => "ENTER to drag the HUD's elements over the game",
             ValueKind::SoundPreview => "ENTER or a click to hear the sound chosen above",
         });
         if self
@@ -1047,6 +1060,7 @@ pub(super) fn row_default(console: &ViewerConsole, setting: &Setting) -> RowDefa
             | ValueKind::ImportPage
             | ValueKind::AssetBrowser
             | ValueKind::ContentCard
+            | ValueKind::HudEdit
             | ValueKind::SoundPreview
     ) {
         return RowDefault::default();
@@ -1288,13 +1302,24 @@ mod tests {
         }
         // Rows, tabs, values, chrome, footer, search and dropdown choices are not
         // controls.
-        for token in [0, 499, 500, 700, 800, 911, 913, DROPDOWN_BASE + 5] {
+        let value = crate::menu_widgets::numeric::VALUE_BASE;
+        for token in [
+            0,
+            499,
+            500,
+            800,
+            911,
+            913,
+            DROPDOWN_BASE + 5,
+            value,
+            value + 300,
+        ] {
             assert_eq!(RowControl::of(token), None, "{token}");
         }
         // Every searchable row's segments fit below the reset buttons.
         let rows = search::rows().len();
         assert!(SEGMENT_BASE as usize + rows * MAX_SEGMENTS <= RESET_BASE as usize);
-        assert!(RESET_BASE as usize + rows <= usize::from(u16::MAX));
+        assert!(RESET_BASE as usize + rows <= usize::from(value));
     }
 
     #[test]

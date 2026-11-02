@@ -56,6 +56,7 @@ did: The mystery box's roll and its music box tune
 did: The mystery box's own chest and the words over it
 did: The Box hunt toy: kill the mark for a free mystery box roll
 did: The Banana peel toy: drop peels; opted-in players who walk onto one slip as ragdolls
+did: The Prop gun toy: hold a fake gun from your own pk3; its bolts knock opted-in players down
 did: A macOS build for Apple Silicon, built by GitHub with every release (experimental)
 did: Medals from the SJK team, with medal pictures generated and chosen by Sol
 did: Card pictures drawn from the game: characters posed with lit sabers, weapons, moves
@@ -78,6 +79,9 @@ did: The Mythical holocron's engram: gold plates breathing round a glowing core
 did: Blade cards craft their saber shader for less, and lead to it from the Cards tab
 did: Perk marks on cards: a badge for each thing a card brings
 did: The Forge: shop, crafting and breaking any saber shader down, in one tab
+did: The History tab: every drop, opening, credit and shard spent, box and trade
+did: Blade cost ranking: every Legendary and Mythical blade timed on the GPU
+did: Top-tier saber shaders made faster with the same look
 did: The four holocrons: the Jedi cube, the Great Holocron, the Sith pyramid, the kyber prism
 did: Grand finds told in SJK chat: who opened a holocron and got a grand prize
 did: The holocron limit resets for everyone at 9:00, Paris time
@@ -133,6 +137,10 @@ did: Lighter memory on servers: the menu world dropped during matches
 did: Client mods: JA+ tools (admin teleports after JoF EJK) and JoF tools, loaded on their servers
 did: JoF content: JoF's maps, skins, hilts and packs from JoF's repository, opt in, after JoF's launcher
 did: The Sith cloud on the same card, with the SJK hub naming both collections' servers
+did: Automatic updates for JoF content and the Sith cloud: opt in, hourly, for the groups you mark
+did: The News panel: release recaps and announcements in one, with links into the game, pictures and switches
+did: Sharp tags drawn in a pass of their own, Holo and Solar tags, and the credits cards as tags
+did: The Toy Master: toys hidden on maps to find, each a secret achievement
 did: Mythical shader parts: the Sun's and the Spectral's effects, each switched on or off
 did: The Sun's orbiting glints, circling its blade below the tip
 did: The Sun's plasma trail, and the Flare trail, embers and heat wake a Solar card 000 unlocks
@@ -188,6 +196,7 @@ did: Maps with external lightmaps (q3map2 -external) load and are lit (after EJK
 did: Sky cloud layers: a sky shader's scrolling stages drawn over its box (after JKA)
 did: tcGen vector stages: textures projected in world space, as in JKA
 did: Collection marks: worn, favourite, locked and New saber shaders, the lock held by the hub
+did: Toon models: cartoon-style banded shading with a bright rim, an option off by default
 link: https://github.com/Sol-Vulpes/SJK
 link: https://sol-vulpes.github.io/SJK/
 
@@ -195,7 +204,7 @@ link: https://sol-vulpes.github.io/SJK/
 
 [Creyon]
 github: Creyon94
-role: Contributor and tester: 68 merged pull requests, EternalJK parity
+role: Contributor and tester: 77 merged pull requests, EternalJK parity
 medal: early_contributor
 did: #2 #7 Duel challenges from names with symbols, centre prints kept whole
 did: #3 The third-person camera damped per frame as EternalJK (cg_cameraFPS)
@@ -247,11 +256,19 @@ did: The Saber ideas page: the concepts of the Tidal, Circuit, Aurora, Echo, Neb
 did: The Blade Lab page: the Neon, Peppermint, Soap Bubble, Lava Lamp, Reactor and Bleeding Kyber blades
 did: The Blade Lab page: the Sketch, Hourglass, Fiber Optic, Serpent, Monarch, Phoenix and Quantum blades
 did: The Blade Lab page: the Comic, Quicksilver and Obsidian Edge blades
+did: #297 Blade core thickness: a slider for the white core of a lit blade
+did: #296 Day and night follow the PC's clock, in every graphics preset
+did: #289 Toys say ON and OFF in colour; toy_help explains every toy
+did: #320 Hide chosen chat GIFs on this PC, a Hidden tab shows them again
+did: #328 Shaders chosen by a click; new ones wear a New sticker and gold outline
+did: #317 Client numbers on SJK's scoreboard; rank by score minus deaths
+did: #321 A finished trade's toast says what it gave, names in full
+did: #236 JoF hats as in JoF EJK, from the old EternalJK folder
 link: Creyon's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ACreyon94
 
 [Lumaya]
 github: lumayaa
-role: Contributor: 75 merged pull requests
+role: Contributor: 88 merged pull requests
 medal: early_contributor
 did: #24 Saber blades stop at walls instead of shining through them
 did: #29 Free camera: /freecam flies the camera away from your body
@@ -312,11 +329,21 @@ did: #277 jaPRO race moves predicted as jaPRO cuts and rounds them
 did: #252-#273 Six more prediction fixes: saber locks, respawn, vehicles
 did: #279 #282 jaPRO movement styles and their jumps predicted
 did: #284 jaPRO new jetpack predicted
+did: #305 #307 #308 Prediction checked against a real JA+ server, two fixes backed out
+did: #313 #314 Each prediction fix explained; saber files read in the game's order
+did: #312 Copy a server's IP from the browser or the console
+did: #315 All chat in one colour of your choice
+did: #331 One switch for the away chat bubble, unfocused or minimized
+did: #332 Save game chat logs, a switch in Settings > Chat
+did: #274 Riders and vehicles predicted with their own collision exclusions
+did: #316 Emoji reactions on SJK chat messages
+did: #319 Profile banners: covers to collect, wear and show on your card
+did: #287 Lugormod v3: own movement predicted as the server moves you
 link: Lumaya's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa
 
 [Lukas]
 github: LukasMoudry
-role: Contributor: 18 merged pull requests
+role: Contributor: 20 merged pull requests
 did: #115 Linux clipboard tools follow the desktop session; copy reports failures
 did: #108 clientlist and clientlistinfo, JoF EJK's player list commands
 did: #109 Two-key combo binds, such as bind K+L kill
@@ -335,11 +362,13 @@ did: #181 The chat key opens on All; remembering the channel is an option
 did: #190 JA+ anti-kiss: one Force Push breaks an amkiss
 did: #179 Holocron notifications: off, after duels or always
 did: #198 No more "Too many open files" after a long session
+did: #304 Spectators click the player under the crosshair to follow them
+did: #306 Long chat messages sent whole, in up to four pieces
 link: Lukas's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ALukasMoudry
 
 [Slash]
 github: JoFSlash
-role: Contributor: 67 merged pull requests
+role: Contributor: 90 merged pull requests
 did: #114 Tab completes cfg file names after exec and writeconfig
 did: #113 CTF team saber colours, an option
 did: #153 The SJK scoreboard tells who won the Siege round or team match
@@ -410,6 +439,28 @@ did: #280 Name outline for nameplates: Off, Faint or Strong
 did: #281 Radial HUD spacing and height sliders
 did: #283 Laptops with two graphics cards start on the fast one
 did: #286 fs_restart: new PK3s without restarting SJK
+did: #310 Join the game while following a player
+did: #294 No glow on sabers: the dynamic glow without blades and trails
+did: #293 Quick wheel commands you name are remembered for any page
+did: #288 config.cfg edited or deleted while playing is no longer written over
+did: #290 Every settings search result takes a typed value
+did: #291 The Shaders wheel scrolls past the tier headings
+did: #298 No away emote while riding a vehicle
+did: #309 Force templates keep Force Speed on saber-only servers
+did: #299 A Change name button on the SJK Profile tab
+did: #322 A held melee kick no longer freezes on its last frame
+did: #323 No fakenoclip or freecam in duels
+did: #324 Chat over the trade window
+did: #325 Long Distance Call counts monitor hits from 40 metres again
+did: #326 An empty community hilt no longer closes the game
+did: #327 guntele with a distance: level, stopping short of walls
+did: #329 The day tint can no longer close the game; DX12 maps load again
+did: #330 The player card shows a second saber's own shader
+did: #295 Move HUD elements with the mouse (hud_edit)
+did: #301 Sound sonar: arcs toward the sounds you hear
+did: #302 Quiet mode: only the duel opponent and whispers in chat
+did: #303 Chat and console fonts from the PC
+did: #318 Each HUD style shows the vehicle's HP its own way
 link: Slash's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash
 
 [Milamber]
@@ -419,6 +470,12 @@ did: #156 See & share nameplates, settings to review on What's new, duel bars hi
 did: #163 No hitch when a map remaps to a missing skin
 did: #194 JoF EternalJK in SJK chat: its icon, SJK chat said in All chat on JoF servers
 link: Milamber's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AMilamber0
+
+[Blackwolf1337]
+github: Blackwolf1337
+role: Contributor: 1 merged pull request
+did: #333 JA+ dual jump attack: feet lift only over a player ahead, as the server does
+link: Blackwolf1337's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337
 
 == Art
 
@@ -435,6 +492,7 @@ did: Favourite and locked saber shaders: stars listed first, locks kept from bre
 did: Plugin options as Settings switches, in place of typing a cp_pluginDisable number
 did: JoF EJK's saber hit sparks, mouse 4/5 repeat and lagometer modes 2 and 3 for players coming from EJK
 did: The Banana peel toy: drop peels that players who have it on slip on, cartoon style
+did: Prediction as in 2026.1028.1, a Settings choice for players who preferred it
 
 [Atrosex]
 role: Ideas for SJK
@@ -460,6 +518,14 @@ did: Click a name in the chat to whisper them
 role: Ideas for SJK
 did: Saber sounds of your choice, apart from your saber shader
 
+[g0dchris]
+role: Ideas for SJK
+did: No glow on sabers: the dynamic glow without the blades, so their details show
+
+[Dante]
+role: Ideas for SJK
+did: Quick wheel custom commands remembered in the command list
+
 == Testing
 
 [Glen]
@@ -473,6 +539,7 @@ role: Tester, tag artist and ideas for SJK
 did: Found encrypted whispers ending with a backslash going out unencrypted
 did: The player card on the inspect key only, never from a look (Key only)
 did: Drew the Gonk, EZ and Geyon tags
+did: Toys say when they are switched on or off
 
 == Made with
 

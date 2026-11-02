@@ -2727,6 +2727,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlimit"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f35ee2729c56bb610f6dba436bf78135f728b7373bdffae2ec815b2d3eb98cc3"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "rodio"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3247,6 +3256,7 @@ dependencies = [
  "pollster 1.0.1",
  "rfd",
  "ringbuf",
+ "rlimit",
  "rodio",
  "scraper",
  "serde",

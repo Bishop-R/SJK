@@ -58,6 +58,8 @@ mod entity_view;
 mod fishing;
 mod kyber;
 mod loot_odds;
+mod propgun;
+mod propgun_frame;
 
 mod saber_colour_command;
 mod shader_image;
@@ -80,6 +82,7 @@ mod crash_report;
 mod crosshair_scan;
 mod cut_trace;
 mod damage_feedback;
+mod day_sky_guard;
 mod decal_marks;
 mod decal_store;
 mod decoded_image_cache;
@@ -104,6 +107,7 @@ mod effect_geometry_gpu;
 mod vehicle_assets;
 mod vehicle_fire;
 mod vehicle_pose;
+mod vfs_lifetime;
 
 mod effect_library;
 mod effect_runtime;
@@ -156,6 +160,7 @@ mod hitch_log;
 mod holocron_popup;
 mod holocrons;
 mod hud;
+mod hud_edit;
 mod hud_runtime;
 mod impact_spawn;
 mod impacts;
@@ -223,12 +228,15 @@ mod siege_sabers;
 mod sith_cloud;
 mod surface_tables;
 mod tag_icons;
+mod tag_render;
 mod tags;
 mod tags_frame;
 mod team_sabers;
+mod toy_master;
 mod toy_saved;
 mod toy_sight;
 mod toy_sounds;
+mod toy_switch_words;
 mod trade_window;
 mod trip_mine_lasers;
 mod video_memory;
@@ -262,6 +270,8 @@ mod map_blocks;
 mod map_edits;
 mod mystery_box;
 mod net_timing;
+mod news_images;
+mod news_panel;
 mod particle_motion;
 mod particle_physics;
 mod particle_room;
@@ -293,6 +303,7 @@ mod rig_model;
 mod runtime_settings;
 mod saber;
 mod saber_clash_flare;
+mod saber_core;
 mod saber_defs;
 mod saber_ghosts;
 mod saber_gpu;
@@ -328,6 +339,7 @@ mod sjk_packs;
 mod sky_stage;
 mod small_card_notice;
 mod snapshot_presentation;
+mod sound_sonar;
 mod static_models;
 mod stock_blades;
 mod support_links;
@@ -338,6 +350,7 @@ mod text_dialog;
 mod text_entry;
 mod text_select;
 mod tile_shine;
+mod ui_links;
 mod ui_renderer;
 mod ui_scale;
 mod ui_target;
@@ -351,7 +364,6 @@ mod weapon_select;
 mod weapon_view;
 mod weather;
 mod wgsl_source;
-mod whats_new_card;
 mod window_icon;
 mod world_materials;
 mod world_notes;
@@ -418,6 +430,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 fn main() {
     log::init();
+    platform::raise_open_file_limit();
     crash_report::install();
     if let Err(error) = app_launch::run() {
         log::progress(format_args!("sjk: {error}"));
@@ -474,6 +487,8 @@ struct GpuState {
     fps_help: fps_help::State,
     /// The low-FPS card (`help_fps`).
     fps_card: fps_help::card::Card,
+    /// The HUD edit mode (`hud_edit`, [`hud_edit`]).
+    hud_edit: hud_edit::HudEdit,
     /// The emote help card (`help_emotes`, [`emote_help`]).
     emote_help: emote_help::State,
     /// The emote picker (`emotes`, [`emote_picker`]).
@@ -489,8 +504,8 @@ struct GpuState {
     /// A client mod's notice, shown once on its servers ([`mod_notice_card`]).
     mod_notice: mod_notice_card::State,
     small_card_notice: small_card_notice::Card,
-    /// What the update brought ([`whats_new_card`]).
-    whats_new_card: whats_new_card::Card,
+    /// What the update brought and the SJK team's announcements ([`news_panel`]).
+    news: news_panel::Panel,
     /// The SJK team's announcements and contributor rewards ([`official`]).
     official: official::Official,
     window: Option<Arc<Window>>,
@@ -516,6 +531,8 @@ struct GpuState {
     particle_pipelines: particle_draw::Pipelines,
     particle_atlas: ParticleAtlas,
     effect_geometry: effect_geometry_gpu::Runtime,
+    /// Players' tags on the world, drawn at their pictures' full size (`tag_render.rs`).
+    tag_render: tag_render::TagRender,
     hud_pipeline: wgpu::RenderPipeline,
     ui_shapes: ShapeRenderer,
     text_pipeline: wgpu::RenderPipeline,
@@ -575,13 +592,15 @@ struct GpuState {
     box_hunt: box_hunt::BoxHunt,
     /// The Banana peel toy (`toy_banana`): its switch and the peels on the floor.
     banana: banana::Banana,
+    /// The Prop gun toy (`toy_propgun`): the gun held, the bolts and what others hold.
+    propgun: propgun::PropGun,
     /// The Tag toy (`toy_tag`): the own tag stuck on the world.
     tags: tags::Tags,
     /// The Ragdoll toy (`toy_ragdoll`): the player's own fall and the falls of others.
     ragdoll: ragdoll::Ragdoll,
-    /// Order 66's, the Hax's, the Drone's, the Monitor's, Box hunt's and the Banana peel's
-    /// switches as last saved (`toy_saved`).
-    toys_saved: [toy_saved::Saved; 6],
+    /// Order 66's, the Hax's, the Drone's, the Monitor's, Box hunt's, the Banana peel's and
+    /// the Prop gun's switches as last saved (`toy_saved`).
+    toys_saved: [toy_saved::Saved; 7],
     /// The Holocrons tab's 3D holocron ([`holocrons::stage`]).
     holocron_stage: holocrons::stage::Stage,
     /// The time its turn and bob are drawn at, instead of the clock's, for a world shot.
@@ -671,6 +690,8 @@ struct GpuState {
     mystery_boxes: mystery_box::MysteryBoxes,
     /// What the player's Use key does at what they face, by the crosshair (`use_prompt`).
     use_prompt: use_prompt::UsePrompt,
+    /// The Toy Master's toys hidden on the loaded map (`toy_master`).
+    toy_master: toy_master::ToyMaster,
     player_shadows: player_shadows::State,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -768,6 +789,8 @@ struct GpuState {
     /// Collection's nameplate over the stage model).
     frame_view: Option<hud::identification::Camera>,
     pointer_captured: bool,
+    /// A primary press consumed by spectator aim-to-follow; consume its release too.
+    spectator_follow_click: bool,
     cursor_policy: pointer_input::CursorPolicy,
     cursor_position: [f32; 2],
     ui_epoch: Instant,
@@ -1313,6 +1336,12 @@ impl GpuState {
             &particle_layout,
             frame_target::aa::effects::FORMAT,
         );
+        let tag_render = tag_render::TagRender::new(
+            device,
+            &camera_layout,
+            frame_target::aa::effects::FORMAT,
+            context.anisotropy_limit,
+        );
         load_profile.mark("effect-atlas")?;
         let (entity_pipeline, particle_pipelines) = particle_draw::create(
             device,
@@ -1506,6 +1535,7 @@ impl GpuState {
             graphics_reload: graphics_reload::State::default(),
             fps_help: fps_help::State::default(),
             fps_card: fps_help::card::Card::default(),
+            hud_edit: hud_edit::HudEdit::default(),
             emote_help: emote_help::State::default(),
             emote_picker: emote_picker::State::default(),
             e2e_whispers: e2e_whispers::State::default(),
@@ -1514,7 +1544,7 @@ impl GpuState {
             log_request_card: log_request_card::Card::default(),
             mod_notice: mod_notice_card::State::default(),
             small_card_notice: small_card_notice::Card::default(),
-            whats_new_card: whats_new_card::Card::default(),
+            news: news_panel::Panel::default(),
             official: official::Official::default(),
 
             screenshots: screenshot_setup.manager,
@@ -1528,6 +1558,7 @@ impl GpuState {
             particle_pipelines,
             particle_atlas,
             effect_geometry,
+            tag_render,
             hud_pipeline,
             ui_shapes,
             text_pipeline,
@@ -1569,6 +1600,7 @@ impl GpuState {
             monitor: Default::default(),
             box_hunt: Default::default(),
             banana: Default::default(),
+            propgun: Default::default(),
             tags: Default::default(),
             ragdoll: Default::default(),
             toys_saved: Default::default(),
@@ -1634,6 +1666,7 @@ impl GpuState {
             map_edits: Default::default(),
             mystery_boxes: Default::default(),
             use_prompt: Default::default(),
+            toy_master: Default::default(),
             player_shadows: player_shadows::State::default(),
             camera_buffer,
             camera_bind_group,
@@ -1704,6 +1737,7 @@ impl GpuState {
             profile_hub: profile_hub::Hub::default(),
             frame_view: None,
             pointer_captured: false,
+            spectator_follow_click: false,
             cursor_policy: pointer_input::CursorPolicy::new(),
             cursor_position: [0.0; 2],
             ui_epoch: Instant::now(),
@@ -1846,6 +1880,7 @@ impl GpuState {
         // actors.
         self.step_monitors(presentation_time);
         self.step_bananas(presentation_time);
+        self.step_propgun(presentation_time);
         self.step_ragdolls(presentation_time);
         timing.mark(Phase::Config);
         self.refresh_config_strings(game_audio);
@@ -2064,6 +2099,7 @@ impl GpuState {
         if stock_vehicle {
             hud_visibility.vehicle = false;
         }
+        self.update_sound_sonar(game_audio.as_ref());
         let hud_style = menu_hud::HudStyle::read(self.console.as_ref());
         // The radial look is laid out for the bundled font (Inter), whatever
         // `cg_classicHudFont` says: its numbers are aligned to that font's metrics.
@@ -2084,6 +2120,8 @@ impl GpuState {
             .set_force_wheel_bar(hud_style != menu_hud::HudStyle::Radial);
         self.hud
             .set_radial_placement(hud::RadialPlacement::read(self.console.as_ref()));
+        let hud_offsets = hud::placement::Offsets::read(self.console.as_ref());
+        self.hud.set_offsets(hud_offsets);
         let hud_layout = self.hud.layout(
             hud_font,
             match hud_style {
@@ -2206,7 +2244,7 @@ impl GpuState {
                 || self.holocron_popup.pending(),
         );
         // And what the update brought, last.
-        let news_shown = self.prepare_whats_new_card(
+        let news_shown = self.prepare_news_panel(
             covered
                 || medal_shown
                 || holocron_shown
@@ -2384,7 +2422,21 @@ impl GpuState {
             vehicle_readout.as_ref(),
             viewport,
             hud_scale,
+            [
+                hud::placement::Element::Vitals,
+                hud::placement::Element::Force,
+            ]
+            .map(|element| hud_offsets.get(element)),
         );
+        for (element, bounds) in [
+            hud::placement::Element::Vitals,
+            hud::placement::Element::Force,
+        ]
+        .into_iter()
+        .zip(self.menu_hud.block_bounds(viewport, hud_scale))
+        {
+            self.hud.element_bounds.add(element, bounds);
+        }
         if classic_hud && let Some(font) = &self.classic_hud_font {
             self.menu_hud
                 .append_text(&mut self.classic_text_vertices, font, viewport, hud_scale);
@@ -2415,22 +2467,29 @@ impl GpuState {
                 information_visible,
                 self.chat.wants_history(self.console.as_ref()),
             );
-        if chat_visible {
+        // The trade window shades the menu and drops the text before it: the chat then
+        // draws after it, over it, so the players can talk while they trade (#215).
+        let chat_over_trade = !console_open && self.chat_over_trade_window(trade_shown);
+        if chat_visible && !chat_over_trade {
             self.append_configured_chat(viewport, text_scale, scoreboard_visible);
         }
         self.append_weapon_select_name(viewport);
+        // The ghost editor's path, under its column (or over play while looking about).
+        let ghost_overlay =
+            !self.console_covers_frame() && !medal_popup && self.append_ghost_overlay(viewport);
         if self.game_menu && !self.console_covers_frame() && !medal_popup {
             self.refresh_game_menu_players();
             let team_sizes = self.live_session.as_ref().map_or([0, 0], |session| {
                 ingame_menu::team_sizes(session.game_state())
             });
+            let own_side = self.live_session.as_ref().map(|session| {
+                ingame_menu::OwnSide::of(session.game_state(), &session.latest_snapshot().player)
+            });
             let view = ingame_menu::View {
                 page: self.game_menu_page,
                 selected_row: self.game_menu_row,
-                team: self
-                    .live_session
-                    .as_ref()
-                    .map_or(3, |session| session.latest_snapshot().player.team()),
+                team: own_side.map_or(3, |own| own.team),
+                following: own_side.is_some_and(|own| own.following),
                 team_game: self.is_team_game(),
                 siege: self.is_siege_game(),
                 red_players: team_sizes[0],
@@ -2439,7 +2498,22 @@ impl GpuState {
                 staff: profile_card::with(|summary| summary.staff),
                 _frame: std::marker::PhantomData,
             };
-            if view.page == GameMenuPage::MapEdit {
+            if view.page == GameMenuPage::GhostEdit {
+                // The ghost editor has only the SJK UI's look, in every menu style.
+                let target = ingame_menu::sjk_view::text_target(
+                    &mut self.game_fonts,
+                    &mut self.text_vertices,
+                    &self.ui_font,
+                );
+                if let Some(editor) = self.ghost.editor.as_deref_mut() {
+                    self.in_game_menu.append_own_page(
+                        GameMenuPage::GhostEdit,
+                        |canvas| editor.build(canvas, viewport),
+                        target,
+                        viewport,
+                    );
+                }
+            } else if view.page == GameMenuPage::MapEdit {
                 // The map editor's panel has only the SJK UI's look, in every menu style.
                 self.refresh_map_edit_panel();
                 let target = ingame_menu::sjk_view::text_target(
@@ -2520,7 +2594,7 @@ impl GpuState {
         let launcher = self.game_menu
             && !matches!(
                 self.game_menu_page,
-                GameMenuPage::Shot | GameMenuPage::MapEdit
+                GameMenuPage::Shot | GameMenuPage::MapEdit | GameMenuPage::GhostEdit
             )
             && !self.in_game_menu.is_sjk()
             && !console_covers_frame
@@ -2535,6 +2609,7 @@ impl GpuState {
         } else {
             self.world_notes.composer_closed();
         }
+        let mut chat_drawn_over_trade = false;
         if alpha_shown {
             self.append_alpha_card(viewport);
         } else if medal_shown {
@@ -2552,7 +2627,7 @@ impl GpuState {
         } else if official_shown {
             self.append_official(viewport);
         } else if news_shown {
-            self.append_whats_new_card(viewport);
+            self.append_news_panel(viewport);
         } else if emote_help_shown {
             self.append_emote_help_card(viewport);
         } else if emote_picker_shown {
@@ -2563,8 +2638,17 @@ impl GpuState {
             self.append_mod_notice_card(viewport);
         } else if trade_shown {
             self.append_trade_window(viewport);
+            if chat_over_trade {
+                self.append_configured_chat(viewport, text_scale, false);
+                chat_drawn_over_trade = true;
+            }
         }
         // A trade running while its window is closed: the toast at the top, over play.
+        // The HUD edit mode's outlines and panel, over the game it edits.
+        let hud_edit_shown = !console_covers_frame && self.prepare_hud_edit();
+        if hud_edit_shown {
+            self.append_hud_edit(viewport);
+        }
         let trade_toast = self.append_trade_toast(viewport, console_covers_frame || medal_popup);
         // An achievement unlocked, or a medal or holocron in a match: its card over play or
         // the menus, never input-taking.
@@ -2596,8 +2680,14 @@ impl GpuState {
                 .is_open()
                 .then(|| self.quick_wheel.draw_list()),
             information_visible.then(|| self.hud.draw_list()),
-            chat_visible.then(|| self.chat.draw_list()),
+            (chat_visible && !chat_over_trade).then(|| self.chat.draw_list()),
+            hud_edit_shown.then(|| self.hud_edit.draw_list()),
             map_edit_strip.then(|| self.map_edits.strip.0.draw_list()),
+            self.ghost
+                .editor
+                .as_deref()
+                .filter(|_| ghost_overlay)
+                .map(|editor| editor.overlay.draw_list()),
             scoreboard_visible.then(|| self.scoreboard.draw_list()),
             (self.game_menu && !console_covers_frame && !medal_popup)
                 .then(|| self.in_game_menu.draw_list()),
@@ -2621,12 +2711,13 @@ impl GpuState {
             fps_shown.then(|| self.fps_card.draw_list()),
             logs_shown.then(|| self.log_request_card.draw_list()),
             official_shown.then(|| self.official.window.draw_list()),
-            news_shown.then(|| self.whats_new_card.draw_list()),
+            news_shown.then(|| self.news.draw_list()),
             emote_help_shown.then(|| self.emote_help.card.draw_list()),
             emote_picker_shown.then(|| self.emote_picker.card.draw_list()),
             whisper_shown.then(|| self.e2e_whispers.card.draw_list()),
             mod_notice_shown.then(|| self.mod_notice.card.draw_list()),
             trade_shown.then(|| self.trades.window.draw_list()),
+            chat_drawn_over_trade.then(|| self.chat.draw_list()),
             trade_toast.then(|| self.trades.toast.draw_list()),
             alpha_shown.then(|| self.alpha_card.draw_list()),
             unlock_toast.then(|| self.unlock_toast.draw_list()),
@@ -2707,6 +2798,7 @@ impl GpuState {
         self.submit_drones(presentation_time, visual_now);
         self.submit_monitors(presentation_time);
         self.submit_bananas(presentation_time);
+        self.submit_propgun(presentation_time);
         self.submit_holocron_stage(visual_now);
         self.sync_saber_skins(game_audio, presentation_time);
         let debug_missiles = effect_debug::sync(self.console.as_ref());
@@ -2849,12 +2941,15 @@ impl GpuState {
             }
             self.pickups.clear();
         }
+        // A held prop gun hangs on the pistol's hand rig, whatever the player holds.
+        let prop_view = self.propgun_view();
         let view_weapon = first_person_weapon::frame_inputs(
             self,
             active_snapshot,
             first_person,
             local_entity_id,
             presentation_time,
+            prop_view.map(|_| first_person_weapon::PROP_RIG),
         );
         let first_person_charge = view_weapon.and(active_snapshot).and_then(|snapshot| {
             let predicted = self
@@ -2864,7 +2959,18 @@ impl GpuState {
             charge_flash::Charges::collect(Some(snapshot), predicted)
                 .of(snapshot.player.client_num())
         });
-        if let Some(inputs) = view_weapon {
+        self.propgun.view_muzzle = None;
+        if let Some(inputs) = view_weapon
+            && let Some(prop) = prop_view
+        {
+            self.propgun.view_muzzle = first_person_weapon::submit_prop(
+                &self.first_person_weapon,
+                inputs,
+                prop,
+                &mut self.object_groups,
+            );
+            self.last_first_person_flash = None;
+        } else if let Some(inputs) = view_weapon {
             first_person_weapon::submit(&self.first_person_weapon, inputs, &mut self.object_groups);
             // `CG_AddPlayerWeapon` records the view gun's `tag_flash` for
             // trace-weapon beams (`cg_weapons.c:579`) and plays the
@@ -2896,6 +3002,7 @@ impl GpuState {
         self.static_models.append_instances(&mut self.object_groups);
         self.append_map_edit_instances();
         self.append_mystery_box_instances();
+        self.append_toy_master_instances();
         pickups::simple::append_frame(self, visual_now);
         // The charge glow on the view gun's muzzle (`cg_weapons.c` charge bits), after
         // this frame's sprites were cleared.
@@ -3070,6 +3177,13 @@ impl GpuState {
                         .map_or(ParticleBlend::Add, |layer| layer.blend),
                 )
             },
+        );
+        self.tag_render.prepare(
+            &self.device,
+            &self.queue,
+            &self.effect_aux.decals,
+            particle_now,
+            global_particle_seconds,
         );
         timing.mark(Phase::Encode);
         let particle_ranges = effect_submission::prepare(

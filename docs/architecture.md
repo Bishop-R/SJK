@@ -44,12 +44,15 @@ on a same-map restart; attachment resets presentation and anchors prediction to
 the remote snapshot. Wire codecs remain unchanged.
 
 CPU preparation and GPU installation own immutable destination inputs. Superseding
-transitions discard their channels; GPU construction checks cancellation between
-build stages. Only a completed world is adopted. A prepared gamestate's content
-selection must match before attaching a session without rebuilding, and a restart
-must receive a fresh snapshot before attachment. A graphics reload takes the same path
-to build the world on show again on a new graphics context (same device and surface,
-the start-only renderer settings read anew; see
+transitions signal cancellation before discarding their channels: CPU preparation
+checks after mounting, BSP parsing and scene construction, and before every shader
+script read; GPU construction checks between build stages. This releases a cancelled
+worker's VFS at its next boundary instead of letting it retain all mounted PK3 files
+until an obsolete build completes. Only a completed world is adopted. A prepared
+gamestate's content selection must match before attaching a session without rebuilding,
+and a restart must receive a fresh snapshot before attachment. A graphics reload takes
+the same path to build the world on show again on a new graphics context (same device
+and surface, the start-only renderer settings read anew; see
 [rendering.md](rendering.md#graphics-reload)). A join from the menu hands over
 the destination world prepared while it connected
 ([portal.rs](../crates/sjk-viewer/src/portal.rs)) rather than constructing a
@@ -113,4 +116,8 @@ The menu moves with the application shell between resident worlds, but its asset
 catalogues belong to one immutable VFS generation. Attaching a new world invalidates
 the model-icon workers and the cosmetics and Force-template catalogues before retaining
 the new VFS; otherwise those caches keep every PK3 of an old world open across map and
-server changes.
+server changes. VFS generations and live PK3 sources are counted independently and
+logged at world attachment, disconnect and reconnect, so a short attachment overlap is
+distinguishable from a generation whose owner never releases it. Unix clients also ask
+the host for the permitted soft open-file limit at startup (respecting macOS's
+per-process ceiling); failure is logged and remains non-fatal. Windows is unchanged.

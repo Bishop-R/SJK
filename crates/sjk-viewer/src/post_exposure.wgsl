@@ -40,7 +40,8 @@ struct Params {
     to_dark: f32,
     // 0 inactive (hold base, snap later), 1 frozen, 2 metering, 3 metering and snap.
     mode: u32,
-    _padding: u32,
+    // The PC clock's night darkening (`Values::night`), 1 by day; after adaptation.
+    night: f32,
 }
 
 @group(0) @binding(0) var scene: texture_2d<f32>;
@@ -144,6 +145,6 @@ fn adapt() {
     }
     s.adapt = clamp(s.adapt, params.min_ev, params.max_ev);
     // Exactly the base at 0 EV, so r_autoExposure 0 reproduces the fixed exposure.
-    s.exposure = select(params.base * exp2(s.adapt), params.base, s.adapt == 0.0);
+    s.exposure = select(params.base * exp2(s.adapt), params.base, s.adapt == 0.0) * params.night;
     state = s;
 }

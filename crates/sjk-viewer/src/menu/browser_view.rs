@@ -7,6 +7,8 @@ use crate::{TextVertex, UiFont};
 
 pub(super) use super::browser_table::{HEADER_TOKEN, ROW_TOKEN, SCROLLBAR_TOKEN};
 
+/// Copy the selected server address, including its port.
+pub(super) const COPY_IP_TOKEN: u16 = 28;
 pub(super) const REFRESH_TOKEN: u16 = 10;
 pub(super) const FAVOURITE_TOKEN: u16 = 11;
 pub(super) const BACK_TOKEN: u16 = 12;
@@ -20,6 +22,21 @@ pub(super) const FILTER_TOKEN: u16 = 20;
 const SOURCES: u16 = 2;
 
 impl ClientMenu {
+    /// Copy only the selected endpoint, never passwords or a connect command.
+    pub(super) fn copy_selected_server_address(&mut self) {
+        let Some(entry) = self.browser.visible_entry(self.browser.selected()) else {
+            self.state.set_status("Select a server to copy its IP");
+            return;
+        };
+        let address = entry.address.to_string();
+        self.state
+            .set_status(if crate::console::clipboard::copy(&address) {
+                format!("Copied server IP: {address}")
+            } else {
+                "Could not copy server IP to the clipboard".to_owned()
+            });
+    }
+
     /// Retail's join-server screen ([`super::classic::browser`]) over the
     /// browser model and pointer tokens; the SJK UI draws its own
     /// ([`super::sjk::browser`]).

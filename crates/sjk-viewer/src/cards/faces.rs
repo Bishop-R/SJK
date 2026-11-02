@@ -17,7 +17,7 @@
 use super::Rarity;
 use crate::menu::emblem::MipChain;
 use serde::Deserialize;
-use sjk_ui::TextureId;
+use sjk_ui::{Color, TextureId};
 use sjk_vfs::VirtualFileSystem;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -57,11 +57,14 @@ pub(crate) enum Kind {
     /// A droppable saber shader (20/10/2026, the SJK Blades collection): its Solar copies
     /// drop that blade too ([`Face::blade`]).
     Blade,
+    /// A clan's card (01/11/2026): the clan is its set ("JoF"), so the strip reads
+    /// "Clan · JoF" and each clan gets a set of its own.
+    Clan,
 }
 
 impl Kind {
     /// Every kind the client knows, in the order the Cards tab's filter walks them.
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::Community,
         Self::Place,
         Self::Personality,
@@ -69,6 +72,7 @@ impl Kind {
         Self::Credits,
         Self::Meme,
         Self::Blade,
+        Self::Clan,
     ];
 
     fn from_id(id: &str) -> Option<Self> {
@@ -80,7 +84,22 @@ impl Kind {
             "credits" => Some(Self::Credits),
             "meme" => Some(Self::Meme),
             "blade" => Some(Self::Blade),
+            "clan" => Some(Self::Clan),
             _ => None,
+        }
+    }
+
+    /// The id a card file names it by ("credits"), as the hub's `tag_cards` lists it.
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Self::Community => "community",
+            Self::Place => "place",
+            Self::Personality => "personality",
+            Self::Game => "game",
+            Self::Credits => "credits",
+            Self::Meme => "meme",
+            Self::Blade => "blade",
+            Self::Clan => "clan",
         }
     }
 
@@ -94,6 +113,7 @@ impl Kind {
             Self::Credits => "Credits",
             Self::Meme => "Meme",
             Self::Blade => "Blade",
+            Self::Clan => "Clan",
         }
     }
 }
@@ -124,9 +144,52 @@ pub(crate) struct Face {
     /// What the client draws as its picture from the game's own models, in place of
     /// [`Self::art`] ([`super::scene`]; 30/10/2026); `None` for most cards.
     pub(crate) scene: Option<String>,
+    /// The rank it shows in place of its rarity (`rank` and `rank_colour`; 31/10/2026,
+    /// Sol's decision for the JoF collection): its rarity then only sets its odds.
+    pub(crate) rank: Option<Rank>,
+}
+
+/// A card's rank: the name and colour it shows in place of its rarity's.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Rank {
+    pub(crate) name: String,
+    pub(crate) colour: Color,
+}
+
+/// The longest rank name, as the hub checks.
+const RANK_MAX: usize = 24;
+
+/// The rank a card file's `rank` and `rank_colour` (`#RRGGBB`) make, or why not.
+fn rank(name: &str, colour: &str) -> Result<Rank, String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > RANK_MAX {
+        return Err(format!("rank must be 1 to {RANK_MAX} characters"));
+    }
+    let value = colour
+        .strip_prefix('#')
+        .filter(|hex| hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+        .ok_or_else(|| format!("rank_colour {colour:?} is not #RRGGBB"))?;
+    let channel = |shift: u32| ((value >> shift) & 0xff) as f32 / 255.0;
+    Ok(Rank {
+        name: name.to_owned(),
+        colour: Color::new(channel(16), channel(8), channel(0), 1.0),
+    })
 }
 
 impl Face {
+    /// How it reads and is coloured: its rank's, else its rarity's ([`super::Tone`]).
+    pub(crate) fn tone(&self) -> super::Tone<'_> {
+        match &self.rank {
+            Some(rank) => super::Tone {
+                name: &rank.name,
+                colour: rank.colour,
+                mark: None,
+            },
+            None => self.rarity.tone(),
+        }
+    }
+
     /// What it brings, as its hover card and the Cards tab say it ("Brings the Sun blade
     /// while you hold it."), when it brings an unlockable this client knows.
     pub(crate) fn brings(&self) -> Option<String> {
@@ -203,10 +266,14 @@ struct File {
     blade: Option<String>,
     #[serde(default)]
     scene: Option<String>,
+    #[serde(default)]
+    rank: Option<String>,
+    #[serde(default)]
+    rank_colour: Option<String>,
 }
 
 /// The card file `text` of card `id`, read.
-fn parse(id: &str, text: &str) -> Result<Face, String> {
+pub(crate) fn parse(id: &str, text: &str) -> Result<Face, String> {
     let file: File = serde_json::from_str(text).map_err(|error| error.to_string())?;
     let within = |what: &str, value: &str, max: usize| {
         if value.trim().is_empty() || value.chars().count() > max {
@@ -239,6 +306,21 @@ fn parse(id: &str, text: &str) -> Result<Face, String> {
                 false
             }
         });
+    // A rank comes with its colour; a bad pair leaves the card its rarity's look.
+    let rank = match (file.rank, file.rank_colour) {
+        (None, None) => None,
+        (Some(name), Some(colour)) => rank(&name, &colour)
+            .inspect_err(|why| {
+                crate::log::progress(format_args!("cards: {id}: rank left out: {why}"));
+            })
+            .ok(),
+        _ => {
+            crate::log::progress(format_args!(
+                "cards: {id}: rank left out: rank and rank_colour come together"
+            ));
+            None
+        }
+    };
     Ok(Face {
         id: id.to_owned(),
         name: file.name,
@@ -257,6 +339,7 @@ fn parse(id: &str, text: &str) -> Result<Face, String> {
         grants: file.grants.filter(|id| !id.trim().is_empty()),
         blade: file.blade.filter(|id| !id.trim().is_empty()),
         scene,
+        rank,
     })
 }
 
@@ -355,6 +438,12 @@ impl Faces {
         self.lock_art().failed.retain(|failed| *failed != index);
     }
 
+    /// Face `index`'s picture file as its pack holds it, `None` when it is missing: what
+    /// a card stuck as a tag is drawn from (`tag_render.rs`).
+    pub(crate) fn picture(&self, index: usize) -> Option<Arc<[u8]>> {
+        self.pictures.get(index).cloned().flatten()
+    }
+
     /// The decoded picture of face `index`, taken for upload: `None` until a [`request`]
     /// for it has been decoded. The worker keeps no copy.
     pub(crate) fn take_art(&self, index: usize) -> Option<MipChain> {
@@ -449,7 +538,7 @@ fn scene_picture(face: &Face) -> Option<Vec<u8>> {
         return Some(bytes);
     }
     let scene = super::scene::parse(text).ok()?;
-    let colour = face.rarity.colour;
+    let colour = face.tone().colour;
     super::scene::want(super::scene::Job {
         id: face.id.clone(),
         scene,
@@ -527,6 +616,29 @@ pub(crate) fn install_for_shot(list: Vec<Face>, pictures: impl Fn(usize) -> usiz
         .map(|index| before.pictures.get(pictures(index)).cloned().flatten())
         .collect();
     *lock() = Some(Arc::new(Faces::new(list, files, before.generation + 1)));
+}
+
+/// Make `list` the current faces for a unit test, without pictures, until the returned
+/// guard goes; tests that install faces wait for one another.
+#[cfg(test)]
+pub(crate) fn install_for_test(list: Vec<Face>) -> impl Drop {
+    static TURN: Mutex<()> = Mutex::new(());
+    struct Restore {
+        before: Option<Arc<Faces>>,
+        _turn: MutexGuard<'static, ()>,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            *lock() = self.before.take();
+        }
+    }
+    let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let before = lock().clone();
+    *lock() = Some(Arc::new(Faces::of_list(list)));
+    Restore {
+        before,
+        _turn: turn,
+    }
 }
 
 /// The name of card `id` as players read it: its face's name, or its id when the packs
@@ -621,6 +733,14 @@ mod tests {
 "#;
 
     #[test]
+    fn every_kind_reads_back_from_its_id() {
+        for kind in Kind::ALL {
+            assert_eq!(Kind::from_id(kind.id()), Some(kind));
+        }
+        assert_eq!(Kind::from_id("clan").map(Kind::name), Some("Clan"));
+    }
+
+    #[test]
     fn a_card_file_reads_and_bad_ones_are_refused() {
         let face = parse("sjk_alpha_010", FILE).unwrap();
         assert_eq!(face.name, "Toxiee and Sol on JoF Memorial");
@@ -694,6 +814,54 @@ mod tests {
         // A field the client does not know yet is read past.
         let later = FILE.replace("\"artist\"", "\"frame\": \"gold\", \"artist\"");
         assert!(parse("x", &later).is_ok());
+    }
+
+    #[test]
+    fn a_rank_takes_the_rarity_s_place_and_a_bad_one_is_left_out() {
+        let plain = parse("sjk_alpha_010", FILE).unwrap();
+        assert_eq!(plain.rank, None);
+        let tone = plain.tone();
+        assert_eq!((tone.name, tone.mark), ("Legendary", Some('\u{E003}')));
+        assert_eq!(tone.to_string(), "\u{E003} Legendary");
+        let ranked = |rank: &str| {
+            FILE.replace("\"legendary\"", "\"mythical\"")
+                .replace("\"artist\"", &format!("{rank}, \"artist\""))
+        };
+        let leader = parse(
+            "jof_001",
+            &ranked(r##""rank": " Leader ", "rank_colour": "#22D3ee""##),
+        )
+        .unwrap();
+        assert_eq!(
+            leader.rarity.id, "mythical",
+            "the rarity stays, for the odds"
+        );
+        let rank = leader.rank.as_ref().unwrap();
+        assert_eq!(rank.name, "Leader");
+        let [r, g, b] = [rank.colour.r, rank.colour.g, rank.colour.b]
+            .map(|channel| (channel * 255.0).round() as u8);
+        assert_eq!([r, g, b], [0x22, 0xD3, 0xEE]);
+        let tone = leader.tone();
+        assert_eq!(
+            (tone.name, tone.mark, tone.colour),
+            ("Leader", None, rank.colour)
+        );
+        assert_eq!(tone.to_string(), "Leader", "no rarity mark, no rarity name");
+        // A rank without its colour, a bad colour or a name too long: the card still
+        // reads, with its rarity's look.
+        for bad in [
+            r#""rank": "Leader""#,
+            r##""rank_colour": "#22D3EE""##,
+            r#""rank": "Leader", "rank_colour": "22D3EE""#,
+            r##""rank": "Leader", "rank_colour": "#22D3EG""##,
+            r##""rank": "Leader", "rank_colour": "#22D3E""##,
+            r##""rank": " ", "rank_colour": "#22D3EE""##,
+            r##""rank": "A rank name far too long to read", "rank_colour": "#22D3EE""##,
+        ] {
+            let face = parse("x", &ranked(bad)).unwrap();
+            assert_eq!(face.rank, None, "{bad}");
+            assert_eq!(face.tone().name, "Mythical", "{bad}");
+        }
     }
 
     #[test]

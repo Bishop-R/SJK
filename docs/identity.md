@@ -488,6 +488,12 @@ Tester and Contributor were called Early Tester and Early Contributor until 27/1
 team keeps giving them. Only the names players read changed; the ids stay
 `early_tester` and `early_contributor`, as the hub stores and sends them.
 
+Since 31/10/2026 (Sol's decision) the hub gives Tester by itself, by date, to every
+player it sees on SJK who does not hold it yet: rank IV until Sunday 01/11/2026
+included, then a week each of rank III (to 08/11), II (to 15/11) and I (to 22/11/2026).
+From 23/11/2026 it is only given by hand again, and rank V is no longer earned. The
+client needs no change: the medal arrives in the player's profile like any award.
+
 ### Medal ranks
 
 Since 27/10/2026 (Sol's decision) every medal a player holds has a rank from I to V,
@@ -713,10 +719,17 @@ blade-skin unlock id or `""`, and whether the Illuminate holocron is lit.
   it is none. A `not_unlocked` or `bad_look` answer leaves that skin out (the look
   goes with `saber:""`, so Illuminate still syncs) until the profile's unlocks change,
   and a `not_unlocked` has the own profile read again soon (at most once every 30
-  seconds); too many (429: `look_quota`, or the address's `rate_limited`), a refused
-  signature (401, the clock still off after the one retry) and failures wait 10
-  seconds and go again; another refusal (an older hub) is not repeated until the look
-  or the claim changes. Leaving sends nothing: the release drops the look. `Snapshot::look_outcome` says what became of the last one.
+  seconds); the key's `look_quota` (429) waits 1 second, the address's `rate_limited`
+  (429), a refused signature (401, the clock still off after the one retry) and
+  failures wait 10 seconds and go again; `not_on_server` asks for the claim again at
+  once; another refusal (an older hub) is not repeated until the look or the claim
+  changes. The second between two looks counts from the earlier one's answer, so they
+  reach the hub in different whole seconds (the hub's quota counts whole seconds).
+  `Service::set_look` leaves the look in a slot the worker reads between its other hub
+  calls (`Worker::look_between`), so a slow call does not hold a toy back for a whole
+  round of the worker's calls (the cardboard box's slow sync, 31/10/2026); the viewer
+  logs each outcome as `SJK look sent: <n> ms after the change, the hub answered in
+  <m> ms`. Leaving sends nothing: the release drops the look. `Snapshot::look_outcome` says what became of the last one.
 - Receiving: presence entries carry `look` (`Presence::look`) and the feed carries look
   events (`Feed::looks`, `LookEvent`), queued for the viewer (`Service::take_looks`, the
   newest 64, handing over only those read for the viewer's server under the feed's
@@ -737,10 +750,13 @@ Looks are public to every SJK player on the server, as badges are.
 ## Map edits
 
 Staff publish a map's edits to the hub, and the worker keeps every SJK player's copies
-in `map_edits` beside the key: the hub's list every 10 minutes once registered, each
-document newer than its copy downloaded, a copy the hub stopped listing removed, and a
-copy with unpublished changes left alone. What the edits do is in
-[map-edits.md](map-edits.md).
+in `map_edits` beside the key: the hub's list every 10 minutes once registered (at once
+on `Service::refresh_map_edits`, which the editor sends when it turns on, and after a
+publish), each document newer than its copy downloaded, a copy the hub stopped listing
+removed, and a copy with unpublished changes left alone. What the last look did lands in
+`Snapshot::map_edits_note` (a summary, or why it fell short), the publish's answer in
+`Snapshot::map_edits_published`, both worded by `map_edits::refusal` when the hub said
+no. What the edits do is in [map-edits.md](map-edits.md).
 
 ## Mystery boxes
 
@@ -798,7 +814,8 @@ on the hub, in the SJK UI's look in every menu style:
 - who they are: the hub name with its colours, Verified by the SJK team or not yet,
   the date the key was registered (`Member since`) and up to three other
   names worn (the switch, the key and the hub are on the Identity page, in Settings,
-  Network, since 09/10/2026);
+  Network, since 09/10/2026); on the Profile screen Change name opens the Character
+  tab's Name field, since the hub name is the `name` worn in game;
 - their record, from the achievement counts kept on this PC (players defeated, saber
   kills, best streak, duels won, flags captured, maps and servers played, time
   played) and the last four achievements unlocked;
@@ -1013,18 +1030,39 @@ and in the hub (same ids):
 | Payback | `monitor_payback` | during the player's Screen Saver, the player whose monitor raised it struck with a monitor | client |
 | Power Surge (hidden) | `monitor_surge` | 3 different players struck with monitors during one Screen Saver | client |
 | Blue, Yellow, Red, Dual, Staff Master | `style_blue_50`, `style_yellow_50`, `style_red_50`, `style_dual_50`, `style_staff_50` | 50 duels won with the saber in that style (`fd.saberAnimLevel` when the kill is made: 1 Fast, 2 Medium, 3 Strong, 6 two sabers, 7 staff; Desann's and Tavion's count towards none), in a private duel (saber only or full Force) or a duel game; kills out of a duel do not count | client |
+| Sneaking Mission, Legendary Soldier | `box_minutes_30`, `box_minutes_60` | 30, 60 minutes hidden in the cardboard box with another player close by (Tactical Espionage's count) | client |
+| Surprise! | `box_ambush` | the player who lifted the player's box defeated by the player within 3 seconds | client |
+| Alert! | `box_spotted_10` | the boxes of 10 different players lifted | client |
+| Wipe Them Out | `order66_purge` | 5 holders of the toy brought down by one Order 66 of the player's | client |
+| I Am the Senate | `order66_victims_25` | 25 different players brought down by the player's Order 66s | client |
+| Puppet Master, Double Agent, Total Control (hidden) | `hax_puppet`, `hax_double`, `hax_triple` | 1, 2, 3 players defeated by a player the Hax steers, in one hack (the hacker not counted) | client |
+| Leap of Faith | `hax_fall` | a player the Hax steers dead by a fall, a pit or a hazard (by their own hand or the world's) | client |
+| Script Kiddie, Elite Hacker | `hax_minutes_5`, `hax_minutes_15` | 5, 15 minutes steering players with the Hax | client |
+| It's a Trap! | `hax_traps_5` | 5 hackers caught in the player's Hax trap | client |
+| Eye in the Sky | `drone_strike` | the player the Drone watched defeated by the player within 10 seconds of it landing (the peek ended) | client |
+| Special Delivery | `drone_monitor` | the player the Drone watched struck with the player's monitor within 5 seconds of it landing | client |
+| DJ | `boombox_minutes_30` | 30 minutes of the player's boombox playing with an SJK player within its range | client |
+| Block Party | `boombox_crowd` | 3 SJK players within the boombox's range at once | client |
+| Tough Crowd (hidden) | `boombox_tough_crowd` | a player within the boombox's range dead by their own hand or the world's while it plays | client |
+| Tech Support | `monitor_victims_25` | 25 different players struck with the player's monitors | client |
+| Two for One, Strike! (hidden) | `monitor_double`, `monitor_triple` | 2, 3 players struck with one monitor | client |
+| Long Distance Call | `monitor_far` | a player struck with a monitor 1575 units (40 metres, as the world ping measures) or more from where it was thrown, measured where it met the body (`achievements::MONITOR_FAR`) | client |
+| Bounty Hunter, Big Game Hunter | `box_hunt_mark`, `box_hunt_marks_10` | 1, 10 box hunt marks killed (a free roll won or not) | hub |
+| Still Standing, Most Wanted | `box_hunt_survive`, `box_hunt_survive_5` | 1, 5 marks stayed to the end without a hunter's kill, still in the hunt | hub |
 | First Bite, Angler | `fish_first`, `fish_50` | 1, 50 fish landed with the Fishing toy ([client.md](client.md#fishing)) | client |
 | Every Fish in the Pond | `fish_kinds` | every kind of fish landed (12, `fishing::FISH_KINDS`) | client |
 | Echo Angler | `echo_angler` | 10 Echoes landed on the line | client |
 | Old Whiskers (hidden) | `old_whiskers` | Old Whiskers, the great catfish, landed | client |
 
+
 The fourteen after Decorated came on 26/10/2026 (Sol's list), with the categories
 Collection and Toys; the five style masters on 29/10/2026 (Dante's idea in #ideas,
-duels only at Slash's call); the five Fishing ones on 29/10/2026 (Slash), in Toys, which
-now takes a band of its own: with five bands the wall starts a little higher and its
-bands stand a little closer, so the last still ends over the keys. Each needs the same id in the hub's catalogue, and the hub bounds
-how fast a fishing count may rise as it does the others (a bite at most every 20
-seconds). A hidden achievement (Touched by the Force) is a secret until it
+duels only at Slash's call); the toys' own from Sneaking Mission on, on 30/10/2026 (a
+player's ideas, reworked with Sol), when Toys became a category for each toy on the
+board's Fun page; the five Fishing ones on 29/10/2026 (Slash), in a Fishing category of
+their own on the Fun page, after Box hunt. Each needs the same id in the hub's catalogue,
+and the hub bounds how fast a fishing count may rise as it does the others (a bite at most
+every 20 seconds). A hidden achievement (Touched by the Force) is a secret until it
 is unlocked: the board, its hover card and the "Next up" list show "Secret" or "Secret
 achievement", a `?` in its medallion, no goal and no count; unlocked, it shows like any
 other (the unlock card names it). A retired achievement (Surveyor, since 26/10/2026)
@@ -1035,6 +1073,12 @@ hub's `"retired": true` on Surveyor's entry is not needed by the client.
 Totals ("12 of 39 unlocked", the player card's "Achievements 12 / 39", the profile
 card) count every obtainable achievement and the retired ones the player holds, so a
 holder of Surveyor reads "of 40".
+
+The Toy Master's achievements (since 30/10/2026, [toy-master.md](toy-master.md)) are not
+in the client's catalogue: the hub sends one only once it is unlocked, with its `name`,
+`description` and `group` (`toy_master`), fields no other achievement carries. The board
+shows them in a "Toy Master" category, and totals count them like retired ones held:
+in both numbers, only for whoever holds them.
 
 What the client counts comes from its live matches on servers, never a demo, a game
 it hosts or a server on the player's own machine (a loopback address: Create game and
@@ -1094,7 +1138,30 @@ live snapshot by `achievements_frame.rs`):
   (`achievements::note`), from the hits the struck players' own clients tell (their
   `hit_` event, never a hit only foreseen) on a server not on this machine: during the
   player's Screen Saver, a hit on the player whose monitor raised it counts Payback,
-  and the third different player hit counts Power Surge, each once a Screen Saver.
+  and the third different player hit counts Power Surge, each once a Screen Saver;
+- the toys' own (30/10/2026). The tracker weighs each obituary against what the toys
+  tell it of the moment (`tracker::Toys`, `GpuState::toy_moments`): who lifted the
+  player's box and when that reached this client, the player the Hax steers, the player
+  the Drone last watched and when it landed (the peek ended, or moved to another player),
+  and the SJK players within the range of the player's boombox while it plays. A kill of
+  the lifter within 3 seconds (`tracker::BOX_AMBUSH`) counts Surprise!, once a lift; of
+  the player the Drone watched within 10 seconds of its landing (`tracker::DRONE_STRIKE`),
+  Eye in the Sky, once a landing. A kill by the player steered of anyone but themselves
+  and the hacker counts towards the best of one hack (Puppet Master to Total Control);
+  their death by a fall, a pit or a hazard by their own hand or the world's, Leap of
+  Faith. Minutes steering and minutes with a listener in reach count as time played
+  does, the most listeners at once is kept (Block Party), and a listener dead by their
+  own hand or the world's counts Tough Crowd. The rest are counted by the toys
+  (`achievements::note`, `note_best`, `note_name`): a box lifted (Alert!, by the name
+  shown), a trap sprung on a hacker (It's a Trap!), the holders blown up in the window of
+  the player's own Order 66 (Wipe Them Out, the most of one order, and I Am the Senate,
+  by name), and the player's monitor's hits as the struck players' clients tell them
+  (Tech Support by name, Two for One and Strike! by the players one monitor struck, Long
+  Distance Call by how far it flew from its throw, and Special Delivery, a hit on the
+  player the Drone watched within 5 seconds of its landing). The sets of players are
+  kept by the name the server shows without colours (`sjk_identity::normal_form`), at
+  most 512 each, in `achievements.json`'s `named`, and the toys' minutes' spare
+  milliseconds in its `spare_ms`.
 
 The counts are kept in `achievements.json` beside `identity.key` (written at most
 every 20 seconds while they change, through a temporary file, and on the way out),
@@ -1156,14 +1223,19 @@ category stands, the medallion's picture or the tier's icon, and a holocron's li
 tier's colour. One arrival brings at most three cards, and the large pop-up that opens with
 the game menu takes back the cards of what it shows. The new medal and holocron pop-ups'
 entrances (and their fanfare) also wait for the window to come back. A newer SJK release
-the update check finds has a card too ([client.md](client.md#updates)). The board shows every
-achievement listed as a wall of medallions in four bands of up to twelve (since
-26/10/2026; each category's run under its name and count, two short categories
-sharing a band, `collection_achievements.rs`): a medallion with the goal that fills
-with the count, gold once unlocked, and the name under it, the categories Combat,
-Duels and flags, Journeys, Community, Collection and Toys. The arrows and Tab read the
-wall in its order; the one chosen shows up close on the right with what to do, a bar
-and the count or the date it was unlocked.
+the update check finds has a card too ([client.md](client.md#updates)). The board has two
+pages (since 30/10/2026, Sol: "the general/normal ones and the more specific ones / fun
+ones", so it can keep growing): General, with Combat, Duels and flags, Journeys,
+Community and Collection, and Fun, with a category for each toy (Cardboard box, Order
+66, Hax, Drone, Boombox, Monitor, Box hunt; `Category::page`). The switch at the wall's
+top right, or F, turns them; the board opens on General. Each page shows every
+achievement listed on it as a wall of medallions in four bands of up to twelve (since
+26/10/2026; each category's run under its name and count, short categories sharing a
+band, the categories in their own order, `collection_achievements.rs`): a medallion
+with the goal that fills with the count, gold once unlocked, and the name under it.
+The arrows and Tab read the wall in its order; the one chosen shows up close on the
+right with what to do, a bar and the count or the date it was unlocked, and "Next up"
+the page's three nearest to unlocking. The total at the top counts both pages.
 
 What this proves: an achievement is the player's own record, as a claim is the
 player's own word. A modified client or an edited `achievements.json` can send counts
@@ -1396,3 +1468,9 @@ are built. In the SJK UI the Identity page opens from the Profile
 page (its arc holds five entries), the in-game SJK menu and the `identity` command.
 Achievements a dedicated server would vouch for, and pictures for the achievements,
 are not made yet.
+
+## Profile banners
+
+A profile may equip an owned static cover, shared by its profile header and player
+cards. Choose it in Collection > Banners; the hub validates and saves equipment.
+Old or unknown covers use the neutral fallback. See [profile banners](profile-banners.md).

@@ -123,6 +123,12 @@ pub(crate) struct LegacyLocalSounds {
     /// TaystJK cg_chatSounds mode; final muting remains in the output consumer.
     pub(crate) chat_mode: i64,
     pub(crate) pm_only: bool,
+    /// Quiet mode (the viewer's `chat/quiet.rs`): chat beeps follow its rule.
+    pub(crate) quiet: bool,
+    /// The player's own slot, the gamestate's client number (not a followed player's).
+    own_slot: Option<u16>,
+    /// The private duel partner whose chat still beeps in quiet mode.
+    partner: crate::quiet_chat::DuelPartner,
     /// Fixed-capacity filtering shared with chat presentation policy.
     pub(crate) chat_filter: chat_filter::Filter,
     media: LocalSoundMedia,
@@ -194,6 +200,9 @@ impl LegacyLocalSounds {
             last_command_sequence: game_state.server_command_sequence,
             chat_mode: 1,
             pm_only: false,
+            quiet: false,
+            own_slot: u16::try_from(game_state.client_num).ok(),
+            partner: crate::quiet_chat::DuelPartner::default(),
             chat_filter: chat_filter::Filter::default(),
             pending: Vec::with_capacity(MAX_LOCAL_SOUNDS_PER_SNAPSHOT),
             roster: crate::chat::ChatRoster::default(),
@@ -239,6 +248,7 @@ impl LegacyLocalSounds {
     /// A player's `CS_PLAYERS` string changed: read the names again.
     pub(crate) fn observe_players(&mut self, game_state: &GameState) {
         self.roster.update(game_state);
+        self.own_slot = u16::try_from(game_state.client_num).ok();
     }
 
     /// Run one snapshot through the reference frame order: new reliable
@@ -247,6 +257,12 @@ impl LegacyLocalSounds {
     pub(crate) fn observe_snapshot(&mut self, snapshot: &Snapshot) {
         self.pending.clear();
         let time = snapshot.server_time;
+        self.partner.observe(
+            &self.roster,
+            self.own_slot,
+            &snapshot.player,
+            i64::from(time),
+        );
         self.execute_server_commands(snapshot);
         let team = snapshot.player.team();
         let team_changed = self.previous_team.is_some_and(|previous| previous != team);
@@ -284,9 +300,24 @@ impl LegacyLocalSounds {
                 .split(|byte| matches!(byte, b' ' | b'\n' | b'\r'))
                 .next()
                 .unwrap_or_default();
-            if self.pm_only
-                && matches!(verb, b"chat" | b"lchat" | b"tchat" | b"ltchat")
-                && !crate::chat::private_chat_command(&command.command)
+            // Who sent a chat line and whether it is a genuine whisper, for PM-only
+            // and quiet mode (`quiet_chat.rs`), worked out only while one is on.
+            let facts = ((self.pm_only || self.quiet)
+                && matches!(verb, b"chat" | b"lchat" | b"tchat" | b"ltchat"))
+            .then(|| self.chat_facts(&command.command))
+            .flatten();
+            if self.pm_only && !facts.is_some_and(|(_, private)| private) {
+                continue;
+            }
+            if self.quiet
+                && facts.is_some_and(|(sender, private)| {
+                    !crate::quiet_chat::quiet_passes(
+                        private,
+                        sender,
+                        self.own_slot,
+                        self.partner.target(),
+                    )
+                })
             {
                 continue;
             }
@@ -498,6 +529,22 @@ impl LegacyLocalSounds {
     }
 
     /// The beep just pushed is for chat `command`: name its sender.
+    /// The sender of chat `command` and whether it is a whisper: marked as a tell and
+    /// not a public line of a player whose name starts with the marker, or in a tell's
+    /// brackets after its sender's name, as the chat feed reads it.
+    fn chat_facts(&self, command: &[u8]) -> Option<(crate::quiet_chat::LineSender, bool)> {
+        let event = crate::chat::server_chat_event(&crate::tokenize_command(command))?;
+        let display = crate::chat::chat_display_text(&crate::chat::chat_unescape(&event.text));
+        let sender = crate::quiet_chat::line_sender(&display, event.sender, &self.roster);
+        let private = (event.is_private
+            && !crate::quiet_chat::forged_tell(&event.text, event.sender, &self.roster))
+            || sender
+                .target()
+                .and_then(|target| self.roster.display_name(target))
+                .is_some_and(|name| crate::chat::chat_body(&display, name).1);
+        Some((sender, private))
+    }
+
     fn name_sender(&mut self, command: &[u8]) {
         let sender = chat_sender(command, &self.roster);
         if let Some(beep) = self.pending.last_mut() {
@@ -688,6 +735,90 @@ mod pm_only_tests {
                 .iter()
                 .filter(|sound| sound.event == LegacySoundEvent::ChatBeep)
                 .count(),
+            1
+        );
+    }
+}
+
+#[cfg(test)]
+mod quiet_tests {
+    use super::*;
+    use sjk_protocol::ReliableServerCommand;
+
+    /// The senders (`cause`) of the chat beeps `commands` make in quiet mode, in a duel
+    /// with slot 3 while `duelling`.
+    fn beeps(
+        local: &mut LegacyLocalSounds,
+        time: i32,
+        duelling: bool,
+        commands: &[&[u8]],
+    ) -> usize {
+        let mut snapshot = test_snapshot(time);
+        snapshot.player.set_client_num(0);
+        snapshot.player.set_raw_field(119, u32::from(duelling));
+        snapshot.player.set_raw_field(44, 3);
+        let first = local.last_command_sequence + 1;
+        snapshot.server_commands = commands
+            .iter()
+            .enumerate()
+            .map(|(n, command)| ReliableServerCommand {
+                sequence: first + n as i32,
+                command: command.to_vec(),
+            })
+            .collect();
+        local.observe_snapshot(&snapshot);
+        local
+            .pending()
+            .iter()
+            .filter(|sound| {
+                matches!(
+                    sound.event,
+                    LegacySoundEvent::ChatBeep
+                        | LegacySoundEvent::TeamChatBeep
+                        | LegacySoundEvent::PrivateChatBeep
+                )
+            })
+            .count()
+    }
+
+    #[test]
+    fn quiet_beeps_only_whispers_the_server_and_the_partner() {
+        let mut game = GameState::empty_local(0);
+        for (slot, name) in [(1, "Padawan"), (2, "Padawan"), (3, "Duelist"), (4, "Fox")] {
+            game.replace_config_string(1_131 + slot, format!("n\\{name}\\t\\0").into_bytes())
+                .expect("a player");
+        }
+        let mut local = LegacyLocalSounds::new(&game, LocalSoundMedia::register(|_| 1));
+        local.quiet = true;
+        for (command, beeps_wanted) in [
+            (b"chat \"Fox^7\x19: hi\"".as_slice(), 0),
+            (b"tchat \"(Fox^7)\x19: team\"", 0),
+            (b"chat \"Padawan^7\x19: hi\"", 0),
+            (b"chat \"Duelist^7\x19: hi\"", 1),
+            (b"chat \"\x19[Fox^7\x19]\x19: psst\"", 1),
+            (b"chat \"[Fox]: by its brackets\"", 1),
+            (b"chat \"Server: restart\"", 1),
+        ] {
+            assert_eq!(
+                beeps(&mut local, 1_000, true, &[command]),
+                beeps_wanted,
+                "{}",
+                String::from_utf8_lossy(command)
+            );
+        }
+        // The kill ends the duel: the partner's "gg" still beeps, later lines do not.
+        assert_eq!(
+            beeps(&mut local, 2_000, false, &[b"chat \"Duelist^7\x19: gg\""]),
+            1
+        );
+        let late = 2_001 + crate::quiet_chat::PARTNER_GRACE_MS as i32;
+        assert_eq!(
+            beeps(&mut local, late, false, &[b"chat \"Duelist^7\x19: again\""]),
+            0
+        );
+        local.quiet = false;
+        assert_eq!(
+            beeps(&mut local, late, false, &[b"chat \"Fox^7\x19: back\""]),
             1
         );
     }

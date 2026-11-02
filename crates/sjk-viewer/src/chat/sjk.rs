@@ -46,6 +46,7 @@ impl ChatOverlay {
         } else {
             (body, Vec::new(), None)
         };
+        let loud = self.sjk_line_loud(&message.key_id, official.is_some());
         if self.lines.len() == HISTORY_LIMIT {
             self.lines.pop_front();
         }
@@ -75,6 +76,7 @@ impl ChatOverlay {
                 client: super::client_icons::find(&message.client),
                 in_all: false,
                 key_id: message.key_id.clone(),
+                prize: drop.as_ref().and_then(|words| words.prize),
                 tier: drop.map(|words| words.tier),
                 official: official.is_some(),
             }),
@@ -82,8 +84,9 @@ impl ChatOverlay {
             encrypted: false,
             verified: false,
             recipient: None,
+            loud,
         });
-        if self.is_typing() && self.scroll > 0 {
+        if self.is_typing() && self.scroll > 0 && (loud || !self.options.quiet) {
             self.scroll = (self.scroll + 1).min(self.lines.len().saturating_sub(1));
             self.unread = (self.unread + 1).min(HISTORY_LIMIT);
         }
@@ -94,6 +97,7 @@ impl ChatOverlay {
     /// ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_holocron(&mut self, tier: &str, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -116,10 +120,50 @@ impl ChatOverlay {
         self.push_sjk(&message, false, now);
     }
 
+    /// Put a made-up grand find of `skin` from a `tier` holocron or crystal into the feed,
+    /// as another player's, for `debug_find` (`chat/find_blade.rs`).
+    pub(crate) fn rehearse_find(
+        &mut self,
+        tier: &'static crate::holocrons::Tier,
+        skin: &'static crate::unlockables::Unlockable,
+        now: Instant,
+    ) {
+        let message = ChatMessage {
+            reactions: Default::default(),
+            id: u64::MAX,
+            at: 0,
+            key_id: String::new(),
+            name: "^1Warrior ^7SmoKeY".to_owned(),
+            verified: true,
+            tick: sjk_identity::Tick::None,
+            staff: false,
+            creator: false,
+            trust: None,
+            emoji: String::new(),
+            client: String::new(),
+            text: String::new(),
+            holocron: Some(sjk_identity::DropMark {
+                tier: tier.id.to_owned(),
+                own: false,
+                find: Some(sjk_identity::FindMark {
+                    shader: true,
+                    name: skin.name.to_owned(),
+                    rarity: skin.tier.label().to_lowercase(),
+                    finish: String::new(),
+                    card: String::new(),
+                    skin: skin.id.to_owned(),
+                }),
+            }),
+            official: None,
+        };
+        self.push_sjk(&message, false, now);
+    }
+
     /// Put the SJK team's line `official` into the feed, for `debug_announce` and
     /// `debug_reward`. The real lines come from the hub's feed ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_official(&mut self, official: sjk_identity::Official, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -352,6 +396,7 @@ mod tests {
 
     fn message(id: u64, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

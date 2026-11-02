@@ -58,14 +58,9 @@ impl GpuState {
     /// `toy_boxhunt`: on or off, said on the centre of the screen.
     pub(crate) fn toggle_box_hunt(&mut self) {
         self.box_hunt.toggle();
-        let text = if self.box_hunt.on() {
-            "Box hunt: you may become the mark; kill the mark to win a free mystery box roll"
-        } else {
-            "Box hunt off: you are out of the hunt"
-        };
         self.chat.receive(
             sjk_client::ServerEventKind::CenterPrint,
-            text.to_owned(),
+            crate::toy_switch_words::switched("Box hunt", self.box_hunt.on()),
             None,
             Instant::now(),
         );

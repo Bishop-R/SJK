@@ -18,6 +18,11 @@
 //! A hidden achievement ([`Kind::hidden`]) shows as a secret until it is unlocked; a
 //! retired one ([`Kind::retired`]) can no longer be earned and shows only to those who
 //! hold it ([`Standing::listed`]).
+//!
+//! The Toy Master's achievements (since 30/10/2026, `docs/toy-master.md`) are not in
+//! [`ALL`]: a public catalogue cannot keep a secret. The hub alone knows them and sends
+//! one, with its name and words, only to whoever unlocked it ([`secret_kind`]); boards
+//! show them after the catalogue's, in their own category.
 
 pub(crate) mod medallion;
 pub(crate) mod tracker;
@@ -80,7 +85,46 @@ pub(crate) enum Counter {
     DuelStyleRed,
     DuelStyleDual,
     DuelStyleStaff,
-    /// Fish landed with the Fishing toy ([`crate::fishing`]).
+    /// Players struck with a monitor during the player's Screen Saver who raised it
+    /// (`monitor/saver.rs`).
+    MonitorPayback,
+    /// Screen Savers during which the player struck three different players.
+    MonitorSurge,
+    // The toys' own (Sol, 30/10/2026; `achievements/tracker.rs` and the toys).
+    /// Lifters of the player's box the player defeated just after (`BOX_AMBUSH`).
+    BoxAmbush,
+    /// Different players whose box the player lifted (by name).
+    BoxSpotted,
+    /// The most players one Order 66 of the player's brought down.
+    Order66Best,
+    /// Different players the player's Order 66s brought down (by name).
+    Order66Victims,
+    /// The most players a player the Hax steered defeated in one hack.
+    HaxBest,
+    /// Players the Hax steered to a fall, a pit or a hazard.
+    HaxFalls,
+    /// Minutes spent steering players with the Hax.
+    HaxMinutes,
+    /// Hackers caught in the player's Hax trap.
+    HaxTraps,
+    /// Players defeated just after the player's Drone watched them (`DRONE_STRIKE`).
+    DroneStrikes,
+    /// Players struck with a monitor just after the player's Drone watched them.
+    DroneMonitor,
+    /// Minutes the player's boombox played with a listener in reach.
+    BoomboxMinutes,
+    /// The most listeners in reach of the player's boombox at once.
+    BoomboxCrowd,
+    /// Listeners who took their own life while the player's boombox played.
+    BoomboxToughCrowd,
+    /// Different players struck with the player's monitors (by name).
+    MonitorVictims,
+    /// The most players one of the player's monitors struck.
+    MonitorBestThrow,
+    /// Players struck with a monitor thrown from [`MONITOR_FAR`] away or more.
+    MonitorFar,
+    // The Fishing toy's (Slash, 29/10/2026; [`crate::fishing`]).
+    /// Fish landed with the Fishing toy.
     FishCaught,
     /// Kinds of fish landed (bits of [`fish_kind`]).
     FishKinds,
@@ -88,15 +132,15 @@ pub(crate) enum Counter {
     EchoesLanded,
     /// Old Whiskers, the great catfish, landed.
     GreatCatfish,
-    /// Players struck with a monitor during the player's Screen Saver who raised it
-    /// (`monitor/saver.rs`).
-    MonitorPayback,
-    /// Screen Savers during which the player struck three different players.
-    MonitorSurge,
 }
 
+/// How far a monitor must fly to its hit for Long Distance Call (game units, from where
+/// it was thrown to its centre where it met the body): 40 metres as the world ping shows
+/// them (39.37 units a metre, `world_ping`); 1500 (38 metres) until 31/10/2026.
+pub(crate) const MONITOR_FAR: f32 = 1_575.0;
+
 impl Counter {
-    const COUNT: usize = 28;
+    const COUNT: usize = 44;
     const ALL: [Self; Self::COUNT] = [
         Self::Kills,
         Self::SaberKills,
@@ -120,12 +164,28 @@ impl Counter {
         Self::DuelStyleRed,
         Self::DuelStyleDual,
         Self::DuelStyleStaff,
+        Self::MonitorPayback,
+        Self::MonitorSurge,
+        Self::BoxAmbush,
+        Self::BoxSpotted,
+        Self::Order66Best,
+        Self::Order66Victims,
+        Self::HaxBest,
+        Self::HaxFalls,
+        Self::HaxMinutes,
+        Self::HaxTraps,
+        Self::DroneStrikes,
+        Self::DroneMonitor,
+        Self::BoomboxMinutes,
+        Self::BoomboxCrowd,
+        Self::BoomboxToughCrowd,
+        Self::MonitorVictims,
+        Self::MonitorBestThrow,
+        Self::MonitorFar,
         Self::FishCaught,
         Self::FishKinds,
         Self::EchoesLanded,
         Self::GreatCatfish,
-        Self::MonitorPayback,
-        Self::MonitorSurge,
     ];
 
     /// Its name in `achievements.json`.
@@ -153,45 +213,117 @@ impl Counter {
             Self::DuelStyleRed => "duel_style_red",
             Self::DuelStyleDual => "duel_style_dual",
             Self::DuelStyleStaff => "duel_style_staff",
+            Self::MonitorPayback => "monitor_paybacks",
+            Self::MonitorSurge => "monitor_surges",
+            Self::BoxAmbush => "box_ambushes",
+            Self::BoxSpotted => "box_spotted",
+            Self::Order66Best => "order66_best",
+            Self::Order66Victims => "order66_victims",
+            Self::HaxBest => "hax_best",
+            Self::HaxFalls => "hax_falls",
+            Self::HaxMinutes => "hax_minutes",
+            Self::HaxTraps => "hax_traps",
+            Self::DroneStrikes => "drone_strikes",
+            Self::DroneMonitor => "drone_monitors",
+            Self::BoomboxMinutes => "boombox_minutes",
+            Self::BoomboxCrowd => "boombox_crowd",
+            Self::BoomboxToughCrowd => "boombox_tough_crowds",
+            Self::MonitorVictims => "monitor_victims",
+            Self::MonitorBestThrow => "monitor_best_throw",
+            Self::MonitorFar => "monitor_far",
             Self::FishCaught => "fish_caught",
             Self::FishKinds => "fish_kinds",
             Self::EchoesLanded => "echoes_landed",
             Self::GreatCatfish => "great_catfish",
-            Self::MonitorPayback => "monitor_paybacks",
-            Self::MonitorSurge => "monitor_surges",
         }
     }
 
     /// Whether the count is the size of a set the record keeps (maps, servers, weapons,
-    /// duel partners, kinds of fish) rather than a number.
+    /// duel partners, kinds of fish, the toys' players by name) rather than a number.
     const fn is_set(self) -> bool {
         matches!(
             self,
             Self::Maps | Self::Servers | Self::Weapons | Self::DuelPartners | Self::FishKinds
+        ) || self.is_named()
+    }
+
+    /// Whether the count is the size of a set of player names kept in
+    /// [`Record::named`].
+    const fn is_named(self) -> bool {
+        matches!(
+            self,
+            Self::BoxSpotted | Self::Order66Victims | Self::MonitorVictims
         )
+    }
+
+    /// Whether the count is minutes, its spare milliseconds kept in [`Record::spare_ms`]
+    /// (time played and in the box keep theirs in fields of their own).
+    const fn is_timed(self) -> bool {
+        matches!(self, Self::HaxMinutes | Self::BoomboxMinutes)
     }
 }
 
-/// Where a board shows an achievement.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Where a board shows an achievement: the general categories on the board's General
+/// page, a toy each on its Fun page (Sol, 30/10/2026: "the general/normal ones and the
+/// more specific ones / fun ones", so the board can keep growing; [`Page`]).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum Category {
     Combat,
     Duels,
     Journeys,
     Community,
     Collection,
-    Toys,
+    CardboardBox,
+    Order66,
+    Hax,
+    Drone,
+    Boombox,
+    Monitor,
+    BoxHunt,
+    Fishing,
+    /// The Toy Master's secrets, which the hub alone names ([`secret_kind`]).
+    ToyMaster,
+}
+
+/// A page of the achievements board.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum Page {
+    /// Play itself: combat, duels, journeys, the community and the collection.
+    #[default]
+    General,
+    /// The toys, one category each.
+    Fun,
+}
+
+impl Page {
+    pub(crate) const ALL: [Self; 2] = [Self::General, Self::Fun];
+
+    /// The name its switch reads.
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Self::General => "General",
+            Self::Fun => "Fun",
+        }
+    }
 }
 
 impl Category {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 14] = [
         Self::Combat,
         Self::Duels,
         Self::Journeys,
         Self::Community,
         Self::Collection,
-        Self::Toys,
+        Self::CardboardBox,
+        Self::Order66,
+        Self::Hax,
+        Self::Drone,
+        Self::Boombox,
+        Self::Monitor,
+        Self::BoxHunt,
+        Self::Fishing,
+        Self::ToyMaster,
     ];
 
     /// The name a board reads.
@@ -202,7 +334,25 @@ impl Category {
             Self::Journeys => "Journeys",
             Self::Community => "Community",
             Self::Collection => "Collection",
-            Self::Toys => "Toys",
+            Self::CardboardBox => "Cardboard box",
+            Self::Order66 => "Order 66",
+            Self::Hax => "Hax",
+            Self::Drone => "Drone",
+            Self::Boombox => "Boombox",
+            Self::Monitor => "Monitor",
+            Self::BoxHunt => "Box hunt",
+            Self::Fishing => "Fishing",
+            Self::ToyMaster => "Toy Master",
+        }
+    }
+
+    /// The board page it is on.
+    pub(crate) const fn page(self) -> Page {
+        match self {
+            Self::Combat | Self::Duels | Self::Journeys | Self::Community | Self::Collection => {
+                Page::General
+            }
+            _ => Page::Fun,
         }
     }
 }
@@ -285,12 +435,15 @@ impl Kind {
     }
 }
 
-use Category::{Collection, Combat, Community, Duels, Journeys, Toys};
+use Category::{
+    Boombox, BoxHunt, CardboardBox, Collection, Combat, Community, Drone, Duels, Fishing, Hax,
+    Journeys, Monitor, Order66,
+};
 use Counter as C;
 use Source::{Client, Hub};
 
 /// Every achievement, in the hub's catalogue order.
-pub(crate) const ALL: [Kind; 47] = [
+pub(crate) const ALL: [Kind; 73] = [
     kind(
         "first_blood",
         "First Blood",
@@ -525,7 +678,7 @@ pub(crate) const ALL: [Kind; 47] = [
         "Executor",
         "Defeat a player with Order 66.",
         1,
-        Toys,
+        Order66,
         Hub,
     ),
     kind(
@@ -533,7 +686,7 @@ pub(crate) const ALL: [Kind; 47] = [
         "Tactical Espionage",
         "Spend 10 minutes hidden in the cardboard box with players close by.",
         10,
-        Toys,
+        CardboardBox,
         Client(C::BoxMinutes),
     ),
     kind(
@@ -616,55 +769,13 @@ pub(crate) const ALL: [Kind; 47] = [
         Duels,
         Client(C::DuelStyleStaff),
     ),
-    // 29/10/2026 (Slash): the Fishing toy's, counted on servers as the rest.
-    kind(
-        "fish_first",
-        "First Bite",
-        "Land a fish with the Fishing toy.",
-        1,
-        Toys,
-        Client(C::FishCaught),
-    ),
-    kind(
-        "fish_50",
-        "Angler",
-        "Land 50 fish.",
-        50,
-        Toys,
-        Client(C::FishCaught),
-    ),
-    kind(
-        "fish_kinds",
-        "Every Fish in the Pond",
-        "Land every kind of fish.",
-        crate::fishing::FISH_KINDS as u64,
-        Toys,
-        Client(C::FishKinds),
-    ),
-    kind(
-        "echo_angler",
-        "Echo Angler",
-        "Land 10 Echoes on the line.",
-        10,
-        Toys,
-        Client(C::EchoesLanded),
-    ),
-    kind(
-        "old_whiskers",
-        "Old Whiskers",
-        "Land Old Whiskers, the great catfish.",
-        1,
-        Toys,
-        Client(C::GreatCatfish),
-    )
-    .secret(),
     // Since 29/10/2026 (Sol's Screen Saver, `monitor/saver.rs`).
     kind(
         "monitor_payback",
         "Payback",
         "During your Screen Saver, hit the player whose monitor set it off.",
         1,
-        Toys,
+        Monitor,
         Client(C::MonitorPayback),
     ),
     kind(
@@ -672,8 +783,262 @@ pub(crate) const ALL: [Kind; 47] = [
         "Power Surge",
         "Hit 3 different players with monitors during one Screen Saver.",
         1,
-        Toys,
+        Monitor,
         Client(C::MonitorSurge),
+    )
+    .secret(),
+    // 30/10/2026 (Sol): the toys' own, from a player's ideas, reworked.
+    kind(
+        "box_minutes_30",
+        "Sneaking Mission",
+        "Spend 30 minutes hidden in the cardboard box with players close by.",
+        30,
+        CardboardBox,
+        Client(C::BoxMinutes),
+    ),
+    kind(
+        "box_minutes_60",
+        "Legendary Soldier",
+        "Spend 60 minutes hidden in the cardboard box with players close by.",
+        60,
+        CardboardBox,
+        Client(C::BoxMinutes),
+    ),
+    kind(
+        "box_ambush",
+        "Surprise!",
+        "Defeat the player who lifted your box within 3 seconds.",
+        1,
+        CardboardBox,
+        Client(C::BoxAmbush),
+    ),
+    kind(
+        "box_spotted_10",
+        "Alert!",
+        "Lift the boxes of 10 different players.",
+        10,
+        CardboardBox,
+        Client(C::BoxSpotted),
+    ),
+    kind(
+        "order66_purge",
+        "Wipe Them Out",
+        "Bring down 5 players with one Order 66 of yours.",
+        5,
+        Order66,
+        Client(C::Order66Best),
+    ),
+    kind(
+        "order66_victims_25",
+        "I Am the Senate",
+        "Bring down 25 different players with your Order 66.",
+        25,
+        Order66,
+        Client(C::Order66Victims),
+    ),
+    kind(
+        "hax_puppet",
+        "Puppet Master",
+        "Make a player you steer with the Hax defeat another player.",
+        1,
+        Hax,
+        Client(C::HaxBest),
+    ),
+    kind(
+        "hax_double",
+        "Double Agent",
+        "Make a player you steer with the Hax defeat 2 players in one hack.",
+        2,
+        Hax,
+        Client(C::HaxBest),
+    ),
+    kind(
+        "hax_triple",
+        "Total Control",
+        "Make a player you steer with the Hax defeat 3 players in one hack.",
+        3,
+        Hax,
+        Client(C::HaxBest),
+    )
+    .secret(),
+    kind(
+        "hax_fall",
+        "Leap of Faith",
+        "Steer a player with the Hax to their death by a fall, a pit or a hazard.",
+        1,
+        Hax,
+        Client(C::HaxFalls),
+    ),
+    kind(
+        "hax_minutes_5",
+        "Script Kiddie",
+        "Steer players with the Hax for 5 minutes in all.",
+        5,
+        Hax,
+        Client(C::HaxMinutes),
+    ),
+    kind(
+        "hax_minutes_15",
+        "Elite Hacker",
+        "Steer players with the Hax for 15 minutes in all.",
+        15,
+        Hax,
+        Client(C::HaxMinutes),
+    ),
+    kind(
+        "hax_traps_5",
+        "It's a Trap!",
+        "Catch 5 hackers in your Hax trap.",
+        5,
+        Hax,
+        Client(C::HaxTraps),
+    ),
+    kind(
+        "drone_strike",
+        "Eye in the Sky",
+        "Defeat the player your Drone watched within 10 seconds of landing it.",
+        1,
+        Drone,
+        Client(C::DroneStrikes),
+    ),
+    kind(
+        "drone_monitor",
+        "Special Delivery",
+        "Hit your Drone's target with a monitor within 5 seconds of landing it.",
+        1,
+        Drone,
+        Client(C::DroneMonitor),
+    ),
+    kind(
+        "boombox_minutes_30",
+        "DJ",
+        "Play 30 minutes of music on your boombox with a listener in reach.",
+        30,
+        Boombox,
+        Client(C::BoomboxMinutes),
+    ),
+    kind(
+        "boombox_crowd",
+        "Block Party",
+        "Play your boombox to 3 listeners at once.",
+        3,
+        Boombox,
+        Client(C::BoomboxCrowd),
+    ),
+    kind(
+        "boombox_tough_crowd",
+        "Tough Crowd",
+        "Have a listener take their own life while your boombox plays.",
+        1,
+        Boombox,
+        Client(C::BoomboxToughCrowd),
+    )
+    .secret(),
+    kind(
+        "monitor_victims_25",
+        "Tech Support",
+        "Hit 25 different players with monitors.",
+        25,
+        Monitor,
+        Client(C::MonitorVictims),
+    ),
+    kind(
+        "monitor_double",
+        "Two for One",
+        "Hit 2 players with one monitor.",
+        2,
+        Monitor,
+        Client(C::MonitorBestThrow),
+    ),
+    kind(
+        "monitor_triple",
+        "Strike!",
+        "Hit 3 players with one monitor.",
+        3,
+        Monitor,
+        Client(C::MonitorBestThrow),
+    )
+    .secret(),
+    kind(
+        "monitor_far",
+        "Long Distance Call",
+        "Hit a player with a monitor thrown from more than 40 metres away.",
+        1,
+        Monitor,
+        Client(C::MonitorFar),
+    ),
+    kind(
+        "box_hunt_mark",
+        "Bounty Hunter",
+        "Kill the mark in the box hunt.",
+        1,
+        BoxHunt,
+        Hub,
+    ),
+    kind(
+        "box_hunt_marks_10",
+        "Big Game Hunter",
+        "Kill 10 marks in the box hunt.",
+        10,
+        BoxHunt,
+        Hub,
+    ),
+    kind(
+        "box_hunt_survive",
+        "Still Standing",
+        "Stay the mark in the box hunt to the end without a hunter killing you.",
+        1,
+        BoxHunt,
+        Hub,
+    ),
+    kind(
+        "box_hunt_survive_5",
+        "Most Wanted",
+        "Stay the mark in the box hunt to the end 5 times.",
+        5,
+        BoxHunt,
+        Hub,
+    ),
+    // 29/10/2026 (Slash): the Fishing toy's, counted on servers as the rest.
+    kind(
+        "fish_first",
+        "First Bite",
+        "Land a fish with the Fishing toy.",
+        1,
+        Fishing,
+        Client(C::FishCaught),
+    ),
+    kind(
+        "fish_50",
+        "Angler",
+        "Land 50 fish.",
+        50,
+        Fishing,
+        Client(C::FishCaught),
+    ),
+    kind(
+        "fish_kinds",
+        "Every Fish in the Pond",
+        "Land every kind of fish.",
+        crate::fishing::FISH_KINDS as u64,
+        Fishing,
+        Client(C::FishKinds),
+    ),
+    kind(
+        "echo_angler",
+        "Echo Angler",
+        "Land 10 Echoes on the line.",
+        10,
+        Fishing,
+        Client(C::EchoesLanded),
+    ),
+    kind(
+        "old_whiskers",
+        "Old Whiskers",
+        "Land Old Whiskers, the great catfish.",
+        1,
+        Fishing,
+        Client(C::GreatCatfish),
     )
     .secret(),
 ];
@@ -706,6 +1071,60 @@ pub(crate) fn find(id: &str) -> Option<&'static Kind> {
     ALL.iter().find(|kind| kind.id == id)
 }
 
+/// Most Toy Master's achievements kept named in one session ([`secret_kind`]).
+const SECRET_KINDS_MAX: usize = 64;
+/// The Toy Master's achievements the hub named, each kept once for the session.
+static SECRET_KINDS: Mutex<Vec<&'static Kind>> = Mutex::new(Vec::new());
+
+/// `held`, an achievement the hub sent, as a board shows it: one of [`ALL`], or one of
+/// the Toy Master's that the hub named ([`sjk_identity::wire::TOY_MASTER`]), a secret
+/// kept apart from the catalogue.
+pub(crate) fn held_kind(held: &sjk_identity::Achievement) -> Option<&'static Kind> {
+    find(&held.id).or_else(|| secret_kind(held))
+}
+
+/// A Toy Master's achievement the hub named in `held`: an achievement the client's
+/// catalogue does not hold, of the Toy Master's group, with its name. Kept for the
+/// session, so the same one is the same [`Kind`] every time (a new name or description,
+/// rare, is another).
+pub(crate) fn secret_kind(held: &sjk_identity::Achievement) -> Option<&'static Kind> {
+    if held.group.as_deref() != Some(sjk_identity::wire::TOY_MASTER) || find(&held.id).is_some() {
+        return None;
+    }
+    let name = held
+        .name
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())?;
+    let description = held.description.as_deref().unwrap_or_default();
+    let mut kinds = SECRET_KINDS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(kind) = kinds
+        .iter()
+        .find(|kind| kind.id == held.id && kind.name == name && kind.description == description)
+    {
+        return Some(kind);
+    }
+    if kinds.len() >= SECRET_KINDS_MAX {
+        return None;
+    }
+    let text = |text: &str| -> &'static str { Box::leak(text.to_owned().into_boxed_str()) };
+    let kind: &'static Kind = Box::leak(Box::new(Kind {
+        hidden: true,
+        category: Category::ToyMaster,
+        ..kind(
+            text(&held.id),
+            text(name),
+            text(description),
+            1,
+            Category::ToyMaster,
+            Hub,
+        )
+    }));
+    kinds.push(kind);
+    Some(kind)
+}
+
 impl Kind {
     /// `count` as the board writes it: hours for time played, a plain number otherwise.
     pub(crate) fn amount(&self, count: u64) -> String {
@@ -716,7 +1135,10 @@ impl Kind {
             } else {
                 format!("{} h", count / 60)
             }
-        } else if self.source == Client(C::BoxMinutes) {
+        } else if matches!(
+            self.source,
+            Client(C::BoxMinutes | C::HaxMinutes | C::BoomboxMinutes)
+        ) {
             format!("{count} min")
         } else {
             count.to_string()
@@ -796,7 +1218,7 @@ pub(crate) fn total_for(holds: impl Fn(&Kind) -> bool) -> usize {
 }
 
 /// The counts the client keeps, as `achievements.json` holds them.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Record {
     counts: [u64; Counter::COUNT],
     /// Milliseconds played beyond the whole minutes in `counts`.
@@ -812,6 +1234,12 @@ pub(crate) struct Record {
     weapons: u32,
     /// Kinds of fish landed (bits of [`fish_kind`]).
     fish: u32,
+    /// The toys' sets of players ([`Counter::is_named`]), by the counter's key: names
+    /// without colours, lower case.
+    named: BTreeMap<String, BTreeSet<String>>,
+    /// Milliseconds beyond the whole minutes in `counts` of the toys' minutes
+    /// ([`Counter::is_timed`]).
+    spare_ms: [u64; Counter::COUNT],
     /// What the hub held for the counts kept as sets (maps, servers, weapons), when
     /// that was more: after a reinstall the hub's count stands until the set passes it.
     floors: [u64; Counter::COUNT],
@@ -822,7 +1250,30 @@ pub(crate) struct Record {
     awaiting: BTreeSet<String>,
 }
 
+impl Default for Record {
+    fn default() -> Self {
+        Self::EMPTY
+    }
+}
+
 impl Record {
+    /// Nothing counted.
+    const EMPTY: Self = Self {
+        counts: [0; Counter::COUNT],
+        play_ms: 0,
+        box_ms: 0,
+        maps: BTreeSet::new(),
+        servers: BTreeSet::new(),
+        partners: BTreeSet::new(),
+        weapons: 0,
+        fish: 0,
+        named: BTreeMap::new(),
+        spare_ms: [0; Counter::COUNT],
+        floors: [0; Counter::COUNT],
+        unlocked: BTreeMap::new(),
+        awaiting: BTreeSet::new(),
+    };
+
     /// The count `counter` stands at.
     pub(crate) fn count(&self, counter: Counter) -> u64 {
         let raw = match counter {
@@ -831,6 +1282,10 @@ impl Record {
             Counter::DuelPartners => self.partners.len() as u64,
             Counter::Weapons => u64::from(self.weapons.count_ones()),
             Counter::FishKinds => u64::from(self.fish.count_ones()),
+            _ if counter.is_named() => self
+                .named
+                .get(counter.key())
+                .map_or(0, |set| set.len() as u64),
             _ => self.counts[counter as usize],
         };
         raw.max(self.floors[counter as usize])
@@ -860,6 +1315,13 @@ impl Record {
         self.box_ms = total % 60_000;
     }
 
+    /// Add `ms` to the minutes of `counter` ([`Counter::is_timed`]).
+    fn time(&mut self, counter: Counter, ms: u64) {
+        let total = self.spare_ms[counter as usize] + ms;
+        self.add(counter, total / 60_000);
+        self.spare_ms[counter as usize] = total % 60_000;
+    }
+
     /// A catch the Fishing toy landed: `catch` (none when the hook came up empty) or an
     /// Echo (`echo`). Whether a count changed.
     pub(crate) fn fished(&mut self, catch: Option<&crate::fishing::Catch>, echo: bool) -> bool {
@@ -881,6 +1343,13 @@ impl Record {
                 true
             }
         }
+    }
+
+    /// Remember player `name` in the set of `counter` ([`Counter::is_named`]), by its
+    /// normal form; whether they were new.
+    fn name(&mut self, counter: Counter, name: &str) -> bool {
+        let set = self.named.entry(counter.key().to_owned()).or_default();
+        Self::remember(set, &sjk_identity::normal_form(name))
     }
 
     /// Remember `name` in `set` (lower case, bounded); whether it was new.
@@ -916,6 +1385,12 @@ impl Record {
                     set.pop_last();
                 }
             }
+            _ if counter.is_named() => {
+                let set = self.named.entry(counter.key().to_owned()).or_default();
+                while set.len() as u64 > below {
+                    set.pop_last();
+                }
+            }
             Counter::Weapons => {
                 while u64::from(self.weapons.count_ones()) > below {
                     self.weapons &= self.weapons - 1;
@@ -934,6 +1409,7 @@ impl Record {
                 if counter == Counter::BoxMinutes {
                     self.box_ms = 0;
                 }
+                self.spare_ms[index] = 0;
             }
         }
         for other in &ALL {
@@ -1043,6 +1519,20 @@ impl Record {
                     waiting,
                 }
             })
+            // The Toy Master's the hub named, after the catalogue's: only unlocked ones
+            // ever come.
+            .chain(
+                held.iter()
+                    .filter(|held| held.unlocked > 0)
+                    .filter_map(|held| {
+                        secret_kind(held).map(|kind| Standing {
+                            kind,
+                            progress: 1,
+                            unlocked: Some(held.unlocked),
+                            waiting: false,
+                        })
+                    }),
+            )
             .collect()
     }
 
@@ -1068,6 +1558,16 @@ impl Record {
                 )
             })
             .collect();
+        let spare_ms: serde_json::Map<String, Value> = Counter::ALL
+            .iter()
+            .filter(|counter| self.spare_ms[**counter as usize] > 0)
+            .map(|counter| {
+                (
+                    counter.key().to_owned(),
+                    json!(self.spare_ms[*counter as usize]),
+                )
+            })
+            .collect();
         json!({
             "version": 1,
             "counts": counts,
@@ -1078,6 +1578,8 @@ impl Record {
             "partners": self.partners,
             "weapons": self.weapons,
             "fish": self.fish,
+            "named": self.named,
+            "spare_ms": spare_ms,
             "floors": floors,
             "unlocked": self.unlocked,
             "awaiting": self.awaiting,
@@ -1091,6 +1593,18 @@ impl Record {
         for counter in Counter::ALL {
             record.counts[counter as usize] = number(json["counts"].get(counter.key()));
             record.floors[counter as usize] = number(json["floors"].get(counter.key()));
+            if counter.is_timed() {
+                record.spare_ms[counter as usize] =
+                    number(json["spare_ms"].get(counter.key())).min(59_999);
+            }
+            if counter.is_named()
+                && let Some(names) = json["named"][counter.key()].as_array()
+            {
+                let set = record.named.entry(counter.key().to_owned()).or_default();
+                for name in names.iter().filter_map(Value::as_str) {
+                    Self::remember(set, name);
+                }
+            }
         }
         record.play_ms = number(json.get("play_ms")).min(59_999);
         record.box_ms = number(json.get("box_ms")).min(59_999);
@@ -1189,19 +1703,7 @@ impl Shared {
 }
 
 static SHARED: Mutex<Shared> = Mutex::new(Shared {
-    record: Record {
-        counts: [0; Counter::COUNT],
-        play_ms: 0,
-        box_ms: 0,
-        maps: BTreeSet::new(),
-        servers: BTreeSet::new(),
-        partners: BTreeSet::new(),
-        weapons: 0,
-        fish: 0,
-        floors: [0; Counter::COUNT],
-        unlocked: BTreeMap::new(),
-        awaiting: BTreeSet::new(),
-    },
+    record: Record::EMPTY,
     file: None,
     dirty: false,
     saved_at: None,
@@ -1339,12 +1841,27 @@ pub(crate) fn forget(id: Option<&str>) {
 
 /// One more of `counter`, a moment a toy saw rather than the snapshots' tracker (the
 /// Screen Saver's achievements); the caller keeps to live matches on servers, as the
-/// tracker does.
+/// tracker does ([`crate::GpuState::toys_count`]).
 pub(crate) fn note(counter: Counter) {
     update(|record| {
         record.add(counter, 1);
         true
     });
+}
+
+/// `counter`, a best ([`Counter::Order66Best`], [`Counter::MonitorBestThrow`]), raised
+/// to `value`, as [`note`].
+pub(crate) fn note_best(counter: Counter, value: u64) {
+    update(|record| {
+        let before = record.count(counter);
+        record.raise(counter, value);
+        record.count(counter) != before
+    });
+}
+
+/// Player `name` in the set of `counter` ([`Counter::is_named`]), as [`note`].
+pub(crate) fn note_name(counter: Counter, name: &str) {
+    update(|record| record.name(counter, name));
 }
 
 /// The record's counts, for the profile's numbers.
@@ -1380,6 +1897,7 @@ mod tests {
         assert_eq!(record.count(Counter::EchoesLanded), 1);
         assert_eq!(crate::fishing::FISH_KINDS, 12);
         assert_eq!(find("fish_kinds").unwrap().goal, 12);
+        assert_eq!(find("fish_first").unwrap().category.page(), Page::Fun);
         assert_eq!(Record::from_json(&record.to_json()), record);
     }
 
@@ -1390,6 +1908,9 @@ mod tests {
             goal: find(id).map_or(1, |kind| kind.goal),
             unlocked,
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         }
     }
 
@@ -1408,14 +1929,64 @@ mod tests {
             assert_eq!(find(kind.id), Some(kind));
         }
         assert!(find("nope").is_none());
+        // Every category has the catalogue's, but the Toy Master's: only the hub names
+        // those (`secret_kind`).
         for category in Category::ALL {
-            assert!(ALL.iter().any(|kind| kind.category == category));
+            let held = ALL.iter().any(|kind| kind.category == category);
+            assert_eq!(held, category != Category::ToyMaster, "{category:?}");
         }
     }
 
-    /// The fourteen of 26/10/2026 follow Decorated in the hub's order, the eight the hub
-    /// counts are its own, Master Craftsman asks for every card finish, and only Touched
-    /// by the Force and Old Whiskers are hidden, only Surveyor retired.
+    /// A Toy Master's achievement the hub named shows after the catalogue's once
+    /// unlocked, the same kind every time; anything else is not taken for one.
+    #[test]
+    fn the_toy_masters_achievements_come_named_by_the_hub() {
+        let secret =
+            |id: &str, name: Option<&str>, group: &str, unlocked: i64| sjk_identity::Achievement {
+                id: id.to_owned(),
+                progress: 1,
+                goal: 1,
+                unlocked,
+                reward: Some("kyber_rare".to_owned()),
+                name: name.map(str::to_owned),
+                description: Some("Found it.".to_owned()),
+                group: Some(group.to_owned()),
+            };
+        let found = secret("secret_test", Some("Test toy"), "toy_master", 1_000);
+        let kind = secret_kind(&found).expect("named");
+        assert_eq!((kind.name, kind.description), ("Test toy", "Found it."));
+        assert_eq!(kind.category, Category::ToyMaster);
+        assert!(std::ptr::eq(kind, secret_kind(&found).unwrap()));
+        assert!(std::ptr::eq(kind, held_kind(&found).unwrap()));
+        assert_eq!(
+            secret_kind(&secret("secret_x", None, "toy_master", 1)),
+            None
+        );
+        assert_eq!(
+            secret_kind(&secret("secret_x", Some("X"), "other", 1)),
+            None
+        );
+        // A catalogue id is never taken for a secret.
+        assert_eq!(
+            secret_kind(&secret("first_blood", Some("X"), "toy_master", 1)),
+            None
+        );
+        let standings = Record::default().standings(&[
+            found.clone(),
+            secret("secret_later", Some("Later"), "toy_master", 0),
+        ]);
+        assert_eq!(standings.len(), ALL.len() + 1);
+        let last = standings.last().unwrap();
+        assert_eq!((last.kind.id, last.unlocked), ("secret_test", Some(1_000)));
+        assert!(!last.secret() && last.listed());
+        let (unlocked, total) = tally(&standings);
+        assert_eq!(total, tally(&standings[..ALL.len()]).1 + 1);
+        assert_eq!(unlocked, tally(&standings[..ALL.len()]).0 + 1);
+    }
+
+    /// The fourteen of 26/10/2026 and those since follow Decorated in the hub's order,
+    /// the twelve the hub counts are its own, Master Craftsman asks for every card finish,
+    /// six are hidden and only Surveyor retired.
     #[test]
     fn the_new_achievements_follow_the_hubs_catalogue() {
         let ids: Vec<&str> = ALL[21..].iter().map(|kind| kind.id).collect();
@@ -1441,31 +2012,117 @@ mod tests {
                 "style_red_50",
                 "style_dual_50",
                 "style_staff_50",
+                "monitor_payback",
+                "monitor_surge",
+                "box_minutes_30",
+                "box_minutes_60",
+                "box_ambush",
+                "box_spotted_10",
+                "order66_purge",
+                "order66_victims_25",
+                "hax_puppet",
+                "hax_double",
+                "hax_triple",
+                "hax_fall",
+                "hax_minutes_5",
+                "hax_minutes_15",
+                "hax_traps_5",
+                "drone_strike",
+                "drone_monitor",
+                "boombox_minutes_30",
+                "boombox_crowd",
+                "boombox_tough_crowd",
+                "monitor_victims_25",
+                "monitor_double",
+                "monitor_triple",
+                "monitor_far",
+                "box_hunt_mark",
+                "box_hunt_marks_10",
+                "box_hunt_survive",
+                "box_hunt_survive_5",
                 "fish_first",
                 "fish_50",
                 "fish_kinds",
                 "echo_angler",
                 "old_whiskers",
-                "monitor_payback",
-                "monitor_surge",
             ]
         );
         assert_eq!(ALL[20].id, "decorated");
         let hub = ALL[21..].iter().filter(|kind| kind.source == Hub).count();
-        assert_eq!(hub, 8);
+        assert_eq!(hub, 12);
         assert_eq!(find("craft_finishes").unwrap().goal, 3);
         assert_eq!(
             find("craft_finishes").unwrap().goal,
             crate::cards::FINISHES.len() as u64
         );
         let hidden: Vec<&str> = ALL.iter().filter(|k| k.hidden).map(|k| k.id).collect();
-        assert_eq!(hidden, ["mythical_find", "old_whiskers", "monitor_surge"]);
+        assert_eq!(
+            hidden,
+            [
+                "mythical_find",
+                "monitor_surge",
+                "hax_triple",
+                "boombox_tough_crowd",
+                "monitor_triple",
+                "old_whiskers"
+            ]
+        );
         let retired: Vec<&str> = ALL.iter().filter(|k| k.retired).map(|k| k.id).collect();
         assert_eq!(retired, ["surveyor"]);
         assert_eq!(OBTAINABLE, ALL.len() - 1);
         assert_eq!(find("box_minutes_10").unwrap().amount(7), "7 min");
         assert_eq!(find("holocrons_200").unwrap().category, Collection);
-        assert_eq!(find("order66_kill").unwrap().category, Toys);
+        assert_eq!(find("order66_kill").unwrap().category, Order66);
+        assert_eq!(find("hax_minutes_5").unwrap().amount(3), "3 min");
+        assert_eq!(Order66.page(), Page::Fun);
+        assert_eq!(Collection.page(), Page::General);
+    }
+
+    /// The toys' sets of players count each name once (colours left out), their minutes
+    /// keep the spare milliseconds, a best only rises, and the file keeps them all;
+    /// clearing one keeps its set just below the goal.
+    #[test]
+    fn the_toys_sets_minutes_and_bests_are_kept_and_cleared() {
+        let mut record = Record::default();
+        for name in ["^1Sol", "Bishop", "sol", "Creyon"] {
+            record.name(Counter::MonitorVictims, name);
+        }
+        assert_eq!(record.count(Counter::MonitorVictims), 3);
+        assert_eq!(record.count(Counter::BoxSpotted), 0);
+        record.time(Counter::HaxMinutes, 90_000);
+        record.time(Counter::HaxMinutes, 45_000);
+        assert_eq!(
+            (
+                record.count(Counter::HaxMinutes),
+                record.spare_ms[Counter::HaxMinutes as usize]
+            ),
+            (2, 15_000)
+        );
+        record.raise(Counter::MonitorBestThrow, 2);
+        record.raise(Counter::MonitorBestThrow, 1);
+        assert_eq!(record.count(Counter::MonitorBestThrow), 2);
+        let back = Record::from_json(&record.to_json());
+        assert_eq!(back, record);
+        let new: Vec<&str> = record.unlock(9, false).iter().map(|kind| kind.id).collect();
+        assert_eq!(new, ["monitor_double"]);
+        assert_eq!(find("monitor_victims_25").unwrap().amount(3), "3");
+        // The hub's count is a floor for a set, as for maps.
+        assert!(
+            record
+                .merge_hub(&[held("monitor_victims_25", 10, 0)])
+                .is_some()
+        );
+        assert_eq!(record.count(Counter::MonitorVictims), 10);
+        for index in 0..30 {
+            record.name(Counter::MonitorVictims, &format!("p{index}"));
+        }
+        let _ = record.unlock(10, false);
+        assert!(record.unlocked.contains_key("monitor_victims_25"));
+        record.forget(find("monitor_victims_25").unwrap());
+        assert_eq!(record.count(Counter::MonitorVictims), 24);
+        record.forget(find("hax_minutes_5").unwrap());
+        assert_eq!(record.count(Counter::HaxMinutes), 2);
+        assert_eq!(record.spare_ms[Counter::HaxMinutes as usize], 0);
     }
 
     /// A hidden achievement is a secret until unlocked: its name and what it asks are

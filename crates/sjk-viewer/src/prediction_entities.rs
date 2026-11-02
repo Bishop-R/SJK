@@ -15,6 +15,9 @@ struct Body {
 #[derive(Default)]
 pub(super) struct Entities {
     bodies: Vec<Body>,
+    /// `cg_predictLegacy` [`ACTOR_CONTEXT`](sjk_game_jka::pmove::predict_legacy): no
+    /// actor is known, as in 2026.1028.1.
+    pub(super) off: bool,
 }
 
 impl Entities {
@@ -28,6 +31,9 @@ impl Entities {
 
     pub(super) fn update(&mut self, entities: &[EntityState]) {
         self.bodies.clear();
+        if self.off {
+            return;
+        }
         self.bodies.extend(entities.iter().filter_map(|entity| {
             matches!(entity.entity_type(), 1 | 13).then(|| Body {
                 number: entity.number(),
@@ -39,6 +45,15 @@ impl Entities {
         self.bodies.sort_unstable_by_key(|body| body.number);
     }
 
+    /// Turn the actor context off (clearing what is known) or back on from the next
+    /// snapshot.
+    pub(super) fn set_off(&mut self, off: bool) {
+        self.off = off;
+        if off {
+            self.bodies.clear();
+        }
+    }
+
     fn body(&self, number: u16) -> Option<&Body> {
         self.bodies
             .binary_search_by_key(&number, |body| body.number)
@@ -46,12 +61,24 @@ impl Entities {
             .map(|i| &self.bodies[i])
     }
 
+    #[cfg(test)]
     pub(super) fn predict(
         &self,
         predictor: &mut Predictor,
         ride: Option<&mut RidePrediction>,
         command: UserCommand,
         collision: &impl MovementCollision,
+    ) {
+        self.predict_with_collisions(predictor, ride, command, collision, collision);
+    }
+
+    pub(super) fn predict_with_collisions(
+        &self,
+        predictor: &mut Predictor,
+        ride: Option<&mut RidePrediction>,
+        command: UserCommand,
+        collision: &impl MovementCollision,
+        vehicle_collision: &impl MovementCollision,
     ) {
         let bodies = |number| self.body(number).map(|body| body.legs);
         let npcs = |number| self.body(number).is_some_and(|body| body.npc);
@@ -60,7 +87,14 @@ impl Entities {
             npcs: &npcs,
             ..MoveContext::CLIENT
         };
-        super::ride::predict(predictor, ride, command, collision, &context);
+        super::ride::predict(
+            predictor,
+            ride,
+            command,
+            collision,
+            vehicle_collision,
+            &context,
+        );
     }
 }
 

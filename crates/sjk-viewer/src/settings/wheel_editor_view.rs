@@ -707,7 +707,7 @@ impl WheelEditor {
                 &mut self.ui,
                 frame,
                 &mut y,
-                "Back to the wheel's own pages, Force, General, Toys and Weather. Your pages and choices are removed.",
+                "Back to the wheel's own pages, Force, General, Toys and Weather. Your pages and choices are removed; your named commands stay.",
             ),
             (Column::Pages, _) => note(
                 &mut self.ui,
@@ -845,6 +845,16 @@ impl WheelEditor {
                 Slot::Custom { .. } => None,
             })
             .collect();
+        // A remembered command is on the page when a custom choice runs it.
+        let saved_on_page: Vec<bool> = self
+            .saved
+            .iter()
+            .map(|saved| {
+                self.choices().iter().any(
+                    |slot| matches!(slot, Slot::Custom { command, .. } if *command == saved.command),
+                )
+            })
+            .collect();
         for (slot, line) in shown.clone().enumerate() {
             let top = PICK_TOP + slot as f32 * PICK_LINE;
             let middle = top + PICK_LINE * 0.5;
@@ -864,6 +874,10 @@ impl WheelEditor {
                 PickLine::Emote(index) => {
                     emote_choice(index).map_or_else(|| "Emote".into(), |(name, _)| name.into())
                 }
+                PickLine::Saved(index) => self.saved.get(index).map_or_else(
+                    || "Custom command".into(),
+                    |saved| saved.label.clone().into(),
+                ),
                 PickLine::Custom => "Custom command...".into(),
             };
             let lit = line == picker.highlighted;
@@ -886,6 +900,11 @@ impl WheelEditor {
                 PickLine::Emote(index) => emote_choice(index)
                     .and_then(|(_, command)| crate::emote_icons::for_command(&command))
                     .or_else(|| wheel("taunt")),
+                PickLine::Saved(index) => self
+                    .saved
+                    .get(index)
+                    .and_then(|saved| crate::emote_icons::for_command(&saved.command))
+                    .or_else(|| wheel(crate::quick_wheel::catalog::CUSTOM_ICON)),
                 PickLine::Custom => wheel(crate::quick_wheel::catalog::CUSTOM_ICON),
                 PickLine::Heading(_) => None,
             };
@@ -904,12 +923,37 @@ impl WheelEditor {
                 FontWeight::Regular,
                 TextAlign::Start,
             );
-            if matches!(lines[line], PickLine::Action(action) if on_page.contains(&action)) {
+            // The highlighted remembered command has a cross that forgets it,
+            // the line's other marks moved left of it.
+            let forget = lit && matches!(lines[line], PickLine::Saved(_));
+            if forget {
+                icon_button(
+                    &mut self.ui,
+                    frame,
+                    [DETAIL_X + DETAIL_WIDTH - 12.0 - BUTTON * 0.5, middle],
+                    Glyph::Remove,
+                    true,
+                    false,
+                    PICK_FORGET,
+                );
+            }
+            let mark_right = if forget { BUTTON + 12.0 } else { 0.0 };
+            let marked = match lines[line] {
+                PickLine::Action(action) => on_page.contains(&action),
+                PickLine::Saved(index) => saved_on_page.get(index).copied().unwrap_or(false),
+                _ => false,
+            };
+            if marked {
                 text(
                     &mut self.ui,
                     TextFamily::Body,
                     format_args!("On the page"),
-                    frame.rect(DETAIL_X + DETAIL_WIDTH - 130.0, middle - 11.0, 116.0, 22.0),
+                    frame.rect(
+                        DETAIL_X + DETAIL_WIDTH - 130.0 - mark_right,
+                        middle - 11.0,
+                        116.0,
+                        22.0,
+                    ),
                     14.0 * s,
                     color::GOLD,
                     FontWeight::Regular,
@@ -1044,13 +1088,19 @@ impl WheelEditor {
                 ));
                 keys.push((&["Esc"][..], "cancel"));
             }
-            (None, Some(_), _) => {
+            (None, Some(picker), _) => {
                 keys.extend([
                     (&["Type"][..], "search"),
                     (&["Up", "Down"][..], "choose"),
                     (&["Enter"][..], "pick"),
-                    (&["Esc"][..], "cancel"),
                 ]);
+                if matches!(
+                    self.pick_shown().get(picker.highlighted),
+                    Some(PickLine::Saved(_))
+                ) {
+                    keys.push((&["Delete"][..], "forget"));
+                }
+                keys.push((&["Esc"][..], "cancel"));
             }
             (None, None, Some(Confirm::RemovePage(_))) => {
                 keys.extend([(&["Delete"][..], "remove"), (&["Esc"][..], "keep")]);
@@ -1349,6 +1399,13 @@ mod tests {
                 .is_some()
             {}
         }
+        // As many remembered commands as are kept, under the catalogue's Your own.
+        for number in 0..crate::quick_wheel::pages::MAX_SAVED {
+            console.wheel_pages.remember(
+                "Twenty-four characters!!",
+                &format!("say a long command; say {number}"),
+            );
+        }
         let mut menu = SettingsMenu::new();
         let font = crate::text::load_modern(1.0, None).expect("Inter");
         let rail = Rail {
@@ -1369,6 +1426,14 @@ mod tests {
                     // The pages after Force have choices to edit.
                     &[KeyCode::ArrowDown, KeyCode::ArrowRight, KeyCode::Enter][..],
                     &[KeyCode::ArrowDown, KeyCode::ArrowRight, KeyCode::F2][..],
+                    // The catalogue on the last remembered command, its cross shown.
+                    &[
+                        KeyCode::ArrowDown,
+                        KeyCode::ArrowRight,
+                        KeyCode::Enter,
+                        KeyCode::End,
+                        KeyCode::ArrowUp,
+                    ][..],
                 ] {
                     menu.open_wheel_editor(&console, mode);
                     for key in keys {
@@ -1465,7 +1530,12 @@ mod tests {
         draw(&mut menu);
         let line = menu.wheel.picker.unwrap().first;
         let slot = (0..PICK_LINES as u16)
-            .find(|slot| matches!(pick_lines()[line + usize::from(*slot)], PickLine::Action(_)))
+            .find(|slot| {
+                matches!(
+                    pick_lines(&menu.wheel.saved)[line + usize::from(*slot)],
+                    PickLine::Action(_)
+                )
+            })
             .unwrap();
         let at = centre(&menu, PICK_BASE + slot);
         click(&mut menu, &mut console, at);

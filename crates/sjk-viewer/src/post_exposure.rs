@@ -129,6 +129,9 @@ pub(crate) struct Values {
     pub(crate) to_dark: f32,
     pub(crate) key: f32,
     pub(crate) base: f32,
+    /// The PC clock's night darkening (`day_live::night_tint`), 1 by day and whenever the
+    /// live sun shows the hour itself; multiplied into the exposure after adaptation.
+    pub(crate) night: f32,
 }
 
 impl Default for Values {
@@ -201,6 +204,7 @@ impl Settings {
             to_dark: float(4),
             key: float(5),
             base: float(6),
+            night: 1.0,
         }
     }
 }
@@ -326,7 +330,8 @@ pub(crate) struct Params {
     to_bright: f32,
     to_dark: f32,
     mode: u32,
-    _padding: u32,
+    /// [`Values::night`]: the exposure's last factor, after adaptation.
+    night: f32,
 }
 
 impl Params {
@@ -336,14 +341,29 @@ impl Params {
         Self {
             base: if hdr { values.base } else { 1.0 },
             min_ev: if hdr { values.min_ev.min(0.0) } else { 0.0 },
-            max_ev: values.max_ev.max(0.0),
+            max_ev: values.max_ev.max(0.0) * day_share(values.night),
             log_key: values.key.max(1e-3).log2(),
             to_bright: smoothing(delta, values.to_bright),
             to_dark: smoothing(delta, values.to_dark),
             mode: mode as u32,
-            _padding: 0,
+            night: if values.night.is_finite() {
+                values.night.clamp(0.05, 1.0)
+            } else {
+                1.0
+            },
         }
     }
+}
+
+/// How much of the brightening range the PC clock's `night` factor leaves: all by day,
+/// none in full night, where the dark night sky would otherwise make eye adaptation
+/// brighten the view back and undo the night.
+pub(crate) fn day_share(night: f32) -> f32 {
+    let full = crate::world_materials::shadows::day::live::NIGHT_FACTOR;
+    if !night.is_finite() {
+        return 1.0;
+    }
+    ((night - full) / (1.0 - full)).clamp(0.0, 1.0)
 }
 
 /// The fraction of the remaining distance an exponential approach with time constant
@@ -599,7 +619,12 @@ impl crate::GpuState {
     /// Prepare this frame's eye adaptation; call once per frame before recording.
     /// `backdrop` is the menu backdrop holding the view.
     pub(crate) fn prepare_eye_adaptation(&mut self, delta: f32, backdrop: bool) {
-        let values = self.context.exposure.values();
+        let mut values = self.context.exposure.values();
+        // Without the live sun (SJK recommended, Vanilla style) the PC clock's night is a
+        // darker exposure; with it, the sun itself shows the hour.
+        if !self.context.sun_shadows.day.enabled {
+            values.night = self.context.dynamic_light_settings.day_clock().night_tint();
+        }
         let snapshot = self
             .live_session
             .as_ref()
@@ -841,6 +866,24 @@ mod tests {
     }
 
     #[test]
+    fn the_night_takes_away_the_brightening_only() {
+        assert_eq!(day_share(1.0), 1.0);
+        assert_eq!(day_share(0.4), 0.0);
+        assert!((day_share(0.7) - 0.5).abs() < 1e-6);
+        assert_eq!(day_share(f32::NAN), 1.0);
+        let night = Values {
+            night: 0.4,
+            ..Values::default()
+        };
+        let params = Params::new(night, Mode::Metering, 0.016, true);
+        assert_eq!(params.max_ev, 0.0, "no brightening at night");
+        assert_eq!(params.min_ev, -0.5, "darkening stays");
+        assert_eq!(params.night, 0.4);
+        let day = Params::new(Values::default(), Mode::Metering, 0.016, true);
+        assert_eq!(day.max_ev, 1.0);
+    }
+
+    #[test]
     fn defaults_and_ranges_match_the_cvars() {
         let mut cvars = CvarRegistry::new();
         crate::frame_target::aa::register(&mut cvars).unwrap();
@@ -855,6 +898,7 @@ mod tests {
                 to_dark: 2.5,
                 key: 0.18,
                 base: 1.0,
+                night: 1.0,
             }
         );
         cvars.set_text(ENABLED, "0").unwrap();

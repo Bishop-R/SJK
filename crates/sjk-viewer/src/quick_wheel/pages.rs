@@ -26,6 +26,15 @@
 //! ordinary page of the catalogue's Toys, Illuminate for now): a file holding
 //! exactly the version 2 defaults becomes the new defaults, any other file gets a
 //! Toys page once, after its Force page (else last), unless it has eight pages.
+//!
+//! The custom commands the player names in Settings are remembered apart, in
+//! `wheel_commands.json` beside it ([`COMMANDS_FILE`]), newest first and one per
+//! command, so the catalogue offers them again for any page; restoring the
+//! default pages keeps them.
+//!
+//! ```json
+//! { "version": 1, "commands": [ {"name": "Ready", "command": "ready"} ] }
+//! ```
 
 use super::catalog::{self, ACTIONS, State};
 use serde_json::{Value, json};
@@ -52,6 +61,19 @@ pub(crate) const NAME_CHARS: usize = 20;
 pub(crate) const LABEL_CHARS: usize = 24;
 /// Longest custom console command, in characters.
 pub(crate) const COMMAND_CHARS: usize = 200;
+/// The remembered custom commands' file, in the profile folder.
+pub(crate) const COMMANDS_FILE: &str = "wheel_commands.json";
+/// Most custom commands remembered; past it the oldest is forgotten.
+pub(crate) const MAX_SAVED: usize = 24;
+/// The remembered commands file's version.
+const COMMANDS_VERSION: u64 = 1;
+
+/// A custom command the player named once, offered again by the catalogue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SavedCommand {
+    pub(crate) label: String,
+    pub(crate) command: String,
+}
 
 /// One choice of a page.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -166,6 +188,9 @@ fn defaults_before_toys() -> Vec<Page> {
 pub(crate) struct WheelPages {
     path: Option<PathBuf>,
     pages: Vec<Page>,
+    /// Where the remembered custom commands are kept, and they, newest first.
+    commands_path: Option<PathBuf>,
+    saved: Vec<SavedCommand>,
 }
 
 impl WheelPages {
@@ -178,6 +203,9 @@ impl WheelPages {
     /// after its Force page (else last), and is saved as the current version, so
     /// a removed Toys page stays removed. A wheel of eight pages is left as it is
     /// (Settings can add the pages later).
+    ///
+    /// The remembered custom commands come from [`COMMANDS_FILE`]; without it,
+    /// the custom choices already on the pages (emotes aside) are remembered.
     pub(crate) fn load(directory: &Path) -> Self {
         let path = directory.join(FILE);
         let (pages, version) = match std::fs::read(&path) {
@@ -190,10 +218,29 @@ impl WheelPages {
             }),
             Err(_) => (defaults(), VERSION),
         };
+        let commands_path = directory.join(COMMANDS_FILE);
+        let (saved, seed) = match std::fs::read(&commands_path) {
+            Ok(bytes) => (
+                parse_saved(&bytes).unwrap_or_else(|| {
+                    crate::log::progress(format_args!(
+                        "warning: {} is not a quick wheel commands file; none remembered",
+                        commands_path.display()
+                    ));
+                    Vec::new()
+                }),
+                false,
+            ),
+            Err(_) => (Vec::new(), true),
+        };
         let mut pages = Self {
             path: Some(path),
             pages,
+            commands_path: Some(commands_path),
+            saved,
         };
+        if seed {
+            pages.remember_from_pages();
+        }
         if version < 2 && pages.add_force_page().is_some() {
             crate::log::progress(format_args!("quick wheel: the Force page added"));
         }
@@ -241,6 +288,71 @@ impl WheelPages {
         Self {
             path: None,
             pages: defaults(),
+            commands_path: None,
+            saved: Vec::new(),
+        }
+    }
+
+    /// The remembered custom commands, newest first.
+    pub(crate) fn saved(&self) -> &[SavedCommand] {
+        &self.saved
+    }
+
+    /// Remember the custom command `command` named `label`, first in the list:
+    /// one already remembered (the same command) takes the new name and moves
+    /// up. Past [`MAX_SAVED`] the oldest is forgotten. Whether it was kept
+    /// (`false` for a blank name or command).
+    pub(crate) fn remember(&mut self, label: &str, command: &str) -> bool {
+        let (label, command) = (clean(label, LABEL_CHARS), clean(command, COMMAND_CHARS));
+        if label.is_empty() || command.is_empty() {
+            return false;
+        }
+        self.saved.retain(|saved| saved.command != command);
+        self.saved.insert(0, SavedCommand { label, command });
+        self.saved.truncate(MAX_SAVED);
+        self.save_commands();
+        true
+    }
+
+    /// Forget remembered command `index`; the choices on the pages stay.
+    pub(crate) fn forget(&mut self, index: usize) {
+        if index < self.saved.len() {
+            self.saved.remove(index);
+            self.save_commands();
+        }
+    }
+
+    /// Remember the custom choices on the pages, in page order, but not the
+    /// installed emotes (`sjkemote <id>`), which the catalogue lists already;
+    /// saved when there are any.
+    fn remember_from_pages(&mut self) {
+        let emote = format!("{} ", crate::emotes::COMMAND);
+        for slot in self.pages.iter().flat_map(|page| &page.choices) {
+            if let Slot::Custom { label, command } = slot
+                && !command.starts_with(&emote)
+                && self.saved.len() < MAX_SAVED
+                && self.saved.iter().all(|saved| saved.command != *command)
+            {
+                self.saved.push(SavedCommand {
+                    label: label.clone(),
+                    command: command.clone(),
+                });
+            }
+        }
+        if !self.saved.is_empty() {
+            self.save_commands();
+        }
+    }
+
+    fn save_commands(&self) {
+        let Some(path) = &self.commands_path else {
+            return;
+        };
+        if let Err(error) = write_saved(path, &self.saved) {
+            crate::log::progress(format_args!(
+                "warning: quick wheel commands not saved to {}: {error}",
+                path.display()
+            ));
         }
     }
 
@@ -506,6 +618,8 @@ fn parse(bytes: &[u8]) -> Option<(Vec<Page>, u64)> {
     let mut pages = WheelPages {
         path: None,
         pages: Vec::new(),
+        commands_path: None,
+        saved: Vec::new(),
     };
     for item in items.iter().take(MAX_PAGES) {
         let Some(name) = item
@@ -559,9 +673,6 @@ fn slot(value: &Value) -> Option<Slot> {
 }
 
 fn write(path: &Path, pages: &[Page]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let pages: Vec<Value> = pages
         .iter()
         .map(|page| {
@@ -580,8 +691,44 @@ fn write(path: &Path, pages: &[Page]) -> std::io::Result<()> {
             }
         })
         .collect();
-    let bytes = serde_json::to_vec_pretty(&json!({"version": VERSION, "pages": pages}))
-        .map_err(std::io::Error::other)?;
+    write_whole(path, &json!({"version": VERSION, "pages": pages}))
+}
+
+/// The commands a `wheel_commands.json` remembers, at most [`MAX_SAVED`], one per
+/// command; `None` when it is not one.
+fn parse_saved(bytes: &[u8]) -> Option<Vec<SavedCommand>> {
+    let value: Value = serde_json::from_slice(bytes).ok()?;
+    let mut saved: Vec<SavedCommand> = Vec::new();
+    for item in value.get("commands")?.as_array()? {
+        // An object naming a command; a bare string would be an action's id.
+        let Some(Slot::Custom { label, command }) = item.is_object().then(|| slot(item)).flatten()
+        else {
+            continue;
+        };
+        if saved.len() < MAX_SAVED && saved.iter().all(|saved| saved.command != command) {
+            saved.push(SavedCommand { label, command });
+        }
+    }
+    Some(saved)
+}
+
+fn write_saved(path: &Path, saved: &[SavedCommand]) -> std::io::Result<()> {
+    let commands: Vec<Value> = saved
+        .iter()
+        .map(|saved| json!({"name": saved.label, "command": saved.command}))
+        .collect();
+    write_whole(
+        path,
+        &json!({"version": COMMANDS_VERSION, "commands": commands}),
+    )
+}
+
+/// `value` written to `path` as pretty JSON, its folder made when missing.
+fn write_whole(path: &Path, value: &Value) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
     // Written whole beside the file, then moved over it, so a crash never
     // leaves half a file.
     let partial = path.with_extension("json.partial");
@@ -714,6 +861,87 @@ mod tests {
         assert_eq!(ids(&pages), ["force", "general", "toys", "weather"]);
         assert!(!directory.path().join(FILE).exists());
         assert!(WheelPages::load(directory.path()).is_default());
+    }
+
+    #[test]
+    fn custom_commands_are_remembered_once_newest_first_and_kept_apart() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut pages = WheelPages::load(directory.path());
+        assert!(pages.saved().is_empty());
+        // Nothing is written until one is remembered.
+        assert!(!directory.path().join(COMMANDS_FILE).exists());
+        assert!(pages.remember("Ready", "ready"));
+        assert!(pages.remember(" Taunt ", "say \"hi\"; taunt"));
+        assert!(!pages.remember(" ", "kill"));
+        assert!(!pages.remember("Kill", ""));
+        // The same command again takes the new name and moves first.
+        assert!(pages.remember("Set", "ready"));
+        let saved = |pages: &WheelPages| -> Vec<(String, String)> {
+            pages
+                .saved()
+                .iter()
+                .map(|saved| (saved.label.clone(), saved.command.clone()))
+                .collect()
+        };
+        let both = vec![
+            ("Set".to_owned(), "ready".to_owned()),
+            ("Taunt".to_owned(), "say \"hi\"; taunt".to_owned()),
+        ];
+        assert_eq!(saved(&pages), both);
+        // Read back as made; the pages' file is untouched.
+        assert_eq!(saved(&WheelPages::load(directory.path())), both);
+        assert!(!directory.path().join(FILE).exists());
+        // Restoring the default pages keeps them.
+        pages.add_page("Duels");
+        pages.restore_defaults();
+        assert_eq!(saved(&WheelPages::load(directory.path())), both);
+        // Forgotten, it stays forgotten.
+        pages.forget(0);
+        pages.forget(5);
+        assert_eq!(saved(&pages), both[1..]);
+        assert_eq!(saved(&WheelPages::load(directory.path())), both[1..]);
+        // The oldest goes past the limit.
+        for number in 0..MAX_SAVED {
+            pages.remember(&format!("C{number}"), &format!("echo {number}"));
+        }
+        assert_eq!(pages.saved().len(), MAX_SAVED);
+        assert_eq!(pages.saved()[0].command, format!("echo {}", MAX_SAVED - 1));
+        assert!(pages.saved().iter().all(|saved| saved.label != "Taunt"));
+    }
+
+    #[test]
+    fn without_a_commands_file_the_pages_custom_choices_are_remembered() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = r#"{"version": 3, "pages": [
+            {"id": "a", "name": "A", "choices": ["duel", {"name": "Ready", "command": "ready"},
+                {"name": "Dance", "command": "sjkemote kane_dance"}]},
+            {"id": "b", "name": "B", "choices": [{"name": "Again", "command": "ready"},
+                {"name": "Kill", "command": "kill"}]}
+        ]}"#;
+        std::fs::write(directory.path().join(FILE), file).unwrap();
+        let pages = WheelPages::load(directory.path());
+        let commands: Vec<_> = pages
+            .saved()
+            .iter()
+            .map(|saved| (saved.label.as_str(), saved.command.as_str()))
+            .collect();
+        assert_eq!(commands, [("Ready", "ready"), ("Kill", "kill")]);
+        // Once the file exists it is what is remembered, even empty.
+        std::fs::write(
+            directory.path().join(COMMANDS_FILE),
+            r#"{"version": 1, "commands": ["duel", {"name": "Hi", "command": "say hi"},
+                {"name": "Hello", "command": "say hi"}, {"name": "", "command": "x"}]}"#,
+        )
+        .unwrap();
+        let pages = WheelPages::load(directory.path());
+        assert_eq!(pages.saved().len(), 1);
+        assert_eq!(pages.saved()[0].label, "Hi");
+        std::fs::write(
+            directory.path().join(COMMANDS_FILE),
+            r#"{"version": 1, "commands": []}"#,
+        )
+        .unwrap();
+        assert!(WheelPages::load(directory.path()).saved().is_empty());
     }
 
     #[test]

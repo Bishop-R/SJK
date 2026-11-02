@@ -56,7 +56,7 @@ fn base_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         }
         let y0 = (0.1 + 0.8 * h11(k * 1.3 + fi)) * top;
         let a = h11(k * 4.1 + fi);
-        let bd = bolt3(ro, rd, around(0.4, a, y0), around(0.4 + 1.2 * h11(k + fi), a + 0.15, y0 + 1.5 + 1.5 * h11(k * 5.0)), k + fi * 9.0, 0.45);
+        let bd = bolt3(ro, rd, around(0.4, a, y0), around(0.4 + 1.2 * h11(k + fi), a + 0.15, y0 + 1.5 + 1.5 * h11(k * 5.0)), k + fi * 9.0, 0.45, px);
         col += boltLight(bd, hot, px) * 0.9;
     }
     // vapour boiling off it

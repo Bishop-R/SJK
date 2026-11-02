@@ -12,6 +12,7 @@ mod command;
 mod command_buffer;
 mod config;
 mod config_saver;
+mod config_watch;
 pub mod console_socket;
 mod cvar;
 pub mod key_names;

@@ -22,10 +22,24 @@ impl ShaderCatalog {
     /// Unreadable files are reported once. Valid override scripts retain `.oshader` priority.
     pub fn load_with_warnings(
         vfs: &VirtualFileSystem,
-        mut warning: impl FnMut(&VirtualPath, &ShaderError),
+        warning: impl FnMut(&VirtualPath, &ShaderError),
     ) -> Self {
+        Self::load_with_warnings_until(vfs, || false, warning)
+            .expect("an uncancelled shader load completes")
+    }
+
+    /// Loads usable definitions, stopping before the next script read when
+    /// `cancelled` reports that the owner no longer needs the catalogue.
+    pub fn load_with_warnings_until(
+        vfs: &VirtualFileSystem,
+        mut cancelled: impl FnMut() -> bool,
+        mut warning: impl FnMut(&VirtualPath, &ShaderError),
+    ) -> Option<Self> {
         let mut catalog = Self::default();
         for path in shader_paths(vfs) {
+            if cancelled() {
+                return None;
+            }
             match vfs.read(path.as_str()) {
                 Ok(Some(asset)) => {
                     let definitions =
@@ -42,7 +56,7 @@ impl ShaderCatalog {
                 Err(error) => warning(&path, &ShaderError::Vfs(error)),
             }
         }
-        catalog
+        Some(catalog)
     }
 
     fn load_script(

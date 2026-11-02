@@ -32,12 +32,140 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
-- jaPRO plugin options: Force jumps (Settings > Mods, `japro.plugin 1`) is offered now that SJK predicts it: off, holding jump bunny hops instead of Force jumping, on jaPRO servers that let players choose _(Sol, after Kushina's idea and Lumaya's PR #282)_
+= cg_soundSonar: Sound sonar, for deaf and hard-of-hearing players: arcs round the crosshair point toward the sounds you hear.
+= cg_scoreboardIDs: New: each player's client number, small before the name on SJK's scoreboard, as the classic one's Id column shows it.
 
+- Move the HUD with the mouse: Settings > HUD "Move HUD elements" (or `hud_edit`) outlines the health, Force, weapon, timer, lagometer, chat, kill feed, movement keys and the rest over the game; drag one to move it, right-click it to put it back _(Slash, PR #295, after Lex's idea)_
+- Sound sonar (Settings > Sound, `cg_soundSonar`, off by default): short arcs round the crosshair point toward the sounds you hear, footsteps, shots and swings, voices, explosions and the rest, each kind its own colour, fading over a second _(Slash, PR #301, after Dawson's idea)_
+- Quiet mode: `quiet` (or Settings > Chat > Quiet mode, `cg_quietMode`) hides public, team, SJK and admin chat and their sounds until you turn it off or the map changes, but for your private duel partner and whispers; your SJK scoreboard row says Quiet _(Slash, PR #302, after Lex Deifaber's idea)_
+- Fonts from your PC: Settings > Chat font (`cg_chatFont`) and Console font (`con_font`) list the font families installed on this PC; pick one to draw the chat or the console in it. Characters it lacks, Cyrillic, Chinese, Japanese, Korean and emoji still come from SJK's fonts, and SJK default keeps SJK's own _(Slash, PR #303, after Saturn's idea)_
+- Scoreboard: each player's client number on SJK's scoreboard too (`cg_scoreboardIDs`, off by default), and Rank by score - deaths (`cg_scoreboardDeathsRank`, off by default), with the # column numbering players in that order (Foshin's idea) _(Creyon, PR #317)_
+- Trading: a finished trade says your new items are in your collection only when the other player gave you something; otherwise it says you gave your offer and received nothing, with the other player's name shown in full (clan marks included); the message over play grows to show the whole line instead of cutting it off (hub report #208) _(Creyon, PR #321)_
+- JoF hats look as in JoF EJK: the pumpkin, cap, cringe, fedora, Santa hat, sombrero and top hat show their own pictures instead of plain grey, in game and in the profile preview, and McFox and McSnowFox are solid instead of see-through _(Creyon, PR #236)_
+- SJK chat: react to public messages with six shared emoji buttons; reaction errors clear after five seconds _(Lumaya, PR #316)_
+- Profile banners: collect profile covers (Jedi Archives, Binary Sunset, Sith Eclipse, Hyperspace and Living Nebula) shown on your Profile and player card; Collection > Banners previews and wears them, a plain cover being free for everyone, and once the hub turns them on a holocron opening may bring one on top of its usual prize _(Lumaya, PR #319)_
+- Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
+- Vehicle HUD: each HUD style shows the health of the vehicle you pilot its own way: Text only just the number, SJK radial a yellow arc under the crosshair, SJK classic a yellow bar, instead of the same speed, shield and ammo strip for all _(Slash, PR #318)_
+- Lugormod v3 servers: your own movement is predicted as the server moves you: scaled players' size and eye height, standing up under low ceilings, the admin jetpack in FFA, rolls with the stun baton; other servers are unchanged (`cg_noPredict 1` still turns prediction off) _(Lumaya, PR #287)_
+
+## 2026.1102.1 (Alpha) | 02/11/2026
+
+Toon shading, livelier Toy Master shows, grand finds told in colour and a round of crash fixes.
+
+> Toon models: Cartoon shading for players, off by default.
+> Toy Master: Shows now dance, float and throw out prizes to grab.
+> Grand finds: The chat shows the prize in its colour, with its blade.
+> Fixes: Empty hilts, the day clock and DX12 no longer close the game.
+> Trading: Chat while a trade is open.
+
+= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
+= cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
+
+- Toon models: an option draws players and other models with cartoon-style shading, light in soft bands with a bright rim around them, only on your screen (Settings > Graphics > Image, `r_toonModels`) _(Sol)_
+- Grand finds in the game's chat look the part: the line starts with the holocron's or kyber crystal's picture, the prize is written in its own rarity colour, and a blade shows small and live; with the chat open, rest the pointer on it to see it large (`debug_find` rehearses one) _(Sol)_
+- The Toy Master's toys: facing one shows the Use prompt by the crosshair, as at a mystery box, saying only "???"; while a toy's show spins, the players around it spin and squish with it (on your screen only, where they really stand and face is unchanged), and a show whose sound you lack says so in the log, its sound heard once a pack bringing it loads _(Sol)_
+- On JA+ servers the dual sabers' forward jump attack no longer sinks you into the floor when nobody is in front: as on the server, your feet only lift to sail over a player ahead _(Blackwolf1337, after JA+)_
+- The Toy Master's toys can put on longer shows in steps: the players around one dance at its beat with a glowing ring on the ground showing how far it reaches, then float weightless (in looks only, your view stays your own), and at the end it throws out credits, kyber shards and holocrons that bounce and land: Use takes one, first come first served _(Sol)_
+- Hilts: choosing an empty hilt from the community list (such as Empty Hilt (Stance)) no longer closes the game, and no longer closes it at every start after: it shows the blade with no hilt, and a hilt the menu cannot show falls back to the stock one and says so in the log _(Slash, after hub report #214)_
+- Loading graphics with Sun follows PC clock (`r_dayClock`) or Sun and sky on can no longer close the game: if the sky's day and night tint cannot be built, the map keeps its own sky, and if the game closed while building it, the next start leaves it out once and says so in the console. On DX12 without `dxcompiler.dll` maps load again: the HUD's program, and with Sun and sky the light probes' update, no longer fail to compile _(Slash, after hub report #219)_
+- Achievements: Long Distance Call (a monitor hit from 40 metres or more) unlocks again: the hit was measured after the monitor's flight had been run again from the hand, so it always looked 0 metres long. It now takes where the monitor met the body, 40 metres as the world ping shows them _(Slash, after hub reports #216 and #220)_
+- The player card shows the shader on a second saber, or on a staff's other half, when it is not the first's: a row of its own with its swatch and name _(Slash, after hub report #224)_
+- Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
+- JA+ tools: `japlus.guntele` with a distance (`japlus.guntele 300`, from the console or a quick wheel choice) takes you that far straight ahead, level, and stops just before a wall or step in the way, so it no longer drops you under the floor when you look down or into a wall _(Slash, after hub report #218, Nib)_
+- Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
+- Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
+- Chat logs: Save game chat logs in Settings > Chat (classic: HUD) saves received game-server chat in your profile's chatlogs/chat.log; off by default _(Lumaya)_
+- Cards: a card held in more than one finish shows each one, Normal, Holo, Solar and V, as chips to look at in turn, not only the best _(Sol)_
+- Cards can be of kind Clan, the clan being the card's set (the card reads Clan, JoF) _(Sol)_
+- Effects: the spawn and teleport beam throws as much lightning as retail again, about a sixth of before, as effect runners now roll their count _(Sol)_
+
+## 2026.1101.1 (Alpha) | 01/11/2026
+
+Sharp tags in Holo and Solar, credits cards on walls, hidden toys to find and a Tester medal for playing.
+
+> Tags: Sharp on walls, and now and then Holo or Solar.
+> Cards: Stick the credits cards you hold as tags.
+> Toy Master: Toys hidden on maps wait to be found.
+> Tester medal: Playing SJK earns it until 22/11.
+
+- Tags on walls are sharp: each picture is drawn at its full size in a pass of its own, where they were squeezed into small tiles before and blurred up close _(Sol)_
+- Tags come Holo or Solar now and then from holocrons (4 % and 0.5 %). Holo's rainbow foil shifts as you walk past, Solar burns round the tag's outline; choose the finish on Collection > Tags (`cg_tagFinish`) _(Sol)_
+- The credits cards you hold stick as tags too, their picture as a sticker in the finish of a copy you hold; Collection > Tags lists them under the tags and now scrolls _(Sol)_
+- The Toy Master: SJK's creator hides toys on maps for you to find, and each one found with Use is a secret achievement. The "?" on Collection > Toys tells more; Settings > Sound > Toys silences their shows (`s_toyMasterSound`) _(Sol)_
+- Playing SJK now earns the Tester medal by itself: rank IV until Sunday 01/11/2026, then a week each of rank III, II and I; from 23/11/2026 it is given by hand again _(Sol)_
+
+## 2026.1031.2 (Alpha) | 31/10/2026
+
+One News panel, cloud content that updates itself, faster blades and a fairer box hunt.
+
+> News: Release notes and announcements share one News panel.
+> Content: JoF content and the Sith cloud can update themselves.
+> Sabers: Legendary and Mythical blades draw faster.
+> Box hunt: Marks only among players in play, with an arrow.
+
+- What's new and the SJK team's announcements are now one News panel (`news`): the releases' recaps and the announcements in one list, with their settings to review, links that take you straight to a setting or a page, pictures and switches you can flip on the spot. It opens after an update and when there is news you have not read, never in the middle of play _(Sol)_
+- The switches on the what's-new card's Settings to review work for every setting: some (the dynamic glow's saber setting) did nothing and always showed Off _(Sol)_
+- JoF content and the Sith cloud can update themselves: turn on Update automatically on their card (or Settings > JoF content auto-update, Sith cloud auto-update) and tick Auto on the groups you want; SJK checks at start and every hour, also during a match, downloads what changed and says so in a small card, the new files loading from the next map. Off by default (`jof.contentAuto`, `sith.cloudAuto`) _(Sol)_
+- Legendary and Mythical saber shaders draw faster, looking the same: about a quarter less GPU time over the 48 of them, and half or more on Bleeding Kyber, Abyssal Eye, Sith Holocron, Reactor and Felucia Spores _(Sol)_
+- Box hunt: a mark is picked only among players in play (not typing in the chat, in a menu, spectating or idle), only when at least 3 are, and a mark away for a minute hands it to another; hunters see an arrow to the mark through walls, or round the crosshair pointing their way _(Sol)_
+- Box hunt: the mark is no longer shown for up to 20 seconds after their time is up, when killing them won nothing; the mark's game tells a kill made in the first seconds and tries again if the hub missed it; a hunter who wins no free roll reads why in the centre _(Sol)_
+- Mystery boxes are open inside under their lid (the top was closed with planks and the iron bands crossed it) and a faint halo of light rises over them, to find them from afar _(Sol)_
+
+## 2026.1031.1 (Alpha) | 31/10/2026
+
+Nameplate styles, a day that follows your clock, toy achievements and many fixes.
+
+> Nameplates: Pick Holo, Capsule or Classic for nameplates.
+> Lighting: Day and night can follow your PC's clock.
+> Achievements: 26 new ones for the toys, on a Fun page.
+> Chat: Hide a GIF on your PC, or colour public All chat.
+> Fixes: Duels, kicks, vehicles, Force templates and more.
+
+= r_dynamicGlowNoSabers: New: the dynamic glow leaves saber blades and trails out, so each saber's details show while the rest still glows; off, sabers glow as before.
+= r_dayClock: New: day and night follow your PC's clock in every preset: with Sun and sky the sun moves, without it the sky turns to night and the world darkens.
+
+- Nameplate styles: choose how nameplates look, Holo (today's), Capsule (your picture in a pill, the bars on a tray under it) or Classic (the name over a framed plate of bars, grey bars on players who do not share). Settings > Nameplate style or Collection > Nameplates, which shows yours (`cg_nameplateStyle`) _(Sol)_
+- Prediction as in 2026.1028.1: Settings > Game options > Prediction brings back how that release predicted your own movement, for players who preferred it; `cg_predictLegacy` turns the changes back off one by one (saber files, saber-lock facing, respawn jump, trigger box, gesture, held, other players, history gap). Current, the default, follows the server _(Sol, after Kushina's request)_
+- Toys reach the hub sooner: a toy you switch on or off is sent between the hub's regular calls, and a send the hub turned away for coming too fast is tried again a second later, so other players see it change sooner _(Sol)_
+- Cards: a card can show a rank and its colour in place of a rarity, for the JoF collection (Leaders in cyan, the Council in green): its foot, tile, close-up, hover, the opening and the chat's grand finds name the rank, its hover gives the card's own odds, and the rarity chip leaves ranked cards out _(Sol)_
+- Collection > History: everything that came to you, what you opened and what it held, the credits and kyber shards you gained and spent, your mystery boxes and finished trades, newest first with their dates; an Open all is one row that opens on its holocrons, chips filter by kind, and Load older goes further back _(Sol)_
+- Profile > SJK Profile has a Change name button: it opens the Character tab with its Name field ready to type, the name the hub and other SJK players see being the one you wear in game _(Slash, PR #299, after hub report #202, Nib)_
+- Chat GIFs: Hide this GIF on the chosen message in SJK chat hides one GIF on your PC: its line reads GIF hidden and it never loads. The GIF picker's new Hidden tab lists the GIFs you hid, and a click on one shows it again; `gif_unhideall` shows them all (Kushina's idea) _(Creyon)_
+- Toys: switching a toy says its name and ON in green or OFF in red, short, for every toy (Illuminate, the cardboard box, Order 66 and the Hax said nothing, Box hunt, the Drone, the Monitor and the Banana peel said a long line), and `toy_help` lists every toy with what it does and how _(Creyon)_
+- All chat colour: Settings > Chat > All chat colour (`cg_chatColor`) shows the text of public All chat in one colour of your choice on your PC; team, admin, whispers and SJK chat keep theirs, as do names. Off (original colours) until you pick one _(Lumaya, PR #315)_
+- Vehicles: each predicted rider and vehicle leaves out its own pilot or chassis when it moves, as the original game does, instead of sharing one list for both _(Lumaya, PR #274)_
+- Melee kicks: holding the kick no longer leaves your kick frozen on its last frame while the server keeps kicking; each kick plays from the start _(Slash)_
+- Duels: `fakenoclip` and `freecam` are refused in a duel, and a duel starting ends them: the server saw a still player with the chat balloon up, and JoF's servers then spared them all damage _(Slash, after hub report #209)_
+- Away emote: alt-tabbing out or going idle while riding a vehicle no longer starts your away emote, which broke the vehicle's animations and attacks until you got off and on again _(Slash, after hub report #205)_
+- Force templates: on saber-only servers, templates such as JoF's Fullforce FFA no longer lose Force Speed (leaving only Sense) when the server's info does not show its free saber skills: SJK now takes them from the server's own word, as the original game does _(Slash, after hub report #206)_
+- Settings search: every result takes a typed number. Results from the later groups (part of Sound, Gameplay, Interface, HUD, Chat, Network) only took the slider; a click on their value did nothing (#203) _(Slash)_
+- Collection > Shaders: the mouse wheel scrolls on through the list and the wall. It stopped at a tier's heading, most of all with Owned on, while the arrow keys still went on (#201) _(Slash)_
+- Settings no longer go back to old values after `config.cfg` is edited or deleted while the game runs: an edited file is loaded at once, and a deleted one stays deleted so the next start is on the defaults, instead of the game writing its old name, field of view and camera back over it at exit (#199, after Kushina's workaround) _(Slash)_
+- Lighting: day and night can follow your PC's clock (Settings > Lighting > Sun follows PC clock, `r_dayClock`); with Sun and sky off, as in the SJK and Vanilla presets, the sky turns to dusk and night and the world gets darker _(Creyon)_
+- Spectating: aim at a player to see their name, then left-click to follow their view; a click with nobody under the crosshair keeps its normal bind _(Lukas)_
+- Quick wheel commands you name are remembered: a custom command saved in Settings > Quick wheel is offered again under Your own in the catalogue when you add or change a choice on any page, so it goes on another page or wheel without typing it again. Delete (or its cross) forgets one; choices already on pages keep it _(Slash, after Dante's idea)_
+- Blade core thickness: a slider in Settings > Game options (`cg_saberCoreSize`, 0.5 to 2) draws the white core of every lit blade thinner or thicker, its glow unchanged _(Creyon)_
+- No glow on sabers (Settings > Graphics > Image, `r_dynamicGlowNoSabers`): the dynamic glow leaves saber blades, their glow and their trails out, so they keep their own look and the details of each saber show, while everything else still glows. Off until you turn it on _(Slash, after g0dchris' idea)_
+- Server browser: Copy IP copies the chosen server's address and port (also Ctrl+C), and `copyServerIP` copies the server you are on, never a password _(Lumaya, PR #312)_
+- Prediction with custom sabers: when two saber files define the same saber name, the first one counts, in the original game's file order, so a mod's saber no longer predicts the wrong flips, wall runs or jump attacks _(Lumaya, PR #314, after the original game)_
+- Mac and Linux: SJK raises its open-file limit at start as far as the system allows, so many PK3s no longer run out of files, and the log tracks how many game-file sets are still held at each map change _(Lukas, PR #198)_
+- Achievements: 26 new ones for the toys (the cardboard box, Order 66, the Hax, the Drone, the boombox, the monitor and the box hunt), three of them secret, and the board has two pages, General and Fun, a category for each toy on Fun (press F or use the switch at the top right) _(Sol, after a player's ideas)_
+- jaPRO plugin options: Force jumps (Settings > Mods, `japro.plugin 1`) is offered now that SJK predicts it: off, holding jump bunny hops instead of Force jumping, on jaPRO servers that let players choose _(Sol, after Kushina's idea and Lumaya's PR #282)_
+- Spectating: while you follow a player, the join menu and the match card offer Join again, as they read your own team rather than the followed player's (hub report #207) _(Slash, PR #310, after Jaykmeit's report)_
 - Mystery boxes: when the opener takes what came out, everyone else sees it go and the lid close at once, instead of it floating on for 10 seconds _(Sol)_
 - Tags: two new ones, Gonk (Uncommon) and Geyon (Rare), and the EZ tag has its real picture, all three drawn by Blep and picked from the Discord's #tag-proposals _(Sol, art by Blep)_
 - A prompt by the crosshair shows what Use does at a mystery box, with the key you bound to Use: Open mystery box and its price, Take it, or why you cannot yet (your turn in a few seconds, not enough credits), instead of a message in the middle of the screen _(Sol)_
 - Fishing toy: `toy_fishing` (the quick wheel's Toys page, Collection > Toys) gets a rod out. Stand still and press Use when the float dips to land fish and junk for your fish log; each of the 12 fish looks different, and your last catch waits in the bucket; where there is no water, a small pond appears. An Echo dropped to you while you fish comes up on the line. Five new achievements: First Bite, Angler, Every Fish in the Pond, Echo Angler and a hidden one _(Slash, PR #278, after Sanji's idea)_
+
+## 2026.1030.2 (Alpha) | 30/10/2026
+
+Hotfix: dual sabers and joining JA+ servers behave again as before 2026.1029.1.
+
+> Dual sabers: The forward jump attack lands on the floor again instead of sinking into it.
+> Joining: You no longer slide away at high speed while a JA+ server lets you in.
+> Movement: Two prediction changes of 2026.1029.1 are backed out after checks on a real JA+ server.
+
+- Prediction on JA+ servers: dual sabers jump attacks no longer sink you into the floor, and joining no longer throws you sideways at high speed before the server stops you; two prediction changes of 2026.1029.1 (dual jump attack hull, zero gravity push) are backed out after Lumaya checked them against an original JA+ server _(Lumaya, PRs #305, #307 and #308)_
 
 ## 2026.1030.1 (Alpha) | 30/10/2026
 

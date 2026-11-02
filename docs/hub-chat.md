@@ -546,7 +546,8 @@ new GIPHY key allows 100 requests an hour, too few for every player to share.
   the 300 characters, the picker says so and nothing changes.
 - **Favourites**: the star in a tile's corner (shown on the tile under the pointer or
   the keyboard, gold on a favourite), or F on a tile, adds or removes it; the chosen
-  message has Add GIF to favourites (or Remove) under Mute when its line shows a GIF.
+  message has Add GIF to favourites (or Remove GIF favourite) under Mute when its line
+  shows a GIF, with Hide this GIF beside it ([Hidden GIFs](#hidden-gifs)).
   Kept in `gif-favourites.txt` beside `config.cfg`: one id a line, newest first, at
   most 500 (adding past that lets the oldest go), written through a temporary file at
   every change. Nothing is sent anywhere
@@ -588,6 +589,30 @@ new GIPHY key allows 100 requests an hour, too few for every player to share.
   says Enter pick, F favourite, PgUp/PgDn scroll, Esc close GIFs. The search field
   takes Ctrl+A (typing then replaces the words), Ctrl+V and a held Backspace as the
   message field does.
+
+## Hidden GIFs
+
+A player can hide a GIF they do not want to see (#ideas recap of 29/10/2026). The chosen
+message on the SJK chat page has **Hide this GIF** beside its favourites button, the two
+on one row as Staff's are (alone, as **Show this GIF again**, once hidden) for a message whose link is from a trusted source,
+while GIFs are on and its sender is not muted. A hidden GIF never shows
+(`chat_gifs::shows`): everywhere SJK chat shows GIFs (the SJK chat page, the menu docks,
+the chat feed, and the picker's Favourites, Search and Seen in chat) its line reads
+**GIF hidden** in place of the link (`link::HIDDEN_LABEL`), no picture is drawn, and it is
+never fetched for a line. Lines already worded follow at once
+(`chat_gifs::shown_revision`). Its favourites button is not offered while it is hidden.
+
+The picker's **Hidden** tab (between Seen in chat and Sources) lists the hidden GIFs,
+newest first, with their pictures (the one place they show, so a player can tell them
+apart; `chat_gifs::show_hidden_preview`): a click on a tile, or Enter on it, chooses it
+(a gold edge), and **Show this GIF again**, standing where Search's field does, shows
+that GIF again, the others staying hidden. Its tiles have no star. With none hidden it says
+how to hide one. `gif_unhideall` shows every hidden GIF again and says how many.
+
+The list is kept on this PC in `gif-hidden.txt` beside `config.cfg`, in the favourites'
+format (one id or approved-source link a line, newest first, at most 500, written
+through a temporary file at every change); nothing is sent anywhere
+([hidden.rs](../crates/sjk-viewer/src/chat_gifs/hidden.rs)).
 
 ## From a bind
 
@@ -700,7 +725,9 @@ request, 08/10/2026):
   theirs too.
 - In the game's chat a line starts with SJK's emblem, small (1.35 times the text's
   height, in its own colours, `ui_renderer::LOGO_TEXTURE`; Sol's request, 11/10/2026),
-  where it used to read the letters SJK. The dock and the page, which show only SJK
+  where it used to read the letters SJK. A holocron drop or grand find starts with the
+  holocron's or crystal's picture instead (01/11/2026,
+  [holocrons.md](holocrons.md#chat-lines)). The dock and the page, which show only SJK
   chat, have no mark. A message sent from another client that takes part in SJK chat
   starts with that client's icon instead, at the same size: the clients are the
   entries of [chat/client_icons.rs](../crates/sjk-viewer/src/chat/client_icons.rs)
@@ -1202,7 +1229,8 @@ cannot: the [Hax](client.md#hax)'s hacker steering the hacked player, the
 [Boombox](client.md#boombox)'s track, told to each player within reach, and the
 [Monitor](client.md#monitor)'s throws, told to every SJK player, the nearest first (its
 hits ride the Ragdoll's falls), and the [Banana peel](client.md#banana-peel)'s peels, told
-the same way, and their slips (since 29/10/2026). Two threads of
+the same way, and their slips (since 29/10/2026), and the [Prop gun](client.md#prop-gun)'s
+guns held and shots fired (since 01/11/2026). Two threads of
 the identity service of their own ([relay.rs](../crates/sjk-identity/src/relay.rs),
 `sjk-hub-relay-send` and `sjk-hub-relay-read`), each with its own HTTP client, read the
 hub and the game server as the feed does:
@@ -1400,7 +1428,7 @@ never in a game server's chat.
   sent to a game server.
 - "Read more": a click on the line in the dock or on the chat page (Up and Down on the
   page pass over it), or the console's `announcement [number]` (no number: the newest),
-  opens the announcement's card ([sjk-ui.md](sjk-ui.md#announcements-and-reward-rounds)).
+  opens the announcement on the News panel ([sjk-ui.md](sjk-ui.md#news-panel)).
   The command closes the console first; the card frees the cursor, in a match too
   (Sol's report, 25/10/2026: the console stayed under the card, and closing it closed
   the card too).
@@ -1427,13 +1455,32 @@ never in a game server's chat.
   the game's chat) and the windows offline: nothing is sent, nothing is written to
   `announcements_seen.txt`, a rehearsed Claim only closes the reward.
 
-**The creator** writes announcements in game: the `announce` window (Kind News or Release
-with its version, Title, Text; a live preview of the chat line; Ctrl+Enter or Send, then
-a confirmation) sends `POST /v1/creator/announce`, checked first with the hub's rules
-(`news::check`: a title of 1 to 80 characters on one line, a text of 1 to 2000 characters
-on at most 30 lines, the chat's alphabet without `^`, a release's version like
-`2026.1025.1`). Anyone else is told "Only SJK's creator can announce", and the hub refuses
+**The SJK team** writes announcements in game (the creator alone until 31/10/2026, then
+every staff member, Sol's decision): the `announce` window (Kind News or Release with its
+version, Title, Text; a live preview of the chat line; Ctrl+Enter or Send, then a
+confirmation) sends `POST /v1/staff/announce` (`POST /v1/creator/announce` on a hub from
+before), checked first with the hub's rules (`news::check`: a title of 1 to 80 characters
+on one line, a text of 1 to 2000 characters on at most 30 lines, the chat's alphabet
+without `^`, the backtick allowed for chips, well-formed markup, a release's version like
+`2026.1025.1`). Anyone else is told "Only the SJK team can announce", and the hub refuses
 them too.
+
+**News panel markup** (31/10/2026, [sjk-ui.md](sjk-ui.md#news-panel),
+[news_markup.rs](../crates/sjk-identity/src/news_markup.rs)): an announcement's text may
+hold links into the client's UI, `[Label](setting:<cvar>)` and `[Label](open:<page>)`,
+and lines `[[image:<id>]]` and `[[switch:<cvar>]]`. Only announcements are read this way,
+never chat messages, so only the SJK team makes links. The chat line shows a link's label
+and leaves pictures and switches out (`news_markup::plain`). In the `announce` window's
+Text: Ctrl+L makes the cvar just typed a link to its setting, named as Settings names it,
+or with none opens a picker of the places `ui_links.rs` knows; Ctrl+K makes the cvar just
+typed its switch, on a line of its own; Ctrl+I opens the system's file dialog (on a thread
+of its own) for a PNG or JPEG of at most 3 MB, uploads it (`PUT /v1/staff/news-image`,
+`Service::upload_news_image`, the outcome in `Snapshot::news_image`) and puts its line at
+the end. The hub re-encodes pictures (no metadata kept) at most 1600 x 900, names each by
+a hash of the file, and lists each announcement's pictures with their sizes (`images`);
+clients read them unsigned at `GET /v1/news-image/<id>` and keep them in `news/` beside
+the settings. On a hub before the panel the pictures and the staff route are missing:
+the announcement goes the creator's way and a picture upload fails with the hub's words.
 
 Checked (25/10/2026): unit tests for the wire types (the spec's examples), the rules,
 the request bodies, the feed's merging and its news, the posting of read announcements,
@@ -1573,3 +1620,44 @@ routes yet); Windows; how the feed behaves with many players at once.
   unanswered lines, a copy for a match that ended, and a JoF EJK message's icon. End
   to end with JoF EJK clients on a local server and a local hub, before it moved into
   JoF tools ([status.md](status.md#sjk-chat-on-jof-servers-said-in-all-chat-too)).
+
+## Emoji reactions
+
+On the SJK chat page, select a public message and use one of the six emoji
+buttons in **Chosen message**. A highlighted button is your reaction: activate
+it again to remove it. The buttons show shared counts, and message metadata
+shows a compact count summary. Pointer and keyboard/Tab use the same controls.
+Blocked senders, official notices and reward notifications offer no reaction
+controls. Messages can still be read on older hubs; an unavailable endpoint
+reports that reaction support needs an updated hub instead of posting chat text.
+Reaction errors show for five seconds, then the status line returns to the reader
+count (or the current connection status); a later failure starts a new timeout.
+
+The catalogue is `like` (thumbs up), `heart`, `laugh`, `wow`, `sad`, `fire`.
+`POST /v1/chat/reaction` is signed and takes
+`{"message":<id>,"emoji":"heart","active":true}`. Setting an existing state
+again is a no-op. The hub uses the authenticated canonical person id; callers
+cannot select another player. Removing a reaction changes only that person's
+matching pair. The endpoint enforces chat mutes and applicable bans, a 30-change
+per-minute person quota, and at most 128 person/emoji pairs per message.
+
+A normal message optionally carries `reactions:[{"key_id":"..","emoji":"heart"}]`.
+The feed optionally carries `reaction_updates`, complete replacement snapshots
+`{"id":<feed sequence>,"message":<chat id>,"reactions":[..]}`; an empty list clears
+that message's reactions. Unknown emoji ids, invalid person ids and duplicates
+are dropped, with a bound of 128 pairs. State is shared between cloned display
+snapshots; drawing counts and labels allocates no extra reaction lists or strings.
+Fresh backlog reads refresh reactions on already-known messages, and an update
+for an absent or deleted message cannot recreate it. Reactions are memory-only
+and disappear with chat history on a hub restart.
+
+Reactions use the SJK hub only. They are never appended to message text, sent as
+fake messages, forwarded to a game server or charged against the ordinary message
+quota. Sending a reaction has its own result, so a failure never offers Retry
+for an unrelated message. No JKA protocol-26 fields or codecs change.
+
+The [matching hub PR](https://github.com/Sol-Vulpes/SJK-hub-shared/pull/5) must be
+merged and deployed before shared reactions work on the live service. This client
+PR does not deploy it. Old clients ignore the added JSON fields. Live hub rollout
+and released-client end-to-end behavior remain unverified; source/unit/API and
+windowless UI checks cover the behavior reported in the PR description.

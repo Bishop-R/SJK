@@ -116,6 +116,7 @@ pub(super) fn submit(
         sinks.saber_instances,
         sinks.saber_states,
         sinks.presentation_time,
+        sinks.saber_core,
     ) {
         add_trails(sinks, owner_entity, hilt, &blades, color);
         crate::saber_submission::lights::append(
@@ -183,6 +184,7 @@ pub(super) fn submit_hilt(
     blades: &mut Vec<Instance>,
     states: &mut StateSlab,
     presentation_time: i64,
+    core_scale: f32,
 ) -> Option<(crate::saber_hilts::Hilt, [Option<saber::Blade>; 8])> {
     // CG_Player owns manual rendering only while saberInFlight (10050-10055);
     // CG_General ignores the lingering modelGhoul2=127 entity (cg_ents.c:871).
@@ -217,7 +219,8 @@ pub(super) fn submit_hilt(
                 flight_motion(state, blade, color, presentation_time)
             });
         blades.extend(Instance::pair(blade, color).map(|i| {
-            i.with_contact(owner_entity, 2, index, !hilt.no_wall_marks, hilt.no_dlight)
+            i.with_core_scale(core_scale)
+                .with_contact(owner_entity, 2, index, !hilt.no_wall_marks, hilt.no_dlight)
                 .with_animation(presentation_time as f64 * 0.001, key as u32)
                 .with_motion(motion)
         }));

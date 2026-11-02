@@ -1037,15 +1037,15 @@ impl Runtime {
     }
 
     /// Draw into the dynamic glow image: the trails (`saberBlur`/`swordTrail` glow)
-    /// unless `blades_only` (`r_DynamicGlow 2`, stock's `RT_SABER_GLOW` test), then the
+    /// with `trails` (not for `r_DynamicGlow 2`, stock's `RT_SABER_GLOW` test), then the
     /// blades' glow capsules without their cores.
     pub(crate) fn draw_glow<'pass>(
         &'pass self,
         pass: &mut wgpu::RenderPass<'pass>,
         camera: &'pass wgpu::BindGroup,
-        blades_only: bool,
+        trails: bool,
     ) {
-        if !blades_only {
+        if trails {
             self.trails.draw(pass, camera, false);
         }
         self.draw_blades(pass, camera, Pass::Glow);
@@ -1053,9 +1053,9 @@ impl Runtime {
         self.draw_horizons(pass, camera, &self.instance_buffer, &self.ranges, false);
     }
 
-    /// Whether the glow image gets any saber this frame.
-    pub(crate) fn has_glow(&self, blades_only: bool) -> bool {
-        (!blades_only && self.trails.has_draws()) || self.ranges.iter().any(|r| !r.is_empty())
+    /// Whether the glow image gets any saber this frame, its trails with `trails`.
+    pub(crate) fn has_glow(&self, trails: bool) -> bool {
+        (trails && self.trails.has_draws()) || self.ranges.iter().any(|r| !r.is_empty())
     }
 
     fn draw_blades<'pass>(

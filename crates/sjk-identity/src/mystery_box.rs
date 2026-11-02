@@ -168,6 +168,10 @@ pub struct HuntMark {
     pub name: String,
     /// When the hub picks another, Unix seconds.
     pub until: i64,
+    /// Seconds from the read to `until`, by the hub's clock (a hub before 31/10/2026
+    /// does not say).
+    #[serde(default)]
+    pub left: Option<u64>,
 }
 
 /// `POST /v1/box-hunt`: the hunt on a server as the player reads it.

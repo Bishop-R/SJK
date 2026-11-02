@@ -164,8 +164,10 @@ impl GpuState {
         self.play_drone_sounds(audio);
         self.play_monitor_sounds(audio);
         self.play_banana_sounds(audio);
+        self.play_propgun_sounds(audio);
         self.play_boombox_sounds(audio);
         self.play_mystery_box_sounds(audio);
+        self.play_toy_master_sounds(audio);
         self.spawn_hax_glyphs(audio, presentation_time);
         Ok(())
     }

@@ -12,7 +12,10 @@
 //!   takes the cards of what it shows away as it opens ([`UnlockToast::withdraw`]);
 //! - a newer SJK release the update check found (`update.rs`), once a session, with
 //!   SJK's emblem, "Update available", the version and "Click to install", in the SJK
-//!   UI's holo blue and without the sound; the Update page opening takes it away.
+//!   UI's holo blue and without the sound; the Update page opening takes it away;
+//! - a content collection's automatic update that changed files
+//!   (`console_jof_content.rs`), with SJK's emblem, "Content updated", "Sith cloud
+//!   updated" and what came, in holo blue and without the sound.
 //!
 //! Unlike the large pop-ups it is not modal: it pauses nothing, over play as over the
 //! menus, and takes no keys. The one input it takes is a click on an update's card while
@@ -217,6 +220,14 @@ pub(crate) enum Unlock {
     /// A contributor reward (`official.rs`) waits for the player, numbered `id` at the
     /// hub: the claim window waits for the game menu.
     Reward { id: u64 },
+    /// A content collection (`title`: JoF content, the Sith cloud) updated itself:
+    /// `files` downloaded, `bytes` in all, and `removed` the server no longer lists.
+    Content {
+        title: &'static str,
+        files: u32,
+        bytes: u64,
+        removed: u32,
+    },
 }
 
 impl Unlock {
@@ -239,6 +250,23 @@ impl Unlock {
             (Self::Holocron { id, .. }, Self::Holocron { id: other, .. }) => id == other,
             (Self::Update { version, .. }, Self::Update { version: other, .. }) => version == other,
             (Self::Reward { id }, Self::Reward { id: other }) => id == other,
+            (
+                Self::Content {
+                    title,
+                    files,
+                    bytes,
+                    removed,
+                },
+                Self::Content {
+                    title: other_title,
+                    files: other_files,
+                    bytes: other_bytes,
+                    removed: other_removed,
+                },
+            ) => {
+                (title, files, bytes, removed)
+                    == (other_title, other_files, other_bytes, other_removed)
+            }
             _ => false,
         }
     }
@@ -255,13 +283,14 @@ impl Unlock {
             Self::Holocron { .. } => "NEW HOLOCRON",
             Self::Update { .. } => "UPDATE AVAILABLE",
             Self::Reward { .. } => "CONTRIBUTOR REWARD",
+            Self::Content { .. } => "CONTENT UPDATED",
         }
     }
 
-    /// Whether the card plays the chime: everything but an update, which is news, not
-    /// a reward.
+    /// Whether the card plays the chime: everything but an update or a content
+    /// update, which are news, not rewards.
     pub(crate) const fn chimes(self) -> bool {
-        !matches!(self, Self::Update { .. })
+        !matches!(self, Self::Update { .. } | Self::Content { .. })
     }
 
     /// The words at the kicker's line's end: the kyber crystal an achievement brings when
@@ -279,6 +308,7 @@ impl Unlock {
             Self::Update { manual: false, .. } => UPDATE_HINT,
             Self::Update { manual: true, .. } => UPDATE_MANUAL_HINT,
             Self::Reward { .. } => "From the SJK team",
+            Self::Content { .. } => "Automatic update",
         }
     }
 
@@ -288,7 +318,7 @@ impl Unlock {
             Self::Achievement { kind, .. } => tint(kind.category),
             Self::Medal { .. } | Self::Reward { .. } => color::GOLD,
             Self::Holocron { tier, .. } => tier.colour,
-            Self::Update { .. } => color::HOLO,
+            Self::Update { .. } | Self::Content { .. } => color::HOLO,
         }
     }
 
@@ -302,7 +332,7 @@ impl Unlock {
                 tier.colour.b * 0.5 + 0.5,
                 1.0,
             ),
-            Self::Update { .. } => color::HOLO,
+            Self::Update { .. } | Self::Content { .. } => color::HOLO,
             _ => color::GOLD_BRIGHT,
         }
     }
@@ -311,7 +341,7 @@ impl Unlock {
     fn edge(self) -> Color {
         match self {
             Self::Holocron { tier, .. } => tier.colour,
-            Self::Update { .. } => color::HOLO,
+            Self::Update { .. } | Self::Content { .. } => color::HOLO,
             _ => color::GOLD,
         }
     }
@@ -341,6 +371,7 @@ impl fmt::Display for Name {
             Unlock::Holocron { tier, .. } => formatter.write_str(&tier.title()),
             Unlock::Update { version, .. } => write!(formatter, "SJK {}", version.as_str()),
             Unlock::Reward { .. } => formatter.write_str("Contributor reward waiting"),
+            Unlock::Content { title, .. } => write!(formatter, "{title} updated"),
         }
     }
 }
@@ -381,7 +412,42 @@ impl fmt::Display for Description {
                 formatter.write_str("This folder cannot update itself: see its page")
             }
             Unlock::Reward { .. } => formatter.write_str("Open the game menu to claim it"),
+            Unlock::Content {
+                files,
+                bytes,
+                removed,
+                ..
+            } => {
+                if files > 0 {
+                    let plural = if files == 1 { "" } else { "s" };
+                    write!(formatter, "{files} file{plural}, ")?;
+                    write_size(formatter, bytes)?;
+                    if removed > 0 {
+                        write!(formatter, ", {removed} removed")?;
+                    }
+                } else {
+                    let plural = if removed == 1 { "" } else { "s" };
+                    write!(formatter, "{removed} old file{plural} removed")?;
+                }
+                formatter.write_str("  ·  from the next map")
+            }
         }
+    }
+}
+
+/// "1.4 GB", "75 MB", "820 KB" (decimal units, as the content card counts),
+/// written without allocating.
+fn write_size(formatter: &mut fmt::Formatter<'_>, bytes: u64) -> fmt::Result {
+    const KB: f64 = 1000.0;
+    let value = bytes as f64;
+    if value >= KB * KB * KB {
+        write!(formatter, "{:.1} GB", value / (KB * KB * KB))
+    } else if value >= KB * KB {
+        write!(formatter, "{:.0} MB", value / (KB * KB))
+    } else if value >= KB {
+        write!(formatter, "{:.0} KB", value / KB)
+    } else {
+        write!(formatter, "{bytes} B")
     }
 }
 
@@ -929,7 +995,7 @@ fn emblem(canvas: &mut MenuCanvas, unlock: Unlock, centre: [f32; 2], radius: f32
                 (None, Some(tier.colour))
             }
         }
-        Unlock::Update { .. } | Unlock::Reward { .. } => {
+        Unlock::Update { .. } | Unlock::Reward { .. } | Unlock::Content { .. } => {
             (Some((crate::ui_renderer::LOGO_TEXTURE, 0.86)), None)
         }
     };
@@ -1308,6 +1374,14 @@ mod tests {
                 });
             }
         }
+        for (files, removed) in [(312, 4), (0, 1)] {
+            unlocks.push(Unlock::Content {
+                title: "JoF content",
+                files,
+                bytes: 4_638_000_000,
+                removed,
+            });
+        }
         for manual in [false, true] {
             unlocks.push(Unlock::Update {
                 version: Version::new("2026.1231.12").unwrap(),
@@ -1509,6 +1583,29 @@ mod tests {
         assert_eq!(update.tag(), UPDATE_HINT);
         assert_eq!(update.name().to_string(), "SJK 2026.1010.2");
         assert!(!update.chimes() && kind("streak_5").chimes());
+        let content = Unlock::Content {
+            title: "Sith cloud",
+            files: 3,
+            bytes: 120_400_000,
+            removed: 0,
+        };
+        assert_eq!(content.kicker(), "CONTENT UPDATED");
+        assert_eq!(content.name().to_string(), "Sith cloud updated");
+        assert_eq!(
+            content.description().to_string(),
+            "3 files, 120 MB  ·  from the next map"
+        );
+        let removed = Unlock::Content {
+            title: "Sith cloud",
+            files: 0,
+            bytes: 0,
+            removed: 1,
+        };
+        assert_eq!(
+            removed.description().to_string(),
+            "1 old file removed  ·  from the next map"
+        );
+        assert!(!content.chimes() && !content.same(removed) && content.same(content));
         let bug_hunter = medal(Medal::BugHunter, 3);
         assert_eq!(bug_hunter.kicker(), "NEW MEDAL");
         let promoted = Unlock::Medal {

@@ -18,14 +18,16 @@
 //! making room. [`GPU_SLOTS`] of them can be on screen at once. The GIF picker's tiles
 //! ([`show_preview`]) are kept apart from the messages' GIFs, as GIPHY's smaller
 //! preview file ([`link::Rendition::Preview`]); [`WORKERS`] threads fetch, so a page of
-//! tiles fills together. [`favourites`] keeps the player's favourite GIFs and
-//! [`search`] asks GIPHY's search for the picker.
+//! tiles fills together. [`favourites`] keeps the player's favourite GIFs,
+//! [`hidden`] the ones they hid ([`shows`]), and [`search`] asks GIPHY's search for the
+//! picker.
 
 pub(crate) mod decode;
 mod discover;
 pub(crate) mod draw;
 pub(crate) mod favourites;
 pub(crate) mod fetch;
+pub(crate) mod hidden;
 pub(crate) mod link;
 pub(crate) mod search;
 pub(crate) mod sources;
@@ -83,6 +85,28 @@ fn switch_video(on: bool, invalidate: impl FnOnce()) {
 /// Whether GIPHY links show their GIF.
 pub(crate) fn enabled() -> bool {
     ENABLED.load(Ordering::Relaxed)
+}
+
+/// Whether GIF `id` may show: its source is trusted ([`sources::trusted`]) and the
+/// player did not hide it ([`hidden`]). A hidden GIF is never fetched; its line reads
+/// "GIF hidden" ([`link::HIDDEN_LABEL`]).
+pub(crate) fn shows(id: &GifId) -> bool {
+    sources::trusted(id) && !hidden::contains(id)
+}
+
+/// Changes when what [`shows`] answers may have changed (a source or a hidden GIF), so
+/// lines already worded are worded again.
+pub(crate) fn shown_revision() -> u64 {
+    sources::revision().wrapping_add(hidden::revision().rotate_left(32))
+}
+
+/// The GIF of a chosen message whose sender is not muted (`muted`), hidden or not, for
+/// its buttons: the first link from a trusted source while GIFs are on.
+pub(crate) fn chosen_gif(text: &str, muted: bool) -> Option<GifId> {
+    if muted || !enabled() {
+        return None;
+    }
+    link::find(text).map(|(id, _)| id).filter(sources::trusted)
 }
 
 /// A message's `text` (as a line shows it) and its GIF: the first GIPHY link made "GIF"
@@ -425,16 +449,30 @@ impl Gifs {
 /// What to draw for GIF `id` this frame ([`Shown`]). The first call for a GIF asks the
 /// worker for it.
 pub(crate) fn show(id: &GifId) -> Shown {
-    if !enabled() || !sources::trusted(id) {
+    if !enabled() || !shows(id) {
         return Shown::Unavailable;
     }
     lock().show(&Key::chat(id))
 }
 
+/// What to draw for a GIF the player hid as a tile of the picker's Hidden tab, which
+/// alone shows them, so one can be chosen and shown again: its preview, from a trusted
+/// source only.
+pub(crate) fn show_hidden_preview(id: &GifId) -> Shown {
+    if !enabled() || !sources::trusted(id) {
+        return Shown::Unavailable;
+    }
+    lock().show(&Key {
+        id: id.clone(),
+        preview: true,
+        revision: sources::revision(),
+    })
+}
+
 /// What to draw for GIF `id` as a picker's tile this frame: its preview, the smaller
 /// file GIPHY makes ([`link::Rendition::Preview`]).
 pub(crate) fn show_preview(id: &GifId) -> Shown {
-    if !enabled() || !sources::trusted(id) {
+    if !enabled() || !shows(id) {
         return Shown::Unavailable;
     }
     lock().show(&Key {
@@ -447,7 +485,9 @@ pub(crate) fn show_preview(id: &GifId) -> Shown {
 /// Whether the cache still waits for `key`: a GIF dropped while it waited in the queue
 /// (the picker scrolled past it) is not fetched.
 fn wanted(key: &Key) -> bool {
-    if !enabled() || key.revision != sources::revision() || !sources::trusted(&key.id) {
+    // A hidden GIF is never fetched for a line; its preview only for the Hidden tab.
+    let hidden = !key.preview && hidden::contains(&key.id);
+    if !enabled() || key.revision != sources::revision() || !sources::trusted(&key.id) || hidden {
         return false;
     }
     lock()

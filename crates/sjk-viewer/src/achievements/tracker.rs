@@ -2,8 +2,12 @@
 //! (`achievements.rs`): players defeated (and how, and in a duel), the player's own
 //! deaths for streaks, flags captured, the maps and servers played, the time played,
 //! duels won flawless or by a hair, the players duelled, long saber throws, thermal
-//! detonators sent back and time hidden in the cardboard box. Only in a live match on a
-//! server: never in a demo, a game this client hosts, or while following someone else.
+//! detonators sent back and time hidden in the cardboard box; and the toys' own, from
+//! what the toys tell it of the moment ([`Toys`]): the lifter of the player's box
+//! defeated at once, a player the Hax steers defeating others or falling, the player the
+//! Drone watched defeated after it landed, and the boombox's listeners. Only in a live
+//! match on a server: never in a demo, a game this client hosts, or while following
+//! someone else.
 //!
 //! Kills come from the obituaries the client already decodes (`EV_OBITUARY`, its
 //! attacker, victim and means of death); captures from the player's own
@@ -73,6 +77,11 @@ const THROW_FRESH_MS: i32 = 250;
 const THERMAL_WINDOW: Duration = Duration::from_secs(1);
 /// How long a private duel's record waits for its obituary after the duel ends.
 const DUEL_LINGER: Duration = Duration::from_secs(2);
+/// Surprise!: how soon after the player's box was lifted its lifter must fall to them
+/// (the lift reaches the boxed player through the hub, a moment after it was made).
+pub(crate) const BOX_AMBUSH: Duration = Duration::from_secs(3);
+/// Eye in the Sky: how soon after the Drone landed the player it watched must fall.
+pub(crate) const DRONE_STRIKE: Duration = Duration::from_secs(10);
 
 /// `meansOfDeath_t` values (`sjk_game_jka::means_of_death`).
 mod means {
@@ -142,12 +151,7 @@ fn count_kill(record: &mut Record, means: u8, kill: Kill, streak: u64) {
     match means {
         means::SABER => record.add(Counter::SaberKills, 1),
         means::FORCE_DARK => record.add(Counter::DarkSideKills, 1),
-        means::WATER
-        | means::SLIME
-        | means::LAVA
-        | means::CRUSH
-        | means::FALLING
-        | means::TRIGGER_HURT => record.add(Counter::LedgeKills, 1),
+        _ if hazard(means) => record.add(Counter::LedgeKills, 1),
         _ => {}
     }
     if let Some(bit) = weapon_kind(means) {
@@ -174,6 +178,33 @@ fn count_kill(record: &mut Record, means: u8, kill: Kill, streak: u64) {
     if kill.returned {
         record.add(Counter::ThermalReturn, 1);
     }
+}
+
+/// Whether a means of death is a fall, a pit or a hazard (Watch Your Step, Leap of Faith).
+fn hazard(means: u8) -> bool {
+    matches!(
+        means,
+        means::WATER
+            | means::SLIME
+            | means::LAVA
+            | means::CRUSH
+            | means::FALLING
+            | means::TRIGGER_HURT
+    )
+}
+
+/// What the toys tell the tracker at a snapshot (`GpuState::toy_moments`): what its
+/// obituaries and minutes are weighed against for the toys' achievements.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Toys {
+    /// The player who lifted the player's box, and when that reached this client.
+    pub(crate) lifted_by: Option<(u16, Instant)>,
+    /// The player the Hax steers now.
+    pub(crate) steering: Option<u16>,
+    /// The player the Drone last watched, and when it landed (the peek ended).
+    pub(crate) landed: Option<(u16, Instant)>,
+    /// The SJK players in reach of the player's boombox while it plays (bits by slot).
+    pub(crate) listeners: u64,
 }
 
 /// What the player took during a fight, from their own health and shield in the
@@ -274,6 +305,15 @@ pub(crate) struct Tracker {
     last_hide: Option<Instant>,
     /// The player has been in the game (not spectating) on this map.
     joined: bool,
+    /// The lift of the player's box, and the Drone's landing, that already counted.
+    ambushed: Option<Instant>,
+    struck: Option<Instant>,
+    /// The player the Hax steers and how many they defeated in this hack.
+    hack: Option<(u16, u64)>,
+    /// When the last snapshot that counted as time steering, and with the boombox
+    /// heard, was seen.
+    last_steer: Option<Instant>,
+    last_music: Option<Instant>,
 }
 
 /// One live snapshot as the tracker needs it.
@@ -287,6 +327,8 @@ pub(crate) struct Seen<'a> {
     pub(crate) obituaries: &'a [ObituaryEvent],
     /// The player hides in the cardboard box (`cardboard_box.rs`: on, alive, playing).
     pub(crate) boxed: bool,
+    /// What the toys tell of the moment.
+    pub(crate) toys: Toys,
     pub(crate) now: Instant,
 }
 
@@ -429,6 +471,84 @@ impl Tracker {
         let hiding = in_match && seen.boxed && someone_near(snapshot, me, player.origin());
         if let Some(ms) = step(&mut self.last_hide, hiding, seen.now) {
             record.hide(ms);
+            changed = true;
+        }
+        changed |= self.watch_toys(seen, record, me, in_match);
+        changed
+    }
+
+    /// Count the toys' achievements of `seen`: its obituaries against what the toys tell
+    /// ([`Toys`]), and the minutes steering and with the boombox heard.
+    fn watch_toys(
+        &mut self,
+        seen: &Seen<'_>,
+        record: &mut Record,
+        me: u16,
+        in_match: bool,
+    ) -> bool {
+        let toys = seen.toys;
+        let mut changed = false;
+        // A hack's tally lasts while the same player is steered.
+        self.hack = match (self.hack, toys.steering) {
+            (Some((slot, kills)), Some(steered)) if slot == steered => Some((slot, kills)),
+            (_, steered) => steered.map(|slot| (slot, 0)),
+        };
+        for event in seen.obituaries {
+            let (killer, victim) = (event.attacker, event.target);
+            if victim >= PLAYERS {
+                continue;
+            }
+            // By their own hand, or the world's.
+            let own_hand = killer == victim || killer >= PLAYERS;
+            if killer == me && victim != me {
+                if let Some((lifter, at)) = toys.lifted_by
+                    && lifter == victim
+                    && seen.now.saturating_duration_since(at) <= BOX_AMBUSH
+                    && self.ambushed != Some(at)
+                {
+                    self.ambushed = Some(at);
+                    record.add(Counter::BoxAmbush, 1);
+                    changed = true;
+                }
+                if let Some((watched, at)) = toys.landed
+                    && watched == victim
+                    && seen.now.saturating_duration_since(at) <= DRONE_STRIKE
+                    && self.struck != Some(at)
+                {
+                    self.struck = Some(at);
+                    record.add(Counter::DroneStrikes, 1);
+                    changed = true;
+                }
+            }
+            if let Some((steered, kills)) = &mut self.hack {
+                if killer == *steered && victim != *steered && victim != me {
+                    *kills += 1;
+                    record.raise(Counter::HaxBest, *kills);
+                    changed = true;
+                }
+                if victim == *steered && own_hand && hazard(event.means_of_death) {
+                    record.add(Counter::HaxFalls, 1);
+                    changed = true;
+                }
+            }
+            if victim != me && own_hand && toys.listeners & 1 << victim != 0 {
+                record.add(Counter::BoomboxToughCrowd, 1);
+                changed = true;
+            }
+        }
+        let steering = in_match && toys.steering.is_some();
+        if let Some(ms) = step(&mut self.last_steer, steering, seen.now) {
+            record.time(Counter::HaxMinutes, ms);
+            changed = true;
+        }
+        let heard = in_match && toys.listeners != 0;
+        if let Some(ms) = step(&mut self.last_music, heard, seen.now) {
+            record.time(Counter::BoomboxMinutes, ms);
+            changed = true;
+        }
+        let crowd = u64::from(toys.listeners.count_ones());
+        if heard && crowd > record.count(Counter::BoomboxCrowd) {
+            record.raise(Counter::BoomboxCrowd, crowd);
             changed = true;
         }
         changed
@@ -673,6 +793,7 @@ mod tests {
         server: SocketAddr,
         local: bool,
         boxed: bool,
+        toys: Toys,
     }
 
     impl Bench {
@@ -690,6 +811,7 @@ mod tests {
                 server: "1.2.3.4:29070".parse().unwrap(),
                 local: false,
                 boxed: false,
+                toys: Toys::default(),
             }
         }
 
@@ -702,6 +824,7 @@ mod tests {
                 local: self.local,
                 obituaries,
                 boxed: self.boxed,
+                toys: self.toys,
                 now: self.now,
             };
             self.tracker.observe(&seen, &mut self.record)
@@ -1070,6 +1193,94 @@ mod tests {
         bench.now += THERMAL_WINDOW + Duration::from_millis(100);
         bench.step(&[kill(2, 5, means::THERMAL)]);
         assert_eq!(bench.record.count(Counter::ThermalReturn), 1);
+    }
+
+    #[test]
+    fn the_lifter_of_the_box_and_the_player_the_drone_watched_count_once_soon_after() {
+        let mut bench = Bench::new(game("mp/ffa3", 0, 2, &[]));
+        let lifted = bench.now;
+        bench.toys.lifted_by = Some((5, lifted));
+        bench.step(&[kill(2, 6, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::BoxAmbush), 0, "not the lifter");
+        bench.step(&[kill(2, 5, means::SABER)]);
+        bench.step(&[kill(2, 5, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::BoxAmbush), 1, "once a lift");
+        bench.toys.lifted_by = Some((5, bench.now));
+        for _ in 0..61 {
+            bench.step(&[]);
+        }
+        bench.step(&[kill(2, 5, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::BoxAmbush), 1, "too late");
+        bench.toys.landed = Some((6, bench.now));
+        for _ in 0..180 {
+            bench.step(&[]);
+        }
+        bench.step(&[kill(5, 6, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::DroneStrikes), 0, "another hand");
+        bench.step(&[kill(2, 6, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::DroneStrikes), 1);
+        bench.toys.landed = Some((6, bench.now));
+        for _ in 0..201 {
+            bench.step(&[]);
+        }
+        bench.step(&[kill(2, 6, means::SABER)]);
+        assert_eq!(bench.record.count(Counter::DroneStrikes), 1, "past 10 s");
+    }
+
+    #[test]
+    fn a_player_steered_counts_their_kills_in_one_hack_their_falls_and_the_minutes() {
+        let mut bench = Bench::new(game("mp/ffa3", 0, 2, &[]));
+        bench.toys.steering = Some(7);
+        bench.step(&[kill(7, 8, means::SABER)]);
+        bench.step(&[kill(7, 2, means::SABER), kill(7, 9, means::SABER)]);
+        assert_eq!(
+            bench.record.count(Counter::HaxBest),
+            2,
+            "the hacker is no prey"
+        );
+        bench.toys.steering = None;
+        bench.step(&[kill(7, 8, means::SABER)]);
+        bench.toys.steering = Some(7);
+        bench.step(&[kill(7, 8, means::SABER)]);
+        assert_eq!(
+            bench.record.count(Counter::HaxBest),
+            2,
+            "a new hack starts at 0"
+        );
+        bench.step(&[kill(1022, 7, means::FALLING)]);
+        bench.step(&[kill(7, 7, means::SABER)]);
+        assert_eq!(
+            bench.record.count(Counter::HaxFalls),
+            1,
+            "a fall, not any death"
+        );
+        for _ in 0..1_200 {
+            bench.step(&[]);
+        }
+        assert_eq!(bench.record.count(Counter::HaxMinutes), 1);
+        assert_eq!(
+            bench.record.count(Counter::Kills),
+            0,
+            "none of them the player's"
+        );
+    }
+
+    #[test]
+    fn the_boombox_counts_its_minutes_its_crowd_and_a_listener_who_quits() {
+        let mut bench = Bench::new(game("mp/ffa3", 0, 2, &[]));
+        bench.toys.listeners = 1 << 5 | 1 << 6 | 1 << 9;
+        for _ in 0..1_201 {
+            bench.step(&[]);
+        }
+        assert_eq!(bench.record.count(Counter::BoomboxMinutes), 1);
+        assert_eq!(bench.record.count(Counter::BoomboxCrowd), 3);
+        bench.step(&[kill(5, 6, means::SABER), kill(4, 4, means::FALLING)]);
+        assert_eq!(bench.record.count(Counter::BoomboxToughCrowd), 0);
+        bench.step(&[kill(1022, 9, means::FALLING)]);
+        assert_eq!(bench.record.count(Counter::BoomboxToughCrowd), 1);
+        bench.toys.listeners = 1 << 5;
+        bench.step(&[]);
+        assert_eq!(bench.record.count(Counter::BoomboxCrowd), 3, "a best");
     }
 
     #[test]

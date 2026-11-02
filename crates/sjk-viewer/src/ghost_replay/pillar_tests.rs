@@ -339,3 +339,50 @@ fn a_sideways_shove_on_the_start_platform_is_steered_out_before_the_pillars() {
         "{messages:?}"
     );
 }
+
+#[test]
+fn a_run_cut_at_its_first_move_by_the_editor_replays_like_the_run_alone() {
+    let course = Course::new();
+    let run = record_run(&course);
+    // The same run behind a second of standing with the console open (`ghost record`
+    // typed), as a real recording begins.
+    let mut idle = run.clone();
+    let still = Frame {
+        time: 0,
+        view: run.start.view,
+        forward: 0,
+        right: 0,
+        up: 0,
+        buttons: sjk_game_jka::pmove_talk::BUTTON_TALK,
+        weapon: run.start.weapon,
+        force_selection: run.frames[0].force_selection,
+        inventory_selection: run.frames[0].inventory_selection,
+        generic_command: 0,
+        origin: run.start.origin,
+        velocity: run.start.velocity,
+        ground: true,
+        confirmed: true,
+    };
+    idle.frames = (0..125)
+        .map(|step| Frame {
+            time: step * 8,
+            ..still
+        })
+        .chain(run.frames.iter().map(|frame| Frame {
+            time: frame.time + 1_000,
+            ..*frame
+        }))
+        .collect();
+    let cut = edit::Cut::new(idle);
+    let first = cut.first_move(0).expect("the run moves");
+    assert_eq!(first, 125);
+    let edited = cut.edited(first, cut.len() - 1, true);
+    assert_eq!(edited.start, run.start);
+    assert_eq!(edited.frames, run.frames);
+    let (end, messages) = replay(&course, &edited, edited.start.origin, &[]);
+    let target = run.frames.last().unwrap().origin;
+    assert!(
+        steer::horizontal([target[0] - end[0], target[1] - end[1], 0.0]) < 0.01,
+        "{end:?} vs {target:?}: {messages:?}"
+    );
+}

@@ -61,6 +61,8 @@ struct Sinks<'a> {
     /// and where each rod's tip is drawn (for the next frame's catch).
     fishing: (Option<usize>, Option<usize>, crate::fishing::Lines),
     fishing_tips: &'a mut [Option<[f32; 3]>; 64],
+    /// The prop gun each player holds, by slot ([`crate::propgun`]).
+    propgun: [Option<crate::propgun_frame::HeldDraw>; crate::looks::SLOTS],
     /// How bright each player's Screen Saver shell is ([`crate::monitor::saver`]).
     screen_savers: crate::monitor::Glows,
     world: &'a sjk_runtime::World,
@@ -76,6 +78,8 @@ struct Sinks<'a> {
     /// Who wears which blade skin.
     saber_skins: &'a crate::saber_skins::SaberSkins,
     black_sabers: crate::saber_rgb::black::Policy,
+    /// `cg_saberCoreSize` ([`crate::saber_core`]), read once a frame.
+    saber_core: f32,
     saber_states: &'a mut saber_trail::StateSlab,
     saber_segments: &'a mut saber_trail::SegmentPool,
     /// Trail edges for held and flying blades; `None` with `cg_saberTrail 0`.
@@ -254,6 +258,7 @@ pub(crate) fn submit(
         .and_then(|game| game.config_string(0))
         .and_then(|info| sjk_client::LegacyClientInfo::new(info).integer("g_gametype"))
         .unwrap_or(0);
+    let propgun = gpu.propgun_held_draws();
     let mut sinks = Sinks {
         force_fx,
         grip_victim: force_fx.animation
@@ -296,6 +301,7 @@ pub(crate) fn submit(
             gpu.fishing.lines,
         ),
         fishing_tips: &mut gpu.fishing.tips,
+        propgun,
         world: active_world,
         actor_meshes: &gpu.actor_meshes,
         object_meshes: &gpu.object_meshes,
@@ -318,6 +324,7 @@ pub(crate) fn submit(
                 .unwrap_or(i64::from(sjk_client::PLUGIN_DISABLE_DEFAULT)),
             gpu.muted_players.slots().muted,
         ),
+        saber_core: crate::saber_core::read(gpu.console.as_ref()),
         saber_states: &mut gpu.saber_states,
         saber_segments: &mut gpu.saber_trail_segments,
         trail_edges: trails.then(|| {
@@ -556,6 +563,16 @@ fn submit_actor(
         && let Some(points) = crate::ragdoll::shown_entity(entity.id)
     {
         crate::ragdoll::place(transform, &points);
+    }
+    // Players around the Toy Master's spinning toy spin and squish with it, their looks
+    // alone (`toy_master::dance_actor`); not a limp one nor a vehicle.
+    if entity.kind == EntityKind::Actor
+        && !mesh.is_some_and(|index| {
+            sinks.actor_meshes[index].ragdoll.posed
+                || sinks.actor_meshes[index].preview.vehicle.is_some()
+        })
+    {
+        crate::toy_master::dance_actor(transform, 24.0);
     }
     // `EV_VEH_FIRE`: this vehicle's volleys, at its muzzles as posed now.
     if let Some(index) = mesh
@@ -1312,6 +1329,32 @@ fn submit_equipment(
 ) {
     let rotation = weapon_view::actor_world_rotation(transform.rotation);
     let origin = Vec3::from_array(transform.translation);
+    // A held prop gun replaces the weapon or saber in the hand (`propgun`); in first
+    // person the view model stands in for it.
+    let prop = usize::try_from(entity.id.get())
+        .ok()
+        .and_then(|id| id.checked_sub(1))
+        .and_then(|slot| sinks.propgun.get(slot).copied().flatten());
+    if let Some(prop) = prop {
+        if (!draw_actor && !sinks.portal_view) || limp(&sinks.actor_meshes[actor_mesh]) {
+            return;
+        }
+        if let Some(attachment) = sinks.actor_meshes[actor_mesh].weapon_attachments[0] {
+            let (grip, hand) =
+                saber::world_attachment(origin, rotation, attachment.scaled(transform.scale));
+            let scale = Vec3::from_array(transform.scale) * prop.scale;
+            let hand = hand * crate::propgun_frame::HAND_TURN;
+            let at = grip + hand * (prop.offset * scale);
+            let mut instance = ActorInstance::new(
+                at.to_array(),
+                (hand * prop.rotation).normalize().to_array(),
+                scale.to_array(),
+            );
+            instance.view_flags = sinks.entity_view_flags;
+            sinks.object_groups[prop.mesh].push(instance);
+        }
+        return;
+    }
     let team_plain = crate::team_sabers::of(&sinks.team_blades, entity.id.get()).plain;
     if saber_submission::submit(
         entity.id.get(),
@@ -1348,6 +1391,7 @@ fn submit_equipment(
         sinks.trail_edges.as_mut(),
         sinks.lights,
         attacking,
+        sinks.saber_core,
     ) {
         return;
     }

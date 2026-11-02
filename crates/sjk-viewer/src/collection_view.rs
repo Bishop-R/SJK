@@ -57,7 +57,7 @@ impl Count {
 }
 
 /// Each tab's count, in the row's order.
-pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 9] {
+pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 11] {
     let medals = medals::held(inputs);
     // Out of the ones the player sees: a retired one not held is not counted.
     let (achievements, achievements_total) = crate::achievements::tally(inputs.standings);
@@ -129,6 +129,26 @@ pub(super) fn counts(inputs: &Inputs<'_>) -> [Count; 9] {
             held: cards::held(inputs),
             total: 0,
         },
+        Count {
+            held: inputs
+                .snapshot
+                .filter(|_| inputs.enabled)
+                .and_then(|snapshot| snapshot.me.as_ref())
+                .map(|profile| {
+                    crate::profile_card::banner::ALL
+                        .iter()
+                        .filter(|banner| {
+                            crate::profile_card::banner::count(Some(profile), banner.id) > 0
+                        })
+                        .count()
+                }),
+            total: crate::profile_card::banner::ALL.len(),
+        },
+        // The history counts nothing.
+        Count {
+            held: None,
+            total: 0,
+        },
     ]
 }
 
@@ -163,9 +183,11 @@ pub(crate) fn row_labels(
         second: "",
         pair: crate::saber_skins::Pair::None,
         share: false,
+        nameplate_style: crate::hud::nameplate::Style::Holo,
         toy_keys: &[],
         toys_unseen: 0,
         tag: "",
+        tag_finish: "",
     };
     counts(&inputs).iter().map(|count| count.label()).collect()
 }
@@ -312,6 +334,10 @@ impl Panel {
                 color: Color::new(1.0, 1.0, 1.0, 1.0),
             });
         }
+        if self.tab != Tab::History {
+            // Not on show: shown again, the History tab reads the newest lines.
+            self.history.shown = false;
+        }
         let counts = counts(inputs);
         let mut labels: Vec<String> = counts.iter().map(|count| count.label()).collect();
         // The Forge says the shards it trades with, as it read them this frame.
@@ -342,7 +368,9 @@ impl Panel {
             Tab::Shaders => self.shaders(&frame, inputs, seconds),
             Tab::Toys => self.toys(&frame, inputs),
             Tab::Tags => self.tags(&frame, inputs),
+            Tab::Banners => self.banners(&frame, inputs),
             Tab::Cards => self.cards(&frame, inputs, seconds),
+            Tab::History => self.history_tab(&frame, inputs),
             Tab::Forge => {
                 self.grid = inputs.grid;
                 self.forge(&frame, inputs, seconds, viewport);
@@ -357,7 +385,7 @@ impl Panel {
     /// How many of all the things the player holds, at the top right: the words, and a
     /// bar under them, a stretch to a tab in the tabs' order, each filled as far as its
     /// share held (one tick a thing no longer fits two hundred things, 21/10/2026).
-    fn tally(&mut self, frame: &Frame, counts: &[Count; 9]) {
+    fn tally(&mut self, frame: &Frame, counts: &[Count; 11]) {
         let s = frame.s;
         // Only the things with a set total: the holocrons are opened, not collected.
         let total: usize = counts.iter().map(|count| count.total).sum();
@@ -435,9 +463,28 @@ impl Panel {
         let mut keys: Vec<(&[&str], &str)> = Vec::with_capacity(10);
         match self.tab {
             Tab::Medals => keys.push((&["Left", "Right"], "choose")),
+            Tab::History => {
+                keys.push((&["Left", "Right"], "filter"));
+                keys.push((&["Up", "Down"], "choose"));
+                let chosen = self.history.chosen;
+                if self.history.more_row(chosen) {
+                    keys.push((&["Enter"], "load older"));
+                } else if self
+                    .history
+                    .rows
+                    .get(chosen)
+                    .is_some_and(|row| row.group.is_some())
+                {
+                    keys.push((&["Enter"], "open, close"));
+                }
+                keys.push((&["R"], "refresh"));
+            }
             Tab::Cards if self.card_inspect => {
                 if self.cards_shown > 1 {
                     keys.push((&["Left", "Right"], "previous, next"));
+                }
+                if self.chosen_finishes_held() > 1 {
+                    keys.push((&["V"], "finish"));
                 }
                 keys.push((&["Esc"], "put back"));
             }
@@ -448,6 +495,9 @@ impl Panel {
                 if self.cards_shown > 1 {
                     keys.push((&["Arrows"], "choose"));
                 }
+                if self.chosen_finishes_held() > 1 {
+                    keys.push((&["V"], "finish"));
+                }
                 if self.cards_shown > cards::COLUMNS * cards::LINES {
                     keys.push((&["PgUp", "PgDn"], "page"));
                 }
@@ -456,7 +506,10 @@ impl Panel {
                     keys.push((&["R"], "reveal"));
                 }
             }
-            Tab::Achievements => keys.push((&["Arrows"], "choose")),
+            Tab::Achievements => {
+                keys.push((&["Arrows"], "choose"));
+                keys.push((&["F"], "General or Fun"));
+            }
             Tab::Forge if self.forge.ask.is_some() => {
                 keys.push((&["Tab"], "switch"));
                 keys.push((&["Enter"], "answer"));
@@ -517,6 +570,10 @@ impl Panel {
                     Some(_) => keys.push((&["Enter"], "equip")),
                     None => {}
                 }
+            }
+            Tab::Banners => {
+                keys.push((&["Arrows"], "choose"));
+                keys.push((&["Enter"], "equip / unequip"));
             }
             Tab::Tags => {
                 keys.push((&["Arrows"], "choose"));

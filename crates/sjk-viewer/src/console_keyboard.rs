@@ -195,6 +195,24 @@ impl ViewerConsole {
                     .any(|command| command.eq_ignore_ascii_case("toggleconsole"))
             })
     }
+
+    /// The chat the key of `event` opens by its binding (`messagemode` to `messagemode6`),
+    /// for a window that keeps the keyboard but lets the chat key through (the trade
+    /// window, #215).
+    pub(crate) fn bound_chat_action(&self, event: &KeyEvent) -> Option<crate::input::InputAction> {
+        let key_name = crate::input::keys::key_name(event)?;
+        self.chat_action_bound_to(key_name.as_str())
+    }
+
+    /// [`Self::bound_chat_action`] for the key called `key_name`.
+    fn chat_action_bound_to(&self, key_name: &str) -> Option<crate::input::InputAction> {
+        self.shell
+            .binds
+            .commands_for_event(key_name, true)
+            .ok()?
+            .iter()
+            .find_map(|command| crate::input::chat_action(command))
+    }
     /// Consume console input before gameplay input gets a chance to observe it.
     pub(crate) fn handle_key(
         &mut self,
@@ -620,5 +638,45 @@ mod open_console_tests {
             assert!(!native_console(1, true, false, true));
             assert!(native_console(0, true, true, false));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::input::InputAction;
+
+    #[test]
+    fn a_chat_binding_is_read_for_the_trade_window() {
+        let profile = tempfile::tempdir().unwrap();
+        let mut console = super::ViewerConsole::new(profile.path().join("config.cfg")).unwrap();
+        let _ = console.shell.binds.bind("y", "messagemode");
+        let _ = console.shell.binds.bind("t", "messagemode2");
+        let _ = console.shell.binds.bind("i", "messagemode5");
+        let _ = console.shell.binds.bind("u", "messagemode3");
+        let _ = console.shell.binds.bind("k", "say hello; messagemode6");
+        let _ = console.shell.binds.bind("f", "+use");
+        assert_eq!(
+            console.chat_action_bound_to("y"),
+            Some(InputAction::MessageMode(false))
+        );
+        assert_eq!(
+            console.chat_action_bound_to("t"),
+            Some(InputAction::MessageMode(true))
+        );
+        assert_eq!(
+            console.chat_action_bound_to("i"),
+            Some(InputAction::SjkMessageMode)
+        );
+        assert_eq!(
+            console.chat_action_bound_to("u"),
+            Some(InputAction::TargetMessage(false))
+        );
+        assert_eq!(
+            console.chat_action_bound_to("k"),
+            Some(InputAction::AdminMessageMode)
+        );
+        // Other keys stay the window's (swallowed while it shows).
+        assert_eq!(console.chat_action_bound_to("f"), None);
+        assert_eq!(console.chat_action_bound_to("ENTER"), None);
     }
 }

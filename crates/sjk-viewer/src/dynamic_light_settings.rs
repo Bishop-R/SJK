@@ -8,6 +8,7 @@ use std::sync::{
 
 #[path = "model_light_settings.rs"]
 mod model;
+pub(crate) use model::TOON_CVAR as TOON_MODELS_CVAR;
 
 /// The static world's shadows on dynamic lights (`dynamic_light_shadows.rs`); SJK's.
 pub(crate) const SHADOWS_CVAR: &str = "r_dynamicLightShadows";
@@ -78,6 +79,11 @@ impl Settings {
         Ok(settings)
     }
 
+    /// The live day controls, `r_dayClock` among them.
+    pub(crate) fn day_clock(&self) -> &crate::world_materials::shadows::day::live::Clock {
+        &self.3
+    }
+
     /// Whether walls stop dynamic lights ([`SHADOWS_CVAR`]).
     pub(crate) fn shadows(&self) -> bool {
         self.4.load(Ordering::Relaxed)
@@ -99,7 +105,7 @@ impl Settings {
         lights: &mut super::PointLightList,
     ) {
         self.apply(lights);
-        world.update_day_clock(queue, self.3.values());
+        world.update_day_clock(queue, self.3.values(), self.3.sky_values());
         world.set_day_debug(self.3.debug());
         world.set_gap_close(self.3.gap_close());
         world.set_ambient_fill(self.3.ambient_fill());
@@ -107,7 +113,7 @@ impl Settings {
         world.update_scene_lighting_mode(
             queue,
             lights,
-            self.1.enabled(),
+            self.1.bits(),
             self.2.bits(),
             self.shadows(),
         );

@@ -65,6 +65,7 @@ const BIO_BACK_TOKEN: u16 = 1_020;
 const BROWSE_TOKEN: u16 = 1_021;
 const EMOJI_TOKEN: u16 = 1_023;
 const REMOVE_EMOJI_TOKEN: u16 = 1_024;
+const NAME_TOKEN: u16 = 1_025;
 /// The emoji grid's first cell; the others follow.
 const EMOJI_CELL_TOKEN: u16 = 1_100;
 /// The emoji grid's columns.
@@ -109,6 +110,9 @@ enum Focus {
     UsePicture,
     RemovePicture,
     BioBack,
+    /// Change name (on the Profile screen only), which opens the Character tab's
+    /// Name field: the hub's name is the one worn in game.
+    Name,
     /// The Name emoji button, which opens the emoji panel.
     Emoji,
     /// The emoji panel's grid (its cursor is `emoji_cursor`) and Remove emoji.
@@ -155,6 +159,8 @@ pub(crate) enum PanelAction {
     },
     /// Show a tab of the Collection screen (on its own in the classic menus).
     Hub(HubTab),
+    /// Change name: the Profile screen's Character tab with its Name field open.
+    EditName,
     /// Open the Staff page.
     Staff,
     /// Send this PNG to the hub as the player's picture.
@@ -878,6 +884,9 @@ impl Panel {
     fn order(&self) -> Vec<Focus> {
         // On the Profile screen its tabs are the screen's (Ctrl+Tab), not a stop.
         let mut order = vec![Focus::Picture];
+        if self.mode == Mode::Hub {
+            order.push(Focus::Name);
+        }
         if self.writable {
             order.push(Focus::Emoji);
         }
@@ -924,6 +933,7 @@ impl Panel {
                 PanelAction::None
             }
             Focus::Staff => PanelAction::Staff,
+            Focus::Name => PanelAction::EditName,
             Focus::Emoji => {
                 self.show_emoji();
                 PanelAction::None
@@ -1067,6 +1077,10 @@ impl Panel {
                 self.emoji_cursor = usize::from(token - EMOJI_CELL_TOKEN);
                 self.pick_emoji(EMOJI_CHOICES[self.emoji_cursor], notice)
             }
+            Some(NAME_TOKEN) if self.mode == Mode::Hub => {
+                self.focus = Focus::Name;
+                PanelAction::EditName
+            }
             Some(STAFF_TOKEN) if self.staff => {
                 self.focus = Focus::Staff;
                 PanelAction::Staff
@@ -1126,6 +1140,7 @@ impl Panel {
             Focus::UsePicture => USE_TOKEN,
             Focus::RemovePicture => REMOVE_TOKEN,
             Focus::BioBack => BIO_BACK_TOKEN,
+            Focus::Name => NAME_TOKEN,
             Focus::Emoji => EMOJI_TOKEN,
             Focus::EmojiGrid => EMOJI_CELL_TOKEN + self.emoji_cursor as u16,
             Focus::RemoveEmoji => REMOVE_EMOJI_TOKEN,
@@ -1148,12 +1163,14 @@ pub(crate) mod tests {
 
     pub(crate) fn me(bio: &str) -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: "^1Sol".to_owned(),
+            banner: "".into(),
             bio: bio.to_owned(),
             verified: true,
             tick: sjk_identity::Tick::None,
@@ -1200,11 +1217,15 @@ pub(crate) mod tests {
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -1219,12 +1240,14 @@ pub(crate) mod tests {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         }
     }
@@ -1382,6 +1405,11 @@ pub(crate) mod tests {
         panel.open_as(true, Mode::Hub);
         panel.sync(&inputs(Some(&shot)));
         assert_eq!(panel.focus, Focus::Picture);
+        // Change name comes after the picture and opens the Character tab's Name
+        // field (hub report #202: the tab had no way to the name).
+        panel.step(true);
+        assert_eq!(panel.focus, Focus::Name);
+        assert_eq!(panel.activate(None), PanelAction::EditName);
         panel.focus = Focus::Board;
         assert_eq!(panel.activate(None), PanelAction::Hub(HubTab::Achievements));
         panel.focus = Focus::Unlockables;
@@ -1393,6 +1421,7 @@ pub(crate) mod tests {
         let mut alone = opened(&shot);
         alone.focus = Focus::Board;
         assert_eq!(alone.activate(None), PanelAction::Hub(HubTab::Achievements));
+        assert!(!alone.order().contains(&Focus::Name));
     }
 
     /// Browse... opens the file dialog on a worker thread, once while it is open; the

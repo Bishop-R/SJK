@@ -180,6 +180,7 @@ impl GpuState {
         let weather = merge && self.weather.visible();
         let present = ranges.blended().any(|range| !range.is_empty())
             || self.effect_geometry.stats().indices != 0
+            || self.tag_render.has_draws()
             || self.saber_gpu.has_draws()
             || weather;
         // The main view encodes and merges only the rectangle its effects can reach.
@@ -217,9 +218,11 @@ impl GpuState {
         // scene's, which the layer still holds there only before anything else draws.
         self.saber_gpu
             .draw_haze(&self.device, &mut pass, camera, layer.original());
-        // Impact marks lie on the world, so the haze covers them as it covers the wall.
+        // Impact marks lie on the world, so the haze covers them as it covers the wall;
+        // players' tags too, over the marks (`tag_render.rs`).
         self.effect_geometry
             .draw_decals(&mut pass, camera, &self.particle_atlas.bind_group);
+        self.tag_render.draw(&mut pass, camera);
         // Weather before the other effects, though `RB_RenderWorldEffects` runs after
         // every surface. Effects write no depth, so weather drawn after them lay over every
         // blade and puff in front of it: the haze, measured to the wall behind, greyed

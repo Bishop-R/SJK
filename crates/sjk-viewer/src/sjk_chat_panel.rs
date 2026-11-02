@@ -31,6 +31,8 @@ mod gif_picker;
 mod gif_sources;
 #[path = "sjk_chat_people.rs"]
 mod people;
+#[path = "sjk_chat_reactions.rs"]
+mod reactions;
 #[path = "sjk_chat_panel_view.rs"]
 mod view;
 
@@ -43,6 +45,8 @@ const HUB_UNMUTE_TOKEN: u16 = 1_305;
 /// GIF beside Send (the picker), and the chosen message's Add GIF to favourites.
 const GIF_TOKEN: u16 = 1_306;
 const FAVOURITE_TOKEN: u16 = 1_307;
+/// The chosen message's "Hide this GIF" / "Show this GIF again" ([`crate::chat_gifs::hidden`]).
+const HIDE_GIF_TOKEN: u16 = 1_366;
 /// Retry, beside the notice that says the hub did not take the last message.
 const RETRY_TOKEN: u16 = 1_308;
 /// The chosen message's Ban 24 h, and staff's Lift chat ban.
@@ -80,6 +84,12 @@ pub(crate) enum PanelAction {
     Close,
     /// Send this message to the SJK chat.
     Send(String),
+    /// Set a reaction, without sending chat text.
+    React {
+        message: u64,
+        emoji: String,
+        active: bool,
+    },
     /// Send it to the SJK chat only, never said in the server's All chat.
     SendSjkOnly(String),
     /// Mute or unmute, on this PC, the player with this key, last seen with this name.
@@ -145,6 +155,7 @@ struct Shown {
     /// The chosen message's id, its sender's key and name, and whether they are
     /// muted here.
     chosen: Option<(u64, String, String, bool)>,
+    reaction_mine: [bool; 6],
     /// The chosen message's GIF, when it has one on show.
     chosen_gif: Option<crate::chat_gifs::GifId>,
     chosen_source: Option<crate::chat_gifs::GifId>,
@@ -195,6 +206,7 @@ pub(crate) struct Panel {
     pointer: Option<sjk_ui::Vec2>,
     previous_people: Vec<String>,
     epoch: Instant,
+    reaction_notice: reactions::Notice,
     /// The GIF picker.
     gifs: gif_picker::Picker,
     /// `cl_giphyKey` as the last frame had it, for the key card's Change GIPHY key.
@@ -270,6 +282,7 @@ impl Panel {
             pointer: None,
             previous_people: Vec::with_capacity(PEOPLE_SHOWN),
             epoch: Instant::now(),
+            reaction_notice: reactions::Notice::default(),
             gifs: gif_picker::Picker::new(),
             giphy_key: String::new(),
             hover: Default::default(),
@@ -312,7 +325,7 @@ impl Panel {
     pub(crate) fn place_card(
         &mut self,
         place: impl FnOnce(Option<&str>, &str) -> crate::sender_card::Place,
-        picture: impl FnOnce(&str) -> Option<String>,
+        picture: impl FnOnce(&str) -> Option<(String, &'static str)>,
     ) {
         let Some(card) = self.card.as_mut() else {
             return;
@@ -323,8 +336,10 @@ impl Panel {
         }
         if card.person.avatar.is_none()
             && let Some(key_id) = &card.person.key_id
+            && let Some((avatar, banner)) = picture(key_id)
         {
-            card.person.avatar = picture(key_id);
+            card.person.avatar = Some(avatar);
+            card.person.banner = banner;
         }
     }
 
@@ -486,8 +501,21 @@ impl Panel {
             self.gifs.search_now();
             return Some(PanelAction::None);
         }
+        if token == gif_picker::UNHIDE_TOKEN && self.gifs.tab == Tab::Hidden {
+            if let Some(id) = self.gifs.hidden_chosen.take() {
+                crate::chat_gifs::hidden::set(&id, false);
+            }
+            self.focus = TAB_BASE + Tab::Hidden.index() as u16;
+            return Some(PanelAction::None);
+        }
         if (TILE_BASE..TILE_BASE + TILES as u16).contains(&token) {
             let id = self.gifs.tile(token)?.clone();
+            if self.gifs.tab == Tab::Hidden {
+                // Chosen: Show this GIF again acts on it.
+                self.focus = token;
+                self.gifs.hidden_chosen = Some(id);
+                return Some(PanelAction::None);
+            }
             match gif_picker::with_gif(&self.draft, &id) {
                 Some(draft) => {
                     self.draft = draft;
@@ -503,6 +531,9 @@ impl Panel {
             return Some(PanelAction::None);
         }
         if (STAR_BASE..STAR_BASE + TILES as u16).contains(&token) {
+            if self.gifs.tab == Tab::Hidden {
+                return Some(PanelAction::None);
+            }
             if let Some(id) = self.gifs.tile(TILE_BASE + (token - STAR_BASE)).cloned() {
                 let favourite = crate::chat_gifs::favourites::contains(&id);
                 crate::chat_gifs::favourites::set(&id, !favourite);
@@ -641,6 +672,9 @@ impl Panel {
 
     /// What Enter (or a click) on `token` does.
     fn activate(&mut self, token: u16) -> PanelAction {
+        if let Some(action) = reactions::activate(self, token) {
+            return action;
+        }
         if token == CARD_TOKEN {
             return PanelAction::None;
         }
@@ -666,6 +700,15 @@ impl Panel {
             if let Some(id) = self.shown.chosen_gif.clone() {
                 let favourite = crate::chat_gifs::favourites::contains(&id);
                 crate::chat_gifs::favourites::set(&id, !favourite);
+            }
+            return PanelAction::None;
+        }
+        if token == HIDE_GIF_TOKEN {
+            // Hidden or shown again on this PC; the keyboard stays on the button.
+            self.focus = token;
+            if let Some(id) = self.shown.chosen_gif.clone() {
+                let hidden = crate::chat_gifs::hidden::contains(&id);
+                crate::chat_gifs::hidden::set(&id, !hidden);
             }
             return PanelAction::None;
         }
@@ -1019,6 +1062,7 @@ mod tests {
             CARD_BAN_TOKEN,
             CARD_TRADE_TOKEN,
             ONLY_TOKEN,
+            HIDE_GIF_TOKEN,
         ];
         tokens.extend((0..MESSAGES_SHOWN as u16).map(|index| MESSAGE_BASE + index));
         let mut sorted = tokens.clone();
@@ -1027,10 +1071,49 @@ mod tests {
         assert_eq!(sorted.len(), tokens.len(), "{tokens:?}");
         assert!(tokens.iter().all(|token| *token < NAME_BASE));
     }
+    /// The chosen message's Hide this GIF hides it on this PC and the same button shows
+    /// it again; in the picker's Hidden tab a click on a tile only chooses it, Show this
+    /// GIF again shows that one again, and its tile has no star (F does nothing there).
+    #[test]
+    fn a_gif_is_hidden_and_shown_again_one_by_one() {
+        use crate::chat_gifs::hidden;
+        use gif_picker::{STAR_BASE, TILE_BASE, Tab};
+        let id = crate::chat_gifs::GifId::new("PanelHide01xyz").unwrap();
+        let other = crate::chat_gifs::GifId::new("PanelHide02xyz").unwrap();
+        let mut panel = Panel::new();
+        panel.shown.chosen_gif = Some(id.clone());
+        assert_eq!(panel.activate(HIDE_GIF_TOKEN), PanelAction::None);
+        assert!(hidden::contains(&id));
+        assert_eq!(panel.focus, HIDE_GIF_TOKEN, "the keyboard stays on it");
+        assert_eq!(panel.activate(HIDE_GIF_TOKEN), PanelAction::None);
+        assert!(!hidden::contains(&id), "shown again");
+        hidden::set(&id, true);
+        hidden::set(&other, true);
+        panel.gifs.open = true;
+        panel.gifs.choose_tab(Tab::Hidden);
+        panel.gifs.ids = vec![other.clone(), id.clone()];
+        let favourite = crate::chat_gifs::favourites::contains(&id);
+        let _ = panel.activate_gifs(STAR_BASE + 1);
+        assert_eq!(
+            crate::chat_gifs::favourites::contains(&id),
+            favourite,
+            "no star"
+        );
+        let _ = panel.activate_gifs(TILE_BASE + 1);
+        assert!(hidden::contains(&id), "a click only chooses it");
+        assert_eq!(panel.gifs.hidden_chosen, Some(id.clone()));
+        let _ = panel.activate_gifs(gif_picker::UNHIDE_TOKEN);
+        assert!(!hidden::contains(&id), "Show this GIF again shows it");
+        assert!(hidden::contains(&other), "the other stays hidden");
+        assert_eq!(panel.gifs.hidden_chosen, None);
+        hidden::set(&other, false);
+    }
+
     use sjk_identity::ChatMessage;
 
     pub(super) fn message(id: u64, key: &str, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 1_791_300_000 + id as i64 * 60,
             key_id: key.to_owned(),
@@ -1050,6 +1133,8 @@ mod tests {
 
     pub(super) fn chat(count: u64) -> ChatState {
         ChatState {
+            reaction: None,
+            own_key: None,
             messages: (1..=count)
                 .map(|id| message(id, &format!("{id:016x}"), &format!("message {id}")))
                 .collect(),
@@ -1335,7 +1420,7 @@ mod tests {
         let pictures = std::cell::Cell::new(0);
         let picture = |answer: Option<&str>| {
             let pictures = &pictures;
-            let answer = answer.map(str::to_owned);
+            let answer = answer.map(|version| (version.to_owned(), ""));
             move |key: &str| {
                 assert_eq!(key, format!("{:016x}", 2));
                 pictures.set(pictures.get() + 1);

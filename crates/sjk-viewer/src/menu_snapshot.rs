@@ -19,6 +19,9 @@
 //! as on screen. The in-game menus are drawn over a retail levelshot standing for
 //! the match.
 
+#[path = "menu_snapshot_banners.rs"]
+mod profile_banners;
+
 use crate::keybind_editor::{Category, KeybindEditor};
 use crate::menu::art::{ArtPiece, ArtSet};
 use crate::menu::classic::layout::{Entry, Page, Panel, Span};
@@ -969,7 +972,8 @@ fn nameplate_snapshot() {
     nameplates(&mut shots, &vfs);
 }
 
-/// Nameplates over a match, as holo frames (design C, 28/10/2026): a verified player
+/// Nameplates over a match, in each style (holo frames, design C, 28/10/2026, in
+/// `nameplates.png`; `-capsule` and `-classic` the others): a verified player
 /// with a picture, just spawned (overheal, 125) with estimated Force (grey haze), a red
 /// enemy with no picture (their initial) whom the estimate cannot place
 /// (yellow "?"), a duelling staff player without SJK farther off (their model's head
@@ -978,7 +982,7 @@ fn nameplate_snapshot() {
 /// a large shield (199), and far away a player without SJK (a small grey hexagon and
 /// the name over a hairline).
 fn nameplates(shots: &mut Snapshot, vfs: &sjk_vfs::VirtualFileSystem) {
-    use crate::hud::nameplate::{PreviewPlate, State};
+    use crate::hud::nameplate::{PreviewPlate, State, Style};
     use sjk_ui::TextureId;
     let badge = RgbaImage::from_raw(128, 128, crate::ui_renderer::verified_badge_pixels())
         .expect("a full cell");
@@ -1170,20 +1174,28 @@ fn nameplates(shots: &mut Snapshot, vfs: &sjk_vfs::VirtualFileSystem) {
         "^0Qu^7iet",
         "Jaden",
     ];
-    let mut state = State::default();
-    let mut vertices = Vec::new();
     // The plates draw with the HUD font in game (`hud_runtime::append`).
     let hud = crate::text::load_classic().expect("build the HUD font");
     let menu = std::mem::replace(&mut shots.font, hud);
-    state.preview(
-        &plates,
-        &names,
-        &power_icons,
-        &shots.font.font,
-        &mut vertices,
-        VIEWPORT,
-    );
-    shots.save("nameplates", &state.list, &vertices, true);
+    // Each style (`cg_nameplateStyle`): the holo frame, the capsule, the classic plate.
+    for (name, style) in [
+        ("nameplates", Style::Holo),
+        ("nameplates-capsule", Style::Capsule),
+        ("nameplates-classic", Style::Classic),
+    ] {
+        let mut state = State::default();
+        state.set_style(style);
+        let mut vertices = Vec::new();
+        state.preview(
+            &plates,
+            &names,
+            &power_icons,
+            &shots.font.font,
+            &mut vertices,
+            VIEWPORT,
+        );
+        shots.save(name, &state.list, &vertices, true);
+    }
     shots.font = menu;
 }
 
@@ -1465,12 +1477,14 @@ fn identity_page(shots: &Snapshot, art: ArtSet) {
         status,
         key_id: "44f3d0b36c9b2510".to_owned(),
         me: Some(Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
             key_id: "44f3d0b36c9b2510".to_owned(),
             key: String::new(),
             name: name.to_owned(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: sjk_identity::Tick::None,
@@ -1543,11 +1557,15 @@ fn identity_page(shots: &Snapshot, art: ArtSet) {
         look_outcome: None,
         packs_revision: 0,
         map_edits_revision: 0,
+        map_edits_note: None,
         map_edits_published: None,
         mystery_boxes: None,
         mystery_boxes_revision: 0,
         mystery_box: None,
         box_hunt: None,
+        secrets: None,
+        secrets_revision: 0,
+        secret: None,
         assets_note: None,
         crashes_sent: 0,
         crash_note: None,
@@ -1562,12 +1580,14 @@ fn identity_page(shots: &Snapshot, art: ArtSet) {
         marks_revision: 0,
         mark_refusal: None,
         trades: None,
+        history: None,
         announcements: Vec::new(),
         announcements_revision: 0,
         rewards: None,
         rewards_revision: 0,
         claim: None,
         announce: None,
+        news_image: None,
         public_key: String::new(),
     };
     let online = hub(Status::Online, "^1Sol", &["^4Vulpes", "Padawan"]);
@@ -1760,6 +1780,30 @@ fn player_card(shots: &mut Snapshot) {
         shots.save(name, &state.list, &vertices, true);
     }
     player_card_profile(shots);
+    // Two sabers, each its own shader (the test sample, loaded as the Tidal and the Frost): a row each.
+    let skins = crate::saber_skins::tests::loaded_pair(1);
+    let card = crate::hud::player_card::card_with(
+        &info("n|Fox|t|0|model|kyle|st|single_1|st2|single_2|c1|4|c2|1|"),
+        None,
+        [Some("saber_tidal"), Some("saber_frost")],
+    );
+    let state = State::preview_with(
+        card,
+        [760.0, 470.0],
+        VIEWPORT,
+        false,
+        [skins.get("saber_tidal"), skins.get("saber_frost")],
+    );
+    let mut vertices = Vec::new();
+    crate::ui_renderer::append_text_commands(
+        &state.list,
+        |id| state.resolve_text(id),
+        &mut vertices,
+        &shots.font.font,
+        VIEWPORT,
+        crate::text::TextStyle::NEUTRAL,
+    );
+    shots.save("player-card-two-shaders", &state.list, &vertices, true);
 }
 
 /// The player card of an SJK player with everything the card reads: the Glitch shader
@@ -1785,14 +1829,19 @@ fn player_card_profile(shots: &mut Snapshot) {
         goal: 1,
         unlocked,
         reward: None,
+        name: None,
+        description: None,
+        group: None,
     };
     let profile = sjk_identity::Profile {
+        tag_cards: Vec::new(),
         credits: 0,
         cards: Vec::new(),
         keys: Vec::new(),
         key_id: "0123456789abcdef".to_owned(),
         key: String::new(),
         name: "Sol".to_owned(),
+        banner: "".into(),
         bio: "Fox of the JoF and maker of SJK, the fast clean JKA client.".to_owned(),
         verified: true,
         tick: sjk_identity::Tick::None,
@@ -1861,7 +1910,7 @@ fn player_card_profile(shots: &mut Snapshot) {
             shader,
         );
         let skin = shader.and_then(|id| skins.get(id));
-        let state = State::preview_with(card, [760.0, 470.0], VIEWPORT, pinned, skin);
+        let state = State::preview_with(card, [760.0, 470.0], VIEWPORT, pinned, [skin, None]);
         let mut vertices = Vec::new();
         crate::ui_renderer::append_text_commands(
             &state.list,
@@ -2788,6 +2837,7 @@ fn in_game_menu(shots: &Snapshot, art: ArtSet) {
             page,
             selected_row,
             team: 1,
+            following: false,
             team_game,
             siege: false,
             red_players: 3,
@@ -2959,12 +3009,14 @@ fn medals_snapshot() {
         status: Status::Online,
         key_id: "44f3d0b36c9b2510".to_owned(),
         me: Some(Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
             key_id: "44f3d0b36c9b2510".to_owned(),
             key: String::new(),
             name: "^1Sol".to_owned(),
+            banner: "".into(),
             bio: String::new(),
             verified: true,
             tick: sjk_identity::Tick::None,
@@ -2999,11 +3051,15 @@ fn medals_snapshot() {
         look_outcome: None,
         packs_revision: 0,
         map_edits_revision: 0,
+        map_edits_note: None,
         map_edits_published: None,
         mystery_boxes: None,
         mystery_boxes_revision: 0,
         mystery_box: None,
         box_hunt: None,
+        secrets: None,
+        secrets_revision: 0,
+        secret: None,
         assets_note: None,
         crashes_sent: 0,
         crash_note: None,
@@ -3018,12 +3074,14 @@ fn medals_snapshot() {
         marks_revision: 0,
         mark_refusal: None,
         trades: None,
+        history: None,
         announcements: Vec::new(),
         announcements_revision: 0,
         rewards: None,
         rewards_revision: 0,
         claim: None,
         announce: None,
+        news_image: None,
         public_key: String::new(),
     };
     let with = hub(shot_medals());

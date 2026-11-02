@@ -234,6 +234,7 @@ mod tests {
 
     fn said(id: u64, key: &str, name: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 1_000 + id as i64,
             key_id: key.repeat(16),

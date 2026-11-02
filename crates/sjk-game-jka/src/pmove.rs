@@ -224,6 +224,9 @@ pub struct MovementConfig {
     /// (`g_fixSaberMoveData`, `g_fixWeaponAttackAnim`, `g_fixRunWalkAnims`, bits 0-2).
     /// A retail server publishes none and runs none.
     pub legacy_fixes: u32,
+    /// `cg_predictLegacy`: the client prediction changes since 2026.1028.1 that this
+    /// player turned back off ([`predict_legacy`] bits). Never read by a server's move.
+    pub predict_legacy: u32,
     /// `CS_SERVERINFO` `g_debugMelee` as the server's dialect reads it. SJK's own server
     /// does not simulate it and keeps the default (off).
     pub debug_melee: crate::pmove_debug_melee::DebugMelee,
@@ -233,6 +236,8 @@ pub struct MovementConfig {
     pub ja_plus: crate::pmove_japlus::JaPlusRules,
     /// jaPRO command policy selected from advertised server capabilities.
     pub ja_pro: crate::pmove_japro::JaProRules,
+    /// Current Lugormod-v3 movement policy.
+    pub lugormod: crate::pmove_lugormod::LugormodRules,
 }
 
 impl Default for MovementConfig {
@@ -250,11 +255,45 @@ impl Default for MovementConfig {
             authoritative: false,
             // The reference server's cvar defaults: every fix on.
             legacy_fixes: 0b111,
+            predict_legacy: 0,
             debug_melee: crate::pmove_debug_melee::DebugMelee::default(),
             grapple: None,
             ja_plus: crate::pmove_japlus::JaPlusRules::default(),
             ja_pro: crate::pmove_japro::JaProRules::default(),
+            lugormod: crate::pmove_lugormod::LugormodRules::default(),
         }
+    }
+}
+
+/// `cg_predictLegacy` bits: each turns one client prediction change made since
+/// 2026.1028.1 back off, for players who preferred how that release moved. The
+/// default (none) follows the server; every bit predicts some moves the server
+/// then corrects.
+pub mod predict_legacy {
+    /// #267: the equipped sabers' `.sab` move overrides and restrictions.
+    pub const SABER_DEFINITIONS: u32 = 1;
+    /// #253: a saber lock turns the view to face the opponent.
+    pub const SABER_LOCK_FACING: u32 = 2;
+    /// #260: no jump after respawning until attack and use are released.
+    pub const RESPAWN_JUMP: u32 = 4;
+    /// #254: triggers touched with the last move's box, not one from the posture.
+    pub const TRIGGER_HULL: u32 = 8;
+    /// #262: the gesture button starts its taunt.
+    pub const GESTURE: u32 = 16;
+    /// #261: movement held still while another client holds the player.
+    pub const HELD_PLAYER: u32 = 32;
+    /// #250: other players' and NPCs' animations and kinds read for bounces and kicks.
+    pub const ACTOR_CONTEXT: u32 = 64;
+    /// #252: prediction freezes when the command history overflowed.
+    pub const HISTORY_GAP: u32 = 128;
+    /// Every change: prediction as in 2026.1028.1.
+    pub const ALL: u32 = 255;
+}
+
+impl Predictor {
+    /// Whether this client prediction turned a [`predict_legacy`] change back off.
+    fn legacy_prediction(&self, bit: u32) -> bool {
+        !self.config.authoritative && self.config.predict_legacy & bit != 0
     }
 }
 
@@ -271,6 +310,8 @@ impl Default for HiltSpeedScales {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MovementState {
+    /// Reused Lugormod snapshot fields; inert without its current-server policy.
+    pub lugormod: crate::pmove_lugormod::LugormodState,
     /// Raw jaPRO stat metadata; interpreted only when its dialect is selected.
     pub ja_pro: crate::pmove_japro::JaProState,
     /// Authoritative pickup eligibility fields, separate from predicted grants.
@@ -620,6 +661,7 @@ impl MovementState {
             movement_direction: player.movement_direction(),
             view_angles: player.view_angles(),
             delta_angles: player.delta_angles(),
+            lugormod: crate::pmove_lugormod::LugormodState::from_player(player),
             view_height: player.view_height(),
             standing_height: f32::from(player.standing_height()),
             crouching_height: f32::from(player.crouching_height()),
@@ -1185,7 +1227,9 @@ impl Predictor {
             } else {
                 i32::from(self.config.roll_rules.gametype)
             },
-            sabers: if self.config.authoritative {
+            sabers: if self.config.authoritative
+                || self.legacy_prediction(predict_legacy::SABER_DEFINITIONS)
+            {
                 context.sabers
             } else {
                 self.config.saber_definitions.unwrap_or(context.sabers)
@@ -1295,6 +1339,7 @@ impl Predictor {
                     game.as_deref_mut(),
                 );
             }
+            self.lugormod_finish_slice();
             self.cleared_box = false;
             if self.state.movement_flags & PMF_JUMP_HELD != 0 {
                 // The C wrapper changes repeated slices to a held, non-analog
@@ -1345,6 +1390,9 @@ impl Predictor {
         // A fake noclip flies a camera, not the body: the animations that hold the body
         // still (a taunt or a JA+ emote, a kick, a saber lock) must not hold it, and
         // the server is sent a standing still command in any case.
+        if self.legacy_prediction(predict_legacy::HELD_PLAYER) {
+            self.state.held_by_client = 0;
+        }
         if !(self.fake_noclip && !self.config.authoritative) {
             crate::pmove_input_freeze::apply(
                 &mut self.state,
@@ -1477,19 +1525,24 @@ impl Predictor {
         let hovering = self.hovering();
         self.sample_water(collision);
         self.water_entry = self.state.water_level;
-        let bounds = self.check_duck(&command, collision);
+        let lugormod = self.lugormod_player();
+        let bounds = if lugormod {
+            self.lugormod_bounds()
+        } else {
+            self.check_duck(&command, collision)
+        };
         // `BG_VehicleAdjustBBoxForOrientation` (`bg_pmove.c:10814-10818`).
-        let bounds = self.vehicle_box(bounds, collision);
+        let mut bounds = self.vehicle_box(bounds, collision);
         self.box_bounds = (bounds.minimums, bounds.maximums);
         // A wall run falls at half gravity (`bg_pmove.c:10726-10730`), until the slice ends.
         let gravity = self.state.gravity;
         let pack_distance = self.activate_new_jetpack(&command, bounds, collision);
         let jetpacking = self.state.movement_type == 1;
-        if jetpacking {
+        if jetpacking && !lugormod {
             self.jetpack_move(&command, bounds, collision);
         } else if self.new_jetpack_active() {
             self.new_jetpack_thrust(&command, bounds, collision, seconds, pack_distance);
-        } else if self.slow_fall {
+        } else if !lugormod && self.slow_fall {
             self.state.gravity = wall_moves::halved_gravity(gravity);
         }
         self.state.legs_timer_at_entry = self.state.legs_timer;
@@ -1520,6 +1573,15 @@ impl Predictor {
                 seconds,
                 game.as_deref_mut(),
             );
+        }
+        if lugormod {
+            bounds = self.lugormod_check_duck(&command, bounds, collision);
+            self.box_bounds = (bounds.minimums, bounds.maximums);
+            if jetpacking {
+                self.jetpack_move(&command, bounds, collision);
+            } else if self.slow_fall {
+                self.state.gravity = wall_moves::halved_gravity(gravity);
+            }
         }
         // PM_GroundTrace precedes PM_DropTimers (bg_pmove.c:10821,10845).
         self.drop_timers(millis);
@@ -1586,7 +1648,10 @@ impl Predictor {
                 context,
             );
         }
-        if !self.riding_move() && !self.npc_aboard() {
+        if !self.riding_move()
+            && !self.npc_aboard()
+            && !self.legacy_prediction(predict_legacy::GESTURE)
+        {
             gesture::animate(&mut self.state, &command, &mut self.events);
         }
         self.vehicle_impacts(&command, game.as_deref_mut());
@@ -2131,7 +2196,7 @@ impl Predictor {
                 forward * f32::from(command.forward_move) + right * f32::from(command.right_move)
             };
             if self.state.movement_type == 1 && !self.slow_fall {
-                wish_velocity *= if command.up_move <= 0 { 0.8 } else { 2.0 };
+                wish_velocity *= self.jetpack_air_control(command);
             } else if self.new_jetpack_active() && !self.slow_fall {
                 wish_velocity *= 1.75;
             }
@@ -2492,8 +2557,16 @@ mod jump;
 #[path = "pmove_gesture.rs"]
 mod gesture;
 
+#[cfg(test)]
+#[path = "pmove_predict_legacy_tests.rs"]
+mod predict_legacy_tests;
+
 #[path = "pmove_dual_jump_hull.rs"]
 mod dual_jump_hull;
+
+#[cfg(test)]
+#[path = "pmove_dual_jump_hull_tests.rs"]
+mod dual_jump_hull_tests;
 
 #[path = "pmove_wall_moves.rs"]
 mod wall_moves;
@@ -2642,3 +2715,6 @@ mod prediction_gametype_tests {
         assert_eq!(predictor.gametype, 9);
     }
 }
+
+#[path = "pmove_lugormod_motion.rs"]
+mod lugormod_motion;

@@ -112,12 +112,14 @@ other character (Cyrillic, Japanese) is drawn from the wide-glyph atlas
 ([rendering.md](rendering.md#characters-beyond-the-code-page)).
 
 A chat line holds at most `MAX_SAY_TEXT` - 1 (149) bytes; the server cuts a
-longer one (`Cmd_Say_f`). The chat field counts a draft by the bytes it is sent
-with, escapes included and the whole line encoded as above
-(`chat_input_fits`, [chat.rs](../crates/sjk-client/src/chat.rs)): a Russian line
-in Windows-1251 holds 149 letters as EternalJK's does, a Japanese, Chinese or
-Korean line in UTF-8 about 49 characters (an emoji takes 4 bytes, a family up to 25),
-and the sent command is cut at a whole character, never in the middle of one.
+longer one (`Cmd_Say_f`). SJK divides one draft into at most four such lines, at a
+word where possible. The chat field counts each piece by the bytes it is sent with,
+escapes included and the whole line encoded as above (`chat_commands`,
+[chat.rs](../crates/sjk-client/src/chat.rs)): a Russian piece in Windows-1251 holds
+149 letters as EternalJK's does, a Japanese, Chinese or Korean piece in UTF-8 about
+49 characters (an emoji takes 4 bytes, a family up to 25), and no piece cuts a
+character or escape. The active `^` colour is repeated in the next piece and counts
+inside its limit.
 
 A player's name is read from the bytes of the `n` key of its `CS_PLAYERS`
 configstring and decoded on its own (`LegacyClientInfo::name`,
@@ -142,6 +144,61 @@ them into the int fields; only `STAT_WEAPONS` is an unsigned 19-bit field.
 a score of -1 after a suicide, negative health on death and ammo's -1 sentinel
 read as -1, not 65535.
 
+
+### Lugormod-v3 movement
+
+The movement dialect recognises the colour-stripped advertised `Lugormod v3`
+name through a documented compatibility table in
+[dialect.rs](../crates/sjk-protocol/src/dialect.rs). A filesystem directory named
+`lugormod`, an unversioned name, U# or v2 does not establish v3 rules. This adds
+native movement support; the client-plugin identity/handshake policy is unchanged.
+The current serverinfo selects the rules again on refresh, so reused fields from
+another mod cannot enable them. `cg_noPredict 1` remains the player's override.
+
+Reference: [LugorDev/Lugormod-v3 `50f42520` multiplayer game][lugormod-pmove],
+with the default [CMake definitions][lugormod-build]: `LMD_NEW_FORCEPOWERS` and
+`LMD_NEW_WEAPONS` enabled, `LMD_NEW_JUMP` and `LMD_NEW_JETPACK` absent.
+[pmove_lugormod.rs](../crates/sjk-game-jka/src/pmove_lugormod.rs) owns the
+snapshot adapter; [pmove_lugormod_motion.rs](../crates/sjk-game-jka/src/pmove_lugormod_motion.rs)
+owns the local-player posture rules.
+
+| Behavior | Prediction and source |
+| --- | --- |
+| Model bounds and view | `iModelScale` scales the horizontal half-width (15), corpse top (-8) and final integer eye height. Feet stay at -24; standing/crouching tops already come from the server and are not scaled twice. Meditate/crouch/sit poses use the short hull while their timer runs (`PM_SetBounds`, line 5850; `Pmove`, line 13064) |
+| Duck/stand/roll posture | Sample ground with the old posture before changing it. Stand-up clearance sweeps the lower half of the scaled box upwards; allsolid or fraction below 1 blocks it, startsolid alone does not (`PM_CanStand`/`PM_CheckDuck`, lines 5960-6063) |
+| Enhanced jetpack | With `PM_JETPACK`, snapshot `userInt1` and FFA together select fivefold horizontal control and bypass the ordinary 256 upward cap. Positive vertical speed gets `18 - ground_distance/256` thrust when positive; nonpositive speed keeps the ordinary 12. Other modes/profiles keep stock thrust/control (`PM_AirMove`, line 4612; `PmoveSingle`, line 12634) |
+| Public roll rules | A stun baton may roll under the normal published Force eligibility gates. The roll-entry speed-squared threshold and horizontal clearance scale with the model (`PM_TryRoll`, line 5027; `PM_Footsteps`, line 6839). Private mercenary skill/roll restriction checks are not inferred |
+| Velocity precision | The default v3 `PmoveSingle` unconditionally snaps final velocity. The adapter keeps that behavior even if a reused `pmove_float` key exists; fixed/66 ms command slicing remains unchanged |
+
+The grapple uses `PM_GRAPPLING` 9 and reuses `vehOrientation`, `hyperSpaceAngles`
+and `vehSurfaces` ([g_active.c][lugormod-grapple], line 2643). Stock ordinary
+protocol-26 player snapshots omit those vehicle-only fields. In that mode the
+viewer interpolates server positions and retains immediate mouse-look, rather
+than simulating a rope without its anchor. It also uses server positions for
+extended Force levels (the levitation bit in stat 11), scaled active Force rises,
+and invalid authored corpse hulls whose top falls below their feet. These
+policies consult the current movement dialect without per-frame allocation.
+No snapshot schema or wire codec changed.
+
+Remaining limits: extended Force curves/air jumps, private profession/skill and
+restriction state, overridden unpublished `lmd_noPlayerBounce`/`g_blockspeedhack`,
+custom build switches, scaled rider/NPC boxes, dual-jump resize integration,
+full weapon timing and game-owned emote/menu movement are not established by
+this change. Snapshot interpolation for the states above is a fallback, not proof
+of prediction parity for those mechanics.
+
+Windows x64 focused checks match 248 MSVC `/O2 /fp:precise` outputs from the
+referenced bounds/stand functions and default jetpack/air-control branches.
+Synthetic ordinary players, trace stubs, animation selection stubs and no spinning
+saber randomness bound that evidence. Command/reseed/preview tests cover
+8/7/4/3 ms and switches among v3, BaseJKA, JA+, jaPRO and other Lugormod names.
+Full Pmove, live servers, animation playback and rendered performance remain
+unverified; numerical branch fixtures are not wire captures or retail assets.
+
+[lugormod-pmove]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/game/bg_pmove.c
+[lugormod-build]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/CMakeLists.txt#L269
+[lugormod-grapple]: https://github.com/LugorDev/Lugormod-v3/blob/50f42520c5ad1bfa91aa4e9d7e8d9560eac16ef2/game/g_active.c#L2643
+
 ### Server-dialect movement rules
 
 jaPRO/TaystJK command prediction also reads the existing snapshot race/style
@@ -158,11 +215,10 @@ copy clears roll; outgoing user commands remain unchanged. Serverinfo refresh
 and snapshot reseeding refresh this policy and metadata. `cg_noPredict 1` is the
 existing player override to display server positions without local prediction.
 
-The jaPRO held-jump gate runs before the shared zero-gravity push-off. At
-nonpositive gravity the push remains available even on styles that disable
-Force special jumps; those style restrictions apply to the positive-gravity
-special-jump branch (TaystJK `2d60c0fa`, `bg_pmove.c:3744-3796`). Focused
-regressions cover all 19 styles, held/released input and 8/7/4/3 ms.
+Zero-gravity push-off prediction remains unsupported for every profile, including
+jaPRO, following the rollback in #308. Held-jump and positive-gravity special-jump
+policies remain in place. Tests cover no automatic impulse for all 19 styles at
+8/7/4/3 ms.
 
 jaPRO on-foot acceleration and friction also follow the movement-style table
 in [pmove_japro_movement.rs](../crates/sjk-game-jka/src/pmove_japro_movement.rs).
@@ -285,6 +341,7 @@ Stock and other servers, SJK's dedicated server included, keep the stock rules.
 | Taunts | Every JA+ server | Meditation keeps the player in place but the view free; other taunts leave movement and view free |
 | Staff kick | Every JA+ server | A staff's alternate attack standing still is a front kick |
 | Melee kicks | Every JA+ server | JA+ plays its own kicks server-side (melee's spin and back kicks in place of the stock W+A and W+D kicks, the jumping back kick, the backflip kick and the flip stab); the kicker is held still with the view free. A kiss, a ledge, a get-up, a stab or a backflip kick taken holds the player and the view (JoF EternalJK `bg_pmove.c:12470-12498`, `SVMOD_JAPLUS`, at bd5e202). The client predicts the stock kick until the server's kick arrives, as JoF EternalJK does |
+| Dual jump hull | Every JA+ server (`dmflags` 256: every window) | The dual sabers' forward jump attack raises the feet to 0 in its stock windows only when another player stands within 70 units ahead along the view, so the attacker is not sunk into the floor when nobody is there |
 
 Not predicted: the options EternalJK never reads outside its `serverconfig`
 listing (single-player attacks, new DFA, model scale, kata, auto replier, ledge
@@ -360,12 +417,16 @@ displayed snapshots carry different mover trajectories.
 Jump prediction respects `PMF_RESPAWNED`: holding attack or use after spawning
 blocks jumping until those buttons are released. The latch is cleared before
 movement for every weapon, as in OpenJK `codemp/game/bg_pmove.c`.
-The dual forward jump attack raises the collision hull's feet during codemp's
-two authored animation windows. `PMF_FIX_MINS` restores the hull with downward
-and upward clearance traces, moving up or ending in a crouch when necessary.
-The animation window requires a loaded animation timing table.
+PR #266 added timed hull resizing for the dual sabers' forward jump attack and #307 rolled it back, because an original JA+ 2.4 B7 server stayed grounded while prediction shrank the hull. On JA+ servers ([pmove_dual_jump_hull.rs](../crates/sjk-game-jka/src/pmove_dual_jump_hull.rs)) the feet are raised to 0 in the stock windows only when a box trace 70 units along the view hits another player; with `dmflags` 256 (`old_collision`) they are raised in every window, as stock does. The rule comes from VisionJK's port of the JA+ 2.4 B7 server module. All other servers, SJK's dedicated server included, keep the fixed -24-unit foot minimum. Not verified against a running JA+ server.
 Local prediction loads the equipped hilts' movement flags, named special-move
 overrides and ready/draw/putaway animations from the shared `.sab` catalog.
+The shared catalog follows OpenJK's `FS_GetFileList` order and keeps the first
+case-insensitive saber name (`WP_SaberLoadParms` / `WP_SaberParseParms`,
+`codemp/game/bg_saberLoad.c`, `4d0dfaf1`). A higher-priority mount still replaces
+the same virtual file. Sorting file paths or replacing duplicate names can select
+a different move restriction/override; PR #314 corrects that inherited integration
+problem exposed by #267. Synthetic duplicate-file/name cases are covered; a live
+custom-hilt server remains unverified.
 Clientinfo changes refresh this configuration for committed moves, replay and
 previews; unknown or multiplayer-forbidden names fall back to Kyle and
 two-handed hilts exclude a second saber. Authoritative moves keep the game's
@@ -446,6 +507,25 @@ model slot and refreshed on encountered model-configstring changes, outside
 command replay. The local vehicle shares the geometry helper and keeps its
 clearance check; remote collision follows stock's no-clearance-callback path.
 
+### Vehicle and rider trace exclusions
+
+Prediction applies codemp `CG_VehicleClipCheck` to the actor making each trace.
+A vehicle's chassis ignores its linked riders, while a rider ignores its linked
+vehicle. Rider/rider and unrelated-actor contacts retain stock behavior. The
+pilot's collision view and the chassis view borrow the same world and scratch
+storage without changing each other's context. Committed, replayed and preview
+commands use these views; local passengers also receive the rider exclusions
+when no locally predicted chassis is available.
+Both views retain snapshot rocket-target metadata, and both moves retain the
+snapshot NPC/animation context.
+
+The 30/10/2026 original JA+ 2.4 B7 comparison of PR #274 against `58c2e386`
+observed identical endpoints at 8/7/4/3 ms, including a swoop pilot and a
+shuttle pilot/passenger. Passenger carrier exclusions were exercised, but no
+endpoint improvement was demonstrated. Shared shuttle residuals remain;
+this is limited regression evidence, not full vehicle parity. See the
+[verification record](status.md#prediction-vehiclerider-trace-exclusions).
+
 ### When prediction steps aside
 
 These cases show the server's state instead of predicting, as JoF EternalJK's
@@ -477,8 +557,11 @@ its trace mask, so the client no longer stops where the server walks on.
 noclip while the server is sent a still player: zero movement, `BUTTON_TALK` and the view
 held from the moment it began, with the command time intact. The predicted state is not
 reseeded from snapshots, every map area is drawn, and turning it off (or dying,
-spectating or boarding a vehicle) snaps back to the server's position without error
-smoothing. Turbo (attack held) sets the velocity along the aim directly.
+spectating, boarding a vehicle or a duel starting) snaps back to the server's position
+without error smoothing. It is refused in a duel: JoF's JA+ servers spare a player
+with the talk balloon up any damage, so a flying duellist took none of the opponent's
+(Nib's hub report #209, 30/10/2026); jaPRO's own chat protection leaves duels out
+(`g_godChat`, `!ps.duelInProgress`). Turbo (attack held) sets the velocity along the aim directly.
 The flight ignores the animations that hold a body still (a taunt, a JA+ emote, a kick, a
 saber lock): `pmove_input_freeze` does not run for a fake-noclip predictor, so the camera
 flies while the real body stays in its emote.
@@ -507,8 +590,8 @@ Your body remains at its server entity, with no view weapon. It is hidden
 from the main view while the camera is within 32 units of its eye, so the
 initial view stays clear; it becomes visible after flying away. Turning
 it off returns to the real player on the next snapshot and restores the chosen
-first/third-person mode. It is available while alive and on foot; death,
-spectating or entering a vehicle ends flight. It is temporary and mutually
+first/third-person mode. It is available while alive, on foot and out of a duel;
+death, spectating, entering a vehicle or a duel starting ends flight. It is temporary and mutually
 exclusive with `/fakenoclip`. Generic actions, weapon changes and Force-wheel reliable commands are suppressed.
 Disconnecting, reconnecting or changing maps clears it. `/freecam off` also
 works from the menu. This does not change server noclip permissions.
@@ -630,12 +713,124 @@ dropped, as the server drops a stock client's extras. Pressing a hug bind twenty
 used to queue twenty hugs, still firing one a second after the player stopped. Chat
 (`say`, `say_team`, `tell`, typed or bound) is not queued twice while identical chat
 waits, but is never dropped: a message is still worth reading late, a late action is not.
+The pieces of one submitted draft are kept separately, including identical ones. A
+bind or console command queued behind them does not expire while it waits, so a team
+switch or `kill` pressed during the draft is not silently lost.
 What the player sends (chat, binds, console commands) goes ahead of the client's own
 `score` requests still waiting (every two seconds while dead or holding the
 scoreboard), so chat no longer queues a second each behind them (27/10/2026, hub
 report 172). It stays behind the client's other commands, a `userinfo` after a model
 or saber change or a Force-profile `team` retry, so a `kill` bind respawns with the
 new model and a typed `/team s` is not undone by a retry sent after it.
+
+## Prediction regression review, 30/10/2026
+
+Audit #305 covers all 25 prediction PRs from 29/10, against release
+`2026.1030.1` (`b138373f`) and `main` `c1b90267`. Twenty-three were merged;
+#274 and #287 were not in that release. The before-merge control is `0fd6a5e1`.
+OpenJK source reference remains multiplayer `codemp` at `4d0dfaf1`.
+
+Two changes caused reproducible disagreements with an original JA+ 2.4 B7
+server and have separate rollback PRs: #251 in #308 and #266 in #307. Source
+agreement and synthetic tests had missed both integration failures. This review
+supersedes the implementation recommendations for those two rows below.
+
+The necessity reassessment uses each merge's first parent, its production delta
+and the current callers at `82c8c185` (hotfix `2026.1030.2`). A concrete missing
+input or wrong constant establishes a source-level reason for a change; it does
+not certify the implementation on every mod. In particular, the earlier
+"Retain" labels must not be read as approval based on the narrow dual-saber run.
+The #251/#266 rollbacks are merged in this hotfix.
+
+| PR | Before the change, and reassessment |
+| --- | --- |
+| #249 gametype | Client moves used `MoveContext::CLIENT` gametype 0 despite serverinfo already supplying the real gametype to roll rules. CTY flag-carrier Force restrictions therefore received the wrong input. A real missing input, not a second movement algorithm; live CTY still unverified. |
+| #250 actor context | Collision could identify an entity, but body-animation lookup returned None and NPC lookup false in committed moves, replay, previews and rides. Existing bounce/target kernels could not consume snapshot actor state. Wiring was missing; multiplayer interactions still unverified. |
+| #251 zero-gravity push | Added a genuinely absent OpenJK branch, but applied it to transient uninitialized spawn data. Integration was wrong; rolled back by #308. Missing reference code alone was insufficient justification. |
+| #252 history gaps | The bounded 512-command queue discarded unacknowledged commands and then replayed the surviving tail as complete. The freeze prevents that invalid replay; join/explicit transition resets clear the gap. This is an overflow safeguard, not ordinary movement tuning. Real network overflow recovery remains unverified. |
+| #253 saber-lock facing | Existing lock input filtering retained the old view but did not face the presented opponent as `CG_PredictPlayerState` does. The missing step is distinct from that freeze. Snapshot/presentation timing in a live lock remains unverified. |
+| #254 trigger hull | Reconstructed a box from final posture flags despite Pmove already storing its actual box. Roll selection runs after movement and can change those flags. Reusing the stored box removes the inconsistent reconstruction; the old tests set the mismatch synthetically, so live roll/trigger timing remains unverified. |
+| #260 respawn jump | The shared latch already cleared on attack/use release, but `PM_CheckJump` did not refuse jumping while it was set. The gate was missing, not duplicated. Respawn timing on each mod remains unverified. |
+| #261 held player | Snapshot field 121 was not transferred into movement state, and the command freeze lacked its held-player branch. Both were missing. Carried-player mod semantics remain unverified. |
+| #262 gesture | No `PM_Animate` call handled BUTTON_GESTURE. The existing taunt filter handled ongoing poses, not starting this command-driven taunt. The shared reference calls it outside vehicle/noAnimate paths; mod-specific taunts remain unverified. |
+| #263 rider whitelist | `WP_BLASTER` was incorrectly 4 (Bryar pistol), rather than 5. This is a concrete constant bug in an existing whitelist. It does not alter on-foot movement. Live mounted weapons remain unverified. |
+| #264 rider weapons | The existing legal external-rider weapon path was blocked by `config.authoritative`, although codemp runs it in cgame too. This removes an inappropriate ownership gate, not a new weapon algorithm. Live mounted timing remains unverified. |
+| #265 rocket mask | Lock traces used `0x1 | 0x100 | 0x10000` instead of player-solid mask `0x1 | 0x10 | 0x100 | 0x1000`. PLAYERCLIP and TERRAIN were omitted. Real mask defect; live lock traces remain unverified. |
+| #266 dual hull | Added absent timed hull resizing, but original JA+ runtime contradicted its grounded motion. Rolled back by #307. The source algorithm's presence did not justify enabling it in the existing integration. |
+| #267 saber definitions | Roll prohibition and speed scales were already loaded; other wall/attack restrictions and authored move/stance overrides were not supplied to existing kernels. That missing input is real, but the reused catalog selects duplicate definitions in the wrong order. #314 corrects that integration defect; it predates #267, which exposes more of its data to prediction. Live custom hilts remain unverified. |
+| #268 rocket targets | Only entity numbers below 32 were targets; no snapshot NPC identity or powerups reached lock filtering. Adds missing target facts to an existing trace, including codemp's literal PW_CLOAKED ordinal test. Live mod-specific target semantics remain unverified. |
+| #270 brush contents | Point contents reused physics-time brush translation, while cgame queries the presented transform. Sweeps and contents need separate inputs. The architectural distinction is real; live moving/rotating liquid brushes remain unverified. |
+| #271 audit docs | Documentation only; supplies no prediction behavior. Its source comparison is not runtime certification. |
+| #273 vehicle bounds | Remote vehicle solids used packed boxes; the existing vehicle orientation calculation was used only by local vehicle movement. The PR shares that shape calculation and adds definition/presentation inputs to remote collision. Real missing remote path, with live vehicle contacts still unverified. |
+| #274 vehicle exclusions | Unmerged; cannot affect the reported release. Remains a separate proposal, not a demonstrated fix in the runtime captures. |
+| #276 passenger physics | `riding_move` required optional pilot/vehicle context as well as m_iVehicleNum. Passengers lacking that context could execute on-foot gravity/acceleration, contrary to codemp's vehicle-number dispatch. Missing passenger gate; live attachment behavior remains unverified. |
+| #277 jaPRO slicing | Requested new mod support: ordinary fixed/66 ms slicing and stock velocity snapping did not implement jaPRO race/high-FPS policy. Disabled profiles retain those old policies. Source/fixture coverage establishes selected kernels, not complete live jaPRO correctness. |
+| #279 jaPRO styles | Requested new mod support: previous kernels had stock acceleration/friction, with existing JA+ head sliding kept in its own fallback. Adds style-specific rules only with current jaPRO policy. All style/map interactions remain unverified in game. |
+| #282 jaPRO jumps | Requested new mod support: old jump behavior used stock takeoff/release/Force rules. Style impulses, ramp metadata and only-bhop policies are separate requirements. Disabled profiles follow the old branch; live jaPRO jumping remains unverified. |
+| #284 jaPRO jetpack | Requested new mod support: existing PM_JETPACK is distinct from jaPRO's flag/fuel-based pack. The new path is gated and leaves foreign flags owned by snapshots. Its inherited #251 impulse expectation was removed in #308. Live jaPRO pack behavior remains unverified. |
+| #287 Lugormod | Unmerged; cannot affect the reported release. Its necessity and server behavior require a separate mod-specific validation. |
+
+This review found no second implementation already covering the specific missing
+inputs/gates above. It does not recommend keeping an implementation merely
+because that missing behavior exists. The concrete additional defect is the
+catalog feeding #267; it has a separate failing-before/passing-after correction
+in #314. Other runtime gaps remain open, rather than being cleared by the stock
+dual-saber evidence. No further blanket rollback is justified by this source
+review alone.
+
+Evidence was collected on Windows x64 using a private loopback server with no
+human players: original 2011 JA+ module SHA-256
+`9c2063955c5e6c3cd9febe84469a44cf164fbf9646462b1c66a00020c71d6400`,
+retail dedicated executable, `mp/duel1`, two `single_1` hilts, style 6.
+The local module rebuilt in 2026 was excluded from reference evidence.
+The selected profile detected JA+ enabled and jaPRO disabled.
+
+Four 20-second command/snapshot captures at integer 8/7/4/3 ms yielded
+399/399/400/400 acknowledged endpoints (1,598 total). They cover neutral,
+forward, diagonal held jumping, changing-direction chained swings and a dual
+forward jump attack. Replaying the captures reproduces the native probe's
+endpoint comparisons. All tested saber-move IDs matched the server. Separately,
+46,080 synthetic before/after endpoints across five saber styles and nine
+scenarios isolated differences to the new dual hull in those inputs; synthetic
+animation timings do not establish retail behavior.
+
+The native probe uses SJK BSP world collision, without inline-mover or actor
+collision, and does not exercise the full viewer/input/presentation pipeline.
+The old predictor already has an 8.875-unit initial spawn-height adjustment and
+five wall-stop endpoint disagreements in the 8 ms capture. These are not cleared
+by this review. No full base, jaPRO, custom-hilt, multiplayer-interaction or
+complete movement/animation parity claim follows from these checks.
+
+## Prediction as in 2026.1028.1 (`cg_predictLegacy`)
+
+Some players preferred how 2026.1028.1 predicted their own movement. Each
+change since then that a player on foot can feel has one bit of
+`cg_predictLegacy` (archived, default 0). A set bit brings back that release's
+behaviour for that change only. Settings > Game options > Prediction offers
+Current (0) and As in 2026.1028.1 (255), and the console takes any mix:
+
+| Bit | PR | Turned back off |
+| --- | --- | --- |
+| 1 | #267 | the equipped sabers' `.sab` move overrides and restrictions |
+| 2 | #253 | facing the opponent during a saber lock |
+| 4 | #260 | no jump after respawning until attack and use are released |
+| 8 | #254 | triggers touched with the last move's box (the box comes from the posture flags again) |
+| 16 | #262 | the gesture button starting its taunt |
+| 32 | #261 | movement held still while another client holds the player |
+| 64 | #250 | other players' and NPCs' animations and kinds for bounces and kicks |
+| 128 | #252 | the freeze after a command history overflow |
+
+The bits live in `MovementConfig::predict_legacy`
+([pmove.rs](../crates/sjk-game-jka/src/pmove.rs), `predict_legacy`). A server's
+own move (`authoritative`) never reads them. The viewer applies 2, 64 and 128
+in `LocalPrediction::set_predict_legacy`. Every set bit predicts some moves that
+the server then corrects, since the server runs the current behaviour. The
+vehicle, rocket and jaPRO changes have no bit, because they cannot change how
+a player moves on foot. The two changes that broke JA+ (#251, #266) were
+already rolled back in 2026.1030.2.
+
+The bits are there to find out which change players feel: someone on 255 can
+clear them one at a time. A change no one misses can then lose its bit.
 
 ## Prediction source comparison
 
@@ -653,13 +848,13 @@ Confirmed corrections are proposed separately; an open PR is not a merged featur
 | Area | Pull requests |
 | --- | --- |
 | Game type and surrounding actor context | #249, #250 |
-| Zero-gravity movement and incomplete command history | #251, #252 |
+| Zero-gravity movement and incomplete command history | #251 rolled back in #308; #252 retained |
 | Saber-lock facing and trigger hull | #253, #254 |
 | Respawn jumping and movement while held | #260, #261 |
 | Command gestures | #262 |
 | Rider weapon IDs and client weapon execution | #263, #264 |
 | Rocket trace contents and snapshot target identity/powerups | #265, #268 |
-| Dual jump-attack hull restoration | #266 |
+| Dual jump-attack hull restoration | #266 rolled back in #307 |
 | Equipped saber movement definitions | #267 |
 | Presented inline-brush point contents | #270 |
 
@@ -710,7 +905,7 @@ The links pin both revision and starting line.
 | --- | --- | --- | --- |
 | #249 `b39c1ba0` gametype | [CP:1388][prediction-e-gametype] passes `cgs.gametype` | [CP:1420][prediction-t-gametype] does the same | Shared context input; keep the server's actual gametype |
 | #250 `9b891e7f` surrounding actors | [CP:971][prediction-e-entities] supplies `baseEnt`; PM queries player/NPC state | [CP:953][prediction-t-entities] supplies the same entity context | Shared snapshot input; preserve the dialect's existing move rules |
-| #251 `79290e76` zero-gravity push | [PM:2479][prediction-e-zero] retains the backward trace and clear-trace impulse | [PM:3766][prediction-t-zero] retains that impulse too; earlier held-jump gates depend on movement style | Share the impulse; retain jaPRO style-specific jump gates, proposed separately in #282 |
+| #251 `79290e76` zero-gravity push | [PM:2479][prediction-e-zero] retains the backward trace and clear-trace impulse | [PM:3766][prediction-t-zero] retains that impulse too; earlier held-jump gates depend on movement style | Source agreement only; impulse rolled back in #308 after original JA+ spawn regression |
 | #252 `a807ccd0` missing command history | [CP:1140][prediction-e-history] returns before replay when history is incomplete | [CP:1127][prediction-t-history] has the same guard | Shared replay guard, independent of physics style |
 | #253 `e10a62cf` saber-lock facing | [CP:1396][prediction-e-lock] faces the snapshot opponent's presented origin | [CP:1428][prediction-t-lock] has the same facing step | Shared lock behavior; do not confuse it with dialect-specific DFA view rules |
 | #254 `9cc782db` trigger hull | [CP:815][prediction-e-trigger] traces `cg_pmove.mins/maxs` | [CP:797][prediction-t-trigger] does the same | Share the final movement hull; this does not add mod-specific trigger effects |
@@ -720,7 +915,7 @@ The links pin both revision and starting line.
 | #263 `961418e1` rider weapon ID | [PM:11698][prediction-e-rider] allows melee, saber and blaster | [PM:13648][prediction-t-rider] has the same whitelist | Shared protocol-26 weapon IDs; blaster is 5, not pistol 4 |
 | #264 `e7c4c087` rider weapon execution | [PM:13354][prediction-e-rider-weapon] runs exposed riders' legal weapons in cgame too | [PM:15654][prediction-t-rider-weapon] does the same | Shared execution gate; keep hidden riders excluded |
 | #265 `9aae3e8b` rocket trace mask | [PM:7528][prediction-e-rocket] uses `MASK_PLAYERSOLID` | [PM:9201][prediction-t-rocket] uses that mask too | Shared contents mask; no replacement of dialect collision filtering |
-| #266 `f0d6e1f0` dual-jump hull | [PM:5532][prediction-e-dual] retains both timed resize windows and `PM_CheckFixMins` | [PM:7162][prediction-t-dual] retains the same functions | Shared hull correction; animation timing still comes from the loaded model |
+| #266 `f0d6e1f0` dual-jump hull | [PM:5532][prediction-e-dual] retains both timed resize windows and `PM_CheckFixMins` | [PM:7162][prediction-t-dual] retains the same functions | Source agreement only; rolled back in #307 after original JA+ runtime disagreement |
 | #267 `f2532dde` saber definitions | [SA:4284][prediction-e-saber] obtains both equipped definitions via `BG_MySaber` | [SA:4593][prediction-t-saber] uses the same lookup in game and cgame | Shared definition input; do not substitute stock definitions for a mod's installed `.sab` files |
 | #268 `859e88b4` rocket target facts | [PM:7543][prediction-e-target] reads entity type and the literal `powerups & PW_CLOAKED` test | [PM:9216][prediction-t-target] retains the same tests | Shared snapshot facts, including the reference's literal cloak-ordinal quirk |
 | #270 `a7de034a` brush point contents | [CP:494][prediction-e-contents] uses the brush's presented origin/angles | [CP:478][prediction-t-contents] does the same | Shared transform correction; preserve which solids the dialect includes |
@@ -747,7 +942,7 @@ The surrounding dialect differences remain separate:
 - jaPRO command slicing/precision, movement coefficients and style-specific
   jumps are proposed separately in #277, #279 and #282. They are not supplied
   by these stock-path corrections; their integration must preserve the shared
-  respawn gate and zero-gravity impulse. Complete race physics is unverified.
+  respawn gate. The zero-gravity impulse was rolled back in #308. Complete race physics is unverified.
 - Mod DFA/kick/grapple rules, server-only saber tweaks and private definition
   changes are not made stock by #267. `BG_MySaber` being shared establishes the
   need for definition context, not parity for every move token or mod setting.
@@ -837,16 +1032,13 @@ cloning it per command. Other players' authoritative state is never changed.
 Reference: OpenJK multiplayer `cg_predict.c:1080-1096` and
 `bg_pmove.c:10880-10896` at `4d0dfaf1`. Tests cover NPC/vehicle/brush contacts at
 8/7/4/3 ms and snapshot replacement. Live NPC and wall contacts remain unverified.
-### Restore codemp zero-gravity push-off movement
+### Zero-gravity push-off limitation
 
-At gravity zero or below, an eligible jump check traces eight units backwards
-and adds 450 units/s along the player's full view direction, with the Force-jump
-leg animation, then clears upmove. This preserves OpenJK's `fraction <= 1`
-condition, including a clear trace and airborne commands without jump held.
-A held jump latch and the grounded no-jump gate still suppress the branch.
-Reference: `codemp/game/bg_pmove.c:2057-2085` at `4d0dfaf1`.
-Synthetic tests cover 8/7/4/3 ms, negative gravity, clear/blocked traces, pitch/yaw,
-animation and jump gates. Zero-gravity maps against a live server remain unverified.
+PR #251's shared zero-gravity impulse was rolled back in #308. Original JA+ 2.4 B7 spawn snapshots temporarily supplied zero gravity and base speed; prediction accumulated 450-unit/s impulses while the server stayed still. The previous jump branch is restored globally. Zero-gravity wall push-off remains unsupported. The source-derived impulse
+matched OpenJK `codemp/game/bg_pmove.c:2057-2085` at `4d0dfaf1`, but synthetic
+source agreement did not establish runtime compatibility. Initialized zero-gravity
+maps against a live server remain unverified.
+
 ### Use the Pmove hull for predicted trigger contact
 
 Brush-trigger prediction uses the exact collision box left by the final Pmove slice,

@@ -261,18 +261,25 @@ pub(crate) fn page_url(id: &GifId) -> String {
 
 /// What a message link to a GIF shows in place of the address.
 pub(crate) const LABEL: &str = "GIF";
+/// What it shows instead for a GIF the player hid ([`super::hidden`]).
+pub(crate) const HIDDEN_LABEL: &str = "GIF hidden";
 
 /// `text` as a chat line shows it with its GIF, and the GIF: the first GIPHY link made
-/// [`LABEL`] (the GIF shows under the line); `text` unchanged and no GIF without one.
+/// [`LABEL`] (the GIF shows under the line); [`HIDDEN_LABEL`] and no GIF for one the
+/// player hid; `text` unchanged and no GIF without one or from an untrusted source.
 pub(crate) fn with_label(text: &str) -> (String, Option<GifId>) {
+    let label = |range: std::ops::Range<usize>, label: &str| {
+        let mut shown = String::with_capacity(text.len());
+        shown.push_str(&text[..range.start]);
+        shown.push_str(label);
+        shown.push_str(&text[range.end..]);
+        shown
+    };
     match find(text) {
-        Some((id, range)) if super::sources::trusted(&id) => {
-            let mut shown = String::with_capacity(text.len());
-            shown.push_str(&text[..range.start]);
-            shown.push_str(LABEL);
-            shown.push_str(&text[range.end..]);
-            (shown, Some(id))
+        Some((id, range)) if super::sources::trusted(&id) && super::hidden::contains(&id) => {
+            (label(range, HIDDEN_LABEL), None)
         }
+        Some((id, range)) if super::shows(&id) => (label(range, LABEL), Some(id)),
         _ => (text.to_owned(), None),
     }
 }

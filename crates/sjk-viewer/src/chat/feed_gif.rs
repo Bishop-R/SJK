@@ -6,9 +6,9 @@
 //!
 //! Only SJK chat lines: a game server's chat lines never have a GIF. A muted sender's
 //! GIF is never asked for (the line shows "Messages hidden on this client" and only
-//! [`crate::chat_gifs::show`] fetches), and with `cl_sjkChatGifs 0` the lines show their
-//! links as text: each line keeps the text it shows the other way, so the switch takes
-//! effect on the lines already in the box.
+//! [`crate::chat_gifs::show`] fetches), with `cl_sjkChatGifs 0` the lines show their
+//! links as text, and a GIF the player hid reads "GIF hidden": each line keeps its text
+//! as typed, so a change takes effect on the lines already in the box.
 
 use super::*;
 use crate::chat_gifs::{self, GifId, Shown, draw as gif_draw};
@@ -16,81 +16,113 @@ use crate::chat_gifs::{self, GifId, Shown, draw as gif_draw};
 /// How the chat box shows a GIF.
 pub(super) const LOOK: gif_draw::Look = gif_draw::FEED;
 
-/// An SJK line's GIF and its text the other way (link as text while GIFs show, "GIF"
-/// while they do not).
+/// How an SJK line words its GIF link.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Look {
+    /// "GIF", the GIF under the line.
+    Gif,
+    /// [`chat_gifs::link::HIDDEN_LABEL`]: the player hid it ([`chat_gifs::hidden`]).
+    Hidden,
+    /// The link as typed: GIFs off, or a source the player does not trust.
+    Link,
+}
+
+/// An SJK line's GIF, its text as typed and how it is worded now.
 pub(super) struct LineGif {
     pub(super) id: GifId,
-    other: String,
-    labelled: bool,
-    other_emojis: Vec<u16>,
+    typed: String,
+    look: Look,
+}
+
+/// `typed` with its first GIF link worded as `look` asks.
+fn worded(typed: &str, look: Look) -> String {
+    let label = match look {
+        Look::Gif => chat_gifs::link::LABEL,
+        Look::Hidden => chat_gifs::link::HIDDEN_LABEL,
+        Look::Link => return typed.to_owned(),
+    };
+    match chat_gifs::link::find(typed) {
+        Some((_, range)) => {
+            let mut text = typed.to_owned();
+            text.replace_range(range, label);
+            text
+        }
+        None => typed.to_owned(),
+    }
 }
 
 impl ChatOverlay {
+    /// How GIF `id` is worded while GIFs show or not (`gifs_shown`).
+    fn look(gifs_shown: bool, id: &GifId) -> Look {
+        if !gifs_shown || !chat_gifs::sources::trusted(id) {
+            Look::Link
+        } else if chat_gifs::hidden::contains(id) {
+            Look::Hidden
+        } else {
+            Look::Gif
+        }
+    }
+
+    /// `text` with the emojis its marks stand for, while emojis show.
+    fn marked(emojis: &emoji::Emojis, on: bool, text: String) -> (String, Vec<u16>) {
+        if on {
+            emojis.markup(&text)
+        } else {
+            (text, Vec::new())
+        }
+    }
+
     /// An SJK message's `text` as its line shows it, the emojis its marks stand for and
-    /// its GIF: the first GIPHY link worded "GIF" while GIFs show, else as typed.
+    /// its GIF: the first GIF link worded "GIF" while GIFs show, "GIF hidden" for one the
+    /// player hid, else as typed.
     pub(super) fn with_gif(&self, text: String) -> (String, Vec<u16>, Option<Box<LineGif>>) {
-        let markup = |text: String| {
-            if self.options.emojis {
-                self.emojis.markup(&text)
-            } else {
-                (text, Vec::new())
-            }
-        };
-        let found = chat_gifs::link::find(&text);
-        let Some((id, range)) = found else {
-            let (body, emojis) = markup(text);
+        let Some((id, _)) = chat_gifs::link::find(&text) else {
+            let (body, emojis) = Self::marked(&self.emojis, self.options.emojis, text);
             return (body, emojis, None);
         };
-        let mut labelled = text.clone();
-        labelled.replace_range(range, chat_gifs::link::LABEL);
-        let shows = self.gifs_shown && chat_gifs::sources::trusted(&id);
-        let (shown, other) = if shows {
-            (labelled, text)
-        } else {
-            (text, labelled)
-        };
-        let (body, emojis) = markup(shown);
-        let (other, other_emojis) = markup(other);
+        let look = Self::look(self.gifs_shown, &id);
+        let (body, emojis) = Self::marked(&self.emojis, self.options.emojis, worded(&text, look));
         let gif = LineGif {
             id,
-            labelled: shows,
-            other,
-            other_emojis,
+            typed: text,
+            look,
         };
         (body, emojis, Some(Box::new(gif)))
     }
 
-    /// Follow `cl_sjkChatGifs` ([`options::Options::gifs`]): the lines with a GIF take
-    /// the text of the other way when it changed, and are wrapped again.
+    /// Follow `cl_sjkChatGifs` ([`options::Options::gifs`]), the trusted sources and the
+    /// hidden GIFs: the lines whose GIF is worded another way now are worded again and
+    /// wrapped again.
     pub(super) fn follow_gif_switch(&mut self) {
-        let revision = chat_gifs::sources::revision();
+        let revision = chat_gifs::shown_revision();
         if self.gifs_shown == self.options.gifs && self.gif_sources_revision == revision {
             return;
         }
         self.gifs_shown = self.options.gifs;
         self.gif_sources_revision = revision;
+        let (emojis, on) = (&self.emojis, self.options.emojis);
         for line in &mut self.lines {
             if let Some(gif) = &mut line.gif {
-                let labelled = self.gifs_shown && chat_gifs::sources::trusted(&gif.id);
-                if labelled == gif.labelled {
+                let look = Self::look(self.gifs_shown, &gif.id);
+                if look == gif.look {
                     continue;
                 }
-                gif.labelled = labelled;
-                std::mem::swap(&mut line.body, &mut gif.other);
-                std::mem::swap(&mut line.emojis, &mut gif.other_emojis);
+                gif.look = look;
+                (line.body, line.emojis) = Self::marked(emojis, on, worded(&gif.typed, look));
                 line.wrap = layout::Wrapped::default();
             }
         }
     }
 
-    /// What the feed shows under the line at `index` this frame: its GIF while GIFs show
-    /// and its sender is not muted, else nothing. Asks for the GIF the first time.
+    /// What the feed shows under the line at `index` this frame: its GIF while GIFs show,
+    /// it is not hidden and its sender is not muted, else nothing. Asks for the GIF the
+    /// first time.
     pub(super) fn gif_shown(&self, index: usize) -> Option<Shown> {
         let line = &self.lines[index];
         let gif = line
             .gif
             .as_ref()
-            .filter(|gif| self.gifs_shown && !line.muted && chat_gifs::sources::trusted(&gif.id))?;
+            .filter(|gif| !line.muted && Self::look(self.gifs_shown, &gif.id) == Look::Gif)?;
         Some(chat_gifs::show(&gif.id))
     }
 }
@@ -117,6 +149,7 @@ mod tests {
 
     fn message(id: u64, name: &str, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

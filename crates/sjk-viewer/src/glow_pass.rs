@@ -5,9 +5,10 @@
 //! blurs and adds it (`post_glow.rs`). World surfaces and models draw through the image's
 //! `world_format` view with glow variants of their stage pipelines, then the glowing
 //! billboards, effect geometry and sabers through its display-value view with their
-//! ordinary effect-layer pipelines. A frame without any glowing source records nothing
-//! and the resolve skips the blur and the composite.
-use crate::frame_target::aa::glow::Mode;
+//! ordinary effect-layer pipelines. Which of them draw follows `r_DynamicGlow` and
+//! `r_dynamicGlowNoSabers` ([`crate::frame_target::aa::glow::Live::sources`]). A frame
+//! without any glowing source records nothing and the resolve skips the blur and the
+//! composite.
 use crate::*;
 
 impl GpuState {
@@ -28,7 +29,7 @@ impl GpuState {
             glow.set_drawn(&self.queue, false, false);
             return;
         }
-        let blades_only = live.mode == Mode::Sabers;
+        let sources = live.sources();
         let frame = world_materials::FrameDraw {
             camera: &self.camera_bind_group,
             vertices: &self.geometry.vertex_buffer,
@@ -43,10 +44,10 @@ impl GpuState {
             self.entity_draw_queue.opaque(),
             self.entity_draw_queue.blended(),
         ];
-        let world = !blades_only && self.world_materials.glow_visible(&frame, entities);
-        let particles = !blades_only && particle_ranges.glow().any(|range| !range.is_empty());
-        let geometry = !blades_only && self.effect_geometry.has_glow();
-        let sabers = self.saber_gpu.has_glow(blades_only);
+        let world = sources.scene && self.world_materials.glow_visible(&frame, entities);
+        let particles = sources.scene && particle_ranges.glow().any(|range| !range.is_empty());
+        let geometry = sources.scene && self.effect_geometry.has_glow();
+        let sabers = sources.blades && self.saber_gpu.has_glow(sources.trails);
         let effects = particles || geometry || sabers;
         glow.set_drawn(&self.queue, world || effects, true);
         if world {
@@ -74,7 +75,7 @@ impl GpuState {
                 .draw_glow(&mut pass, camera, &self.particle_atlas.bind_group);
         }
         if sabers {
-            self.saber_gpu.draw_glow(&mut pass, camera, blades_only);
+            self.saber_gpu.draw_glow(&mut pass, camera, sources.trails);
         }
     }
 

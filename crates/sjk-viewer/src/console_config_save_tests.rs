@@ -3,16 +3,25 @@
 
 use super::ViewerConsole;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
-/// A console whose profile is settled on disk, with the file then removed so any
-/// later write shows as the file coming back.
+/// A console whose profile is settled on disk. (A file deleted while the console
+/// runs is not written again, so writes show in the file's time, [`written`].)
 fn settled(path: &Path) -> ViewerConsole {
     let mut console = ViewerConsole::new(path.to_owned()).unwrap();
     console.flush_config();
     assert!(!console.shell.config_dirty());
-    std::fs::remove_file(path).unwrap();
     console
+}
+
+/// When the file was last written.
+fn stamp(path: &Path) -> SystemTime {
+    std::fs::metadata(path).unwrap().modified().unwrap()
+}
+
+/// Whether the file was written since `since`.
+fn written(path: &Path, since: SystemTime) -> bool {
+    stamp(path) != since
 }
 
 fn frame(console: &mut ViewerConsole) {
@@ -27,7 +36,7 @@ fn bound_key_presses_do_not_write_the_config() {
     let mut console = settled(&path);
     console.execute_console_line("bind k \"+forward; +attack\"", None);
     console.flush_config();
-    std::fs::remove_file(&path).unwrap();
+    let since = stamp(&path);
     for _ in 0..20 {
         console.queue_bound_script("K", true);
         frame(&mut console);
@@ -40,7 +49,7 @@ fn bound_key_presses_do_not_write_the_config() {
         frame(&mut console);
     }
     assert!(!console.shell.config_dirty());
-    assert!(!path.exists());
+    assert!(!written(&path, since));
 }
 
 #[test]
@@ -48,6 +57,7 @@ fn an_unarchived_change_does_not_write_the_config() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("config.cfg");
     let mut console = settled(&path);
+    let since = stamp(&path);
     console.execute_console_line("developer 1", None);
     console.execute_console_line("set sjk_scratch 3", None);
     let start = Instant::now();
@@ -57,7 +67,7 @@ fn an_unarchived_change_does_not_write_the_config() {
         .autosave(start + Duration::from_secs(5))
         .unwrap();
     console.flush_config();
-    assert!(!path.exists());
+    assert!(!written(&path, since));
 }
 
 #[test]
@@ -65,6 +75,7 @@ fn an_archived_change_is_written_once_after_the_delay() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("config.cfg");
     let mut console = settled(&path);
+    let since = stamp(&path);
     console.execute_console_line("cg_fov 100", None);
     assert!(console.shell.config_dirty());
     let start = Instant::now();
@@ -73,7 +84,7 @@ fn an_archived_change_is_written_once_after_the_delay() {
         .shell
         .autosave(start + sjk_shell::CONFIG_SAVE_DELAY / 2)
         .unwrap();
-    assert!(!path.exists());
+    assert!(!written(&path, since));
     console
         .shell
         .autosave(start + sjk_shell::CONFIG_SAVE_DELAY)
@@ -84,13 +95,13 @@ fn an_archived_change_is_written_once_after_the_delay() {
     let saved = std::fs::read_to_string(&path).unwrap();
     assert!(saved.contains("seta cg_fov \"100.0\""), "{saved}");
     // Saved once: later frames leave the file alone.
-    std::fs::remove_file(&path).unwrap();
+    let since = stamp(&path);
     console
         .shell
         .autosave(start + sjk_shell::CONFIG_SAVE_DELAY * 3)
         .unwrap();
     console.shell.save_if_dirty().unwrap();
-    assert!(!path.exists());
+    assert!(!written(&path, since));
 }
 
 #[test]

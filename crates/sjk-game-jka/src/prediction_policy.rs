@@ -191,10 +191,18 @@ pub fn interpolation(
     (japlus_special_kick(player) && japlus()).then_some(Interpolation::ServerAngles)
 }
 
-/// `CG_FakeNoclip_f`'s and `CG_PredictPlayerState`'s gate: only a live player on foot.
+/// `CG_FakeNoclip_f`'s and `CG_PredictPlayerState`'s gate: only a live player on foot,
+/// and not in a duel.
+///
+/// The flight sends the server a still player with the talk balloon up, and a server
+/// that spares chatting players their damage (JoF's JA+ servers) then spared a duellist
+/// all of the opponent's (Nib's hub report #209, 30/10/2026). jaPRO leaves duels out of
+/// its own chat protection (`g_godChat`, `!ps.duelInProgress`); SJK keeps the flight out
+/// of them instead, so a duel starting ends it.
 pub fn fake_noclip_allowed(player: &PlayerState, following: bool) -> bool {
     const PM_DEAD: u8 = 5;
     !(following
+        || player.duel_in_progress()
         || player.is_spectator()
         || player.movement_type() == PM_DEAD
         || player.movement_type() == crate::PM_INTERMISSION
@@ -303,10 +311,12 @@ mod tests {
     }
 
     #[test]
-    fn fake_noclip_needs_a_live_player_on_foot() {
+    fn fake_noclip_needs_a_live_player_on_foot_out_of_a_duel() {
         assert!(fake_noclip_allowed(&PlayerState::default(), false));
         assert!(!fake_noclip_allowed(&PlayerState::default(), true));
         assert!(!fake_noclip_allowed(&player_with(&[(84, 7)]), false));
+        // `duelInProgress`: hub report #209.
+        assert!(!fake_noclip_allowed(&player_with(&[(119, 1)]), false));
     }
 
     #[test]

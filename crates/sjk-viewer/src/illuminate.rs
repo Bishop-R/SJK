@@ -371,6 +371,12 @@ impl GpuState {
     /// `toy_illuminate`: light the holocron, or put it out.
     pub(crate) fn toggle_illuminate(&mut self) {
         self.illuminate.toggle();
+        self.chat.receive(
+            sjk_client::ServerEventKind::CenterPrint,
+            crate::toy_switch_words::switched("Illuminate", self.illuminate.lit()),
+            None,
+            Instant::now(),
+        );
     }
 
     /// Add this frame's holocrons and their lights: the local player's, then the

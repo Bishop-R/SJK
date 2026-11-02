@@ -1,4 +1,4 @@
-//! Pure crosshair-name policy from `codemp/cgame/cg_draw.c:6080-6360`.
+//! Crosshair-name policy, based on `codemp/cgame/cg_draw.c:6080-6360`.
 
 /// Trace/presentation facts needed to decide whether a name is visible.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -15,8 +15,6 @@ pub struct CrosshairCandidate {
     pub now: i32,
     /// Server time at which this target was last acquired.
     pub acquired_at: i32,
-    /// Whether the local player is a spectator.
-    pub spectator: bool,
     /// Whether the presentation is in intermission.
     pub intermission: bool,
     /// Whether the scoreboard obscures HUD identification.
@@ -49,7 +47,6 @@ pub struct CrosshairName {
 pub fn crosshair_name(candidate: CrosshairCandidate) -> Option<CrosshairName> {
     if candidate.client_num >= 32
         || candidate.client_num == candidate.local_client
-        || candidate.spectator
         || candidate.intermission
         || candidate.scoreboard
         || candidate.in_fog
@@ -82,3 +79,30 @@ pub fn crosshair_name(candidate: CrosshairCandidate) -> Option<CrosshairName> {
 const NAME_FADE_MS: i32 = 1_000;
 /// `FADE_TIME` from `cg_local.h:40`.
 const FADE_TIME_MS: i32 = 200;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_spectator_team_view_can_identify_the_player_under_the_crosshair() {
+        let target = crosshair_name(CrosshairCandidate {
+            client_num: 7,
+            local_client: 2,
+            local_team: 3,
+            target_team: 0,
+            now: 12_000,
+            acquired_at: 12_000,
+            ..CrosshairCandidate::default()
+        });
+
+        assert_eq!(
+            target,
+            Some(CrosshairName {
+                client_num: 7,
+                teammate: false,
+                alpha: 1.0,
+            })
+        );
+    }
+}

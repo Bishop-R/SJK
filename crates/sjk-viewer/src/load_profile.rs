@@ -22,7 +22,7 @@ impl<'a> LoadProfile<'a> {
     pub(crate) fn mark(&mut self, phase: &str) -> Result<(), String> {
         if self
             .cancelled
-            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire))
         {
             return Err("world install cancelled".into());
         }

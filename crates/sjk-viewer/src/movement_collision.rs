@@ -1,6 +1,6 @@
 //! BSP-backed collision adapter used by client movement prediction.
 
-use crate::local_prediction::movers::Collider;
+use crate::local_prediction::movers::{ClipActor, Collider};
 use glam::Vec3;
 use sjk_bsp::{Aabb, Bsp};
 use sjk_client::pmove::{ENTITY_NUMBER_WORLD, MovementCollision, MovementTrace};
@@ -42,6 +42,7 @@ pub(super) struct BspMovementCollision<'a> {
     bsp: &'a Bsp,
     scratch: RefCell<&'a mut sjk_bsp::TraceScratch>,
     movers: &'a [Collider],
+    actor: Option<ClipActor>,
 }
 
 impl<'a> BspMovementCollision<'a> {
@@ -54,7 +55,62 @@ impl<'a> BspMovementCollision<'a> {
             bsp,
             scratch: RefCell::new(scratch),
             movers,
+            actor: None,
         }
+    }
+
+    pub(super) fn for_actor(
+        bsp: &'a Bsp,
+        scratch: &'a mut sjk_bsp::TraceScratch,
+        movers: &'a [Collider],
+        actor: ClipActor,
+    ) -> Self {
+        Self {
+            actor: Some(actor),
+            ..Self::with_movers(bsp, scratch, movers)
+        }
+    }
+
+    pub(super) fn chassis(&self, actor: Option<ClipActor>) -> ChassisCollision<'_, 'a> {
+        ChassisCollision { world: self, actor }
+    }
+
+    fn trace_for_actor(
+        &self,
+        actor: Option<ClipActor>,
+        start: [f32; 3],
+        minimums: [f32; 3],
+        maximums: [f32; 3],
+        end: [f32; 3],
+        content_mask: u32,
+    ) -> MovementTrace {
+        trace_for_actor(self, actor, start, minimums, maximums, end, content_mask)
+    }
+}
+
+/// Borrow the same scratch/world for chassis movement, without changing the pilot view.
+pub(super) struct ChassisCollision<'w, 'b> {
+    world: &'w BspMovementCollision<'b>,
+    actor: Option<ClipActor>,
+}
+
+impl MovementCollision for ChassisCollision<'_, '_> {
+    fn rocket_lock_target(&self, entity: u16) -> Option<sjk_game_jka::pmove::RocketLockTarget> {
+        self.world.rocket_lock_target(entity)
+    }
+    fn point_contents(&self, point: [f32; 3]) -> u32 {
+        self.world.point_contents(point)
+    }
+    fn trace(
+        &self,
+        start: [f32; 3],
+        minimums: [f32; 3],
+        maximums: [f32; 3],
+        end: [f32; 3],
+        content_mask: u32,
+    ) -> MovementTrace {
+        self.world
+            .trace_for_actor(self.actor, start, minimums, maximums, end, content_mask)
     }
 }
 
@@ -81,45 +137,59 @@ impl MovementCollision for BspMovementCollision<'_> {
         end: [f32; 3],
         content_mask: u32,
     ) -> MovementTrace {
-        let bounds = Aabb::new(minimums, maximums).expect("pmove produces valid bounds");
-        let trace = self.bsp.trace_box_with(
-            &mut self.scratch.borrow_mut(),
-            start,
-            end,
-            bounds,
-            content_mask,
-        );
-        let mut result = MovementTrace {
-            fraction: trace.fraction,
-            end_position: trace.end_position,
-            plane_normal: trace.plane.map_or([0.0; 3], |plane| plane.normal),
-            surface_flags: trace.surface_flags,
-            start_solid: trace.start_solid,
-            all_solid: trace.all_solid,
-            // CG_Trace, codemp/cgame/cg_predict.c:377-383: an escaping
-            // startsolid trace with fraction 1 does not identify a world hit.
-            entity_number: if trace.fraction < 1.0 {
-                ENTITY_NUMBER_WORLD
-            } else {
-                sjk_protocol::ENTITY_NUMBER_NONE
-            },
-        };
-        for mover in self.movers.iter().filter(|mover| !mover.unlaunched) {
-            let trace = inline::trace(self.bsp, mover, start, end, bounds, content_mask);
-            // CG_ClipMoveToEntities also identifies an overlapping entity
-            // when another surface supplied the nearer trace fraction.
-            if trace.all_solid || trace.fraction < result.fraction {
-                result = trace;
-            } else if trace.start_solid {
-                result.start_solid = true;
-                result.entity_number = mover.entity;
-            }
-            if result.all_solid {
-                break;
-            }
-        }
-        result
+        self.trace_for_actor(self.actor, start, minimums, maximums, end, content_mask)
     }
+}
+
+fn trace_for_actor(
+    world: &BspMovementCollision<'_>,
+    actor: Option<ClipActor>,
+    start: [f32; 3],
+    minimums: [f32; 3],
+    maximums: [f32; 3],
+    end: [f32; 3],
+    content_mask: u32,
+) -> MovementTrace {
+    let bounds = Aabb::new(minimums, maximums).expect("pmove produces valid bounds");
+    let trace = world.bsp.trace_box_with(
+        &mut world.scratch.borrow_mut(),
+        start,
+        end,
+        bounds,
+        content_mask,
+    );
+    let mut result = MovementTrace {
+        fraction: trace.fraction,
+        end_position: trace.end_position,
+        plane_normal: trace.plane.map_or([0.0; 3], |plane| plane.normal),
+        surface_flags: trace.surface_flags,
+        start_solid: trace.start_solid,
+        all_solid: trace.all_solid,
+        // CG_Trace, codemp/cgame/cg_predict.c:377-383: an escaping
+        // startsolid trace with fraction 1 does not identify a world hit.
+        entity_number: if trace.fraction < 1.0 {
+            ENTITY_NUMBER_WORLD
+        } else {
+            sjk_protocol::ENTITY_NUMBER_NONE
+        },
+    };
+    for mover in world.movers.iter().filter(|mover| {
+        !mover.unlaunched && actor.is_none_or(|actor| actor.collides(mover.clip_actor))
+    }) {
+        let trace = inline::trace(world.bsp, mover, start, end, bounds, content_mask);
+        // CG_ClipMoveToEntities also identifies an overlapping entity
+        // when another surface supplied the nearer trace fraction.
+        if trace.all_solid || trace.fraction < result.fraction {
+            result = trace;
+        } else if trace.start_solid {
+            result.start_solid = true;
+            result.entity_number = mover.entity;
+        }
+        if result.all_solid {
+            break;
+        }
+    }
+    result
 }
 
 /// CG_Trace camera hull, including presented inline doors/platforms and the
@@ -407,6 +477,174 @@ mod bsp_instance_tests {
             vehicle_player: None,
             entities,
             consumed_bits: 0,
+        }
+    }
+
+    fn rider(number: u16, vehicle: u16, x: f32) -> EntityState {
+        let mut state = EntityState::zero(number, &LEGACY_ENTITY_FIELDS);
+        state.set_raw_field(8, 1);
+        state.set_raw_field(93, u32::from(vehicle));
+        state.set_raw_field(26, 10 | (10 << 8) | (42 << 16));
+        state.set_raw_field(2, x.to_bits());
+        state
+    }
+
+    #[test]
+    fn vehicle_clip_keeps_pilot_and_chassis_contacts_separate() {
+        let bsp = map(&[]);
+        for step in [8, 7, 4, 3] {
+            for attached in [true, false] {
+                let mut cloaked_rider = rider(2, 101, 100.0);
+                cloaked_rider.set_raw_field(77, 2);
+                let passengers = snapshot(vec![
+                    rider(1, if attached { 100 } else { 0 }, 0.0),
+                    cloaked_rider,
+                ]);
+                let mut movers = Movers::new();
+                movers.update(&passengers, 1_000 + step);
+                let mut scratch = bsp.trace_scratch();
+                let pilot = ClipActor::player(0, 100);
+                let mut vehicle = rider(100, 1, 0.0);
+                vehicle.set_raw_field(8, 13);
+                vehicle.set_raw_field(88, 53);
+                let world =
+                    BspMovementCollision::for_actor(&bsp, &mut scratch, &movers.colliders, pilot);
+                let first = world.trace([0.0; 3], [0.0; 3], [0.0; 3], [20.0, 0.0, 0.0], 0x100);
+                assert!(
+                    first.start_solid,
+                    "pilot still collides with the other rider"
+                );
+                let chassis = world.chassis(Some(ClipActor::from_entity(&vehicle)));
+                assert_eq!(chassis.rocket_lock_target(2).unwrap().powerups, 2);
+                let chassis_hit =
+                    chassis.trace([0.0; 3], [0.0; 3], [0.0; 3], [20.0, 0.0, 0.0], 0x100);
+                assert_eq!(chassis_hit.start_solid, !attached);
+                if attached {
+                    assert_eq!(
+                        chassis
+                            .trace([0.0; 3], [0.0; 3], [0.0; 3], [200.0, 0.0, 0.0], 0x100)
+                            .entity_number,
+                        2,
+                        "unrelated vehicle rider still blocks"
+                    );
+                }
+                assert!(
+                    world
+                        .trace([0.0; 3], [0.0; 3], [0.0; 3], [20.0, 0.0, 0.0], 0x100)
+                        .start_solid,
+                    "chassis view must not change pilot context"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn vehicle_clip_metadata_covers_a_local_passenger_without_a_predicted_chassis() {
+        let bsp = map(&[]);
+        let mut vehicle = rider(100, 2, 0.0);
+        vehicle.set_raw_field(8, 13);
+        vehicle.set_raw_field(88, 53);
+        let mut snap = snapshot(vec![vehicle]);
+        snap.player.set_raw_field(84, 100);
+        let mut movers = Movers::new();
+        movers.update(&snap, 1_000);
+        assert!(movers.vehicle_actor.is_none());
+        let mut scratch = bsp.trace_scratch();
+        let world = BspMovementCollision::for_actor(
+            &bsp,
+            &mut scratch,
+            &movers.colliders,
+            movers.local_actor,
+        );
+        let hit = world.trace([0.0; 3], [0.0; 3], [0.0; 3], [20.0, 0.0, 0.0], 0x100);
+        assert!(!hit.start_solid && hit.fraction == 1.0);
+    }
+
+    fn crowded_vehicle_scene() -> (Bsp, Movers, ClipActor) {
+        let entities = (32..160)
+            .map(|number| {
+                let mut entity = rider(
+                    number,
+                    if number % 2 == 0 { 900 } else { 901 },
+                    f32::from(number - 32) * 30.0,
+                );
+                entity.set_raw_field(8, 13);
+                entity.set_raw_field(88, 50);
+                entity
+            })
+            .collect();
+        let mut movers = Movers::new();
+        movers.update(&snapshot(entities), 1_000);
+        let mut vehicle = rider(900, 1, 0.0);
+        vehicle.set_raw_field(8, 13);
+        vehicle.set_raw_field(88, 53);
+        (map(&[]), movers, ClipActor::from_entity(&vehicle))
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn vehicle_clip_views_allocate_nothing_after_warmup() {
+        let (bsp, movers, vehicle) = crowded_vehicle_scene();
+        let mut scratch = bsp.trace_scratch();
+        let world = BspMovementCollision::for_actor(
+            &bsp,
+            &mut scratch,
+            &movers.colliders,
+            ClipActor::player(0, 900),
+        );
+        let chassis = world.chassis(Some(vehicle));
+        let trace = || {
+            chassis.trace(
+                [0.0, 0.0, 100.0],
+                [0.0; 3],
+                [0.0; 3],
+                [4096.0, 0.0, 100.0],
+                0x100,
+            )
+        };
+        let _ = trace();
+        let before = assert_no_alloc::violation_count();
+        assert_no_alloc::assert_no_alloc(|| {
+            for _ in 0..100 {
+                std::hint::black_box(trace());
+            }
+        });
+        assert_eq!(assert_no_alloc::violation_count(), before);
+    }
+
+    #[test]
+    #[ignore = "release-only actor collision filter measurement"]
+    fn measure_vehicle_clip_views() {
+        assert!(!cfg!(debug_assertions), "run with --release");
+        let (bsp, movers, vehicle) = crowded_vehicle_scene();
+        let mut scratch = bsp.trace_scratch();
+        let world = BspMovementCollision::for_actor(
+            &bsp,
+            &mut scratch,
+            &movers.colliders,
+            ClipActor::player(0, 900),
+        );
+        let chassis = world.chassis(Some(vehicle));
+        let unfiltered = world.chassis(None);
+        for (name, collision) in [
+            ("unfiltered", &unfiltered as &dyn MovementCollision),
+            ("pilot", &world as &dyn MovementCollision),
+            ("chassis", &chassis as &dyn MovementCollision),
+        ] {
+            let start = std::time::Instant::now();
+            for _ in 0..10_000 {
+                std::hint::black_box(std::hint::black_box(collision).trace(
+                    [0.0, 0.0, 100.0],
+                    [0.0; 3],
+                    [0.0; 3],
+                    [4096.0, 0.0, 100.0],
+                    0x100,
+                ));
+            }
+            println!(
+                "128 actors, {name}: {:.2} ns per clear sweep",
+                start.elapsed().as_nanos() as f64 / 10_000.0
+            );
         }
     }
 

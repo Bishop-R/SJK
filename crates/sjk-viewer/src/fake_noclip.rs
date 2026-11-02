@@ -4,7 +4,7 @@
 //! The predictor runs a noclip move on the real input and is never pulled back to the
 //! snapshot; [`LocalPrediction::command_for_server`] sends the server a still player with
 //! the talk balloon up. Ending it, or the state it needs ending (death, spectating, a
-//! vehicle), snaps back to the server's position. While it lasts every map area is drawn:
+//! vehicle, a duel), snaps back to the server's position. While it lasts every map area is drawn:
 //! the snapshot's area mask is keyed to where the server thinks the player stands.
 
 use super::*;
@@ -56,7 +56,7 @@ impl GpuState {
         self.detached_camera = free_camera && allowed;
     }
 
-    /// `/fakenoclip`: toggle, only while alive and on foot.
+    /// `/fakenoclip`: toggle, only while alive, on foot and out of a duel.
     pub(crate) fn fake_noclip_command(&mut self) -> Result<Vec<String>, String> {
         let player = self
             .live_session
@@ -76,7 +76,9 @@ impl GpuState {
             &player,
             !local_prediction::predicts_local_view(player.movement_flags()),
         ) {
-            return Err("fakenoclip: only available while alive and on foot.".into());
+            return Err(
+                "fakenoclip: only available while alive, on foot and not in a duel.".into(),
+            );
         }
         console.set_cvar("cg_fakeNoclip", "1");
         self.sync_fake_noclip(&player);

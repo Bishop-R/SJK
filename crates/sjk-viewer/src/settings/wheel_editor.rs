@@ -23,7 +23,7 @@
 use super::*;
 use crate::menu_widgets::MenuCanvas;
 use crate::quick_wheel::catalog::{ACTIONS, Group as ActionGroup};
-use crate::quick_wheel::pages::{self, MAX_CHOICES, MAX_PAGES, Page, Slot};
+use crate::quick_wheel::pages::{self, MAX_CHOICES, MAX_PAGES, Page, SavedCommand, Slot};
 use sjk_ui::{InputEvent, UiEventKind};
 
 /// Where the editor is shown.
@@ -70,7 +70,7 @@ pub(super) enum Field {
 }
 
 /// A line of the catalogue: a group's sub-heading, an action, an installed emote,
-/// or the custom command at the end.
+/// a custom command named before, or a new custom command at the end.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum PickLine {
     Heading(&'static str),
@@ -78,8 +78,14 @@ pub(super) enum PickLine {
     /// An emote of the installed catalogue (`emotes.rs`), by its index there; it
     /// goes on the page as a custom choice running `sjkemote <id>`.
     Emote(usize),
+    /// A custom command the player named before, by its index among the
+    /// remembered ones ([`crate::quick_wheel::pages::WheelPages::saved`]).
+    Saved(usize),
     Custom,
 }
+
+/// The heading over the remembered custom commands and the new one.
+const YOUR_OWN: &str = "Your own";
 
 /// Installed emote `index`'s name and the command that plays it.
 pub(super) fn emote_choice(index: usize) -> Option<(String, String)> {
@@ -131,6 +137,8 @@ pub(super) const PICK_BASE: u16 = 3200;
 pub(super) const PICK_SCROLL: u16 = 3290;
 pub(super) const PICK_CLOSE: u16 = 3291;
 pub(super) const PICK_SEARCH: u16 = 3292;
+/// The highlighted remembered command's cross, which forgets it.
+pub(super) const PICK_FORGET: u16 = 3293;
 pub(super) const FORM_LABEL: u16 = 3300;
 pub(super) const FORM_COMMAND: u16 = 3301;
 pub(super) const FORM_SAVE: u16 = 3302;
@@ -157,6 +165,9 @@ pub(crate) struct WheelEditor {
     /// The pages as last saved, and the keys bound to open each.
     pub(super) pages: Vec<Page>,
     pub(super) keys: Vec<String>,
+    /// The custom commands named before, newest first, which the catalogue
+    /// offers under Your own.
+    pub(super) saved: Vec<SavedCommand>,
     /// Whether the pages are the defaults.
     pub(super) default: bool,
     /// Whether the wheel plays its sounds ([`crate::quick_wheel::SOUNDS_CVAR`]).
@@ -178,6 +189,7 @@ impl Default for WheelEditor {
             confirm: None,
             pages: Vec::new(),
             keys: Vec::new(),
+            saved: Vec::new(),
             default: true,
             sounds: true,
             ui: MenuCanvas::with_capacities(224, 64, 1024),
@@ -186,10 +198,12 @@ impl Default for WheelEditor {
 }
 
 /// The catalogue's lines: each group under its sub-heading (the installed emotes
-/// after the stock ones), then the custom command under its own.
-pub(super) fn pick_lines() -> Vec<PickLine> {
+/// after the stock ones), then under Your own the `saved` custom commands and a
+/// new one.
+pub(super) fn pick_lines(saved: &[SavedCommand]) -> Vec<PickLine> {
     let emotes = crate::emotes::lock().catalogue.as_ref().map_or(0, Vec::len);
-    let mut lines = Vec::with_capacity(ACTIONS.len() + ActionGroup::ALL.len() + emotes + 2);
+    let mut lines =
+        Vec::with_capacity(ACTIONS.len() + ActionGroup::ALL.len() + emotes + saved.len() + 2);
     for group in ActionGroup::ALL {
         lines.push(PickLine::Heading(group.label()));
         lines.extend(
@@ -203,16 +217,18 @@ pub(super) fn pick_lines() -> Vec<PickLine> {
             lines.extend((0..emotes).map(PickLine::Emote));
         }
     }
-    lines.push(PickLine::Heading("Your own"));
+    lines.push(PickLine::Heading(YOUR_OWN));
+    lines.extend((0..saved.len()).map(PickLine::Saved));
     lines.push(PickLine::Custom);
     lines
 }
 
-/// The catalogue's lines that `search` finds: the actions and emotes whose name
-/// or group holds its words (any case), each group's sub-heading kept over what
-/// it finds, and the custom command always last. Every line for no words.
-pub(super) fn pick_lines_matching(search: &str) -> Vec<PickLine> {
-    let lines = pick_lines();
+/// The catalogue's lines that `search` finds: the actions, emotes and `saved`
+/// commands whose name or group (or a saved one's command) holds its words (any
+/// case), each group's sub-heading kept over what it finds, and the new custom
+/// command always last. Every line for no words.
+pub(super) fn pick_lines_matching(search: &str, saved: &[SavedCommand]) -> Vec<PickLine> {
+    let lines = pick_lines(saved);
     let search = search.trim().to_lowercase();
     if search.is_empty() {
         return lines;
@@ -230,9 +246,15 @@ pub(super) fn pick_lines_matching(search: &str) -> Vec<PickLine> {
                 continue;
             }
             PickLine::Custom => {
-                found.extend([PickLine::Heading("Your own"), PickLine::Custom]);
+                if !headed {
+                    found.push(PickLine::Heading(YOUR_OWN));
+                }
+                found.push(PickLine::Custom);
                 continue;
             }
+            PickLine::Saved(index) => saved.get(index).map_or_else(String::new, |saved| {
+                format!("{} {}", saved.label, saved.command)
+            }),
             PickLine::Action(index) => ACTIONS[index].label.to_owned(),
             PickLine::Emote(index) => {
                 emote_choice(index).map_or_else(String::new, |(name, _)| name)
@@ -279,6 +301,7 @@ impl WheelEditor {
     /// on what is there.
     pub(super) fn sync(&mut self, console: &ViewerConsole) {
         self.pages = console.wheel_pages.pages().to_vec();
+        self.saved = console.wheel_pages.saved().to_vec();
         self.default = console.wheel_pages.is_default();
         self.sounds = console
             .bool_cvar(crate::quick_wheel::SOUNDS_CVAR)
@@ -396,11 +419,18 @@ impl WheelEditor {
                     let emotes = crate::emotes::lock().catalogue.as_ref().map_or(0, Vec::len);
                     (0..emotes)
                         .find(|&index| emote_choice(index).is_some_and(|(_, run)| run == *command))
-                        .map_or(PickLine::Custom, PickLine::Emote)
+                        .map(PickLine::Emote)
+                        .or_else(|| {
+                            self.saved
+                                .iter()
+                                .position(|saved| saved.command == *command)
+                                .map(PickLine::Saved)
+                        })
+                        .unwrap_or(PickLine::Custom)
                 }
             });
         self.search.clear();
-        let lines = pick_lines();
+        let lines = pick_lines(&self.saved);
         let highlighted = current
             .and_then(|line| lines.iter().position(|candidate| *candidate == line))
             .unwrap_or(1);
@@ -454,7 +484,28 @@ impl WheelEditor {
 
     /// The catalogue's lines the search finds.
     pub(super) fn pick_shown(&self) -> Vec<PickLine> {
-        pick_lines_matching(&self.search)
+        pick_lines_matching(&self.search, &self.saved)
+    }
+
+    /// Forget the remembered command the catalogue highlights, if it is one; the
+    /// highlight stays where it was, on the line that took its place.
+    fn forget_highlighted(&mut self, console: &mut ViewerConsole) {
+        let Some(picker) = self.picker else {
+            return;
+        };
+        let Some(PickLine::Saved(index)) = self.pick_shown().get(picker.highlighted).copied()
+        else {
+            return;
+        };
+        console.wheel_pages.forget(index);
+        self.sync(console);
+        let lines = self.pick_shown();
+        if let Some(picker) = &mut self.picker {
+            // The line after it (the next remembered one, or the new command,
+            // which is always shown) takes its place.
+            picker.highlighted = picker.highlighted.min(lines.len().saturating_sub(1));
+            reveal_pick(picker, &lines);
+        }
     }
 
     /// The search changed: the highlight goes to the first line it finds, at
@@ -470,12 +521,29 @@ impl WheelEditor {
         }
     }
 
-    /// Put catalogue line `line` on the page: an action, or the custom form.
+    /// Put catalogue line `line` on the page: an action, an emote, a remembered
+    /// command, or the custom form.
     fn pick(&mut self, line: usize, console: &mut ViewerConsole) {
         let Some(picker) = self.picker else {
             return;
         };
         match self.pick_shown().get(line) {
+            Some(PickLine::Saved(index)) => {
+                let Some(SavedCommand { label, command }) = self.saved.get(*index).cloned() else {
+                    return;
+                };
+                let set = console.wheel_pages.set_choice(
+                    self.page,
+                    picker.at,
+                    Slot::Custom { label, command },
+                );
+                self.picker = None;
+                self.sync(console);
+                if let Some(row) = set {
+                    self.column = Column::Choices;
+                    self.rows[1] = row;
+                }
+            }
             Some(PickLine::Action(index)) => {
                 let set =
                     console
@@ -701,6 +769,8 @@ impl WheelEditor {
                     });
                     return;
                 }
+                // Remembered, so the catalogue offers it again for any page.
+                console.wheel_pages.remember(&label, &command);
                 let set =
                     console
                         .wheel_pages
@@ -727,6 +797,7 @@ impl WheelEditor {
                 self.search.pop();
                 self.searched();
             }
+            KeyCode::Delete => self.forget_highlighted(console),
             KeyCode::ArrowUp => self.pick_step(-1),
             KeyCode::ArrowDown => self.pick_step(1),
             KeyCode::PageUp => self.pick_step(-(PICK_LINES as i32 - 2)),
@@ -937,7 +1008,12 @@ impl WheelEditor {
                 let line = picker.first + usize::from(slot);
                 if matches!(
                     lines.get(line),
-                    Some(PickLine::Action(_) | PickLine::Emote(_) | PickLine::Custom)
+                    Some(
+                        PickLine::Action(_)
+                            | PickLine::Emote(_)
+                            | PickLine::Saved(_)
+                            | PickLine::Custom
+                    )
                 ) {
                     picker.highlighted = line;
                 }
@@ -1009,6 +1085,7 @@ impl WheelEditor {
                     let line = picker.first + usize::from(token - PICK_BASE);
                     self.pick(line, console);
                 }
+                Some(PICK_FORGET) => self.forget_highlighted(console),
                 Some(PICK_SCROLL | PICK_SEARCH) => {}
                 _ => self.picker = None,
             }
@@ -1080,7 +1157,7 @@ impl WheelEditor {
 const _: () = assert!(PAGE_BASE as usize + MAX_PAGES <= ADD_PAGE as usize);
 const _: () = assert!(CHOICE_BASE as usize + MAX_CHOICES <= ADD_CHOICE as usize);
 const _: () = assert!(PICK_BASE as usize + PICK_LINES <= PICK_SCROLL as usize);
-const _: () = assert!(PICK_SEARCH < FORM_LABEL);
+const _: () = assert!(PICK_SEARCH < PICK_FORGET && PICK_FORGET < FORM_LABEL);
 
 #[cfg(test)]
 mod tests {
@@ -1095,7 +1172,7 @@ mod tests {
         )
         .unwrap();
         let saved = crate::emotes::lock().catalogue.replace(vec![dance]);
-        let lines = pick_lines();
+        let lines = pick_lines(&[]);
         let last = catalog::action_index("emote_stop").unwrap();
         let at = lines
             .iter()
@@ -1138,7 +1215,7 @@ mod tests {
 
     #[test]
     fn the_catalogue_lists_every_action_once_under_its_group() {
-        let lines = pick_lines();
+        let lines = pick_lines(&[]);
         for index in 0..ACTIONS.len() {
             assert_eq!(
                 lines
@@ -1176,7 +1253,7 @@ mod tests {
         press(&mut menu, &mut console, KeyCode::Enter);
         assert!(menu.wheel.picker.is_some());
         let duel = catalog::action_index("duel").unwrap();
-        let line = pick_lines()
+        let line = pick_lines(&[])
             .iter()
             .position(|line| *line == PickLine::Action(duel))
             .unwrap();
@@ -1227,6 +1304,147 @@ mod tests {
         // Escape closes the overlay.
         press(&mut menu, &mut console, KeyCode::Escape);
         assert!(!menu.wheel_editor_open());
+    }
+
+    #[test]
+    fn a_custom_command_named_once_is_offered_again_and_forgotten_with_delete() {
+        let (directory, mut console) = console();
+        let mut menu = SettingsMenu::new();
+        menu.open_wheel_editor(&console, WheelMode::Overlay);
+        let custom = |label: &str, command: &str| Slot::Custom {
+            label: label.into(),
+            command: command.into(),
+        };
+        // On General (after Force): Add a choice, the new custom command last
+        // in the catalogue, named and typed.
+        press(&mut menu, &mut console, KeyCode::ArrowDown);
+        press(&mut menu, &mut console, KeyCode::ArrowRight);
+        for _ in 0..8 {
+            press(&mut menu, &mut console, KeyCode::ArrowDown);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        press(&mut menu, &mut console, KeyCode::End);
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "Zork");
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "say zork");
+        press(&mut menu, &mut console, KeyCode::Enter);
+        assert_eq!(
+            console.wheel_pages.pages()[1].choices[8],
+            custom("Zork", "say zork")
+        );
+        assert_eq!(menu.wheel.saved.len(), 1);
+        // Weather's catalogue offers it under Your own, before the new command.
+        press(&mut menu, &mut console, KeyCode::ArrowLeft);
+        press(&mut menu, &mut console, KeyCode::ArrowDown);
+        press(&mut menu, &mut console, KeyCode::ArrowDown);
+        assert_eq!(menu.wheel.page, 3);
+        press(&mut menu, &mut console, KeyCode::ArrowRight);
+        for _ in 0..console.wheel_pages.pages()[3].choices.len() {
+            press(&mut menu, &mut console, KeyCode::ArrowDown);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        let lines = menu.wheel.pick_shown();
+        assert_eq!(
+            lines[lines.len() - 3..],
+            [
+                PickLine::Heading("Your own"),
+                PickLine::Saved(0),
+                PickLine::Custom
+            ]
+        );
+        // A search finds it by its name or its command.
+        type_text(&mut menu, &mut console, "zork");
+        assert_eq!(
+            menu.wheel.pick_shown(),
+            [
+                PickLine::Heading("Your own"),
+                PickLine::Saved(0),
+                PickLine::Custom
+            ]
+        );
+        assert_eq!(menu.wheel.picker.unwrap().highlighted, 1);
+        press(&mut menu, &mut console, KeyCode::Enter);
+        let weather = &console.wheel_pages.pages()[3].choices;
+        assert_eq!(weather.last(), Some(&custom("Zork", "say zork")));
+        // Changing that choice, the catalogue opens on it.
+        press(&mut menu, &mut console, KeyCode::Enter);
+        assert!(
+            menu.wheel.typing.is_some(),
+            "a custom choice opens its form"
+        );
+        press(&mut menu, &mut console, KeyCode::Escape);
+        let at = menu.wheel.rows[1];
+        menu.wheel.open_picker(Some(at));
+        let picker = menu.wheel.picker.unwrap();
+        assert_eq!(
+            menu.wheel.pick_shown()[picker.highlighted],
+            PickLine::Saved(0)
+        );
+        // Delete forgets it; the choices on the pages stay, and so does the file.
+        press(&mut menu, &mut console, KeyCode::Delete);
+        assert!(console.wheel_pages.saved().is_empty());
+        assert_eq!(
+            menu.wheel.pick_shown()[menu.wheel.picker.unwrap().highlighted],
+            PickLine::Custom
+        );
+        assert_eq!(
+            console.wheel_pages.pages()[1].choices[8],
+            custom("Zork", "say zork")
+        );
+        let saved = crate::quick_wheel::pages::WheelPages::load(directory.path());
+        assert!(saved.saved().is_empty());
+        // Delete on any other line forgets nothing.
+        console.wheel_pages.remember("Kill", "kill");
+        menu.wheel.sync(&console);
+        press(&mut menu, &mut console, KeyCode::End);
+        press(&mut menu, &mut console, KeyCode::Delete);
+        assert_eq!(console.wheel_pages.saved().len(), 1);
+        // The highlighted one's cross forgets it too.
+        press(&mut menu, &mut console, KeyCode::ArrowUp);
+        menu.wheel.click(Some(PICK_FORGET), &mut console);
+        assert!(console.wheel_pages.saved().is_empty());
+        assert!(menu.wheel.picker.is_some(), "the catalogue stays open");
+    }
+
+    /// Hub report #218: a custom command with arguments, typed key by key
+    /// (Space included), is kept whole on the page and in the files.
+    #[test]
+    fn a_custom_command_keeps_its_arguments_typed_saved_and_reloaded() {
+        let (directory, mut console) = console();
+        let mut menu = SettingsMenu::new();
+        menu.open_wheel_editor(&console, WheelMode::Overlay);
+        // General: Add a choice, the new custom command last in the catalogue.
+        press(&mut menu, &mut console, KeyCode::ArrowDown);
+        press(&mut menu, &mut console, KeyCode::ArrowRight);
+        for _ in 0..8 {
+            press(&mut menu, &mut console, KeyCode::ArrowDown);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        press(&mut menu, &mut console, KeyCode::End);
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "Tele 300");
+        press(&mut menu, &mut console, KeyCode::Enter);
+        type_text(&mut menu, &mut console, "japlus.guntele");
+        menu.wheel_key(KeyCode::Space, Some(" "), &mut console);
+        for (key, digit) in [
+            (KeyCode::Digit3, "3"),
+            (KeyCode::Digit0, "0"),
+            (KeyCode::Digit0, "0"),
+        ] {
+            menu.wheel_key(key, Some(digit), &mut console);
+        }
+        press(&mut menu, &mut console, KeyCode::Enter);
+        let tele = Slot::Custom {
+            label: "Tele 300".into(),
+            command: "japlus.guntele 300".into(),
+        };
+        assert_eq!(console.wheel_pages.pages()[1].choices[8], tele);
+        assert_eq!(console.wheel_pages.saved()[0].command, "japlus.guntele 300");
+        // Both files give it back whole.
+        let saved = crate::quick_wheel::pages::WheelPages::load(directory.path());
+        assert_eq!(saved.pages()[1].choices[8], tele);
+        assert_eq!(saved.saved()[0].command, "japlus.guntele 300");
     }
 
     #[test]
@@ -1330,7 +1548,7 @@ mod tests {
         );
         assert_eq!(menu.wheel.picker.unwrap().highlighted, 1);
         // A group's name finds what is in it.
-        assert!(pick_lines_matching("CAMERA").contains(&PickLine::Action(free)));
+        assert!(pick_lines_matching("CAMERA", &[]).contains(&PickLine::Action(free)));
         // Backspace takes letters off, then on an empty search goes back.
         for _ in 0..8 {
             press(&mut menu, &mut console, KeyCode::Backspace);
@@ -1351,7 +1569,7 @@ mod tests {
         press(&mut menu, &mut console, KeyCode::Enter);
         // The catalogue opens on the choice's own action.
         let picker = menu.wheel.picker.unwrap();
-        assert_eq!(pick_lines()[picker.highlighted], PickLine::Action(0));
+        assert_eq!(pick_lines(&[])[picker.highlighted], PickLine::Action(0));
         press(&mut menu, &mut console, KeyCode::Escape);
         assert!(menu.wheel.picker.is_none());
         assert!(console.wheel_pages.is_default());

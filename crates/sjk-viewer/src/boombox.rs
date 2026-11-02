@@ -274,6 +274,9 @@ pub(crate) struct Boombox {
     lacking: [Option<String>; SLOTS],
     /// Who carries a stereo drawn this frame (bits by slot).
     carriers: u64,
+    /// The SJK players within the own track's range this frame (bits by slot): its
+    /// listeners, for DJ, Block Party and Tough Crowd.
+    listeners: u64,
     cues: Vec<Cue>,
     /// The tracks given to the audio, freed when nothing plays them.
     loaded: Vec<String>,
@@ -298,6 +301,7 @@ impl Default for Boombox {
             placed: [None; SLOTS],
             lacking: std::array::from_fn(|_| None),
             carriers: 0,
+            listeners: 0,
             cues: Vec::with_capacity(8),
             loaded: Vec::new(),
             #[cfg(test)]
@@ -307,6 +311,11 @@ impl Default for Boombox {
 }
 
 impl Boombox {
+    /// The SJK players within the own track's range while it plays (bits by slot).
+    pub(crate) fn listeners(&self) -> u64 {
+        self.listeners
+    }
+
     /// Whether the player carries the stereo.
     pub(crate) fn on(&self) -> bool {
         self.on
@@ -570,6 +579,7 @@ impl GpuState {
         if self.boombox.on {
             self.boombox.on = false;
             self.boombox.stop_own();
+            self.boombox_centre(&crate::toy_switch_words::switched("Boombox", false));
             return;
         }
         if !self.boombox_allowed() {
@@ -825,7 +835,17 @@ impl GpuState {
             }
         }
         // Tell the SJK players within reach of the own track.
+        self.boombox.listeners = 0;
         if remote && let (Some(own), Some(song)) = (own, self.boombox.playing.clone()) {
+            self.boombox.listeners = (0..SLOTS)
+                .filter(|&slot| slot != usize::from(own) && sjk & 1 << slot != 0)
+                .filter(|&slot| {
+                    origins[slot].is_some_and(|at| {
+                        Vec3::from_array(at).distance(Vec3::from_array(own_origin))
+                            <= f32::from(song.range)
+                    })
+                })
+                .fold(0_u64, |bits, slot| bits | 1 << slot);
             let reach = f32::from(song.range) + MARGIN * 2.0;
             let near = (0..SLOTS)
                 .filter(|&slot| slot != usize::from(own) && sjk & 1 << slot != 0)

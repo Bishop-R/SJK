@@ -11,7 +11,8 @@ the files; SJK only downloads what a player picks. The card says so under its ti
 
 **Off by default.** Nothing downloads until the player turns on `sith.cloud` and
 presses Download on the card (`sith.downloads`, Settings > General or Advanced > Mods >
-Sith cloud). Optional groups (SJK Extras) are never chosen by default.
+Sith cloud), or also turns on automatic updates. Optional groups (SJK Extras) are never
+chosen by default.
 
 ## Where the files go
 
@@ -36,6 +37,22 @@ asked before each list, from `cl_hubUrl`), so SJK can move it or switch it off f
 everyone (the hub's empty list) without a release. Without a hub the card says it cannot
 ask where the server is. `sith.cloudUrl` sets another server by hand and skips the hub.
 
+## Automatic updates
+
+As JoF content's, by the same code ([jof-content.md](jof-content.md#automatic-updates)):
+with `sith.cloud` and `sith.cloudAuto` on, the client checks 30 seconds after the start
+and every hour, also during a match, fetches what changed in the groups marked Auto
+(`sith.cloudAutoGroups`) and removes only the files it downloaded for an Auto group
+that the server no longer lists. A run that changed something shows "Sith cloud
+updated" in a small card; the files load from the next map. A failure (the hub says
+the cloud is off, the server is down, a PK3 the running retail game holds in `base`)
+is a log line, tried again the next hour.
+
+The group each file was downloaded for is kept in the shared record
+(`GameData/sjk-jof-content.json`, `group`). An SJK Launcher built on an older
+`sjk-jof-content` that rewrites the record drops that note, so those files are then
+left for the card's Download to clean, never removed by an automatic run.
+
 ## Settings
 
 | Setting | Default | What it does |
@@ -43,8 +60,17 @@ ask where the server is. `sith.cloudUrl` sets another server by hand and skips t
 | `sith.cloud` | 0 | Allow downloads from the Sith cloud |
 | `sith.cloudGroups` | `default` | Groups kept: `default` (the server's recommended ones), `none`, or group ids |
 | `sith.cloudFiles` | empty | Files picked one by one against their group (`+<id>`, `-<id>`), written by the card |
+| `sith.cloudAuto` | 0 | Update automatically: at start and every hour (needs `sith.cloud`); Settings > General or Mods > Sith cloud auto-update |
+| `sith.cloudAutoGroups` | `all` | Groups updated automatically: `all` (those you take files from), ids, or empty for none; the card's Auto ticks write it |
 | `sith.cloudUrl` | empty | Another server's address; empty uses the one the SJK hub names |
 
 The card is [jof_content_card.rs](../crates/sjk-viewer/src/jof_content_card.rs) with
 the Sith cloud's words ([sith_cloud.rs](../crates/sjk-viewer/src/sith_cloud.rs)); like
 JoF content it is built with the `mod-jof` feature, which brings `sjk-jof-content`.
+
+## Verification
+
+The tests listed in [jof-content.md](jof-content.md#verification) cover both
+collections (the same code); `sith_cloud::tests` checks the settings' defaults,
+automatic updates off. The card renders off screen with `SJK_CONTENT_CLOUD=sith`. Not
+verified in game: an automatic run against the live Sith cloud.

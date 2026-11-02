@@ -61,6 +61,9 @@ vec3 r8_vol(vec3 ro, vec3 rd, float px){
 
   // ---- the plasma surface: granules of star-stuff boiling up round the blade ----
   float ta;
+  // 31/10/2026: the granules keep within 0.9 of the axis from just under the hilt to the top,
+  // their widest glow 0.6 (and a pixel's): a ray further off than three of them skips them
+  if (raySegRaw(ro, rd, vec3(0.0, -0.3, 0.0), vec3(0.0, top, 0.0), s) - 0.9 <= 1.8 + 3.0*px)
   for (int i = 0; i < 26; i++){
     float fi = float(i);
     float f = fract(t*(0.22 + 0.12*h11(fi*1.7)) + h11(fi*4.3));
@@ -138,6 +141,9 @@ vec3 r8_vol(vec3 ro, vec3 rd, float px){
   }
 
   // ---- embers drifting round in the heat ----
+  // 31/10/2026: within 4.3 of the axis, from under the hilt to past the top, their widest glow
+  // 0.3 (and a pixel's)
+  if (fxNear(ro, rd, -1.0, top + 2.0) - 4.3 <= 0.9 + 3.0*px)
   for (int i = 0; i < 12; i++){
     float fi = float(i);
     float f = fract(t*(0.05 + 0.03*h11(fi*2.9)) + h11(fi*5.1));

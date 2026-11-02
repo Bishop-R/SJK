@@ -286,6 +286,7 @@ impl crate::GpuState {
     /// `covered` is another card or the console over the frame.
     pub(crate) fn prepare_reload_card(&mut self, covered: bool) -> bool {
         self.sync_graphics_reload();
+        self.report_day_sky_guard();
         let menu_visible = self
             .client_menu
             .as_ref()

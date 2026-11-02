@@ -183,6 +183,7 @@ impl ClientMenu {
                 }
                 return action;
             }
+            super::browser_view::COPY_IP_TOKEN => self.copy_selected_server_address(),
             FAVOURITE_TOKEN => self.browser.toggle_selected_favorite(),
             BACK_TOKEN => return self.close_browser(),
             JOIN_TOKEN => return self.join_selected(),

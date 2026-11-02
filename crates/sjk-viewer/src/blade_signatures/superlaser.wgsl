@@ -95,7 +95,7 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
                 let fj = f32(j);
                 var k = floor(t * 12.0 + fj * 0.31);
                 let e = F + around(0.9 + 1.0 * h11(k * 1.7 + fj), h11(k * 3.1 + fj * 5.0), 1.6 * (h11(k * 2.3 + fj) - 0.4));
-                let db2 = bolt3(ro, rd, F, e, k + fj * 11.0, 0.35);
+                let db2 = bolt3(ro, rd, F, e, k + fj * 11.0, 0.35, px);
                 fxl += boltLight(db2, green, px) * 0.7 * lit * step(0.25, h11(k * 4.7 + fj));
             }
         }

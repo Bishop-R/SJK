@@ -358,6 +358,8 @@ mod tests {
 
     fn sun() -> Unlock {
         Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_sun".into(),
             granted: 1_791_336_225,
             note: String::new(),

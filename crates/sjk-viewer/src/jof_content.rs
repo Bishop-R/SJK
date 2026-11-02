@@ -19,6 +19,18 @@ pub(crate) const SWITCH: &str = "jof.content";
 pub(crate) const GROUPS: &str = "jof.contentGroups";
 /// Single files picked against their group's tick (`+<id>` / `-<id>`).
 pub(crate) const FILES: &str = "jof.contentFiles";
+/// Keep the chosen groups up to date by themselves (opt in).
+pub(crate) const AUTO: &str = "jof.contentAuto";
+/// The groups kept up to date ([`sjk_jof_content::AutoGroups`]).
+pub(crate) const AUTO_GROUPS: &str = "jof.contentAutoGroups";
+/// JoF content's settings, as the generic content code reads them.
+pub(crate) const NAMES: card::Names = card::Names {
+    switch: SWITCH,
+    groups: GROUPS,
+    files: FILES,
+    auto: AUTO,
+    auto_groups: AUTO_GROUPS,
+};
 /// The repository host ([`sjk_jof_content::SourceChoice`]).
 pub(crate) const SOURCE: &str = "jof.contentSource";
 /// The folder, when not the default `<SJK folder>/jof`.
@@ -54,6 +66,18 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         "",
         archive,
         "JoF content files picked one by one against their group: +<id> taken, -<id> left out (the card writes it)",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        AUTO,
+        false,
+        archive,
+        "Update JoF content by itself: at start and every hour, download what changed in the groups marked Auto (jof.contentAutoGroups); off by default; needs jof.content",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        AUTO_GROUPS,
+        sjk_jof_content::plan::AUTO_ALL,
+        archive,
+        "JoF content groups updated by themselves: all (every group you take files from), or group ids; empty for none (the card's Auto ticks write it)",
     ))?;
     cvars.register(CvarDefinition::new(
         SOURCE,
@@ -138,6 +162,24 @@ pub(crate) fn job_settings(
     }
 }
 
+impl crate::GpuState {
+    /// Each frame: the content collections' automatic updates
+    /// ([`ViewerConsole::content_auto`]), a comparison while none is due; one that
+    /// changed files gets its card at the top of the screen.
+    pub(crate) fn update_content_auto(&mut self) {
+        let Some(console) = self.console.as_mut() else {
+            return;
+        };
+        for updated in console
+            .content_auto(std::time::Instant::now(), &self.game_data)
+            .into_iter()
+            .flatten()
+        {
+            self.unlock_toast.push(updated);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,10 +192,46 @@ mod tests {
     }
 
     #[test]
+    fn an_automatic_update_waits_for_both_switches_and_a_group() {
+        use crate::jof_content::card::{AUTO_EVERY, AUTO_FIRST};
+        let directory = tempfile::tempdir().unwrap();
+        let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        let game_data = directory.path().join("GameData");
+        let start = std::time::Instant::now();
+        let mut at = start + AUTO_FIRST;
+        let tick = |console: &mut ViewerConsole, at: std::time::Instant| {
+            assert!(
+                console
+                    .content_auto(at, &game_data)
+                    .iter()
+                    .all(Option::is_none)
+            );
+            assert!(!console.jof_content.busy() && !console.sith_cloud.busy());
+        };
+        tick(&mut console, start);
+        // Off by default.
+        tick(&mut console, at);
+        // The automatic switch alone does nothing.
+        at += AUTO_EVERY;
+        console.set_cvar(AUTO, "1");
+        console.set_cvar(crate::sith_cloud::AUTO, "1");
+        tick(&mut console, at);
+        // Both on, but no group marked Auto.
+        at += AUTO_EVERY;
+        console.set_cvar(SWITCH, "1");
+        console.set_cvar(crate::sith_cloud::SWITCH, "1");
+        console.set_cvar(AUTO_GROUPS, "");
+        console.set_cvar(crate::sith_cloud::AUTO_GROUPS, "none");
+        tick(&mut console, at);
+    }
+
+    #[test]
     fn the_switch_is_off_until_the_player_turns_it_on() {
         let directory = tempfile::tempdir().unwrap();
         let console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
         assert_eq!(console.bool_cvar(SWITCH), Some(false));
+        assert_eq!(console.bool_cvar(AUTO), Some(false), "no automatic updates");
+        assert_eq!(console.text_value(AUTO_GROUPS), Some("all"));
         assert_eq!(console.text_value(GROUPS), Some("default"));
         assert_eq!(console.text_value(SOURCE), Some("auto"));
     }

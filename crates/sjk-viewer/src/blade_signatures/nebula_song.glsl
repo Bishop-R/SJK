@@ -77,6 +77,9 @@ vec3 r8_vol(vec3 ro, vec3 rd, float px){
   }
 
   // ribbons of glowing nebula gas winding slowly round the blade
+  // 31/10/2026: they keep within 2.8 of the axis between 0.5 and L - 0.5, their widest glow 0.8:
+  // a ray further off than three of them skips their 36 pieces
+  if (fxNear(ro, rd, 0.5, L - 0.5) - 2.8 <= 2.4)
   for (int k = 0; k < 3; k++){
     float fk = float(k);
     vec3 prev = around(1.6, fk/3.0 - uTime*(0.05), 0.5);

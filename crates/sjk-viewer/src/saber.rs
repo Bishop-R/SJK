@@ -302,6 +302,19 @@ impl Instance {
         ]
     }
 
+    /// The core of a pair from [`Self::pair_flickering`] drawn `scale` times as thick
+    /// (`cg_saberCoreSize`, [`crate::saber_core`]); a glow, glint or anything else is
+    /// returned unchanged.
+    pub(crate) fn with_core_scale(self, scale: f32) -> Self {
+        if self.color[3] != 0.0 {
+            return self;
+        }
+        Self {
+            radius: self.radius * scale,
+            ..self
+        }
+    }
+
     /// An afterimage of a skinned blade ([`crate::saber_ghosts`]): its glow alone at
     /// `blade`'s pose, `fade` as bright, marked with [`AFTERIMAGE`] so `saber.wgsl`
     /// draws it as the plain capsule in the skin's colours (`afterimage_glow`).
@@ -1338,5 +1351,28 @@ mod scale_tests {
         assert_eq!(socket.direction, [0.0, 0.0, 1.0]);
         // Unscaled models are untouched.
         assert_eq!(hand.scaled([1.0; 3]).grip, hand.grip);
+    }
+
+    #[test]
+    fn only_the_core_of_a_pair_changes() {
+        let blade = Blade {
+            base: [0.0; 3],
+            direction: [0.0, 0.0, 1.0],
+            length: 40.0,
+            radius: 3.0,
+        };
+        let color = crate::saber_rgb::BladeColor::from_rgb([0, 0, 255]);
+        let [glow, core] = Instance::pair(blade, color);
+        let [wide_glow, wide_core] =
+            Instance::pair(blade, color).map(|i| i.with_core_scale(crate::saber_core::MAX));
+        let bytes = |i: &Instance| bytemuck::bytes_of(i).to_vec();
+        assert_eq!(bytes(&wide_glow), bytes(&glow), "the glow keeps its size");
+        assert_eq!(wide_core.radius, core.radius * crate::saber_core::MAX);
+        assert!(
+            wide_core.radius < glow.radius,
+            "the thickest core stays inside the glow"
+        );
+        let [_, same] = Instance::pair(blade, color).map(|i| i.with_core_scale(1.0));
+        assert_eq!(bytes(&same), bytes(&core), "1 is retail's core");
     }
 }

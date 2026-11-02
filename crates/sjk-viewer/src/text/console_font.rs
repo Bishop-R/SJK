@@ -22,7 +22,8 @@ use std::error::Error;
 
 /// Name used in the log.
 pub(crate) const NAME: &str = "JetBrains Mono";
-const JETBRAINS_MONO: &[u8] = include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf");
+pub(super) const JETBRAINS_MONO: &[u8] =
+    include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf");
 /// Line height in layout units, as `SMALLCHAR_HEIGHT`.
 pub(crate) const HEIGHT: f32 = 16.0;
 /// Character advance in layout units, as `SMALLCHAR_WIDTH`.

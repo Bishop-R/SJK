@@ -97,7 +97,8 @@ pub enum LegacySaberColor {
 
 type Definitions = BTreeMap<String, LegacySaberDefinition>;
 
-/// Load the visible VFS union so mod PK3 definitions override retail files.
+/// Load the visible VFS union in legacy file-list order. A mounted replacement
+/// hides the same virtual file; duplicate saber names keep the first definition.
 pub fn legacy_saber_definitions(vfs: &VirtualFileSystem) -> Result<Definitions, Box<dyn Error>> {
     let shared = shared_saber_definitions(vfs)?;
     Ok(Definitions::clone(&shared))
@@ -134,14 +135,16 @@ pub fn shared_saber_definitions(
 
 fn read_saber_definitions(vfs: &VirtualFileSystem) -> Result<Definitions, Box<dyn Error>> {
     let mut definitions = BTreeMap::new();
-    for path in vfs.paths().into_iter().filter(|path| {
-        path.as_str().starts_with("ext_data/sabers/") && path.as_str().ends_with(".sab")
-    }) {
-        let Some(asset) = vfs.read(path.as_str())? else {
+    // WP_SaberLoadParms concatenates FS_GetFileList order; WP_SaberParseParms
+    // scans from the beginning and stops at the first case-insensitive name.
+    for name in vfs.list_files("ext_data/sabers", ".sab") {
+        let Some(asset) = vfs.read(&format!("ext_data/sabers/{name}"))? else {
             continue;
         };
         for definition in parse(&String::from_utf8_lossy(&asset.bytes)) {
-            definitions.insert(definition.name.to_ascii_lowercase(), definition);
+            definitions
+                .entry(definition.name.to_ascii_lowercase())
+                .or_insert(definition);
         }
     }
     Ok(definitions)
@@ -537,6 +540,132 @@ mod load_order_tests {
             legacy_saber_load_order(&vfs).unwrap(),
             ["reborn", "kyle", "zroe", "akr", "single_2"]
         );
+    }
+
+    #[test]
+    fn duplicate_names_keep_the_first_definition_in_a_file() {
+        // WP_SaberParseParms scans the concatenated source from the beginning,
+        // compares names case-insensitively, and stops at the first match.
+        let mut vfs = VirtualFileSystem::new();
+        vfs.mount_memory(
+            "synthetic",
+            [(
+                "ext_data/sabers/example.sab",
+                b"
+            custom { noWallRuns 1 jumpAtkFwdMove LS_NONE }
+            CUSTOM { noFlips 1 jumpAtkFwdMove LS_A_LUNGE }
+        "
+                .to_vec(),
+            )],
+        )
+        .unwrap();
+        let definitions = read_saber_definitions(&vfs).unwrap();
+        let pair = combat_sabers(&[Some("custom".into()), None], &definitions);
+        let first = pair.first.unwrap();
+        assert_eq!(first.flags, 1 << 13);
+        assert_eq!(first.jump_forward_move, 0);
+    }
+
+    #[test]
+    fn duplicate_names_follow_legacy_file_order_across_mounts() {
+        // Archive priority, not lexical path order, selects the first name.
+        for (base_file, mod_file) in [("a", "z"), ("z", "a")] {
+            let mut vfs = VirtualFileSystem::new();
+            vfs.mount_memory(
+                "base",
+                [(
+                    format!("ext_data/sabers/{base_file}.sab"),
+                    b"custom { noFlips 1 jumpAtkFwdMove LS_A_LUNGE }".to_vec(),
+                )],
+            )
+            .unwrap();
+            vfs.mount_memory(
+                "mod",
+                [(
+                    format!("ext_data/sabers/{mod_file}.sab"),
+                    b"CUSTOM { noWallRuns 1 jumpAtkFwdMove LS_NONE }".to_vec(),
+                )],
+            )
+            .unwrap();
+            assert_eq!(
+                vfs.list_files("ext_data/sabers", ".sab"),
+                [format!("{mod_file}.sab"), format!("{base_file}.sab")]
+            );
+            let definitions = read_saber_definitions(&vfs).unwrap();
+            let first = combat_sabers(&[Some("custom".into()), None], &definitions)
+                .first
+                .unwrap();
+            assert_eq!(first.flags, 1 << 13, "base {base_file}, mod {mod_file}");
+            assert_eq!(first.jump_forward_move, 0);
+        }
+    }
+
+    #[test]
+    fn duplicate_names_select_the_reference_force_jump_pose() {
+        use crate::pmove::{
+            MovementCollision, MovementConfig, MovementState, MovementTrace, Predictor,
+        };
+        use sjk_game_jka::pmove_anim::{AnimationLengthTable, AnimationTiming};
+        use sjk_protocol::UserCommand;
+        struct Empty;
+        impl MovementCollision for Empty {
+            fn trace(
+                &self,
+                _: [f32; 3],
+                _: [f32; 3],
+                _: [f32; 3],
+                end: [f32; 3],
+                _: u32,
+            ) -> MovementTrace {
+                MovementTrace::miss(end)
+            }
+        }
+        let mut vfs = VirtualFileSystem::new();
+        vfs.mount_memory(
+            "synthetic",
+            [(
+                "ext_data/sabers/example.sab",
+                b"
+            custom { noWallRuns 1 }
+            CUSTOM { noFlips 1 }
+        "
+                .to_vec(),
+            )],
+        )
+        .unwrap();
+        let definitions = read_saber_definitions(&vfs).unwrap();
+        let sabers = combat_sabers(&[Some("custom".into()), None], &definitions);
+        for step in [8, 7, 4, 3] {
+            let mut prediction = Predictor::from_state(
+                MovementState {
+                    health: 100,
+                    weapon: 3,
+                    gravity: 800.0,
+                    force_jump_flip: true,
+                    ground_entity_number: sjk_protocol::ENTITY_NUMBER_NONE,
+                    ..MovementState::default()
+                },
+                MovementConfig {
+                    saber_definitions: Some(sabers),
+                    ..MovementConfig::default()
+                },
+            );
+            // Synthetic timings only; no game asset data.
+            prediction.set_animation_lengths(Arc::new(AnimationLengthTable::new(vec![
+                AnimationTiming { frame_count: 20, frame_lerp_ms: 50 }; 1400
+            ])));
+            prediction.predict_command(
+                UserCommand {
+                    server_time: step,
+                    forward_move: 127,
+                    weapon: 3,
+                    ..UserCommand::default()
+                },
+                &Empty,
+            );
+            // First definition permits flipping: BOTH_FLIP_F, not BOTH_FORCEINAIR1.
+            assert_eq!(prediction.state().legs_anim, 1163, "{step} ms");
+        }
     }
 
     #[test]

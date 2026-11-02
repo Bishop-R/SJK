@@ -360,6 +360,8 @@ pub(crate) struct Panel {
     refreshed: Option<Instant>,
     /// The opening's ceremony, or the wait for the hub, while it shows.
     ceremony: Option<opening::Ceremony>,
+    /// Bonus covers reveal after the ordinary prizes, within the same opening.
+    bonus_prizes: Vec<opening::Prize>,
     /// The loot table shows over the page.
     loot: bool,
     /// Open all's question shows, the focus on its Open all or Cancel ([`ask_all`]).
@@ -411,6 +413,7 @@ impl Panel {
             data: Data::nothing(State::Waiting),
             refreshed: None,
             ceremony: None,
+            bonus_prizes: Vec::new(),
             loot: false,
             ask_all: None,
             opening_serial: 0,
@@ -939,11 +942,15 @@ mod tests {
             look_outcome: None,
             packs_revision: 0,
             map_edits_revision: 0,
+            map_edits_note: None,
             map_edits_published: None,
             mystery_boxes: None,
             mystery_boxes_revision: 0,
             mystery_box: None,
             box_hunt: None,
+            secrets: None,
+            secrets_revision: 0,
+            secret: None,
             assets_note: None,
             crashes_sent: 0,
             crash_note: None,
@@ -958,24 +965,28 @@ mod tests {
             marks_revision: 0,
             mark_refusal: None,
             trades: None,
+            history: None,
             announcements: Vec::new(),
             announcements_revision: 0,
             rewards: None,
             rewards_revision: 0,
             claim: None,
             announce: None,
+            news_image: None,
             public_key: String::new(),
         }
     }
 
     fn profile(holocrons: Vec<sjk_identity::Holocron>) -> sjk_identity::Profile {
         sjk_identity::Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
             key_id: "0123456789abcdef".into(),
             key: String::new(),
             name: "Sol".into(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: sjk_identity::Tick::None,
@@ -1122,6 +1133,7 @@ mod tests {
 
     fn opened(tier: &str, finish: &str) -> sjk_identity::Opened {
         sjk_identity::Opened {
+            banner: None,
             holocron: 3,
             tier: tier.to_owned(),
             card: Some(sjk_identity::OpenedCard {
@@ -1170,6 +1182,7 @@ mod tests {
             card: None,
             credits: 0,
             unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: name.to_owned(),
                 count: 1,
@@ -1202,6 +1215,7 @@ mod tests {
     #[test]
     fn a_solar_blade_card_shows_with_its_blade() {
         let sun = |count: u32| sjk_identity::OpenedUnlock {
+            finish: None,
             id: "saber_sun".to_owned(),
             name: "Sun blade".to_owned(),
             count,
@@ -1473,6 +1487,7 @@ mod tests {
             card: None,
             credits: 0,
             unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
                 id: id.to_owned(),
                 name: "A blade".to_owned(),
                 count: 2,
@@ -1490,6 +1505,7 @@ mod tests {
                 // The third a blade card with its blade beside its shards (20/10/2026).
                 let blade = sjk_identity::Opened {
                     unlock: Some(sjk_identity::OpenedUnlock {
+                        finish: None,
                         id: "saber_sun".to_owned(),
                         name: "Sun blade".to_owned(),
                         count: 1,
@@ -1518,6 +1534,7 @@ mod tests {
                         2 => opened(tier, "holo"),
                         3 => sjk_identity::Opened {
                             unlock: Some(sjk_identity::OpenedUnlock {
+                                finish: None,
                                 id: "saber_sun".to_owned(),
                                 name: "Sun blade".to_owned(),
                                 count: 1,

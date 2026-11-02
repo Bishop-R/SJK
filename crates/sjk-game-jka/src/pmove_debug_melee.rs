@@ -72,10 +72,12 @@ impl DebugMelee {
                 split_levels: true,
                 ..Self::default()
             },
-            ServerDialect::BaseJka | ServerDialect::Unknown { .. } => Self {
-                level,
-                ..Self::default()
-            },
+            ServerDialect::BaseJka | ServerDialect::LugormodV3 | ServerDialect::Unknown { .. } => {
+                Self {
+                    level,
+                    ..Self::default()
+                }
+            }
         }
     }
 

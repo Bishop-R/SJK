@@ -29,14 +29,18 @@ impl GpuState {
         )
     }
 
-    /// Whether the player may stick tag `id`: a free one or one the profile lists (any in
+    /// What the player holds of tag or card `id`: what the profile lists (every finish in
     /// a local game, which has no hub).
-    fn may_stick_tag(&self, id: &str) -> bool {
+    fn tag_held(&self, id: &str) -> crate::tags::Held {
         let local = self
             .live_session
             .as_ref()
             .is_some_and(ClientSession::is_local);
-        crate::tags::may_stick(id, |id| local || player_identity::owns_unlock(id))
+        if local && (crate::tags::get(id).is_some() || crate::tags::is_card_id(id)) {
+            crate::tags::Held::LOCAL
+        } else {
+            player_identity::tag_held(id)
+        }
     }
 
     /// `toy_tag`: stick the chosen tag where the crosshair meets a wall or the floor.
@@ -54,14 +58,23 @@ impl GpuState {
             .filter(|id| !id.is_empty())
             .unwrap_or(crate::tags::DEFAULT)
             .to_owned();
-        if crate::tags::get(&chosen).is_none() {
+        if crate::tags::get(&chosen).is_none() && !crate::tags::is_card_id(&chosen) {
             self.tag_centre("No such tag: choose one in the Collection");
             return;
         }
-        if !self.may_stick_tag(&chosen) {
+        let held = self.tag_held(&chosen);
+        if held.copies == 0 {
             self.tag_centre("You do not hold that tag yet");
             return;
         }
+        // The finish chosen, when a copy in it is held; Normal otherwise.
+        let finish = self
+            .console
+            .as_ref()
+            .and_then(|console| console.text_cvar(crate::tags::FINISH_CVAR).ok())
+            .map_or(&crate::cards::FINISHES[0], |wanted| {
+                held.finish(wanted.trim())
+            });
         if let Err(wait) = self.tags.may_stick(now) {
             self.tag_centre(&format!("Tag again in {} s", wait.as_secs() + 1));
             return;
@@ -98,6 +111,7 @@ impl GpuState {
             at: Vec3::from_array(trace.end_position).to_array(),
             normal: normal.to_array(),
             spin,
+            finish: (finish.index != 0).then(|| finish.id.to_owned()),
         };
         self.tags.stick(server, tag, now);
     }
@@ -112,15 +126,12 @@ impl GpuState {
     /// The own tag, while it stands where the player is and they still hold it.
     pub(crate) fn own_tag(&mut self) -> Option<sjk_identity::PlacedTag> {
         let (server, map) = self.tag_place();
-        let local = self
-            .live_session
-            .as_ref()
-            .is_some_and(ClientSession::is_local);
-        self.tags
-            .own(server, map.as_deref(), |id| {
-                local || player_identity::owns_unlock(id)
-            })
-            .cloned()
+        let mut tags = std::mem::take(&mut self.tags);
+        let own = tags
+            .own(server, map.as_deref(), |id| self.tag_held(id))
+            .cloned();
+        self.tags = tags;
+        own
     }
 
     /// Hand the decal store the tags on show: the own, and each other player's on this

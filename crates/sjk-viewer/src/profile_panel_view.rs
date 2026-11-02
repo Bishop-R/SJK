@@ -249,6 +249,15 @@ impl Panel {
     }
 
     fn left_column(&mut self, frame: &Frame, inputs: &Inputs<'_>, who: &Who) {
+        let profile = inputs
+            .snapshot
+            .filter(|_| inputs.enabled)
+            .and_then(|snapshot| snapshot.me.as_ref());
+        crate::profile_card::banner::draw(
+            &mut self.ui,
+            frame.rect(LEFT_X - 12.0, TOP - 12.0, LEFT_WIDTH + 24.0, 148.0),
+            crate::profile_card::banner::equipped(profile),
+        );
         let s = frame.s;
         // The player's picture: a click (or Enter) opens the picture panel.
         let lit = self.focus == Focus::Picture || self.ui.token_hovered(PICTURE_TOKEN);
@@ -345,21 +354,40 @@ impl Panel {
         } else {
             format!("Name emoji {}", self.emoji)
         };
+        // On the Profile screen, Change name first: it opens the Character tab's Name
+        // field, the name the hub shows being the one worn in game.
+        let mut x = LEFT_X;
+        if self.mode == Mode::Hub {
+            kit::button(
+                &mut self.ui,
+                frame,
+                [x, y, 150.0, 42.0],
+                "Change name",
+                false,
+                true,
+                self.focus == Focus::Name,
+                NAME_TOKEN,
+            );
+            x += 162.0;
+        }
+        let emoji_width = if self.mode == Mode::Hub { 210.0 } else { 230.0 };
         kit::button(
             &mut self.ui,
             frame,
-            [LEFT_X, y, 230.0, 42.0],
+            [x, y, emoji_width, 42.0],
             &emoji_label,
             false,
             self.writable,
             self.focus == Focus::Emoji || self.middle == Middle::Emoji,
             EMOJI_TOKEN,
         );
+        x += emoji_width + 16.0;
         if self.staff {
+            let width = (LEFT_X + LEFT_WIDTH - x).min(180.0);
             kit::button(
                 &mut self.ui,
                 frame,
-                [LEFT_X + 246.0, y, 180.0, 42.0],
+                [x, y, width, 42.0],
                 "Staff tools",
                 true,
                 true,
@@ -1256,6 +1284,7 @@ impl Panel {
             Focus::UsePicture => "use this picture",
             Focus::RemovePicture => "remove picture",
             Focus::BioBack => "back to your bio",
+            Focus::Name => "change your name",
             Focus::Emoji => "choose an emoji",
             Focus::EmojiGrid => "use this emoji",
             Focus::RemoveEmoji => "remove emoji",
@@ -1329,12 +1358,14 @@ mod tests {
 
     fn full_profile() -> Profile {
         Profile {
+            tag_cards: Vec::new(),
             credits: 0,
             cards: Vec::new(),
             keys: Vec::new(),
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: "^1Ш^7Sol^3Vulpes^7 the Long Named".to_owned(),
+            banner: "".into(),
             bio: format!(
                 "{}\n\nline three\n{}",
                 "Äöüß word ".repeat(30),
@@ -1471,6 +1502,83 @@ mod tests {
             }
         }
         let _ = &families.display;
+    }
+
+    /// On the Profile screen a staff key gets Change name, the Name emoji button and
+    /// Staff tools in one row: each label fits its button, the buttons keep apart and
+    /// within the left column, and each answers the pointer (hub report #202).
+    #[test]
+    fn change_name_emoji_and_staff_tools_fit_their_buttons() {
+        let families = fonts();
+        let record = record();
+        let standings = standings();
+        for emoji in ["", "\u{1F98A}"] {
+            let mut me = full_profile();
+            me.staff = true;
+            me.emoji = emoji.to_owned();
+            let online = snapshot(Some(me), None);
+            for viewport in [[1920.0, 1080.0], [3840.0, 2160.0], [1440.0, 1080.0]] {
+                let frame = Frame::new(viewport);
+                let mut panel = Panel::new();
+                panel.open_as(true, Mode::Hub);
+                let inputs = Inputs {
+                    enabled: true,
+                    snapshot: Some(&online),
+                    standings: &standings,
+                    record: &record,
+                };
+                panel.build(&inputs, &families.body.font, TextStyle::NEUTRAL, viewport);
+                assert!(!panel.ui.overflowed());
+                assert!(panel.staff);
+                assert_eq!(panel.emoji, emoji);
+                // An emoji is drawn about as wide as the text is tall.
+                let emoji_label = if emoji.is_empty() {
+                    ("Add a name emoji", 0.0)
+                } else {
+                    ("Name emoji ", 22.0)
+                };
+                let left = frame.point(LEFT_X, 0.0)[0];
+                let right = frame.point(LEFT_X + LEFT_WIDTH, 0.0)[0];
+                let mut end = left - 1.0;
+                for (token, (label, extra)) in [
+                    (NAME_TOKEN, ("Change name", 0.0)),
+                    (EMOJI_TOKEN, emoji_label),
+                    (STAFF_TOKEN, ("Staff tools", 0.0)),
+                ] {
+                    let rect = panel.ui.rect_for(token).expect("the button's area");
+                    // Room for the label (measured in the heavier weight) and the
+                    // pill's rounded ends.
+                    let needed = (crate::text::display_width(label, 20.0) + extra + 24.0) * frame.s;
+                    assert!(
+                        needed <= rect.width,
+                        "{label:?} needs {needed}, has {} at {viewport:?}",
+                        rect.width
+                    );
+                    assert!(
+                        rect.x > end && rect.right() <= right + 0.5,
+                        "{label:?} at {viewport:?}"
+                    );
+                    end = rect.right();
+                }
+            }
+        }
+        // On its own the page has no Change name.
+        let online = snapshot(Some(full_profile()), None);
+        let mut alone = Panel::new();
+        alone.open_as(true, Mode::Pages);
+        let inputs = Inputs {
+            enabled: true,
+            snapshot: Some(&online),
+            standings: &standings,
+            record: &record,
+        };
+        alone.build(
+            &inputs,
+            &families.body.font,
+            TextStyle::NEUTRAL,
+            [1920.0, 1080.0],
+        );
+        assert!(alone.ui.rect_for(NAME_TOKEN).is_none());
     }
 
     /// The picture panel fits the canvas in each of its states, keeps to the middle

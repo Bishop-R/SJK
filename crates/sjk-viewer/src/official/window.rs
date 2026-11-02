@@ -2,14 +2,13 @@
 //! SJK pop-up card over the darkened screen at a time, in the SJK UI's look in every menu
 //! style:
 //!
-//! - an announcement read in full ([`Page::Announcement`]): SJK's logo, the title, the date
-//!   (dd/mm/yyyy HH:MM), the text in paragraphs with `- ` lines as bullets, and for a
-//!   release Update (this build is older) or See what's new;
 //! - the reward rounds ([`Page::Rounds`]): a round's title, date and note, then who it
 //!   rewards and why, scrolled; older rounds with Left and Right. No amounts;
 //! - a reward waiting for the player ([`Page::Claim`]): what it gives, why, and Claim;
-//! - the creator's announcement ([`Page::Compose`]): Kind, Title and Text with a preview
+//! - the SJK team's announcement ([`Page::Compose`]): Kind, Title and Text with a preview
 //!   of the chat line; Send asks to confirm.
+//!
+//! Announcements are read on the News panel (`news_panel.rs`, 31/10/2026).
 //!
 //! The state and keys live here; [`super`] decides when a page opens and acts on the
 //! player's [`Choice`].
@@ -17,7 +16,7 @@
 use super::words::{self, SENDER};
 use crate::menu::sjk::{Frame, TextTarget, color, key_hint, key_hint_width, kit, text, wrap};
 use crate::menu_widgets::{MenuCanvas, TextFamily};
-use sjk_identity::news::{AnnounceRequest, Announcement, Reward, Round, plain_line, plain_text};
+use sjk_identity::news::{AnnounceRequest, Announcement, Reward, Round, plain_line};
 use sjk_ui::{Color, DrawCommand, FontWeight, InputEvent, Rect, TextAlign, UiEventKind};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -54,10 +53,6 @@ const TITLE_CHARS: usize = 48;
 /// Running text: its line, characters a line and the gap between paragraphs.
 const LINE: f32 = 28.0;
 const LINE_CHARS: usize = 86;
-const BULLET_INDENT: f32 = 24.0;
-const PARAGRAPH_GAP: f32 = 12.0;
-/// The most lines of text an announcement shows at once (Up and Down scroll the rest).
-const TEXT_LINES: usize = 16;
 /// The round list: a person's row, how many show, and the name's column.
 const ROW: f32 = 34.0;
 const ROWS: usize = 11;
@@ -79,16 +74,14 @@ const VERSION_MAX: usize = 24;
 pub(crate) enum Choice {
     /// The window closed.
     Close,
-    /// A release's Update: this build is older than the release.
-    Update,
-    /// A release's See what's new.
-    WhatsNew,
     /// Claim this reward (a rehearsal's is never sent).
     Claim { id: u64, rehearsal: bool },
     /// Later: the claim window waits for the next menu.
     Later,
-    /// Send the creator's announcement.
+    /// Send the SJK team's announcement.
     Send(AnnounceRequest),
+    /// Pick a picture file for the announcement and upload it (Ctrl+I).
+    PickImage,
 }
 
 /// Which field of the composer has the keyboard.
@@ -114,6 +107,11 @@ pub(crate) struct Composer {
     pub(crate) busy: bool,
     /// Why the hub (or the check) refused it.
     pub(crate) message: String,
+    /// The link picker (Ctrl+L with no setting typed): the place lit, of
+    /// [`crate::ui_links::PAGES`].
+    pub(crate) picker: Option<usize>,
+    /// A picture is being picked or uploaded.
+    pub(crate) uploading: bool,
 }
 
 impl Default for Composer {
@@ -127,6 +125,106 @@ impl Default for Composer {
             confirm: false,
             busy: false,
             message: String::new(),
+            picker: None,
+            uploading: false,
+        }
+    }
+}
+
+/// The last word of `text` (after its last space or line break) and where it starts.
+fn last_word(text: &str) -> (usize, &str) {
+    let start = text.rfind([' ', '\n']).map_or(0, |at| at + 1);
+    (start, &text[start..])
+}
+
+/// Whether `text` with `insert` after it keeps to the hub's length and lines.
+fn fits(text: &str, insert: &str) -> bool {
+    let joined = format!("{text}{insert}");
+    joined.chars().count() <= sjk_identity::news::TEXT_MAX
+        && joined.split('\n').count() <= sjk_identity::news::LINES_MAX
+}
+
+impl Composer {
+    /// Ctrl+L: the setting just typed (its cvar) becomes a link to it, named as Settings
+    /// names it; with none, the picker of places opens.
+    pub(crate) fn link(&mut self) {
+        let (start, word) = last_word(&self.text);
+        if crate::settings::has_row(word) {
+            let label = crate::settings::row_label(word).unwrap_or(word);
+            let link = format!("[{label}](setting:{word})");
+            let kept = self.text[..start].to_owned();
+            if fits(&kept, &link) {
+                self.text = kept + &link;
+                self.message.clear();
+            } else {
+                "No room left for the link.".clone_into(&mut self.message);
+            }
+            return;
+        }
+        self.picker = Some(0);
+    }
+
+    /// Ctrl+K: the setting just typed becomes its switch, on a line of its own.
+    pub(crate) fn switch(&mut self) {
+        let (start, word) = last_word(&self.text);
+        if word.is_empty() || crate::settings::switch_label(word).is_none() {
+            "Type an on/off setting's cvar (cg_nameplate), then Ctrl+K."
+                .clone_into(&mut self.message);
+            return;
+        }
+        let word = word.to_owned();
+        let kept = self.text[..start].trim_end().to_owned();
+        let gap = if kept.is_empty() { "" } else { "\n" };
+        let line = format!("{gap}[[switch:{word}]]\n");
+        if fits(&kept, &line) {
+            self.text = kept + &line;
+            self.message.clear();
+        } else {
+            "No room left for the switch.".clone_into(&mut self.message);
+        }
+    }
+
+    /// The hub stored picture `id`: its line goes at the end of the text.
+    pub(crate) fn add_image(&mut self, id: &str) {
+        self.uploading = false;
+        let kept = self.text.trim_end().to_owned();
+        let gap = if kept.is_empty() { "" } else { "\n" };
+        let line = format!("{gap}[[image:{id}]]\n");
+        if fits(&kept, &line) {
+            self.text = kept + &line;
+            self.message.clear();
+        } else {
+            "No room left for the picture's line.".clone_into(&mut self.message);
+        }
+    }
+
+    /// A key while the picker of places shows: Up and Down choose, Enter puts the link
+    /// in, Esc closes it.
+    fn picker_key(&mut self, key: KeyCode) {
+        let Some(at) = self.picker else {
+            return;
+        };
+        let pages = crate::ui_links::PAGES;
+        match key {
+            KeyCode::ArrowUp => self.picker = Some(at.saturating_sub(1)),
+            KeyCode::ArrowDown => self.picker = Some((at + 1).min(pages.len() - 1)),
+            KeyCode::Enter | KeyCode::NumpadEnter => {
+                self.picker = None;
+                let page = pages[at];
+                let space = if self.text.is_empty() || self.text.ends_with([' ', '\n']) {
+                    ""
+                } else {
+                    " "
+                };
+                let link = format!("{space}[{}](open:{})", page.name, page.id);
+                if fits(&self.text, &link) {
+                    self.text.push_str(&link);
+                } else {
+                    "No room left for the link.".clone_into(&mut self.message);
+                }
+            }
+            KeyCode::Escape => self.picker = None,
+            _ => {}
         }
     }
 }
@@ -168,6 +266,7 @@ impl Composer {
     /// The line the chat would show for it now.
     fn preview(&self) -> String {
         let message = sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id: 0,
             at: 0,
             key_id: String::new(),
@@ -203,6 +302,10 @@ impl Composer {
         if self.busy {
             return None;
         }
+        if self.picker.is_some() {
+            self.picker_key(key);
+            return None;
+        }
         if self.confirm {
             return match key {
                 KeyCode::Enter | KeyCode::NumpadEnter => {
@@ -226,6 +329,19 @@ impl Composer {
             KeyCode::Tab => {
                 self.step(!shift);
                 return None;
+            }
+            KeyCode::KeyL if control && self.focus == Field::Text => {
+                self.link();
+                return None;
+            }
+            KeyCode::KeyK if control && self.focus == Field::Text => {
+                self.switch();
+                return None;
+            }
+            KeyCode::KeyI if control && self.focus == Field::Text && !self.uploading => {
+                self.uploading = true;
+                "Choose a PNG or JPEG picture...".clone_into(&mut self.message);
+                return Some(Choice::PickImage);
             }
             _ => {}
         }
@@ -316,12 +432,6 @@ fn edit_text(text: &mut String, key: KeyCode, typed: Option<&str>, shift: bool, 
 /// What a window shows.
 #[derive(Clone, Debug)]
 pub(crate) enum Page {
-    /// An announcement in full; `older` when this build is older than its release.
-    Announcement {
-        announcement: Announcement,
-        older: bool,
-        scroll: usize,
-    },
     /// The reward rounds, newest first, on round `index`, its list `scroll` rows down.
     Rounds {
         rounds: Vec<Round>,
@@ -405,34 +515,6 @@ impl Window {
     ) -> Option<Choice> {
         let choice = match self.page.as_mut()? {
             Page::Compose(composer) => composer.key(code, typed, shift, control),
-            Page::Announcement {
-                announcement,
-                older,
-                scroll,
-            } => match code {
-                KeyCode::Escape | KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => {
-                    Some(Choice::Close)
-                }
-                KeyCode::KeyU if announcement.is_release() && *older => Some(Choice::Update),
-                KeyCode::KeyW if announcement.is_release() && !*older => Some(Choice::WhatsNew),
-                KeyCode::ArrowDown | KeyCode::PageDown => {
-                    *scroll += if code == KeyCode::PageDown {
-                        TEXT_LINES
-                    } else {
-                        1
-                    };
-                    None
-                }
-                KeyCode::ArrowUp | KeyCode::PageUp => {
-                    *scroll = scroll.saturating_sub(if code == KeyCode::PageUp {
-                        TEXT_LINES
-                    } else {
-                        1
-                    });
-                    None
-                }
-                _ => None,
-            },
             Page::Rounds {
                 rounds,
                 index,
@@ -502,9 +584,7 @@ impl Window {
                 KeyCode::ArrowUp
             };
             return match self.page {
-                Some(Page::Rounds { .. } | Page::Announcement { .. }) => {
-                    self.key(code, None, false, false)
-                }
+                Some(Page::Rounds { .. }) => self.key(code, None, false, false),
                 _ => None,
             };
         }
@@ -514,13 +594,7 @@ impl Window {
         let token = event.token?;
         let choice = match (self.page.as_mut()?, token) {
             (_, CLOSE_TOKEN) => Some(Choice::Close),
-            (Page::Announcement { .. }, SCREEN_TOKEN) => Some(Choice::Close),
             (Page::Rounds { .. }, SCREEN_TOKEN) => Some(Choice::Close),
-            (Page::Announcement { older, .. }, PRIMARY_TOKEN) => Some(if *older {
-                Choice::Update
-            } else {
-                Choice::WhatsNew
-            }),
             (Page::Rounds { .. }, PREVIOUS_TOKEN) => {
                 return self.key(KeyCode::ArrowLeft, None, false, false);
             }
@@ -567,11 +641,6 @@ impl Window {
         kit::scrim(ui, viewport);
         ui.hit_region(SCREEN_TOKEN, Rect::new(0.0, 0.0, viewport[0], viewport[1]));
         let focus = match self.page.as_mut() {
-            Some(Page::Announcement {
-                announcement,
-                older,
-                scroll,
-            }) => announcement_page(ui, &frame, announcement, *older, scroll),
             Some(Page::Rounds {
                 rounds,
                 index,
@@ -665,170 +734,6 @@ fn title(ui: &mut MenuCanvas, frame: &Frame, value: &str, y: f32) -> f32 {
         y += TITLE_LINE;
     }
     y
-}
-
-/// One laid-out line of an announcement: its text, whether it starts a bullet, whether
-/// it goes on one, and the gap before it.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TextLine {
-    pub(crate) text: String,
-    pub(crate) bullet: bool,
-    pub(crate) indented: bool,
-    pub(crate) gap: bool,
-}
-
-/// An announcement's text as lines: paragraphs wrapped, a blank line a gap, a line that
-/// starts `- ` a bullet whose wrapped lines stay indented.
-pub(crate) fn lay_text(raw: &str, chars: usize) -> Vec<TextLine> {
-    let mut lines = Vec::new();
-    let mut gap = false;
-    for line in plain_text(raw).lines() {
-        if line.trim().is_empty() {
-            gap = true;
-            continue;
-        }
-        let (bullet, body, width) = match line.strip_prefix("- ") {
-            Some(rest) => (true, rest, chars.saturating_sub(3).max(8)),
-            None => (false, line, chars),
-        };
-        for (index, part) in wrap(body, width).enumerate() {
-            lines.push(TextLine {
-                text: part.to_owned(),
-                bullet: bullet && index == 0,
-                indented: bullet,
-                gap: std::mem::take(&mut gap),
-            });
-        }
-    }
-    lines
-}
-
-fn announcement_page(
-    ui: &mut MenuCanvas,
-    frame: &Frame,
-    announcement: &Announcement,
-    older: bool,
-    scroll: &mut usize,
-) -> u16 {
-    let s = frame.s;
-    let title_text = plain_line(&announcement.title, sjk_identity::news::TITLE_MAX);
-    let title_lines = wrap(&title_text, TITLE_CHARS).take(2).count().max(1);
-    let lines = lay_text(&announcement.text, LINE_CHARS);
-    *scroll = (*scroll).min(lines.len().saturating_sub(TEXT_LINES));
-    let shown = &lines[*scroll..lines.len().min(*scroll + TEXT_LINES)];
-    let gaps = shown.iter().skip(1).filter(|line| line.gap).count();
-    let body_top = TITLE_TOP + title_lines as f32 * TITLE_LINE + 14.0;
-    let body_height = shown.len() as f32 * LINE + gaps as f32 * PARAGRAPH_GAP;
-    let more = lines.len() > TEXT_LINES;
-    let foot = body_top + body_height + if more { 30.0 } else { 0.0 } + BUTTONS_GAP;
-    let height = foot + BUTTON_HEIGHT + MARGIN;
-    let top = top_of(height);
-    card(ui, frame, top, height);
-    let kicker = if announcement.is_release() {
-        "SJK RELEASE"
-    } else {
-        "FROM THE SJK TEAM"
-    };
-    head(
-        ui,
-        frame,
-        top,
-        false,
-        kicker,
-        &crate::holocrons::when_text(announcement.at),
-    );
-    title(ui, frame, &title_text, top + TITLE_TOP);
-    let mut y = top + body_top;
-    for (index, line) in shown.iter().enumerate() {
-        if line.gap && index > 0 {
-            y += PARAGRAPH_GAP;
-        }
-        let x = if line.indented {
-            TEXT_X + BULLET_INDENT
-        } else {
-            TEXT_X
-        };
-        if line.bullet {
-            text(
-                ui,
-                TextFamily::Body,
-                format_args!("\u{2022}"),
-                frame.rect(TEXT_X + 2.0, y, BULLET_INDENT, LINE),
-                26.0 * s,
-                color::GOLD,
-                FontWeight::Regular,
-                TextAlign::Start,
-            );
-        }
-        text(
-            ui,
-            TextFamily::Body,
-            format_args!("{}", line.text),
-            frame.rect(x, y, RIGHT - x, LINE),
-            18.0 * s,
-            color::TEXT,
-            FontWeight::Regular,
-            TextAlign::Start,
-        );
-        y += LINE;
-    }
-    if more {
-        let below = lines.len().saturating_sub(*scroll + TEXT_LINES);
-        text(
-            ui,
-            TextFamily::Body,
-            format_args!(
-                "{} more line{} below: Down, or the wheel",
-                below,
-                if below == 1 { "" } else { "s" }
-            ),
-            frame.rect(TEXT_X, y + 4.0, TEXT_WIDTH, 22.0),
-            15.0 * s,
-            color::QUIET,
-            FontWeight::Regular,
-            TextAlign::Start,
-        );
-    }
-    let foot = top + foot;
-    kit::button(
-        ui,
-        frame,
-        [RIGHT - BUTTON_WIDTH, foot, BUTTON_WIDTH, BUTTON_HEIGHT],
-        "Close",
-        !announcement.is_release(),
-        true,
-        false,
-        CLOSE_TOKEN,
-    );
-    let mut hints: Vec<(&[&str], &str)> = vec![(&["Esc"], "close")];
-    if announcement.is_release() {
-        let (label, hint): (&str, (&[&str], &str)) = if older {
-            ("Update", (&["U"], "update"))
-        } else {
-            ("See what's new", (&["W"], "what's new"))
-        };
-        kit::button(
-            ui,
-            frame,
-            [
-                RIGHT - BUTTON_WIDTH * 2.0 - BUTTON_GAP - 30.0,
-                foot,
-                BUTTON_WIDTH + 30.0,
-                BUTTON_HEIGHT,
-            ],
-            label,
-            true,
-            true,
-            false,
-            PRIMARY_TOKEN,
-        );
-        hints.insert(0, hint);
-    }
-    if more {
-        hints.insert(0, (&["Up", "Down"], "scroll"));
-    }
-    keys(ui, frame, &hints);
-    CLOSE_TOKEN
 }
 
 /// A person of a round as the list shows them: the name (with its colour codes) or
@@ -1538,15 +1443,64 @@ fn compose_page(ui: &mut MenuCanvas, frame: &Frame, composer: &Composer) -> u16 
         frame,
         &[
             (&["Tab"], "next field"),
+            (&["Ctrl", "L"], "link"),
+            (&["Ctrl", "K"], "switch"),
+            (&["Ctrl", "I"], "picture"),
             (&["Ctrl", "Enter"], "send"),
             (&["Esc"], "cancel"),
         ],
     );
+    if let Some(at) = composer.picker {
+        picker(ui, frame, top, at);
+    }
     match composer.focus {
         Field::Kind => NEWS_TOKEN,
         Field::Version => VERSION_TOKEN,
         Field::Title => TITLE_TOKEN,
         Field::Text => TEXT_TOKEN,
+    }
+}
+
+/// The picker of places a link can open, over the composer from `top`, place `at` lit.
+fn picker(ui: &mut MenuCanvas, frame: &Frame, top: f32, at: usize) {
+    let pages = crate::ui_links::PAGES;
+    let row = 30.0;
+    let [x, y, width] = [TEXT_X + 110.0, top + 120.0, 440.0];
+    let height = 60.0 + pages.len() as f32 * row;
+    kit::card(ui, frame, [x, y, width, height]);
+    text(
+        ui,
+        TextFamily::Display,
+        format_args!("Link to (Up, Down, Enter; Esc closes)"),
+        frame.rect(x + 20.0, y + 14.0, width - 40.0, 28.0),
+        18.0 * frame.s,
+        color::GOLD_BRIGHT,
+        FontWeight::Semibold,
+        TextAlign::Start,
+    );
+    for (index, page) in pages.iter().enumerate() {
+        let row_y = y + 50.0 + index as f32 * row;
+        if index == at {
+            let _ = ui.draw_list_mut().push(sjk_ui::DrawCommand::RoundedRect {
+                rect: frame.rect(x + 10.0, row_y, width - 20.0, row - 2.0),
+                radius: 6.0 * frame.s,
+                color: color::alpha(color::HOLO, 0.18),
+            });
+        }
+        text(
+            ui,
+            TextFamily::Body,
+            format_args!("{}   open:{}", page.name, page.id),
+            frame.rect(x + 22.0, row_y, width - 44.0, row),
+            17.0 * frame.s,
+            if index == at {
+                color::TEXT
+            } else {
+                color::MUTED
+            },
+            FontWeight::Regular,
+            TextAlign::Start,
+        );
     }
 }
 
@@ -1568,28 +1522,6 @@ fn keys(ui: &mut MenuCanvas, frame: &Frame, hints: &[(&[&str], &str)]) {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-
-    #[test]
-    fn text_lays_out_in_paragraphs_with_bullets() {
-        let lines = lay_text(
-            "First line\n\n- a point that is long enough to wrap\n- b",
-            20,
-        );
-        let texts: Vec<&str> = lines.iter().map(|line| line.text.as_str()).collect();
-        assert_eq!(
-            texts,
-            [
-                "First line",
-                "a point that is",
-                "long enough to",
-                "wrap",
-                "b"
-            ]
-        );
-        assert!(!lines[0].bullet && lines[1].bullet && !lines[2].bullet && lines[4].bullet);
-        assert!(lines[1].gap && !lines[2].gap && !lines[4].gap);
-        assert!(lines[2].indented && lines[3].indented && !lines[0].indented);
-    }
 
     #[test]
     fn a_rewards_items_follow_the_tiers_order_then_credits_and_shards() {
@@ -1625,6 +1557,64 @@ mod tests {
 
     fn page_of(window: &Window) -> &Page {
         window.page.as_ref().expect("a page")
+    }
+
+    /// Ctrl+L makes the setting just typed a link and otherwise opens the picker of
+    /// places; Ctrl+K makes it a switch line; a picture's line goes at the end. What they
+    /// write passes the markup check the hub makes.
+    #[test]
+    fn the_composer_writes_links_switches_and_pictures() {
+        let mut composer = Composer {
+            focus: Field::Text,
+            text: "Try cg_nameplate".to_owned(),
+            ..Composer::default()
+        };
+        assert_eq!(composer.key(KeyCode::KeyL, None, false, true), None);
+        let label = crate::settings::row_label("cg_nameplate").unwrap();
+        assert_eq!(
+            composer.text,
+            format!("Try [{label}](setting:cg_nameplate)")
+        );
+        // Nothing to link: the picker opens and Enter puts the place in.
+        composer.key(KeyCode::KeyL, None, false, true);
+        assert_eq!(composer.picker, Some(0));
+        composer.key(KeyCode::ArrowDown, None, false, false);
+        composer.key(KeyCode::Enter, None, false, false);
+        assert_eq!(composer.picker, None);
+        let page = crate::ui_links::PAGES[1];
+        assert!(
+            composer
+                .text
+                .ends_with(&format!(" [{}](open:{})", page.name, page.id)),
+            "{}",
+            composer.text
+        );
+        composer.text.push_str("\ncg_nameplate");
+        composer.key(KeyCode::KeyK, None, false, true);
+        assert!(
+            composer.text.ends_with("\n[[switch:cg_nameplate]]\n"),
+            "{:?}",
+            composer.text
+        );
+        composer.uploading = true;
+        composer.add_image("0123456789abcdef");
+        assert!(!composer.uploading);
+        assert!(composer.text.ends_with("[[image:0123456789abcdef]]\n"));
+        assert_eq!(
+            sjk_identity::news_markup::check(&composer.text, |_| true),
+            Ok(())
+        );
+        // Ctrl+I asks for a file once at a time.
+        assert_eq!(
+            composer.key(KeyCode::KeyI, None, false, true),
+            Some(Choice::PickImage)
+        );
+        assert_eq!(composer.key(KeyCode::KeyI, None, false, true), None);
+        // Ctrl+K on a word that is no switch says what it wants.
+        composer.text.push_str("hello");
+        composer.key(KeyCode::KeyK, None, false, true);
+        assert!(composer.text.ends_with("hello"));
+        assert!(composer.message.contains("Ctrl+K"));
     }
 
     #[test]

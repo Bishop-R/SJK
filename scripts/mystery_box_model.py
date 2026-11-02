@@ -10,9 +10,12 @@ drawn from noise and shapes. This script writes, into the output folder:
   the iron edge strip along the bottom;
 - `mystery_box_glow.jpg`: the same layout, black but for the question marks' glow (the
   shader adds it, pulsing);
+- `mystery_box_halo.jpg`: the halo's light, bright at its foot and fading upwards, in
+  soft rays (the shader adds it);
 - `mystery_box.md3`: the chest, LENGTH along y, DEPTH along x (its front, a long side,
-  facing +X), HEIGHT tall, its origin in the middle of its bottom, open-looking at the
-  top (the dark inside);
+  facing +X), HEIGHT tall, its origin in the middle of its bottom, open at the top (dark
+  walls and a floor inside), and a faint halo of light rising over it (a second surface,
+  `models/sjk/mystery_box_halo`) so it is found from afar;
 - `mystery_box_lid.md3`: the lid, its origin on the hinge (the back top edge), reaching
   +X over the chest; the client sets it at (-DEPTH/2 - LID_OVERHANG, 0, HEIGHT) and
   pitches it open;
@@ -39,6 +42,7 @@ HEIGHT = 24.0
 LID_HEIGHT = 5.0
 LID_OVERHANG = 1.0
 SHADER = "models/sjk/mystery_box"
+HALO_SHADER = "models/sjk/mystery_box_halo"
 ATLAS = 1024
 JPEG_QUALITY = 90
 ICON_SIZE = 128
@@ -52,6 +56,10 @@ WOOD = np.array([92.0, 58.0, 34.0])
 IRON = np.array([58.0, 58.0, 62.0])
 PAINT = (236, 214, 150)
 GLOW = (150, 225, 255)
+# The halo's light at its brightest (the shader adds it, so this is all it lights), and
+# its picture's size: across (round the halo) and up.
+HALO_LIGHT = np.array([92.0, 77.0, 44.0])
+HALO_SIZE = (128, 256)
 
 
 def noise(rng, size, scale: float) -> np.ndarray:
@@ -184,7 +192,28 @@ def pictures(output: Path) -> Image.Image:
     image = Image.fromarray(np.clip(atlas, 0, 255).astype(np.uint8))
     image.save(output / "mystery_box.jpg", quality=JPEG_QUALITY)
     glow.save(output / "mystery_box_glow.jpg", quality=JPEG_QUALITY)
+    halo_picture(rng).save(output / "mystery_box_halo.jpg", quality=JPEG_QUALITY)
     return image
+
+
+def halo_picture(rng) -> Image.Image:
+    """The halo's light: soft rays round it (wrapping), brightest at the foot (the
+    bottom row) and gone at the top."""
+    w, h = HALO_SIZE
+    # Rays: noise across, wrapping round (the left and right edges meet on the model).
+    across = rng.random(16)
+    s = np.arange(w) / w * len(across)
+    i = s.astype(int)
+    f = s - i
+    f = f * f * (3 - 2 * f)
+    rays = across[i % len(across)] * (1 - f) + across[(i + 1) % len(across)] * f
+    rays = 0.6 + 0.4 * rays
+    # Up: gone at the top, fading in quickly from the foot so it has no hard edge.
+    t = 1.0 - np.arange(h)[:, None] / (h - 1)
+    up = (1.0 - t) ** 2.2 * np.clip(t / 0.06, 0.0, 1.0)
+    light = up * rays[None, :]
+    rgb = light[:, :, None] * HALO_LIGHT[None, None, :]
+    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
 
 
 def encode_normal(n) -> int:
@@ -215,10 +244,45 @@ def cuboid(x0, x1, y0, y1, z0, z1, regions) -> list:
     return [(*faces[name], region) for name, region in regions.items()]
 
 
-def write_md3(path: Path, name: str, quads: list) -> None:
-    """`quads`: (corners, normal, region) as [`cuboid`] gives them, or (corners, four
-    normals, None, four (s, t)) for a curved face; a triangle repeats its last corner.
-    Each is turned clockwise seen from outside, stock's front side, if it is not."""
+def write_md3(path: Path, name: str, surfaces: list) -> None:
+    """`surfaces`: (name, shader, quads), `quads` holding (corners, normal, region) as
+    [`cuboid`] gives them, or (corners, four normals, None, four (s, t)) for a curved
+    face; a triangle repeats its last corner. Each is turned clockwise seen from outside,
+    stock's front side, if it is not."""
+
+    def text(value: str, size: int) -> bytes:
+        return value.encode("ascii").ljust(size, b"\0")
+
+    every = []
+    blobs = []
+    for surface_name, shader, quads in surfaces:
+        positions, blob = md3_surface(surface_name, shader, quads, text)
+        every += positions
+        blobs.append(blob)
+    surface_bytes = b"".join(blobs)
+    points = np.array(every)
+    mins, maxs = points.min(axis=0), points.max(axis=0)
+    centre = (mins + maxs) / 2
+    radius = float(np.linalg.norm(maxs - centre))
+    frame = struct.pack("<10f", *mins, *maxs, *centre, radius) + text(name, 16)
+    header_size = 108
+    ofs_frames = header_size
+    ofs_surfaces = ofs_frames + len(frame)
+    end = ofs_surfaces + len(surface_bytes)
+    header = (
+        b"IDP3"
+        + struct.pack("<i", 15)
+        + text(f"models/sjk/{name}.md3", 64)
+        + struct.pack(
+            "<9i", 0, 1, 0, len(surfaces), 0, ofs_frames, ofs_surfaces, ofs_surfaces, end
+        )
+    )
+    path.write_bytes(header + frame + surface_bytes)
+
+
+def md3_surface(name: str, shader: str, quads: list, text) -> tuple:
+    """One MD3 surface of `quads` (as [`write_md3`] takes them) with `shader`: its
+    positions and its bytes."""
     positions, normals, uvs, triangles = [], [], [], []
     for quad in quads:
         corners, normal, region = quad[:3]
@@ -241,10 +305,7 @@ def write_md3(path: Path, name: str, quads: list) -> None:
         if tuple(corners[order[2]]) != tuple(corners[order[3]]):
             triangles.append((base, base + 2, base + 3))
 
-    def text(value: str, size: int) -> bytes:
-        return value.encode("ascii").ljust(size, b"\0")
-
-    shaders = text(SHADER, 64) + struct.pack("<i", 0)
+    shaders = text(shader, 64) + struct.pack("<i", 0)
     tris = b"".join(struct.pack("<3i", *t) for t in triangles)
     sts = b"".join(struct.pack("<2f", *uv) for uv in uvs)
     verts = b"".join(
@@ -265,22 +326,7 @@ def write_md3(path: Path, name: str, quads: list) -> None:
         )
         + shaders + tris + sts + verts
     )
-    points = np.array(positions)
-    mins, maxs = points.min(axis=0), points.max(axis=0)
-    centre = (mins + maxs) / 2
-    radius = float(np.linalg.norm(maxs - centre))
-    frame = struct.pack("<10f", *mins, *maxs, *centre, radius) + text(name, 16)
-    header_size = 108
-    ofs_frames = header_size
-    ofs_surfaces = ofs_frames + len(frame)
-    end = ofs_surfaces + len(surface)
-    header = (
-        b"IDP3"
-        + struct.pack("<i", 15)
-        + text(f"models/sjk/{name}.md3", 64)
-        + struct.pack("<9i", 0, 1, 0, 1, 0, ofs_frames, ofs_surfaces, ofs_surfaces, end)
-    )
-    path.write_bytes(header + frame + surface)
+    return positions, surface
 
 
 # Every face of an iron part.
@@ -292,6 +338,14 @@ PLINTH = 3.5
 # ends and the middle, 56 of the side's 1024 pixels wide, standing BAND_OUT proud.
 BAND = 56 / 1024 * LENGTH
 BAND_OUT = 0.5
+# The rim round the top opening, how tall; the floor inside, how high over the ground.
+RIM = 1.4
+FLOOR = PLINTH + 1.5
+# The halo over the chest: how far round it stands out of the chest's top (an ellipse
+# over its top), how tall it rises, and in how many strips round.
+HALO_OUT = 2.0
+HALO_RISE = 52.0
+HALO_STEPS = 32
 # How high the lid's planks arch over its straight edge, and in how many strips.
 LID_EDGE = 1.5
 LID_ARCH = 7.0
@@ -312,18 +366,21 @@ def chest() -> list:
             x, y = sx * (hx - 1.0), sy * (hy - 1.0)
             quads += cuboid(x - 2, x + 2, y - 2, y + 2, 0.0, FOOT, IRON_ALL)
     quads += cuboid(-hx - 1, hx + 1, -hy - 1, hy + 1, FOOT, PLINTH, IRON_ALL)
-    # The planked body, dark inside at the top.
+    # The planked body, open at the top (the rim covers its walls' tops).
     quads += cuboid(
         -hx, hx, -hy, hy, PLINTH, HEIGHT,
-        {"+x": SIDE, "-x": SIDE, "+y": END, "-y": END, "+z": INSIDE},
+        {"+x": SIDE, "-x": SIDE, "+y": END, "-y": END},
     )
-    # Raised iron bands round it, over the painted ones (the end ones wrap the ends).
+    # Inside: dark walls facing in, under the rim, and a floor.
+    quads += inside(hx - 0.2, hy - 0.2, FLOOR, HEIGHT - RIM)
+    # Raised iron bands round it, over the painted ones (the end ones wrap the ends);
+    # open at the top too, where the rim covers them.
     for y0, y1 in bands_y(hy):
         y0 -= BAND_OUT if y0 <= -hy else 0.0
         y1 += BAND_OUT if y1 >= hy else 0.0
         quads += cuboid(
             -hx - BAND_OUT, hx + BAND_OUT, y0, y1, PLINTH, HEIGHT,
-            {"+x": EDGE, "-x": EDGE, "+y": EDGE, "-y": EDGE, "+z": EDGE},
+            {"+x": EDGE, "-x": EDGE, "+y": EDGE, "-y": EDGE},
         )
     # Iron corner posts, standing out of the bands.
     for sx in (-1, 1):
@@ -331,7 +388,7 @@ def chest() -> list:
             x, y = sx * hx, sy * hy
             quads += cuboid(x - 1.2, x + 1.2, y - 1.2, y + 1.2, PLINTH, HEIGHT + 0.6, IRON_ALL)
     # A rim round the top opening.
-    rim = 1.4
+    rim = RIM
     quads += cuboid(hx - 0.2, hx + 0.7, -hy, hy, HEIGHT - rim, HEIGHT, IRON_ALL)
     quads += cuboid(-hx - 0.7, -hx + 0.2, -hy, hy, HEIGHT - rim, HEIGHT, IRON_ALL)
     quads += cuboid(-hx, hx, hy - 0.2, hy + 0.7, HEIGHT - rim, HEIGHT, IRON_ALL)
@@ -347,6 +404,34 @@ def chest() -> list:
         quads += cuboid(-4.0, 4.0, bar0, bar1, 14.0, 15.4, IRON_ALL)
         for x in (-4.0, 3.0):
             quads += cuboid(x, x + 1.0, y0, y1, 14.0, 15.4, IRON_ALL)
+    return quads
+
+
+def inside(hx: float, hy: float, z0: float, z1: float) -> list:
+    """The chest's inside, `hx` and `hy` from the middle: four walls from `z0` to `z1`
+    facing in, and a floor at `z0` facing up, all dark."""
+    walls = cuboid(-hx, hx, -hy, hy, z0, z1, {"+x": INSIDE, "-x": INSIDE, "+y": INSIDE, "-y": INSIDE})
+    quads = [(corners, tuple(-c for c in normal), region) for corners, normal, region in walls]
+    quads += cuboid(-hx, hx, -hy, hy, z0, z0, {"+z": INSIDE})
+    return quads
+
+
+def halo() -> list:
+    """The halo: a band of light round the chest's top (an ellipse standing HALO_OUT out
+    of it), rising HALO_RISE from the rim's top; its picture wraps once round it."""
+    rx, ry = DEPTH / 2 + HALO_OUT, LENGTH / 2 + HALO_OUT
+    z0, z1 = HEIGHT, HEIGHT + HALO_RISE
+    quads = []
+    for i in range(HALO_STEPS):
+        a0, a1 = (2 * math.pi * k / HALO_STEPS for k in (i, i + 1))
+        p0 = (rx * math.cos(a0), ry * math.sin(a0))
+        p1 = (rx * math.cos(a1), ry * math.sin(a1))
+        n0 = (math.cos(a0), math.sin(a0), 0.0)
+        n1 = (math.cos(a1), math.sin(a1), 0.0)
+        s0, s1 = i / HALO_STEPS, (i + 1) / HALO_STEPS
+        corners = [(*p0, z1), (*p1, z1), (*p1, z0), (*p0, z0)]
+        sts = [(s0, 0.0), (s1, 0.0), (s1, 1.0), (s0, 1.0)]
+        quads.append((corners, [n0, n1, n1, n0], None, sts))
     return quads
 
 
@@ -406,8 +491,12 @@ def lid() -> list:
 
 
 def models(output: Path) -> None:
-    write_md3(output / "mystery_box.md3", "mystery_box", chest())
-    write_md3(output / "mystery_box_lid.md3", "mystery_box_lid", lid())
+    write_md3(
+        output / "mystery_box.md3",
+        "mystery_box",
+        [("mystery_box", SHADER, chest()), ("mystery_box_halo", HALO_SHADER, halo())],
+    )
+    write_md3(output / "mystery_box_lid.md3", "mystery_box_lid", [("mystery_box_lid", SHADER, lid())])
 
 
 def icon(output: Path, atlas: Image.Image) -> None:

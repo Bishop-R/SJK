@@ -10,6 +10,7 @@
 // @part Climates
 // @part Sparks
 // @room 10
+// @raycache off
 // @solid 1
 // @palette {"corona.rim_cool":[0.35,0.20,0.55],"corona.rim_hot":[0.90,0.60,0.50],"corona.inner":[1.0,0.92,0.85],"core.white":[1.0,0.98,0.95],"core.fringe_cool":[0.50,0.70,1.0],"core.fringe_hot":[1.0,0.65,0.35],"light.color":[0.95,0.75,0.60],"trail":[0.90,0.70,0.60]}
 
@@ -211,7 +212,7 @@ vec3 ws_storm(vec3 ro, vec3 rd, float px, float d, float top, float form, float 
       float a = h11(k*5.1 + fi);
       float reach = (1.6 + 1.4*h11(k*0.7 + fi))*(1.0 + 0.4*st);
       vec3 A = around(0.35, a, y0), M = around(reach, a + 0.25, y0 + dy*0.5), C = around(0.35, a + 0.5, y0 + dy);
-      float bd = min(bolt3(ro, rd, A, M, k + fi*11.0, 0.3), bolt3(ro, rd, M, C, k + fi*11.0 + 0.5, 0.3));
+      float bd = min(bolt3(ro, rd, A, M, k + fi*11.0, 0.3, px), bolt3(ro, rd, M, C, k + fi*11.0 + 0.5, 0.3, px));
       col += boltLight(bd, vec3(0.45, 0.6, 1.0), px)*on*1.3*form;
     }
   }
@@ -497,7 +498,7 @@ vec3 ws_big(vec3 ro, vec3 rd, float px, float k, float top, float form, float st
       float a = h11(kk*5.1 + fi);
       float reach = (3.8 + 2.2*h11(kk*0.7 + fi))*(1.0 + 0.2*st);
       vec3 A = around(0.35, a, y0), M = around(reach, a + 0.05*(h11(kk) - 0.5), y0 + dy*0.5), C = around(0.35, a + 0.1, y0 + dy);
-      float bd = min(bolt3(ro, rd, A, M, kk + fi*11.0, 0.35), bolt3(ro, rd, M, C, kk + fi*11.0 + 0.5, 0.35));
+      float bd = min(bolt3(ro, rd, A, M, kk + fi*11.0, 0.35, px), bolt3(ro, rd, M, C, kk + fi*11.0 + 0.5, 0.35, px));
       float fade = exp(-fract(t*(7.0 + 3.0*st) + fi*0.31)*2.5);
       col += (boltLight(bd, vec3(0.45, 0.65, 1.0), px)*2.2 + vec3(0.4, 0.6, 1.0)*halo(bd, 1.5)*0.4)*fade*form;
     }
@@ -508,7 +509,7 @@ vec3 ws_big(vec3 ro, vec3 rd, float px, float k, float top, float form, float st
       if (h11(kk*3.3 + fi) < 0.45) continue;
       vec3 A = vec3(0.0, top, 0.0);
       vec3 C = A + around(2.0 + 2.0*h11(kk + fi), h11(kk*2.1 + fi), 3.5 + 2.0*h11(kk*4.4));
-      float bd = bolt3(ro, rd, A, C, kk + fi*7.0, 0.4);
+      float bd = bolt3(ro, rd, A, C, kk + fi*7.0, 0.4, px);
       col += boltLight(bd, vec3(0.5, 0.7, 1.0), px)*1.4*exp(-fract(t*5.0 + fi*0.5)*3.0)*form;
     }
     // sea spray flung off the blade
@@ -531,7 +532,7 @@ vec3 ws_big(vec3 ro, vec3 rd, float px, float k, float top, float form, float st
       if (h11(kk*1.9 + fi) < 0.55) continue;
       vec3 c = (b0 + b1)*0.5;
       vec3 A = around(0.45, atan(c.x, c.z)/6.2832, c.y);
-      float bd = bolt3(ro, rd, A, c, kk + fi*5.0, 0.35);
+      float bd = bolt3(ro, rd, A, c, kk + fi*5.0, 0.35, px);
       col += (boltLight(bd, vec3(1.0, 0.12, 0.08), px)*1.2)*exp(-fract(t*4.0 + fi*0.37)*3.0)*form;
     }
     // red salt dust streaming off the boulders and blade

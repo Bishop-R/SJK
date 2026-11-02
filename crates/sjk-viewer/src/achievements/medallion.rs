@@ -23,7 +23,15 @@ pub(crate) fn tint(category: Category) -> Color {
         Category::Journeys => color::HOLO,
         Category::Community => Color::new(0.45, 0.86, 0.62, 1.0),
         Category::Collection => Color::new(0.72, 0.58, 1.0, 1.0),
-        Category::Toys => Color::new(1.0, 0.56, 0.74, 1.0),
+        Category::CardboardBox => Color::new(0.86, 0.68, 0.44, 1.0),
+        Category::Order66 => Color::new(1.0, 0.42, 0.38, 1.0),
+        Category::Hax => Color::new(0.38, 0.95, 0.52, 1.0),
+        Category::Drone => Color::new(0.52, 0.78, 1.0, 1.0),
+        Category::Boombox => Color::new(1.0, 0.56, 0.74, 1.0),
+        Category::Monitor => Color::new(0.62, 0.9, 0.95, 1.0),
+        Category::BoxHunt => Color::new(1.0, 0.74, 0.3, 1.0),
+        Category::Fishing => Color::new(0.3, 0.72, 0.86, 1.0),
+        Category::ToyMaster => Color::new(1.0, 0.84, 0.36, 1.0),
     }
 }
 

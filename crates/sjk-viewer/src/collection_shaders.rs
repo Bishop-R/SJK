@@ -667,7 +667,6 @@ impl Panel {
                 .filter_map(|row| row.skin.map(|skin| skin.id)),
         );
         self.shader_count = rows.len();
-        self.shader_swatches.clear();
         // A blade card's button (or a change of view or order) asked for its shader.
         let wanted = self.shader_focus.take().or(chosen);
         if let Some(id) = wanted
@@ -900,14 +899,24 @@ impl Panel {
         let Some((at, column)) = line_of(lines, self.shader) else {
             return;
         };
-        if (first..first + shown).contains(&at) {
+        // A line may keep the choice when it is in view, but not as the top line with its
+        // tier's heading scrolled off: the next frame's [`line_window`] would bring the
+        // heading back and undo the notch, and the wheel would stop at every tier
+        // (hub report #201).
+        let keeps = |line: usize| {
+            (first..first + shown).contains(&line)
+                && !(line == first && line > 0 && matches!(lines[line - 1], Line::Head(_)))
+        };
+        if keeps(at) {
             return;
         }
-        let mut in_view = (first..first + shown).filter_map(|index| match lines.get(index) {
-            Some(Line::Things(start, end)) => Some((*start, *end)),
-            _ => None,
-        });
-        let target = if at < first {
+        let mut in_view = (first..first + shown)
+            .filter(|index| keeps(*index))
+            .filter_map(|index| match lines.get(index) {
+                Some(Line::Things(start, end)) => Some((*start, *end)),
+                _ => None,
+            });
+        let target = if at <= first {
             in_view.clone().next()
         } else {
             in_view.next_back()
@@ -1391,11 +1400,17 @@ impl Panel {
                 width: 2.0 * s,
                 color: color::alpha(CHOSEN_OUTLINE, 0.95),
             });
+        } else if row.new {
+            // A New one not seen yet stands out in gold, with its sticker (Creyon,
+            // 31/10/2026); chosen, the white outline says which is chosen.
+            let _ = self.ui.draw_list_mut().push(DrawCommand::Border {
+                rect: frame.rect(x - 3.0, y - 3.0, width + 6.0, height + 6.0),
+                radius: 13.0 * s,
+                width: 1.6 * s,
+                color: color::alpha(color::GOLD_BRIGHT, 0.85),
+            });
         }
         let strip = [x + 10.0, y + 10.0, width - 20.0, 22.0];
-        // Resting the pointer chooses a shader only over its blade ([`Panel::hover_chooses`]).
-        self.shader_swatches
-            .push((index, frame.rect(strip[0], strip[1], strip[2], strip[3])));
         match row.skin {
             None => swatch::stock_strip(self.ui.draw_list_mut(), frame, strip, inputs.stock),
             Some(skin) => {
@@ -1511,6 +1526,15 @@ impl Panel {
         if chosen || hovered {
             kit::band(&mut self.ui, frame, [LIST_X, y, LIST_WIDTH, height]);
         }
+        if row.new && !chosen {
+            // A New one not seen yet: a gold edge down the row's left, with its sticker
+            // (Creyon, 31/10/2026).
+            let _ = self.ui.draw_list_mut().push(DrawCommand::RoundedRect {
+                rect: frame.rect(LIST_X, y + 4.0, 3.0, height - 8.0),
+                radius: 1.5 * s,
+                color: color::alpha(color::GOLD_BRIGHT, 0.9),
+            });
+        }
         let middle = y + height * 0.5;
         let words = |rect_x: f32, width: f32, size: f32| {
             frame.rect(rect_x, middle - size * 0.7, width, size * 1.4)
@@ -1529,8 +1553,6 @@ impl Panel {
         }
         let [look_x, look_width] = columns.look;
         let strip = [look_x, middle - 9.0, look_width, 18.0];
-        self.shader_swatches
-            .push((index, frame.rect(strip[0], strip[1], strip[2], strip[3])));
         match row.skin {
             None => swatch::stock_strip(self.ui.draw_list_mut(), frame, strip, inputs.stock),
             Some(skin) => {
@@ -2802,6 +2824,8 @@ mod tests {
 
     fn unlock(id: &str) -> sjk_identity::Unlock {
         sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: id.into(),
             granted: 1_791_336_225,
             note: String::new(),
@@ -2814,6 +2838,8 @@ mod tests {
     #[test]
     fn the_owned_line_names_the_medal_that_brings_a_shader() {
         let grant = |medal: Option<&str>| sjk_identity::Unlock {
+            holo: 0,
+            solar: 0,
             id: "saber_glitch".to_owned(),
             granted: 0,
             note: String::new(),

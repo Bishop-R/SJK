@@ -256,9 +256,9 @@ fn japro_held_jump_repeats_only_for_the_selected_style_and_server() {
 }
 
 #[test]
-fn japro_zero_gravity_push_precedes_force_special_style_gates() {
-    // TaystJK 2d60c0fa bg_pmove.c:3744-3796: held-jump policy is checked
-    // before the zero-gravity push; Force-special style gates apply only after it.
+fn japro_zero_gravity_does_not_add_automatic_push_impulses() {
+    // Zero-gravity push-off remains unsupported for every style; a transient
+    // zero-gravity spawn snapshot must not inject horizontal speed.
     for millis in [8, 7, 4, 3] {
         for style in 0..19 {
             for held in [false, true] {
@@ -267,7 +267,6 @@ fn japro_zero_gravity_push_precedes_force_special_style_gates() {
                 predictor.state.origin[2] = 200.0;
                 predictor.state.ground_entity_number = ENTITY_NUMBER_NONE;
                 predictor.state.movement_flags = if held { PMF_JUMP_HELD } else { 0 };
-                let permits_held = predictor.japro_jump_rules().unwrap().held_jump;
                 let mut command = UserCommand {
                     server_time: millis,
                     up_move: 127,
@@ -285,8 +284,7 @@ fn japro_zero_gravity_push_precedes_force_special_style_gates() {
                     &MoveContext::CLIENT,
                 );
                 assert_eq!(
-                    predictor.state.velocity[0],
-                    if !held || permits_held { 450.0 } else { 0.0 },
+                    predictor.state.velocity[0], 0.0,
                     "style {style}, held {held}, {millis} ms"
                 );
             }

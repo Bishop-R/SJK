@@ -1,7 +1,8 @@
 //! The words in the world over the mystery boxes (and the box hunt's mark): what a box is
 //! and costs, that it rolls, then what came out, for every SJK player who sees it. Drawn
 //! as the drone's pilot names are: projected over the point, hidden behind walls and far
-//! away.
+//! away. The mark has an arrow besides, seen through walls: over them when they are in
+//! view, on a ring round the crosshair pointing their way when not.
 
 use super::hunt::Card;
 use super::{Here, Opening, ROLL, wire};
@@ -23,6 +24,12 @@ const CARD_WIDTH: f32 = 380.0;
 const CARD_HEIGHT: f32 = 66.0;
 const CARD_TOP: f32 = 56.0;
 const CARD_PULSE: f32 = 2.0;
+/// The arrow to the mark, in pixels at 1080 lines: its size and the ring round the
+/// crosshair it runs on (when the mark is out of view); how far into the view the mark
+/// must be for the arrow over them instead (1.0 is the screen's edge).
+const ARROW_SIZE: f32 = 15.0;
+const ARROW_RING: f32 = 230.0;
+const ARROW_IN_VIEW: f32 = 0.9;
 
 /// How a label's headline is coloured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,8 +75,9 @@ pub(crate) struct Labels {
 impl Default for Labels {
     fn default() -> Self {
         Self {
-            // Each label two lines over their shadows, and the hunt's card.
-            list: DrawList::new(MOST * 4 + 8),
+            // Each label two lines over their shadows, the hunt's card and the arrow to
+            // the mark.
+            list: DrawList::new(MOST * 4 + 12),
             lines: Vec::new(),
         }
     }
@@ -173,7 +181,8 @@ impl GpuState {
                 )
             })
             .collect();
-        wanted.extend(self.box_hunt_mark_label());
+        let mark = self.box_hunt_mark_origin();
+        wanted.extend(mark.map(GpuState::box_hunt_mark_label));
         let unit = crate::ui_scale::height_scale(viewport[1]);
         let width = (420.0 * unit).min(viewport[0]);
         for (point, sight, label) in wanted.into_iter().take(MOST) {
@@ -236,6 +245,10 @@ impl GpuState {
                 }
             }
         }
+        if let Some(origin) = mark {
+            let point = GpuState::box_hunt_mark_label(origin).0;
+            push_arrow(&mut self.mystery_boxes.labels, camera, point, unit);
+        }
         if let Some(card) = self.mystery_boxes.hunt.card() {
             let since = now.saturating_duration_since(card.since).as_secs_f32();
             push_card(&mut self.mystery_boxes.labels, card, since, viewport, unit);
@@ -262,6 +275,66 @@ impl GpuState {
             crate::text::CodePalette::Legible,
         );
     }
+}
+
+/// Push the arrow to the mark standing at `point` (over their head), seen through walls:
+/// pointing down at them when they are in view, else on a ring round the crosshair
+/// pointing their way.
+fn push_arrow(
+    labels: &mut Labels,
+    camera: crate::hud::identification::Camera,
+    point: Vec3,
+    unit: f32,
+) {
+    let viewport = camera.viewport;
+    let size = ARROW_SIZE * unit;
+    let (tip, dir) = match camera.project_within(point, ARROW_IN_VIEW) {
+        // Over the mark, under their label's words, pointing down at them.
+        Some(at) => ([at[0], at[1] + size], [0.0, 1.0]),
+        None => {
+            let dir = screen_direction(camera, point);
+            let centre = [viewport[0] * 0.5, viewport[1] * 0.5];
+            let ring = ARROW_RING * unit;
+            ([centre[0] + dir[0] * ring, centre[1] + dir[1] * ring], dir)
+        }
+    };
+    let across = [-dir[1], dir[0]];
+    let back = [tip[0] - dir[0] * size * 1.6, tip[1] - dir[1] * size * 1.6];
+    let corners = [
+        tip,
+        [back[0] + across[0] * size, back[1] + across[1] * size],
+        [back[0] - across[0] * size, back[1] - across[1] * size],
+    ];
+    for (offset, color) in [
+        (2.0 * unit, Color::new(0.0, 0.0, 0.0, 0.6)),
+        (0.0, Tone::Mark.colour(0.95)),
+    ] {
+        let mut points = [[0.0; 2]; sjk_ui::POLYGON_POINTS];
+        for (to, from) in points.iter_mut().zip(corners) {
+            *to = [from[0] + offset, from[1] + offset];
+        }
+        let _ = labels.list.push(DrawCommand::Polygon {
+            points,
+            count: corners.len() as u8,
+            color,
+            texture: None,
+        });
+    }
+}
+
+/// Which way on the screen (x right, y down, unit length) `point` lies from the
+/// crosshair, behind the camera too (straight down when right behind it).
+fn screen_direction(camera: crate::hud::identification::Camera, point: Vec3) -> [f32; 2] {
+    let forward = (camera.target - camera.eye).normalize_or_zero();
+    let right = forward.cross(camera.up).normalize_or_zero();
+    let up = right.cross(forward);
+    let delta = point - camera.eye;
+    let (x, y) = (delta.dot(right), -delta.dot(up));
+    let length = x.hypot(y);
+    if length < 1e-3 {
+        return [0.0, 1.0];
+    }
+    [x / length, y / length]
 }
 
 /// What the box hunt's card says: a caption, then the mark's name, or that the player is

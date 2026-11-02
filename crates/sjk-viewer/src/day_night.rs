@@ -13,6 +13,9 @@ pub(crate) struct Settings {
     pub(crate) hour: f32,
     /// Real minutes per simulated day; zero holds the selected hour.
     pub(crate) minutes: f32,
+    /// `r_dayClock`: the hour is the PC's; without the live sun the sky alone follows it
+    /// ([`Self::sky`]).
+    pub(crate) pc_clock: bool,
 }
 
 /// Frame-local sunlight and ambient fill, evaluated without allocation.
@@ -39,13 +42,36 @@ impl Settings {
                 .filter(|v| v.is_finite() && (*v as f32).is_finite())
                 .unwrap_or(default) as f32
         };
+        let pc_clock = console
+            .and_then(|c| c.integer_cvar(live::PC_CLOCK_CVAR))
+            .is_some_and(|on| on != 0);
         Self {
             enabled: console
                 .and_then(|c| c.integer_cvar("r_dayNight"))
                 .unwrap_or(1)
                 != 0,
-            hour: number("r_dayHour", 12.).rem_euclid(24.),
-            minutes: number("r_dayMinutes", 0.).clamp(0., 1440.),
+            hour: if pc_clock {
+                live::pc_hour(&sjk_shell::local_time::LocalTime::now())
+            } else {
+                number("r_dayHour", 12.).rem_euclid(24.)
+            },
+            minutes: if pc_clock {
+                0.
+            } else {
+                number("r_dayMinutes", 0.).clamp(0., 1440.)
+            },
+            pc_clock,
+        }
+    }
+
+    /// What the sky's tint is installed with: these settings with the live sun, and the
+    /// PC clock's hour on the sky alone without it (`r_dayClock` with Sun and sky off, the
+    /// SJK and Vanilla presets): the sky turns to dusk and night with the PC's evening
+    /// at the cost of one tint in the sky's shader, no sun or shadows.
+    pub(crate) fn sky(self) -> Self {
+        Self {
+            enabled: self.enabled || self.pc_clock,
+            ..self
         }
     }
 
@@ -167,6 +193,13 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), CvarError> {
         "How much of the lighting is computed live: 2 everything; 1 the same with the world's \
         shadow casters kept between frames; 0 also baked indirect light (where the map brings \
         any) under a live sun; applies at map load",
+    ))?;
+    cvars.register(CvarDefinition::new(
+        live::PC_CLOCK_CVAR,
+        0_i64,
+        CvarFlags::ARCHIVE,
+        "1 sets the hour of the sun from this PC's clock (local time), over r_dayHour and \
+        r_dayMinutes; live",
     ))?;
     for (name, value, help) in [
         (

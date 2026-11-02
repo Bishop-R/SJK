@@ -237,6 +237,12 @@ impl ShaderCatalog {
         self.definitions.is_empty()
     }
 
+    /// Every defined shader's name as [`ShaderCatalog::get`] keys it (lower case, `/`
+    /// separators), in no particular order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.definitions.keys().map(String::as_str)
+    }
+
     pub fn get(&self, name: &str) -> Option<&ShaderDefinition> {
         let normalized = normalize_name(name);
         self.definitions.get(&normalized).or_else(|| {

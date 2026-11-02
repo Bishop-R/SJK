@@ -199,6 +199,16 @@ fn list(directory: &Path) -> Result<Vec<String>, String> {
 impl crate::GpuState {
     /// The `ghost` console command.
     pub(crate) fn ghost_command(&mut self, args: &[String]) -> Result<Vec<String>, String> {
+        if args
+            .first()
+            .is_some_and(|verb| verb.eq_ignore_ascii_case("edit"))
+        {
+            return match args {
+                [_] => self.open_ghost_editor(None),
+                [_, name] => self.open_ghost_editor(Some(name)),
+                _ => Err(format!("usage: {HELP}")),
+            };
+        }
         let directory = self
             .console
             .as_ref()
@@ -228,6 +238,10 @@ impl crate::GpuState {
     /// Whether the experimental showcase tools are switched on, for an SJK staff
     /// key: they are not for everyone to use.
     pub(crate) fn showcase_enabled(&self) -> bool {
+        #[cfg(test)]
+        if self.ghost.showcase_for_shot {
+            return true;
+        }
         crate::player_identity::is_staff()
             && self
                 .console
@@ -243,6 +257,9 @@ impl crate::GpuState {
             self.ghost.interrupt("the showcase tools were switched off");
             self.mimic
                 .stop_with("^3mimic: stopped, the showcase tools were switched off.");
+            if self.ghost.editor.is_some() {
+                self.close_ghost_editor();
+            }
         }
         let Some(console) = &mut self.console else {
             return;
@@ -258,9 +275,13 @@ impl crate::GpuState {
         }
     }
 
-    /// Leaving the game or changing map ends the ghost; a recording is saved.
+    /// Leaving the game or changing map ends the ghost and its editor; a recording is
+    /// saved.
     pub(crate) fn ghost_leave(&mut self) {
         self.mimic.stop_with("^3mimic: stopped, you left the game.");
+        if self.ghost.editor.is_some() {
+            self.close_ghost_editor();
+        }
         if let Some(console) = &self.console {
             let directory = console.config_directory().to_owned();
             self.ghost.leave(&directory);

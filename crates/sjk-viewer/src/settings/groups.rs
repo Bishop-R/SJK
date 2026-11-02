@@ -84,8 +84,12 @@ impl Advanced {
 /// (Network's).
 const CHAT_ROWS: &[&str] = &[
     "cg_drawChat",
+    "cl_unfocusedChatbox",
+    crate::console::chat_log::CVAR,
     crate::chat::pm_only::CVAR,
+    crate::chat::quiet::CVAR,
     "cg_chatBoxFontSize",
+    crate::text::system_font::CHAT_CVAR,
     crate::chat::emoji::CVAR,
     crate::chat::reply::REMEMBER_CVAR,
     crate::chat::tabs::FILTER_CVAR,
@@ -97,6 +101,7 @@ const CHAT_ROWS: &[&str] = &[
     "cg_chatBoxLetterSpacing",
     crate::chat::options::BACKDROP_CVAR,
     crate::chat::options::OUTLINE_CVAR,
+    crate::chat::incoming_color::CVAR,
     crate::chat::options::CARD_SCALE_CVAR,
     crate::text::charset::CVAR,
     "cl_sjkChat",
@@ -162,8 +167,10 @@ const MODS_ROWS: &[&str] = &[
     #[cfg(feature = "mod-japro")]
     "japro.plugin 10",
     "jof.downloads",
+    "jof.contentAuto",
     "jof.contentSource",
     "sith.downloads",
+    "sith.cloudAuto",
     crate::brush_view::CVAR,
     crate::entity_view::CVAR,
     crate::ghost_replay::SHOWCASE_CVAR,
@@ -364,6 +371,7 @@ impl Group {
                 crate::effect_flash::REDUCE_CVAR,
                 crate::saber_clash_flare::CVAR,
                 crate::saber_clash_flare::SIZE_CVAR,
+                crate::saber_core::CVAR,
                 crate::impacts::FLESH_SPARKS_CVAR,
                 crate::team_sabers::TEAM_COLORS_CVAR,
                 crate::team_sabers::CVAR,
@@ -415,6 +423,7 @@ impl Group {
                 "cg_thirdPersonTargetDamp",
                 "cg_wallGrabLock",
                 crate::held_view::LOOK_CVAR,
+                "cg_predictLegacy",
                 "cg_errorDecay",
                 "mod_japlus",
                 #[cfg(feature = "mod-japlus")]
@@ -434,8 +443,10 @@ impl Group {
                 #[cfg(feature = "mod-jof")]
                 sjk_mod_jof::HONOR_NAMES,
                 "jof.downloads",
+                "jof.contentAuto",
                 "jof.contentSource",
                 "sith.downloads",
+                "sith.cloudAuto",
                 #[cfg(feature = "mod-japlus")]
                 "japlus.plugin 1",
                 #[cfg(feature = "mod-japlus")]
@@ -476,6 +487,7 @@ impl Group {
                 crate::text::style::SCALE_CVAR,
                 crate::text::style::TRACKING_CVAR,
                 crate::console::console_options::STYLE_CVAR,
+                crate::text::system_font::CONSOLE_CVAR,
                 "con_scale",
                 crate::console::console_options::DRAW_NOTIFY_CVAR,
                 crate::console::console_options::COPY_COLORS_CVAR,
@@ -491,6 +503,7 @@ impl Group {
                 crate::menu_hud::STYLE_CVAR,
                 crate::menu_hud::FILES_CVAR,
                 "cg_hudScale",
+                crate::hud_edit::COMMAND,
                 crate::hud::RadialPlacement::SPREAD_CVAR,
                 crate::hud::RadialPlacement::HEIGHT_CVAR,
                 "cg_classicHudFont",
@@ -509,6 +522,7 @@ impl Group {
                 "cg_playerCardOutline",
                 crate::hud::team_outline::CVAR,
                 "cg_nameplate",
+                crate::hud::nameplate::STYLE_CVAR,
                 "cg_nameplateRange",
                 "cg_nameplateNear",
                 "cg_nameplateScale",
@@ -540,8 +554,12 @@ impl Group {
                 "cg_killfeed",
                 crate::ground_hud::CVAR,
                 "cg_drawChat",
+                "cl_unfocusedChatbox",
                 crate::chat::pm_only::CVAR,
+                crate::console::chat_log::CVAR,
+                crate::chat::quiet::CVAR,
                 "cg_chatBoxFontSize",
+                crate::text::system_font::CHAT_CVAR,
                 crate::chat::emoji::CVAR,
                 crate::chat::reply::REMEMBER_CVAR,
                 crate::chat::tabs::FILTER_CVAR,
@@ -553,6 +571,7 @@ impl Group {
                 "cg_chatBoxLetterSpacing",
                 crate::chat::options::BACKDROP_CVAR,
                 crate::chat::options::OUTLINE_CVAR,
+                crate::chat::incoming_color::CVAR,
                 crate::chat::options::CARD_SCALE_CVAR,
             ],
             Self::Scoreboard => &[
@@ -560,7 +579,9 @@ impl Group {
                 crate::scoreboard::style::COMPACT_CVAR,
                 crate::scoreboard::style::FPS_CVAR,
                 crate::scoreboard::AFK_CVAR,
-                "cg_showClientIDs",
+                crate::scoreboard::style::IDS_CVAR,
+                crate::scoreboard::style::SJK_IDS_CVAR,
+                crate::scoreboard::style::DEATHS_RANK_CVAR,
                 crate::jof_tag::CVAR,
                 "cg_drawScoreboardIcons",
                 "cg_smallScoreboard",
@@ -650,7 +671,9 @@ impl Group {
                 crate::player_trades::SIZE_CVAR,
                 super::catalog::IMPORT_ROW,
                 "jof.downloads",
+                "jof.contentAuto",
                 "sith.downloads",
+                "sith.cloudAuto",
                 "cl_autoUpdate",
                 "cl_sjkChat",
                 crate::holocron_popup::NOTIFICATIONS_CVAR,
@@ -950,8 +973,9 @@ mod tests {
     fn simple_mode_keeps_its_categories_short() {
         for simple in Simple::ALL {
             let rows = Group::Simple(simple).rows();
+            // General holds the two content collections' automatic updates too.
             assert!(
-                (3..=13).contains(&rows.len()),
+                (3..=15).contains(&rows.len()),
                 "{simple:?}: {} rows",
                 rows.len()
             );
@@ -1025,6 +1049,7 @@ mod tests {
             "cg_thirdPersonTargetDamp",
             "cg_wallGrabLock",
             crate::held_view::LOOK_CVAR,
+            "cg_predictLegacy",
             "cg_errorDecay",
         ];
         for group in [Group::GameOptions, Group::Advanced(Advanced::Gameplay)] {

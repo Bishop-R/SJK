@@ -5,9 +5,9 @@
 //! The stock cgame predicts a ride through two moves per command: the pilot's own (it goes
 //! nowhere of itself, [`crate::pmove::riding`]), then the vehicle's over the vehicle's
 //! player state from the snapshot (`vps`), driven by the pilot's command. The game's
-//! `Update` does not run on a client; in its place the move steers the vehicle itself —
+//! `Update` does not run on a client; in its place the move steers the vehicle itself â€”
 //! `ProcessOrientCommands` and `ProcessMoveCommands`, the vehicle's and the pilot's view,
-//! the move's direction — and `AttachRidersGeneric` carries the pilot to the driver tag.
+//! the move's direction â€” and `AttachRidersGeneric` carries the pilot to the driver tag.
 //! Boarding is not predicted: while the vehicle boards it stands still.
 //!
 //! [`RidePrediction`] holds the vehicle's half; the caller keeps the pilot's `Predictor`
@@ -206,7 +206,7 @@ impl RidePrediction {
     }
 
     /// One command of the ride (`cg_predict.c:1281-1386`): the pilot's move riding the
-    /// vehicle, then — while it still pilots it, outside an intermission — the vehicle's
+    /// vehicle, then â€” while it still pilots it, outside an intermission â€” the vehicle's
     /// move by the same command (the chat bubble's holding it still), which steers the
     /// vehicle and carries the pilot along.
     pub fn predict(
@@ -215,15 +215,28 @@ impl RidePrediction {
         command: UserCommand,
         collision: &impl MovementCollision,
     ) {
-        self.predict_in(pilot, command, collision, &MoveContext::CLIENT);
+        self.predict_with_collisions(pilot, command, collision, collision, &MoveContext::CLIENT);
     }
 
-    /// Predict the pilot and vehicle with the snapshot's read-only entity context.
+    /// Predict both actors in one collision world, retaining the caller's context.
     pub fn predict_in(
         &mut self,
         pilot: &mut Predictor,
         command: UserCommand,
         collision: &impl MovementCollision,
+        context: &MoveContext,
+    ) {
+        self.predict_with_collisions(pilot, command, collision, collision, context);
+    }
+
+    /// Predict pilot and chassis with their respective collision contexts. Their
+    /// rider/vehicle exclusions differ in cgame; both retain the caller's move context.
+    pub fn predict_with_collisions(
+        &mut self,
+        pilot: &mut Predictor,
+        command: UserCommand,
+        pilot_collision: &impl MovementCollision,
+        vehicle_collision: &impl MovementCollision,
         context: &MoveContext,
     ) {
         let Some(mut vehicle) = self.own.take() else {
@@ -246,7 +259,7 @@ impl RidePrediction {
                 self.vehicle.state().speed,
             )
         }));
-        pilot.predict_command_in(command, collision, context);
+        pilot.predict_command_in(command, pilot_collision, context);
         let mut own = command;
         if own.buttons & BUTTON_TALK != 0 {
             own.buttons = BUTTON_TALK;
@@ -271,7 +284,7 @@ impl RidePrediction {
             fighter_alt_control: self.fighter_alt_control,
         };
         self.vehicle
-            .predict_vehicle_command(own, collision, context, &mut game);
+            .predict_vehicle_command(own, vehicle_collision, context, &mut game);
         self.own = self.vehicle.take_vehicle();
     }
 }
@@ -433,6 +446,73 @@ impl VehicleGame for ClientVehicle<'_> {
                 state.view_angles[YAW],
                 self.driver_offset,
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod collision_context_tests {
+    use super::*;
+    use crate::pmove::{MovementState, MovementTrace};
+    use crate::vehicle_fields::{VehicleInfo, kind};
+    use std::cell::Cell;
+    struct Count(Cell<usize>);
+    impl MovementCollision for Count {
+        fn trace(
+            &self,
+            _: [f32; 3],
+            _: [f32; 3],
+            _: [f32; 3],
+            end: [f32; 3],
+            _: u32,
+        ) -> MovementTrace {
+            self.0.set(self.0.get() + 1);
+            MovementTrace::miss(end)
+        }
+    }
+    #[test]
+    fn pilot_and_chassis_use_their_own_collision_contexts() {
+        for step in [8, 7, 4, 3] {
+            let mut template = Vehicle::new(
+                Arc::new(VehicleInfo {
+                    kind: kind::SPEEDER,
+                    ..VehicleInfo::default()
+                }),
+                1,
+            );
+            template.pilot = Some(0);
+            let mut state = PlayerState::default();
+            state.set_client_num(100);
+            state.set_raw_field(84, 1); // vehicle m_iVehicleNum is pilot+1
+            state.stats[0] = 100;
+            state.set_gravity(800);
+            let config = MovementConfig::default();
+            let mut ride =
+                RidePrediction::new(&state, &template, 10 | (10 << 8) | (42 << 16), 0, 0, config);
+            let mut pilot = Predictor::from_state(
+                MovementState {
+                    client_num: 0,
+                    vehicle_entity_num: 100,
+                    health: 100,
+                    standing_height: 40.0,
+                    ..MovementState::default()
+                },
+                config,
+            );
+            let pilot_world = Count(Cell::new(0));
+            let chassis_world = Count(Cell::new(0));
+            ride.predict_with_collisions(
+                &mut pilot,
+                UserCommand {
+                    server_time: step,
+                    ..UserCommand::default()
+                },
+                &pilot_world,
+                &chassis_world,
+                &MoveContext::CLIENT,
+            );
+            assert!(pilot_world.0.get() > 0, "pilot context, step {step}");
+            assert!(chassis_world.0.get() > 0, "chassis context, step {step}");
         }
     }
 }

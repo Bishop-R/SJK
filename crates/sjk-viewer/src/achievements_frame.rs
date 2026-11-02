@@ -8,7 +8,8 @@ use super::*;
 
 /// Count what the live `snapshot` of `session` shows for the achievements;
 /// `obituaries_before` is the obituary tracker's count before the snapshot was observed;
-/// `boxed` whether the player hides in the cardboard box.
+/// `boxed` whether the player hides in the cardboard box, `toys` what the toys tell of
+/// the moment ([`GpuState::toy_moments`]).
 pub(crate) fn observe(
     tracker: &mut achievements::tracker::Tracker,
     obituaries: &sjk_client::ObituaryTracker,
@@ -16,6 +17,7 @@ pub(crate) fn observe(
     snapshot: &Snapshot,
     obituaries_before: u64,
     boxed: bool,
+    toys: achievements::tracker::Toys,
     now: Instant,
 ) {
     // The feed keeps the newest eight; more in one snapshot than that is unheard of.
@@ -32,12 +34,31 @@ pub(crate) fn observe(
         local: session.is_local(),
         obituaries: &events,
         boxed,
+        toys,
         now,
     };
     achievements::update(|record| tracker.observe(&seen, record));
 }
 
 impl GpuState {
+    /// What the toys tell the tracker of this moment, for their achievements.
+    pub(crate) fn toy_moments(&self) -> achievements::tracker::Toys {
+        achievements::tracker::Toys {
+            lifted_by: self.cardboard_box.lifted_by(),
+            steering: self.hax.steering().map(u16::from),
+            landed: self.drone.landed(),
+            listeners: self.boombox.listeners(),
+        }
+    }
+
+    /// Whether what a toy sees counts towards achievements: in a live match on a server
+    /// of another machine, as the tracker's (`achievements/tracker.rs`).
+    pub(crate) fn toys_count(&self) -> bool {
+        self.live_session
+            .as_ref()
+            .is_some_and(|session| !session.is_local() && !session.server().ip().is_loopback())
+    }
+
     /// Twice a second: load the counts once, take in what the hub holds, hand the
     /// service the counts, save, and announce what was unlocked.
     pub(crate) fn update_achievements(&mut self) {

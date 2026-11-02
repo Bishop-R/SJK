@@ -353,3 +353,6 @@ pub fn legacy_animation_index(name: &str) -> Option<usize> {
 pub fn legacy_animation_count() -> usize {
     legacy_animation::NAMES.len()
 }
+
+/// Lugormod-v3 movement policy selected from the current advertised dialect.
+pub mod pmove_lugormod;

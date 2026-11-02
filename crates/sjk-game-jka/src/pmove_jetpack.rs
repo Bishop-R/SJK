@@ -5,6 +5,17 @@
 use super::*;
 
 impl Predictor {
+    /// PM_AirMove's default control, including Lugormod's transmitted FFA admin flag.
+    pub(super) fn jetpack_air_control(&self, command: &UserCommand) -> f32 {
+        if self.lugormod_admin_jetpack() {
+            5.0
+        } else if command.up_move <= 0 {
+            0.8
+        } else {
+            2.0
+        }
+    }
+
     pub(super) fn jetpack_move(
         &mut self,
         command: &UserCommand,
@@ -27,10 +38,15 @@ impl Predictor {
                 1_139 // BOTH_INAIR1
             },
         );
+        let admin = self.lugormod_admin_jetpack();
         let velocity = &mut self.state.velocity[2];
-        if command.up_move > 0 && *velocity < 256.0 {
+        if command.up_move > 0 && (*velocity < 256.0 || admin) {
             let thrust = if *velocity > 0.0 {
-                12.0 - distance / 64.0
+                if admin {
+                    18.0 - distance / 256.0
+                } else {
+                    12.0 - distance / 64.0
+                }
             } else {
                 12.0
             };

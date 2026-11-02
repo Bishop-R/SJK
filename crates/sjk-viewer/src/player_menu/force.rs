@@ -584,6 +584,43 @@ mod tests {
         assert_eq!(menu.commit(), Some("4-1-210000000001000220"));
     }
 
+    /// Both Force pages load templates through `load_template`: JoF's
+    /// "Fullforce FFA" keeps Speed (index 2) and Sense (14) on a saber-only
+    /// server, and loses Speed alone, as stock does, where sabers cost points.
+    #[test]
+    fn the_fullforce_template_loads_whole_with_free_saber_skills() {
+        const FULLFORCE_FFA: &str = "7-1-331330000330001133";
+        for (free_saber, expected) in [(true, FULLFORCE_FFA), (false, "7-1-330330000330001133")] {
+            let mut menu = ForceMenu::new();
+            menu.load(
+                DEFAULT_FORCEPOWERS,
+                Some(ForceLegalizeRules {
+                    free_saber,
+                    ..ForceLegalizeRules::default()
+                }),
+            );
+            menu.load_template("^5{^2JoF^5}^2Fullforce FFA", FULLFORCE_FFA);
+            assert_eq!(menu.allocation().encode(), expected, "{free_saber}");
+            let levels = menu.allocation().levels;
+            assert_eq!(levels[ForcePower::Speed as usize], u8::from(free_saber));
+            assert_eq!(levels[ForcePower::See as usize], 1);
+        }
+    }
+
+    /// The server's `EV_SET_FREE_SABER` reaches the Force page's rules.
+    #[test]
+    fn the_free_saber_event_reaches_the_force_page() {
+        let (_directory, mut console) = console();
+        assert!(console.set_cvar("forcepowers", DEFAULT_FORCEPOWERS));
+        console.set_server_force_rules(ForceLegalizeRules::default());
+        console.note_free_saber(true);
+        let mut menu = ForceMenu::new();
+        menu.open(&console);
+        assert!(menu.free_saber());
+        menu.load_template("Fullforce FFA", "7-1-331330000330001133");
+        assert_eq!(menu.allocation().encode(), "7-1-331330000330001133");
+    }
+
     fn console() -> (tempfile::TempDir, ViewerConsole) {
         let directory = tempfile::tempdir().unwrap();
         let console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();

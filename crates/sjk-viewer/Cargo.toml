@@ -79,6 +79,11 @@ mod-japlus = ["dep:sjk-mod-japlus"]
 mod-japro = ["dep:sjk-mod-japro"]
 mod-jof = ["dep:sjk-mod-jof", "dep:sjk-jof-content"]
 
+[target.'cfg(unix)'.dependencies]
+# Raise the process file-descriptor headroom before mounting PK3 archives. This safe
+# wrapper also respects macOS's hidden kern.maxfilesperproc ceiling.
+rlimit = "0.11.0"
+
 [target.'cfg(windows)'.dependencies]
 # Ctrl+V and copies read and set the clipboard directly: starting PowerShell for them
 # took about a quarter of a second, a hitch in the middle of play.

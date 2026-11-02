@@ -351,19 +351,28 @@ impl super::Runtime {
     }
 
     /// Update already-installed day resources; shape/enabling changes still require restart.
+    /// `sky` is the hour the sky alone follows without the live sun
+    /// (`day::live::Clock::sky_values`): the PC clock's, or noon (the authored sky).
     pub(crate) fn update_day_clock(
         &self,
         queue: &crate::frame_queue::FrameQueue,
         values: [f32; 4],
+        sky: [f32; 2],
     ) {
         let Some(shadow) = &self.shadows else {
+            // No live sun: the sky alone may follow the PC clock (`day::Settings::sky`).
+            self.sky.follow_day_clock(queue, sky, self.sky_azimuth());
             return;
         };
 
         shadow.clarity.set(values[2]);
         shadow.light_scale.set(values[3]);
         let mut day = shadow.day.get();
-        if !day.enabled || (day.hour == values[0] && day.minutes == values[1]) {
+        if !day.enabled {
+            self.sky.follow_day_clock(queue, sky, self.sky_azimuth());
+            return;
+        }
+        if day.hour == values[0] && day.minutes == values[1] {
             return;
         }
         day.hour = values[0];
@@ -372,6 +381,17 @@ impl super::Runtime {
         self.sky
             .update_day_clock(queue, [values[0], values[1]], day::azimuth(&shadow.sun));
     }
+    /// Where the sky's twilight glows without the live sun: over the map's sun, or the
+    /// default one.
+    fn sky_azimuth(&self) -> [f32; 2] {
+        day::azimuth(
+            &self
+                .sky
+                .sun
+                .unwrap_or_else(super::lighting_environment::default_sun),
+        )
+    }
+
     /// Live `r_dayDebug` (terms to leave out of the real-time light).
     pub(crate) fn set_day_debug(&self, bits: u32) {
         if let Some(shadow) = &self.shadows {
@@ -471,8 +491,15 @@ impl super::Runtime {
             device,
             &self.forge.camera_layout,
             self.forge.format,
-            settings.day,
+            settings.day.sky(),
         );
+        if !settings.day.enabled && settings.day.pc_clock {
+            self.sky.follow_day_clock(
+                queue,
+                [settings.day.hour, settings.day.minutes],
+                self.sky_azimuth(),
+            );
+        }
         if !settings.enabled
             || (!self.has_ssao_receivers() && settings.volumetrics == 0 && !settings.day.enabled)
         {

@@ -21,6 +21,7 @@ fn cvars_register_archived_with_stock_names_and_defaults() {
         ("r_DynamicGlowHeight", CvarValue::Integer(0)),
         ("r_DynamicGlowScale", CvarValue::Float(0.25)),
         ("r_dynamicGlowStyle", CvarValue::Integer(1)),
+        (NO_SABERS_CVAR, CvarValue::Integer(0)),
     ] {
         // The retail menu writes `r_dynamicglow`: lookups ignore case.
         let cvar = cvars.get(&name.to_ascii_lowercase()).unwrap();
@@ -43,6 +44,7 @@ fn edits_reach_the_policy_and_the_frame_values() {
     cvars.set_text("r_DynamicGlowHeight", "200").unwrap();
     cvars.set_text("r_DynamicGlowScale", "0.5").unwrap();
     cvars.set_text("r_dynamicGlowStyle", "0").unwrap();
+    cvars.set_text("r_dynamicglownosabers", "1").unwrap();
     assert_eq!(
         settings.live(),
         Live {
@@ -51,6 +53,7 @@ fn edits_reach_the_policy_and_the_frame_values() {
             delta: 1.5,
             intensity: 1.4,
             soft: false,
+            no_sabers: true,
         }
     );
     assert_eq!(
@@ -85,6 +88,43 @@ fn modes_follow_stock_and_jof() {
     // Any other nonzero value is on, as `r_DynamicGlow->integer` tests are.
     assert_eq!(Mode::from_cvar(4), Mode::On);
     assert_eq!(Mode::from_cvar(-1), Mode::On);
+}
+
+#[test]
+fn sabers_leave_the_glow_only_when_asked() {
+    let sources = |mode, no_sabers| {
+        let live = Live {
+            mode,
+            no_sabers,
+            ..Live::default()
+        };
+        let Sources {
+            scene,
+            blades,
+            trails,
+        } = live.sources();
+        [scene, blades, trails]
+    };
+    // Off by default: everything that glows glows, sabers included, as before.
+    assert!(!Live::default().no_sabers);
+    assert_eq!(sources(Mode::On, false), [true, true, true]);
+    assert_eq!(sources(Mode::GlowOnly, false), [true, true, true]);
+    assert_eq!(sources(Mode::Sabers, false), [false, true, false]);
+    assert_eq!(sources(Mode::Off, false), [false, false, false]);
+    // On: blades and trails are left out, the rest of the scene keeps its glow.
+    assert_eq!(sources(Mode::On, true), [true, false, false]);
+    assert_eq!(sources(Mode::GlowOnly, true), [true, false, false]);
+    // Sabers only without sabers leaves nothing to glow.
+    assert_eq!(sources(Mode::Sabers, true), [false, false, false]);
+    assert_eq!(sources(Mode::Off, true), [false, false, false]);
+    // The switch is per frame: it never rebuilds the glow resources.
+    let (mut cvars, settings) = registry();
+    let policy = settings.policy();
+    cvars.set_text(NO_SABERS_CVAR, "1").unwrap();
+    assert!(settings.live().no_sabers);
+    assert_eq!(settings.policy(), policy);
+    cvars.set_text(NO_SABERS_CVAR, "0").unwrap();
+    assert!(!settings.live().no_sabers);
 }
 
 #[test]

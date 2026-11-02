@@ -455,6 +455,7 @@ first drawn) and keys only a later remap uses. Not measured on a GPU; compare th
 | `r_liveLighting` | Lighting tier; default 0. Tier 1 retains world shadow casters between frames; tier 0 also uses available baked indirect light. Applies at map load |
 | `r_dayHour` | Solar hour; default 12 (noon, SJK); updated live when day/night resources are installed |
 | `r_dayMinutes` | Minutes per simulated day; 0 holds the hour |
+| `r_dayClock` | The hour follows the PC's local clock (read once a second, `day_live::PC_CLOCK_CVAR`), over `r_dayHour` and `r_dayMinutes`; default 0 (off); live. Without Sun and sky (`r_dayNight 0`, the SJK and Vanilla presets) the night is a darker exposure instead: factor 1 by day, 0.4 from 20:30 to 05:00, eased through dusk (18:00) and dawn (to 07:00), applied after eye adaptation in the scene resolve, so the HUD keeps its brightness (`day_live::night_tint`, `Params::night`), with eye adaptation brightening less as the night deepens and not at all in full night (`post_exposure::day_share`), so the dark sky does not undo it; and the sky alone follows the PC's hour, the sky stage's day tint installed without sun or shadows (`day::Settings::sky`, `sky_stage::Runtime::follow_day_clock`, written only when the hour changes), from the next map load or graphics reload; with the clock switched off again the sky shows noon, which leaves the authored sky as it is (`day_live::Clock::sky_values`). The tint's pipelines are built inside `gpu_guard::capture` (`day_sky_guard.rs`, hub report #219): one wgpu rejects leaves the authored sky, and `crashes/day-sky.txt`, written before the compile and removed after, makes the start after a session that closed while compiling leave the tint out once, with a console line, then try it again |
 | `r_indirectBoost` | Live sky/bounce illumination multiplier, 0–4; default 1. Does not amplify direct lights or add bounce iterations |
 | `r_ambientFill` | Live material-lighting floor in dark areas, 0–0.2; default 0.025. Fades as existing illumination increases |
 | `r_ambientFillOcclusion` | Fraction of ambient occlusion applied to the readability fill, 0–1; default 1 preserves the previous response. Real indirect lighting keeps full occlusion |
@@ -489,8 +490,10 @@ first drawn) and keys only a later remap uses. Not measured on a GPU; compare th
 | `r_cubeMapping` | Reflection probes on specular-mapped surfaces (rend2's name and meaning); default 1, needs `r_specularMapping`, applies after a graphics reload |
 | `r_cubeMapSize` | Reflection probe face size, a power of two 32–512; default 128, applies after a graphics reload |
 | `r_floorReflections` | Polished floors mirror the scene (see [Floor reflections](#floor-reflections)); default 1, live |
+| `r_toonModels` | Toon shading on players and other lit models, 1 on, 0 stock (default); live, archived. See [Toon models](#toon-models) |
 | `r_DynamicGlow` | Halo around `glow` shader stages: 0 off, 1 on (default), 2 saber blades only, 3 the glow alone (debug); live. See [Dynamic glow](#dynamic-glow) |
 | `r_dynamicGlowStyle` | Glow blur: 1 EternalJK rd-vulkan's (default), 0 retail rd-vanilla's; live |
+| `r_dynamicGlowNoSabers` | 1 keeps saber blades and trails out of the dynamic glow, everything else keeps it; default 0, live, archived |
 | `r_dynamicLightShadows` | Walls stop dynamic lights (sabers, bolts, explosions) in real-time lighting, 1 (default, SJK) or 0 (they light through, as retail); live, console only, archived. See [Dynamic lights and walls](#dynamic-lights-and-walls) |
 
 See [day_night.rs](../crates/sjk-viewer/src/day_night.rs),
@@ -1689,6 +1692,40 @@ release build passed; Cargo runs no bundled regression tests. The owner accepted
 the release playtest on 2026-10-02. Broader live-animation checks, other GPUs and
 exhaustive quality/map coverage remain open.
 
+## Toon models
+
+`r_toonModels 1` (Sol's request, 02/11/2026; Settings > Graphics > Image, "Toon
+models"; off by default, as stock) draws players and every other model lit by
+`rgbGen lightingDiffuse` or `lightingDiffuseEntity` in a stylized, cartoon-like way. It
+is a look in the spirit of current stylized shooters, made from the game's own light;
+it changes only what the viewer sees.
+
+- **Bands.** In stock lighting, `toon_diffuse` (`model_light_grid.wgsl`) replaces
+  `RB_CalcDiffuseColor`'s smooth falloff: the side facing the grid's light direction
+  gets a lit tone, the far side a shadow tone, with a half step between and soft
+  edges (`toon_steps`). The tones are 0.65x and 1.15x the model's mean light (ambient
+  plus half the directed light) rather than ambient and ambient plus directed,
+  because many maps' grids give a weak direction and stock's two ends barely differ.
+  It runs per pixel even with `r_modelPixelLight 0`: bands per vertex would follow
+  the triangles.
+- **Real-time lighting.** There a model's light is one sum with the sun's shadows in
+  it (`model_sun_color`, `sun_realtime_buffer.wgsl`), so `toon_lit` steps its
+  brightness in halves, never below 0.6 of the light, keeping its hue.
+- **Rim.** The silhouette, where the surface turns away from the camera, gets half the
+  model's light again on top (`toon_rim`), the bright edge of the style.
+- **Colour.** The textured result of those stages is a fifth more saturated
+  (`toon_colour`, `world_lighting_mode.wgsl`); other stages of the same shader
+  (additive shine, glow) are unchanged.
+
+The setting is bits 1..3 of the scene-light block's model word
+(`point_lights.metadata.y`, beside `r_modelPixelLight` in bit 0), so it switches live
+with no pipeline rebuild. Cost: a few arithmetic operations per model pixel.
+
+Limits: JA skins have shading painted in, so the result reads as stylized JA rather
+than flat cartoon colours; there are no ink outlines yet; the menu's character
+preview keeps stock shading. `world_shot_toon.rs` renders stock and toon side by
+side from a demo (`SJK_TEST_DEMO`, an ignored test).
+
 ## Entity render effects
 
 NPC nameplate health uses JoF EJK
@@ -1920,6 +1957,13 @@ does. Lines used to take only their authored `origin2`, so a traced line had no 
 and drew as a camera-facing square at the floor. Trip mine beams keep their own cached
 trace. Stock's `CG_Trace` also stops the dropped box on solid entities such as a lift;
 SJK drops it onto the world only, and `traceImpactFx` on a traced line is not played.
+The beam's emitter climbs at 3000 units/s and plays `env/beam_lights` every 100 units: a
+green light and an `FxRunner` with `count 0 0.6` running `env/beam_bolts` (two
+`Electricity` bolts traced out to the walls, `count 0 0.6` each). `CFxScheduler::PlayEffect`
+rounds every primitive's count, runners included, so each runner fires about one time in
+six, and a run plays one random `playFx` entry (`CMediaHandles::GetHandle`). SJK used to
+play every runner's entries once whatever its count, which gave the spawn beam about six
+times retail's lightning ([effect_runtime.rs](../crates/sjk-viewer/src/effect_runtime.rs)).
 
 The Force Speed afterimages use it: two copies of the actor in its current pose
 at alpha 100 and 50, spaced by `(int)(6 * speed * 0.004)` units along the
@@ -3055,6 +3099,68 @@ the sheets to `SJK_SIGNATURE_PREVIEW` (`SJK_SIGNATURES` picks some); and
 third-person camera and from first person looking along the blade, saving to
 `SJK_VIEWS` (`SJK_VIEW_SKINS` picks some).
 
+`python scripts/blade_cost.py` ranks blades by GPU cost (31/10/2026, to find the top-tier
+blades that eat the frame): it runs `signature_gpu_cost_against_stock` once per scene
+(`game`, `close`, `along`) with `SJK_COST_TIERS` (Legendary and Mythical by default,
+`--tiers all`, or `--ids`) and writes `target/blade-cost/blade-cost.md`, each blade's
+milliseconds per frame and multiple of the stock blade in every scene, worst first, beside
+the CSV. With `SJK_COST_TIERS` the test measures blades with no signature too (drawn by the
+shared pipelines, their files from the hub's packs in `SJK_TEST_PACKS`; without them they
+are named as skipped), and every blade's frame draws the passes its file adds as
+`saber_gpu.rs` does: solid, black hole horizon and lens, heat haze (into the same target,
+bending a blank scene image, where the game draws haze and lenses into the effect layer in
+their own pass). Left out: the glow pass (one shared pipeline for every skin), trails,
+afterimages and lights. GPU timestamps on a non-exclusive GPU: compare blades within one
+run.
+
+First optimizations from it (31/10/2026), each leaving every signature sheet (still, orbit and
+tip, 132 blades) within 1/255 of `main`'s:
+
+- `behindBlade` (how far the blade's body hides a piece) ran inside every `rayPt` and `raySeg`,
+  a few hundred times a pixel on the heaviest blades, though most of it depends on the ray
+  alone. `saber.wgsl` now calls `labRayPrepare(ray.o, ray.d)` before a signature's volume and
+  solid parts; the lab keeps the ray's part in `var<private>` variables (the translator writes
+  a non-`const` module variable as one) and `behindBlade` reads it for that ray, returning at
+  once where the ray never passes behind the body; another ray (a shifted one) goes through
+  `behindBladeFull`, the old body. The cached path keeps the old multiplication order: `hideD`
+  divides by `1 - h`, which magnifies the last digit a thousandfold where a piece is nearly
+  hidden (a reordered product moved Big Bang's clash ring contour by 31/255).
+- World Shift drew at a third of its speed with the cache on an RTX 5080 (Vulkan), and still
+  did with the cache switched off by a constant or reached through a wrapper, though the same
+  arithmetic in one function did not. Its header says `@raycache off`: `module_source` renames
+  `behindBladeFull` to `behindBlade` in its module, so its pieces call the old body and the kept
+  one goes uncalled (`Signature::ray_cache`, test `world_shift_alone_goes_without_the_ray_cache`).
+- `bolt3` takes `px` and skips its ten segments when the whole bolt (within half its length and
+  0.71 of its zigzag of its middle) is more than six units and three pixels off the ray: every
+  caller turns its distance into Gaussian glows at most 1.5 wide, under a ten-thousandth there.
+- Exogorth: the grit's throat flash is worked out only in the last tenth of its way in, where
+  it shows, and a fang the ray passes further from than its thickness and half a pixel is
+  skipped.
+
+Timed with `scripts/blade_cost.py`, `main` and the branch in one sitting (RTX 5080, Vulkan,
+1920x1080): the 48 Legendary and Mythical blades' total went from 75.1 to 58.2 ms in the
+`game` scene, 40.8 to 32.0 in `close` and 32.6 to 25.6 in `along` (each blade worn by all 33
+blades of the scene). Bleeding Kyber 3.57 to 1.49 ms, Abyssal Eye 3.03 to 1.37, Sith Holocron
+2.52 to 1.32, Exogorth 4.06 to 2.92, Between Worlds 3.86 to 3.05; World Shift and the five
+blades without a signature unchanged. Not timed on another GPU or backend.
+
+A second round (31/10/2026) gave the blades' own loops the same kind of exact skip: a piece's
+reach from a point or the axis is known, and past it plus three widths of its widest glow (and
+three pixels) it adds under a ten-thousandth. Reactor's magnetic loops, Felucia Spores'
+filaments and spores, Between Worlds' streams (which draw nothing past 2 anyway), Starforge's
+granules and embers, Exogorth's saliva strands and Nebula Song's ribbons. Sheets again within
+1/255 of the original `main`'s. Timed against `main` in one sitting (`game` / `close`): Felucia
+Spores 2.06 to 1.22 / 1.17 to 0.68 ms, Reactor 2.03 to 1.26 / 1.10 to 0.63, Between Worlds 2.78
+to 2.33 / 1.60 to 1.29, Starforge 1.86 to 1.65 / 1.03 to 0.92, Nebula Song 0.98 to 0.83 and
+Exogorth 1.51 to 1.32 in `close`; untouched blades moved up to a tenth either way in that run,
+so smaller changes are noise.
+
+The smoke (`fxSmoke`, in 40 signatures) is not where the time goes: switched off, the 48 top
+blades' `game` total fell by 2.9 of 54.6 ms, 0.29 ms at most for one blade (Starkiller Frost).
+Its noise has no exact shortcut, so it is left as it is. Measuring while the client runs is
+unreliable: during one run the stand-in blade went from 0.57 to 2.57 ms and the switched-off
+helpers seemed to cost time; check the stand-in line of each run.
+
 ### Falling blossoms
 
 Built 21/10/2026 for the Varykino Blossom (blade 166, Kushina's idea: "the afterimage like
@@ -3372,7 +3478,11 @@ same for the main view:
    glowing layers are emitted after the others, so the glow pass draws one tail
    range per slot; this only reorders layers within one slot, which leaves additive
    and modulating blends unchanged (alpha-blended layers stay back to front within
-   each part). Nothing glowing on screen means no pass, no blur and no composite
+   each part). `r_dynamicGlowNoSabers 1` leaves the saber part out (the blades' glow
+   capsules with their skins' glints and black-hole horizons, and the trails), so only
+   the rest of the scene glows; the sabers' own drawing in the scene and the effect
+   layer is unchanged ([`Live::sources`](../crates/sjk-viewer/src/post_glow.rs)).
+   Nothing glowing on screen means no pass, no blur and no composite
    work; a frame only walks the glowing world passes and the entity queue to decide.
 3. **Blur** ([post_glow.rs](../crates/sjk-viewer/src/post_glow.rs)), in 8-bit images
    that clamp after every pass as stock's framebuffer copies did:
@@ -3399,6 +3509,7 @@ same for the main view:
 | --- | --- | --- |
 | `r_DynamicGlow` | 1 | 0 off, 1 on, 2 saber blades only (JoF EternalJK), 3 the blurred glow without the scene (debug); live, 0 frees the images |
 | `r_dynamicGlowStyle` | 1 | 1 rd-vulkan pyramid, 0 retail kernel; rebuilds the blur |
+| `r_dynamicGlowNoSabers` | 0 | 1 keeps saber blades and trails out of the glow image (g0dchris' idea), with any style; with `r_DynamicGlow 2` nothing glows; live |
 | `r_DynamicGlowIntensity` | 1.13 | Retail per-pass gain; rd-vulkan scales its level sum by Intensity - 1; live |
 | `r_DynamicGlowPasses` | 5 | Retail passes, 1-32; live |
 | `r_DynamicGlowDelta` | 0.8 | Retail tap spread added per pass; live |
@@ -3407,9 +3518,10 @@ same for the main view:
 | `r_DynamicGlowWidth`, `r_DynamicGlowHeight` | 0 | Retail blur size in pixels when both are positive; rebuild |
 
 All are archived and keep stock's names (lookups ignore case, so the retail menu's
-`r_dynamicglow` is the same cvar); `r_dynamicGlowStyle` is SJK's. Stock defaults
-`r_DynamicGlow` to 0; SJK turns it on. The renderer settings' IMAGE tab has rows
-for `r_DynamicGlow` and `r_dynamicGlowStyle`. SJK's classic menus have no
+`r_dynamicglow` is the same cvar); `r_dynamicGlowStyle` and `r_dynamicGlowNoSabers`
+are SJK's. Stock defaults `r_DynamicGlow` to 0; SJK turns it on. The renderer
+settings' IMAGE tab has rows for `r_DynamicGlow`, `r_dynamicGlowNoSabers` (No glow on
+sabers) and `r_dynamicGlowStyle`. SJK's classic menus have no
 counterpart of the retail Setup page's glow toggle.
 
 Emission-mapped world stages are drawn too, writing only their emission (see
@@ -3836,6 +3948,53 @@ the lamp cap, the emission field's mean and mask, the strength and glow bits, an
 validation of the material program and its glow variant in both lighting modes. No
 emission map has been rendered: appearance, halo and the light added in real-time
 lighting are unverified.
+
+## Tags
+
+Players' tags ([client.md](client.md#tag)) have a pass of their own since 31/10/2026
+([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs),
+[tag_render.wgsl](../crates/sjk-viewer/src/tag_render.wgsl); Sol: tags were blurry in
+the game). They were impact-mark decals with decal shaders, whose pictures the effects'
+atlas squeezes into 128-pixel tiles: a 256-pixel tag kept a quarter of its texels,
+stretched over 56 units of wall.
+
+- **Geometry:** the decal store still projects each tag onto the world once
+  ([decal_store.rs](../crates/sjk-viewer/src/decal_store.rs), `tag_fragments`); the pass
+  rebuilds its vertices (a triangle list, the picture's axes and the finish on each
+  vertex) only when the store's tags version changes, so a frame with tags on show uploads
+  16 bytes (the finishes' clock).
+- **Pictures:** each picture on show has textures of its own: the picture (`Rgba8Unorm`,
+  its stored values as the effects' are, mipmapped by alpha-weighted averaging so the
+  transparent surroundings do not darken its edge) and its outline (`R8Unorm`, the signed
+  distance to where its alpha crosses a half, from a quarter of its edge outside to as far
+  inside, an exact Euclidean transform). A tag is made square and a power of two from 512
+  to 1024 pixels, a smaller one enlarged once with Catmull-Rom (alpha-weighted, so no dark
+  fringe) rather than left for the GPU to magnify; a card is a 1024 sticker (its 6:5
+  picture at 92 % of the width, corners rounded, a rim of its colour, the outline the
+  rounded box's own). `r_picmip` 1 or more halves them. They are built on a worker thread
+  the first time one is on show (inline in tests), drawn from the next frame, let go 60 s
+  after they were last drawn and all dropped when the packs are mounted anew. Sampling is
+  trilinear and anisotropic (the adapter's limit, up to 16).
+- **Finishes** (`tag_render.wgsl`), the cards' (`sjk_ui::shine`, `ui_shapes.wgsl`) at the
+  scale of a 512-pixel picture: Holo's rainbow foil on the picture only, its light crossing
+  where the viewer's angle puts it (it slides as one walks past) and drifting, stronger and
+  with more bands than a card's, plus a glitter of points catching the light; Solar's
+  corona along the outline, inside the picture, and its glow outside fading within a few of
+  its reaches and to nothing before the decal's edge. Normal is the picture alone.
+- **Drawn** in the effect layer right after the world's marks (`particle_draw.rs`), so
+  heat haze, weather and effects lie over them; depth-tested with the marks' polygon offset
+  (`qglPolygonOffset(-1, -2)`), never writing depth, alpha blended, fullbright as the marks
+  are. The main view's effect rectangle takes them in (`effect_bounds.rs`); mirror and
+  portal views draw them too.
+
+Cost: one draw per tag on show with its picture ready, a few hundred vertices at most;
+Holo and Solar shade a few dozen operations a pixel (Solar three noise lookups and three
+flares) over the tags' own pixels only. Video memory: about 1.75 MB a tag and 7 MB a card
+sticker, for the distinct pictures on show. World shot:
+`world_shot::tags::duel6_tags_on_walls_and_floor` (a Normal and a Holo tag, a Holo and a
+Solar credits card, a Solar tag on the floor; `SJK_TEST_TAGS` names the hub's
+`assets/dist`). Unit tests cover the outline's distances, the pictures' sizes and
+edges, and the sticker. Not measured: frame time with many finished tags on show.
 
 ## Floor reflections
 
@@ -4445,7 +4604,24 @@ own sizes (`con_scale`, row pitch), and its caret, selection and pointer hits
 measure the same fixed advance it draws with. The game fonts load when a world is
 installed with the option on, or on first use, from
 [game_font.rs](../crates/sjk-viewer/src/game_font.rs); they need no game data,
-and a font that fails to load leaves its surfaces on Inter. The console font is drawn after all other text, so the
+and a font that fails to load leaves its surfaces on Inter.
+`cg_chatFont` and `con_font` (Settings: Chat font, Console font; empty is SJK's own) name a
+font family installed on the PC for the chat box and the console
+([system_font.rs](../crates/sjk-viewer/src/text/system_font.rs)): the system font folders
+(Windows `Fonts` and the per-user one, macOS system and user folders, and on Linux the
+user's `fonts` folders and each `XDG_DATA_DIRS` folder's `fonts`, as on NixOS and Flatpak,
+following symlinked folders and visiting each real folder once) are listed
+once on a worker from each file's `name` table, and a chosen family's 256 code-page slots
+are rasterized once on a worker into its own coverage atlas (chat proportional with the
+family's bold face; the console in its 8 by 16 cell, each glyph centred and the em sized so
+the widest ASCII character fits). A slot the font lacks comes from the default (Inter,
+JetBrains Mono), characters beyond the code page and emoji from the default's wide sources,
+and a missing or unreadable font keeps the default. A glyph whose bounds are not finite or
+exceed 4 ems counts as missing, the line is held to 1 to 1.6 ems, and a font whose atlas
+would pass 8192 texels is refused. `con_font` draws the console's own grid (classic and SJK UI
+consoles); the HUD's console-font text and notify lines keep JetBrains Mono. A changed value
+loads on one worker, the font on show staying until the new one is ready, and rebuilds only
+that atlas. The console font is drawn after all other text, so the
 console stays on top. The classic console (`con_style classic`, see
 [client.md](client.md#classic-console)) goes further: its background, bar and
 text are a layer of their own
@@ -4624,11 +4800,20 @@ wide screen and grown by `cg_hudScale` from the bottom like the rest of the game
 HUD, with the turbo bar and the weapons-linked mark in `whiteShader` white
 ([menu_hud/frame.rs](../crates/sjk-viewer/src/menu_hud/frame.rs) `vehicle_hud`).
 Stock's item names are kept: `shield_tic*` show the hull and `armor_tic*` the shields.
-Under `classic` and `radial`, or with a HUD that has no vehicle menu, SJK draws its own
+The text HUD of a nonzero `cg_hudFiles` (the HUD picker's Text only) shows just the
+hull, as a yellow number centred at the bottom in the text HUD's font
+(`Frame::simple_hud`), also when the vehicle hides its rider and the player's numbers
+give way. SJK's own looks show only the hull too, through their layout documents'
+`vehicle_*` widgets (bindings `vehicle_ratio`, `vehicle_value`, `vehicle_text`, shown by
+`draw_vehicle`): `radial` a yellow arc under the crosshair, on the health arc's circle
+between the left and right meters (132 to 48 degrees, four segments, the same track and
+shadow, moved by the radial placement with the rest of the status), with the hull's
+number inside it; `classic` a yellow bar with an `HP` line above the weapon and
+ammunition lines. With a game-data HUD that has no vehicle menu, SJK draws its own
 ([hud/vehicle.rs](../crates/sjk-viewer/src/hud/vehicle.rs)): a vector strip at the
 bottom centre laid out on `swoopvehiclehud`'s 640x80 units (hull above, speed, shield
 and ammunition below), scaled by the window height and `cg_hudScale`, with its numbers
-in the HUD font. Both follow `CG_DrawVehicleHud`
+in the HUD font. The stock HUD and the strip follow `CG_DrawVehicleHud`
 (`cg_draw.c`): hull `stats[STAT_HEALTH]`
 of `armor` in 12 tics, shield `stats[STAT_ARMOR]` of `shields` in five, `speed` of
 `speedMax` in five (red and flashing every 200 ms while the turbo burns), `ammo[0]` and

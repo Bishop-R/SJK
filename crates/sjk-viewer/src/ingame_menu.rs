@@ -41,6 +41,8 @@ pub(crate) enum Page {
     Shot,
     /// The map editor's panel, for staff ([`crate::map_edits::panel`]).
     MapEdit,
+    /// The ghost editor's column, for staff (`ghost edit`).
+    GhostEdit,
     Team,
     /// Map/theme constrained Siege class selection.
     Siege,
@@ -76,6 +78,9 @@ pub(crate) struct View<'a> {
     pub(crate) page: Page,
     pub(crate) selected_row: usize,
     pub(crate) team: u8,
+    /// The player follows someone ([`OwnSide::following`]): Spectate still frees the
+    /// camera, so it stays on offer.
+    pub(crate) following: bool,
     pub(crate) team_game: bool,
     /// The server runs Siege, where retail swaps two bar buttons.
     pub(crate) siege: bool,
@@ -401,6 +406,7 @@ impl InGameMenu {
                 team_game: view.team_game,
                 siege: view.siege,
                 team: view.team,
+                following: view.following,
                 vote: view.vote_active,
             })
         } else {
@@ -420,7 +426,7 @@ impl InGameMenu {
         };
         // The sender card's picture and place, asked before the profile card's lock.
         self.chat
-            .picture_sender_card(crate::player_identity::avatar_version);
+            .picture_sender_card(crate::player_identity::card_appearance);
         self.chat.locate_sender_card(crate::player_mutes::place);
         let mut lines = [chat_dock::BLANK; chat_dock::LINES];
         let chat_view = chat.then(|| chat_dock::ChatDock {
@@ -779,15 +785,64 @@ fn info_lines<'a>(
     }
 }
 
-/// Whether `row` of the join page is the team the player is already on.
+/// Whether `row` of the join page is the team the player is already on. Spectate is
+/// not while the player follows someone: it frees their camera.
 fn current_team_row(view: &View<'_>, row: usize) -> bool {
-    if view.page != Page::Team {
+    if view.page != Page::Team || (view.following && view.team == 3) {
         return false;
     }
     if view.team_game {
         matches!((row, view.team), (1, 1) | (2, 2) | (3, 3))
     } else {
         matches!((row, view.team), (0, 0..=2) | (1, 3))
+    }
+}
+
+/// `pmove_t` flag the server sets on a follower's copy of the followed player's state
+/// (`codemp/game/bg_public.h` `PMF_FOLLOW`).
+const PMF_FOLLOW: u16 = 0x1000;
+
+/// The local player's own side for the join page and the match card, from `game` and
+/// the snapshot's player state `player`.
+///
+/// While the player follows someone, `player` is the followed player's copy
+/// (`SpectatorClientEndFrame` copies their `ps`, `PMF_FOLLOW` set, their `client_num`
+/// and `persistant[PERS_TEAM]` kept), so its team is theirs, not the local player's.
+/// The own team then comes from the own clientinfo (`CS_PLAYERS + clientNum`, `t`), as
+/// codemp's cgame copies it into `ui_myteam` for the join menu only for
+/// `clientNum == cg.clientNum` (`CG_NewClientInfo`), and as `SetTeam` judges a request by
+/// the own `sess.sessionTeam`. A follower watches, whatever team that is.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct OwnSide {
+    /// `TEAM_FREE` 0, red 1, blue 2, spectator 3.
+    pub(crate) team: u8,
+    /// The player watches the match (a spectator, or following someone).
+    pub(crate) watching: bool,
+    /// The player follows someone. `team s` still does something then: `SetTeam`
+    /// turns it down only for a team other than spectator that the player is already
+    /// on, and puts a follower back to the free camera (`SPECTATOR_FREE`).
+    pub(crate) following: bool,
+}
+
+impl OwnSide {
+    pub(crate) fn of(game: &GameState, player: &sjk_protocol::PlayerState) -> Self {
+        let following = player.movement_flags() & PMF_FOLLOW != 0
+            || crate::looks::ViewSlots::of(game, player)
+                .followed()
+                .is_some();
+        if following {
+            Self {
+                team: siege_data::local_team(game),
+                watching: true,
+                following: true,
+            }
+        } else {
+            Self {
+                team: player.team(),
+                watching: player.is_spectator(),
+                following: false,
+            }
+        }
     }
 }
 
@@ -822,6 +877,7 @@ mod sjk_tests {
             page,
             selected_row,
             team,
+            following: false,
             team_game,
             siege: false,
             red_players: 4,
@@ -901,6 +957,118 @@ mod sjk_tests {
         assert_eq!(menu.rows[16], "More maps...");
     }
 
+    const ME: i32 = 5;
+    const FOLLOWED: u16 = 2;
+
+    /// A free-for-all where the local player (slot 5) spectates and slot 2 plays.
+    fn ffa_with_a_spectator() -> GameState {
+        let mut game = GameState::empty_local(ME);
+        game.replace_config_string(1_131 + ME as usize, b"n\\Me\\t\\3".to_vec())
+            .expect("own clientinfo");
+        game.replace_config_string(1_131 + usize::from(FOLLOWED), b"n\\Them\\t\\0".to_vec())
+            .expect("followed clientinfo");
+        game
+    }
+
+    /// The followed player's copy of their state: their slot, their `TEAM_FREE`.
+    fn their_state(follow_flag: bool) -> sjk_protocol::PlayerState {
+        let mut followed = sjk_protocol::PlayerState::default();
+        followed.set_client_num(FOLLOWED);
+        if follow_flag {
+            followed.set_movement_flags(PMF_FOLLOW);
+        }
+        followed.persistent[3] = 0;
+        followed
+    }
+
+    const FOLLOWER: OwnSide = OwnSide {
+        team: 3,
+        watching: true,
+        following: true,
+    };
+
+    /// Hub report #207: `PMF_FOLLOW` alone marks the state as a followed player's,
+    /// even with the own slot in it (a server that leaves `clientNum` as it was).
+    #[test]
+    fn the_follow_flag_alone_reads_the_own_team() {
+        let game = ffa_with_a_spectator();
+        let mut followed = their_state(true);
+        followed.set_client_num(ME as u16);
+        assert_eq!(followed.team(), 0, "the copy carries their team");
+        assert_eq!(OwnSide::of(&game, &followed), FOLLOWER);
+    }
+
+    /// A viewed slot other than the own alone (no `PMF_FOLLOW`) marks it as well.
+    #[test]
+    fn another_viewed_slot_alone_reads_the_own_team() {
+        let game = ffa_with_a_spectator();
+        assert_eq!(OwnSide::of(&game, &their_state(false)), FOLLOWER);
+    }
+
+    /// Hub report #207: following a player in a free-for-all, Join is offered on the
+    /// join page and the match card, and so is Spectate, which frees the camera.
+    #[test]
+    fn following_a_player_offers_join_and_spectate() {
+        let mut game = ffa_with_a_spectator();
+        let followed = their_state(true);
+        let own = OwnSide::of(&game, &followed);
+        assert_eq!(own, FOLLOWER);
+        let following = |team_game, selected| View {
+            following: own.following,
+            ..view(Page::Team, selected, team_game, own.team)
+        };
+        let mut menu = sjk_menu();
+        menu.build_sjk(following(false, 0), [1_920.0, 1_080.0]);
+        assert!(menu.activation_allowed(0), "Join the game");
+        assert!(
+            menu.activation_allowed(1),
+            "Spectate: back to the free camera"
+        );
+        menu.build_sjk(following(true, 0), [1_920.0, 1_080.0]);
+        for row in 0..4 {
+            assert!(menu.activation_allowed(row), "team game row {row}");
+        }
+        let card = sjk_focus::Controls::for_match(sjk_focus::Match {
+            known: true,
+            team_game: false,
+            siege: false,
+            team: own.team,
+            following: own.following,
+            vote: false,
+        });
+        assert!(card.takes(sjk_focus::Control::Team(sjk_client::LegacyTeamChoice::Free)));
+        assert!(card.takes(sjk_focus::Control::Team(
+            sjk_client::LegacyTeamChoice::Spectator
+        )));
+        // The followed player's team, read as before, would hide Join.
+        menu.build_sjk(
+            view(Page::Team, 0, false, followed.team()),
+            [1_920.0, 1_080.0],
+        );
+        assert!(!menu.activation_allowed(0));
+        // In the free camera Spectate is the current choice.
+        menu.build_sjk(view(Page::Team, 0, false, 3), [1_920.0, 1_080.0]);
+        assert!(menu.activation_allowed(0) && !menu.activation_allowed(1));
+
+        // A follower on a side (a Siege player waiting out a respawn) keeps that side.
+        game.replace_config_string(1_131 + ME as usize, b"n\\Me\\t\\1".to_vec())
+            .expect("own clientinfo");
+        assert_eq!(OwnSide::of(&game, &followed).team, 1);
+
+        // In the own view the snapshot's own state stands.
+        let mut playing = sjk_protocol::PlayerState::default();
+        playing.set_client_num(ME as u16);
+        playing.persistent[3] = 0;
+        assert_eq!(
+            OwnSide::of(&game, &playing),
+            OwnSide {
+                team: 0,
+                watching: false,
+                following: false,
+            }
+        );
+    }
+
     #[test]
     fn the_arc_passes_over_rows_that_cannot_be_taken() {
         let mut menu = sjk_menu();
@@ -954,7 +1122,7 @@ mod sjk_tests {
         main.staff = true;
         menu.build_sjk(main, [1_920.0, 1_080.0]);
         assert_eq!(menu.focus, sjk_focus::Focus::Row(sjk_focus::Icon::Staff));
-        assert_eq!(menu.sjk_icons().len(), 6);
+        assert_eq!(menu.sjk_icons().len(), 7, "Map editor and Staff tools");
         let mut main = view(Page::Main, 0, false, 0);
         main.staff = false;
         menu.build_sjk(main, [1_920.0, 1_080.0]);

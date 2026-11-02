@@ -40,6 +40,42 @@ pub(crate) fn fps(console: Option<&ViewerConsole>) -> bool {
         .unwrap_or(true)
 }
 
+/// Archived cvar: the classic look's Id column, on by default as EternalJK-derived
+/// clients have it ([`ClassicOptions::client_ids`]).
+pub(crate) const IDS_CVAR: &str = "cg_showClientIDs";
+
+/// Archived cvar: each player's client number before the name on the SJK look
+/// (29/10/2026 #ideas recap); off by default, as stock JKA's scoreboard shows none
+/// (Sol's defaults rule, review of #317).
+pub(crate) const SJK_IDS_CVAR: &str = "cg_scoreboardIDs";
+
+/// Whether the SJK look shows client numbers (`cg_scoreboardIDs`, off unless set on).
+pub(crate) fn client_ids(console: Option<&ViewerConsole>) -> bool {
+    console
+        .and_then(|console| console.bool_cvar(SJK_IDS_CVAR))
+        .unwrap_or(false)
+}
+
+/// Archived cvar: rank the players by their score minus their deaths, where the deaths
+/// are known (29/10/2026 #ideas recap); off by default, the server's order.
+pub(crate) const DEATHS_RANK_CVAR: &str = "cg_scoreboardDeathsRank";
+
+/// Whether the scoreboard ranks by score minus deaths (`cg_scoreboardDeathsRank`).
+pub(crate) fn deaths_rank(console: Option<&ViewerConsole>) -> bool {
+    console
+        .and_then(|console| console.bool_cvar(DEATHS_RANK_CVAR))
+        .unwrap_or(false)
+}
+
+/// What a row is ranked by: its score, or with `deaths_rank` on its score minus its
+/// deaths when the board knows them (a row without a count keeps its score).
+pub(crate) fn rank_value(score: i32, deaths: Option<i32>, deaths_rank: bool) -> i32 {
+    match deaths {
+        Some(deaths) if deaths_rank => score.saturating_sub(deaths),
+        _ => score,
+    }
+}
+
 /// Layout family of the scoreboard, as drawn.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ScoreboardStyle {
@@ -123,9 +159,7 @@ impl ClassicOptions {
             small: console
                 .bool_cvar("cg_smallScoreboard")
                 .unwrap_or(defaults.small),
-            client_ids: console
-                .bool_cvar("cg_showClientIDs")
-                .unwrap_or(defaults.client_ids),
+            client_ids: console.bool_cvar(IDS_CVAR).unwrap_or(defaults.client_ids),
             icons: console
                 .bool_cvar("cg_drawScoreboardIcons")
                 .unwrap_or(defaults.icons),
@@ -237,5 +271,29 @@ mod tests {
             ScoreboardStyle::from_console(Some(&console)),
             ScoreboardStyle::Classic
         );
+    }
+
+    #[test]
+    fn deaths_count_against_the_score_only_when_ranked_and_known() {
+        assert_eq!(rank_value(10, Some(8), true), 2);
+        assert_eq!(rank_value(10, Some(8), false), 10);
+        assert_eq!(rank_value(10, None, true), 10);
+        assert_eq!(rank_value(i32::MIN, Some(1), true), i32::MIN);
+    }
+
+    #[test]
+    fn the_sjk_ids_and_the_death_rank_are_off_by_default() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console =
+            crate::console::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(!client_ids(Some(&console)));
+        assert!(!deaths_rank(Some(&console)));
+        assert!(!client_ids(None));
+        assert!(!deaths_rank(None));
+        // The classic look's Id column keeps its own switch and default.
+        assert!(ClassicOptions::from_console(Some(&console)).client_ids);
+        assert!(console.set_cvar(SJK_IDS_CVAR, "1"));
+        assert!(client_ids(Some(&console)));
+        assert!(ClassicOptions::from_console(Some(&console)).client_ids);
     }
 }

@@ -26,6 +26,11 @@ pub(crate) fn mode(
         || sjk_game_jka::pmove_japlus::JaPlusRules::from_game_state(game).enabled,
     )
     .or_else(|| {
+        sjk_game_jka::pmove_lugormod::LugormodRules::from_game_state(game)
+            .needs_snapshot(player)
+            .then_some(Interpolation::KeepAngles)
+    })
+    .or_else(|| {
         let style = japro_unpredicted(console, player);
         announce_style(style);
         style.map(|_| Interpolation::KeepAngles)
@@ -103,12 +108,22 @@ fn lerp_angle(from: f32, mut to: f32, fraction: f32) -> f32 {
     from + fraction * (to - from)
 }
 
-fn sample(previous: &Snapshot, next: &Snapshot, time: i32) -> ([f32; 3], [f32; 3]) {
+// Lugormod cg_view.c:270 carries the upper eye-height bit in userInt2.
+fn snapshot_eye_height(player: &PlayerState, lugormod: bool) -> i32 {
+    if lugormod && player.movement_type() != 5 {
+        (player.view_height() as u8) as i32
+            + (((player.raw_field(126).unwrap_or(0) & 1) << 8) as i32)
+    } else {
+        player.view_height()
+    }
+}
+
+fn sample(previous: &Snapshot, next: &Snapshot, time: i32, lugormod: bool) -> ([f32; 3], [f32; 3]) {
     let f = fraction(previous, next, time);
     let from = previous.player.origin();
     let to = next.player.origin();
     let mut eye = std::array::from_fn(|axis| from[axis] + f * (to[axis] - from[axis]));
-    eye[2] += previous.player.view_height() as f32;
+    eye[2] += snapshot_eye_height(&previous.player, lugormod) as f32;
     let from = previous.player.view_angles();
     let to = next.player.view_angles();
     (
@@ -133,10 +148,51 @@ pub(crate) fn present(gpu: &mut GpuState, time: i32) {
     let next = session
         .snapshot_after(previous.server_time)
         .unwrap_or(previous);
-    let (eye, angles) = sample(previous, next, time);
+    let lugormod =
+        sjk_game_jka::pmove_lugormod::LugormodRules::from_game_state(session.game_state()).enabled;
+    let (eye, angles) = sample(previous, next, time, lugormod);
     gpu.camera_position = Vec3::from_array(eye);
     if mode == Interpolation::ServerAngles {
         gpu.camera_pitch = -angles[0].to_radians();
         gpu.camera_yaw = angles[1].to_radians();
+    }
+}
+
+#[cfg(test)]
+mod lugormod_tests {
+    use super::*;
+
+    #[test]
+    fn scaled_snapshot_eye_uses_upper_bit_only_for_live_lugormod_players() {
+        let mut player = PlayerState::default();
+        player.set_view_height(-112);
+        player.set_raw_field(126, 1);
+        assert_eq!(snapshot_eye_height(&player, true), 400);
+        assert_eq!(snapshot_eye_height(&player, false), -112);
+        player.set_movement_type(5);
+        assert_eq!(snapshot_eye_height(&player, true), -112);
+    }
+
+    #[test]
+    fn missing_rope_state_keeps_mouse_look_and_clears_on_server_switch() {
+        let mut game = GameState::empty_local(0);
+        let mut player = PlayerState::default();
+        player.stats[0] = 100;
+        player.set_movement_type(9);
+        for name in ["Lugormod v3", "basejka", "JA+ Mod", "japro", "Lugormod v3"] {
+            game.replace_config_string(0, format!("\\gamename\\{name}").into_bytes())
+                .unwrap();
+            assert_eq!(
+                mode(None, &game, &player),
+                if name == "Lugormod v3" {
+                    Some(Interpolation::KeepAngles)
+                } else {
+                    None
+                },
+                "{name}"
+            );
+        }
+        player.set_movement_type(0);
+        assert_eq!(mode(None, &game, &player), None);
     }
 }

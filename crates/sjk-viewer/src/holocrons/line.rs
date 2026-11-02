@@ -6,7 +6,9 @@
 //! as a chat message with no text and [`sjk_identity::ChatMessage::holocron`] set; this
 //! words it from the tier the client knows, and leaves out a tier it does not. A kyber
 //! crystal's grand find (its tier `kyber_rare` and so on, [`crate::kyber`]) reads the same
-//! with the crystal's name: `Sol opened a Rare Kyber Crystal: Phoenix blade!`.
+//! with the crystal's name: `Sol opened a Rare Kyber Crystal: Phoenix blade!`. A find's
+//! prize ([`Prize`]) is drawn in its own rarity's colour, and a shader's blade beside it
+//! (`chat/view/sjk_line.rs`, 01/11/2026, Sol's request).
 
 use super::Tier;
 use sjk_identity::ChatMessage;
@@ -21,6 +23,29 @@ pub(crate) struct Words {
     /// page, which sets the sender's name in a column of its own.
     pub(crate) rest: String,
     pub(crate) tier: &'static Tier,
+    /// A grand find's prize, which ends both sentences just before their `!`.
+    pub(crate) prize: Option<Prize>,
+}
+
+/// What a grand find gave, as its line shows it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Prize {
+    /// The prize's words' length in bytes: they end the sentence, before its `!`
+    /// ([`Prize::range`]).
+    pub(crate) len: usize,
+    /// The prize's rarity's colour (a shader's tier, a card's rarity or rank), which can
+    /// differ from the holocron's: a Rare crystal can give a Legendary blade.
+    pub(crate) colour: sjk_ui::Color,
+    /// The blade skin a shader prize is, when the client knows it: the line draws it.
+    pub(crate) skin: Option<&'static crate::unlockables::Unlockable>,
+}
+
+impl Prize {
+    /// Where the prize's words are in `sentence` (the line's `text` or `rest`).
+    pub(crate) fn range(&self, sentence: &str) -> std::ops::Range<usize> {
+        let end = sentence.len().saturating_sub(1);
+        end.saturating_sub(self.len)..end
+    }
 }
 
 /// The longest shader name a find's line shows, in characters.
@@ -31,14 +56,16 @@ pub(crate) fn words(message: &ChatMessage) -> Option<Words> {
     let mark = message.holocron.as_ref()?;
     let tier = super::any(&mark.tier)?;
     let end = if tier.is_announced() { '!' } else { '.' };
-    let rest = match &mark.find {
-        Some(find) => format!(
-            "opened {} {}: {}!",
-            tier.article(),
-            tier.title(),
-            prize(find)
+    let (rest, prize) = match &mark.find {
+        Some(find) => {
+            let words = prize(find);
+            let rest = format!("opened {} {}: {words}!", tier.article(), tier.title());
+            (rest, Some(prize_look(find, words.len(), tier)))
+        }
+        None => (
+            format!("found {} {}{end}", tier.article(), tier.title()),
+            None,
         ),
-        None => format!("found {} {}{end}", tier.article(), tier.title()),
     };
     let text = if mark.own {
         format!("You {rest}")
@@ -49,7 +76,35 @@ pub(crate) fn words(message: &ChatMessage) -> Option<Words> {
         let who = if who.is_empty() { "Someone" } else { who };
         format!("{who} {rest}")
     };
-    Some(Words { text, rest, tier })
+    Some(Words {
+        text,
+        rest,
+        tier,
+        prize,
+    })
+}
+
+/// How a find's prize of `len` bytes of words shows: its rarity's colour (the holocron
+/// `tier`'s when the client does not know it) and, for a shader, its blade skin.
+fn prize_look(find: &sjk_identity::FindMark, len: usize, tier: &'static Tier) -> Prize {
+    if find.shader {
+        let skin = crate::unlockables::blade_skin(&find.skin);
+        let colour = skin.map_or_else(
+            || super::Tier::from_id(&find.rarity).map_or(tier.colour, |tier| tier.colour),
+            |skin| skin.tier.colour(),
+        );
+        return Prize { len, colour, skin };
+    }
+    let faces = crate::cards::faces::current();
+    let card = Some(find.card.as_str()).filter(|card| !card.is_empty());
+    let colour = crate::cards::Rarity::from_id(&find.rarity).map_or(tier.colour, |rarity| {
+        crate::cards::tone_in(&faces, rarity, card).colour
+    });
+    Prize {
+        len,
+        colour,
+        skin: None,
+    }
 }
 
 /// What a grand find gave, in words: the shader's name (plain, cut short), or "a
@@ -58,13 +113,21 @@ fn prize(find: &sjk_identity::FindMark) -> String {
     if find.shader {
         let name = crate::text::Plain(&find.name).to_string();
         let name: String = name.trim().chars().take(PRIZE_NAME_MAX).collect();
-        return if name.is_empty() {
-            "a saber shader".to_owned()
-        } else {
-            name
+        if name.is_empty() {
+            return "a saber shader".to_owned();
+        }
+        // A tag that came Holo or Solar (31/10/2026) says so: "Solar Gonk tag".
+        return match crate::cards::Finish::from_id(&find.finish) {
+            Some(finish) if finish.index > 0 => format!("{} {name}", finish.name),
+            _ => name,
         };
     }
-    let rarity = crate::cards::Rarity::from_id(&find.rarity).map_or("rare", |rarity| rarity.name);
+    // A ranked card says its rank, never its rarity.
+    let faces = crate::cards::faces::current();
+    let card = Some(find.card.as_str()).filter(|card| !card.is_empty());
+    let rarity = crate::cards::Rarity::from_id(&find.rarity).map_or("rare", |rarity| {
+        crate::cards::tone_in(&faces, rarity, card).name
+    });
     let article = if rarity.starts_with(['A', 'E', 'I', 'O', 'U']) {
         "an"
     } else {
@@ -89,6 +152,7 @@ mod tests {
 
     fn drop(name: &str, tier: &str, own: bool) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id: 5,
             at: 0,
             key_id: "aa".to_owned(),
@@ -122,12 +186,27 @@ mod tests {
         message
     }
 
+    /// A Solar tag's find says its finish (31/10/2026).
+    #[test]
+    fn a_solar_tag_find_says_its_finish() {
+        let mark = sjk_identity::FindMark {
+            finish: "solar".to_owned(),
+            ..shader("Gonk tag")
+        };
+        assert_eq!(
+            said(&find("Sol", "rare", false, mark)),
+            "Sol opened a Rare Holocron: Solar Gonk tag!"
+        );
+    }
+
     fn shader(name: &str) -> sjk_identity::FindMark {
         sjk_identity::FindMark {
             shader: true,
             name: name.to_owned(),
             rarity: "mythical".to_owned(),
             finish: String::new(),
+            card: String::new(),
+            skin: String::new(),
         }
     }
 
@@ -137,6 +216,8 @@ mod tests {
             name: String::new(),
             rarity: rarity.to_owned(),
             finish: finish.to_owned(),
+            card: String::new(),
+            skin: String::new(),
         }
     }
 
@@ -180,6 +261,41 @@ mod tests {
         );
         // A tier the client does not know is left out, as a drop's.
         assert!(unknown(&find("Fox", "from_the_future", false, shader("A"))));
+    }
+
+    /// A find's prize is marked where it ends the sentence, in its own rarity's colour
+    /// (not the holocron's), with its blade when the client knows the skin (01/11/2026).
+    #[test]
+    fn a_finds_prize_is_marked_in_its_rarity_colour_with_its_blade() {
+        let mark = sjk_identity::FindMark {
+            skin: "saber_phoenix".to_owned(),
+            ..shader("Phoenix blade")
+        };
+        let phoenix = crate::unlockables::blade_skin("saber_phoenix").unwrap();
+        let words = words(&find("Fox", "kyber_rare", false, mark)).unwrap();
+        let prize = words.prize.expect("a prize");
+        assert_eq!(&words.text[prize.range(&words.text)], "Phoenix blade");
+        assert_eq!(&words.rest[prize.range(&words.rest)], "Phoenix blade");
+        assert_eq!(prize.colour, phoenix.tier.colour());
+        assert_eq!(prize.skin.map(|skin| skin.id), Some("saber_phoenix"));
+        // Without the skin's id (an older hub), the shader's tier gives the colour.
+        let words = words_of(&find("Fox", "rare", false, shader("Phoenix blade")));
+        let prize = words.prize.unwrap();
+        assert!(prize.skin.is_none());
+        assert_eq!(prize.colour, crate::holocrons::TIERS[3].colour);
+        // A card's prize is its rarity's colour; a plain drop has no prize.
+        let words = words_of(&find("Fox", "uncommon", false, card("legendary", "holo")));
+        let prize = words.prize.unwrap();
+        assert_eq!(
+            &words.text[prize.range(&words.text)],
+            "a Legendary card, Holo"
+        );
+        assert_eq!(prize.colour, crate::holocrons::TIERS[2].colour);
+        assert!(words_of(&drop("Fox", "legendary", false)).prize.is_none());
+    }
+
+    fn words_of(message: &ChatMessage) -> Words {
+        words(message).unwrap()
     }
 
     #[test]

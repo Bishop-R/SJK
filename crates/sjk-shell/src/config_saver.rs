@@ -94,6 +94,28 @@ impl ConfigSaver {
     pub(crate) fn take_error(&mut self) -> Option<ConfigError> {
         self.writer.as_ref().and_then(Writer::take_error)
     }
+
+    /// Whether a queued write may still be landing on disk.
+    pub(crate) fn writing(&self) -> bool {
+        self.writer
+            .as_ref()
+            .is_some_and(|writer| writer.progress().queued > 0)
+    }
+
+    /// Wait until every queued write has finished, keeping any error for
+    /// [`Self::wait_idle`] or [`Self::take_error`].
+    pub(crate) fn wait_writes(&self) {
+        if let Some(writer) = &self.writer {
+            let mut progress = writer.progress();
+            while progress.queued > 0 {
+                progress = writer
+                    .shared
+                    .idle
+                    .wait(progress)
+                    .unwrap_or_else(|e| e.into_inner());
+            }
+        }
+    }
 }
 
 struct Job {

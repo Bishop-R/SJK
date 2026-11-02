@@ -10,6 +10,49 @@ mod storage;
 
 static CONFIG_FILE: OnceLock<PathBuf> = OnceLock::new();
 
+/// Give mounted PK3 archives the process headroom the host already permits.
+///
+/// Failure is non-fatal: retaining the inherited limit preserves the old startup
+/// behaviour, while VFS lifetime diagnostics identify any ownership leak.
+pub(crate) fn raise_open_file_limit() {
+    #[cfg(unix)]
+    {
+        let (old_soft, hard) = match rlimit::Resource::NOFILE.get() {
+            Ok(limits) => limits,
+            Err(error) => {
+                crate::log::progress(format_args!(
+                    "warning: could not read open-file limit: {error}"
+                ));
+                return;
+            }
+        };
+        match rlimit::increase_nofile_limit(u64::MAX) {
+            Ok(new_soft) => crate::log::progress(format_args!(
+                "open-file limit: soft {old_soft} -> {new_soft}, hard {}",
+                Limit(hard)
+            )),
+            Err(error) => crate::log::progress(format_args!(
+                "warning: could not raise open-file limit from soft {old_soft} (hard {}): {error}",
+                Limit(hard)
+            )),
+        }
+    }
+}
+
+#[cfg(unix)]
+struct Limit(u64);
+
+#[cfg(unix)]
+impl std::fmt::Display for Limit {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 == rlimit::INFINITY {
+            output.write_str("unlimited")
+        } else {
+            self.0.fmt(output)
+        }
+    }
+}
+
 /// Select writable client storage once, before constructing any UI or workers.
 pub(crate) fn initialize_storage(game_data: &std::path::Path) -> Result<(), Error> {
     if CONFIG_FILE.get().is_some() {

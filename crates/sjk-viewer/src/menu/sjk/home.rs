@@ -346,7 +346,10 @@ impl Home {
 
     /// Give the dock's sender card on show its player's picture version (`picture`, from
     /// their key) until it is known. Called before the page is built, outside any lock.
-    pub(crate) fn place_sender_card(&mut self, picture: impl FnOnce(&str) -> Option<String>) {
+    pub(crate) fn place_sender_card(
+        &mut self,
+        picture: impl FnOnce(&str) -> Option<(String, &'static str)>,
+    ) {
         self.chat.picture_sender_card(picture);
     }
 
@@ -1670,7 +1673,7 @@ mod tests {
             assert_eq!(key, "0123456789abcdef");
             None
         });
-        home.place_sender_card(|_| Some("00000000000000aa".to_owned()));
+        home.place_sender_card(|_| Some(("00000000000000aa".to_owned(), "")));
         home.place_sender_card(|_| panic!("known now"));
         let card = home.chat.sender_card.as_ref().expect("the card");
         assert_eq!(card.person.avatar.as_deref(), Some("00000000000000aa"));

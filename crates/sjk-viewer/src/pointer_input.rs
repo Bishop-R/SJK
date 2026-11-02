@@ -141,6 +141,18 @@ impl GpuState {
                 return;
             }
         }
+        if button == PointerButton::Primary {
+            if state == ElementState::Released && std::mem::take(&mut self.spectator_follow_click) {
+                return;
+            }
+            if state == ElementState::Pressed {
+                self.spectator_follow_click = false;
+                if self.follow_aimed_spectator() {
+                    self.spectator_follow_click = true;
+                    return;
+                }
+            }
+        }
         self.route_stock_mouse_button(
             match button {
                 PointerButton::Primary => MouseButton::Left,
@@ -158,6 +170,18 @@ impl GpuState {
             self.quick_wheel
                 .scrolled(delta.y, std::time::Instant::now());
             return;
+        }
+        // A model the map editor grabbed turns with the wheel instead of changing weapon.
+        if let Some(up) = wheel_binding_direction(delta.y)
+            && !self.map_edit_panel_open()
+        {
+            let fine = self
+                .console
+                .as_ref()
+                .is_some_and(|console| console.shift_held());
+            if self.map_edit_wheel(up, fine) {
+                return;
+            }
         }
         if let Some(up) = wheel_binding_direction(delta.y)
             && self
@@ -226,9 +250,11 @@ impl GpuState {
     /// Keyboard catchers also advertise BUTTON_TALK, as CL_CmdButtons does.
     pub(crate) fn key_catcher_active(&self) -> bool {
         self.game_menu
+            || self.hud_edit.is_open()
             || self.text_dialog.is_open()
             // The SJK team's window, which may show in the middle of play.
             || self.official.window.is_open()
+            || self.news.is_open()
             || self.chat.is_typing()
             || self
                 .console
@@ -298,6 +324,11 @@ impl GpuState {
             self.official_pointer(event);
             return true;
         }
+        // And the News panel.
+        if self.news.is_open() {
+            self.news_pointer(event);
+            return true;
+        }
         if self
             .console
             .as_ref()
@@ -306,6 +337,11 @@ impl GpuState {
             if let Some(console) = &mut self.console {
                 console.handle_pointer(event);
             }
+            return true;
+        }
+        // The HUD edit mode takes the pointer over the game it edits.
+        if self.hud_edit.is_open() && !self.text_dialog.is_open() {
+            self.hud_edit_pointer(event);
             return true;
         }
         // The dialog is drawn over everything and takes the keys first; the pointer too.
@@ -376,11 +412,6 @@ impl GpuState {
             self.log_request_card_choice(choice);
             return true;
         }
-        if self.whats_new_card.is_open() {
-            let choice = self.whats_new_card.handle_pointer(event);
-            self.whats_new_card_choice(choice);
-            return true;
-        }
         // The update card, over the menus: a click on it installs the update.
         if self.update_card_pointer(event) {
             return true;
@@ -401,7 +432,7 @@ impl GpuState {
             // The SJK UI has no Report a bug button: it is on its SJK page.
             if !matches!(
                 self.game_menu_page,
-                GameMenuPage::Shot | GameMenuPage::MapEdit
+                GameMenuPage::Shot | GameMenuPage::MapEdit | GameMenuPage::GhostEdit
             ) && !self.in_game_menu.is_sjk()
                 && self.text_dialog.launcher_pointer(event)
             {
@@ -414,6 +445,10 @@ impl GpuState {
             }
             if self.game_menu_page == GameMenuPage::MapEdit {
                 self.map_edit_pointer(event);
+                return true;
+            }
+            if self.game_menu_page == GameMenuPage::GhostEdit {
+                self.ghost_edit_pointer(event);
                 return true;
             }
             if let Some((kind, row)) = self.in_game_menu.pointer(event) {
@@ -475,6 +510,31 @@ impl GpuState {
         }
     }
 
+    /// Follow the player directly under a free spectator camera's crosshair.
+    fn follow_aimed_spectator(&mut self) -> bool {
+        let Some(session) = &mut self.live_session else {
+            return false;
+        };
+        let aimed = self
+            .crosshair_scan
+            .aimed_client(session.latest_snapshot().server_time);
+        let Some(target) = spectator_follow_target(
+            session.latest_snapshot().player.is_spectator(),
+            session.game_state().client_num,
+            aimed,
+        ) else {
+            return false;
+        };
+        let command = format!("follow {target}");
+        if let Err(error) = session.send_reliable_command_from(
+            command.as_bytes(),
+            sjk_client::ReliableCommandOrigin::Input,
+        ) {
+            eprintln!("failed to follow crosshair player {target}: {error}");
+        }
+        true
+    }
+
     fn route_gameplay_wheel(&mut self, vertical: f32) {
         if self.live_session.is_none() || self.chat.is_typing() || self.game_menu {
             return;
@@ -497,6 +557,11 @@ fn normalize_button(button: MouseButton) -> Option<PointerButton> {
         MouseButton::Middle => Some(PointerButton::Middle),
         _ => None,
     }
+}
+
+fn spectator_follow_target(spectator: bool, local_client: i32, aimed: Option<u16>) -> Option<u16> {
+    let local_client = u16::try_from(local_client).ok()?;
+    aimed.filter(|target| spectator && *target < 32 && *target != local_client)
 }
 
 pub(crate) fn normalize_button_event(
@@ -553,5 +618,14 @@ mod tests {
         }
         let swipe = MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 60.0));
         assert_eq!(wheel_binding_direction(vertical(swipe)), Some(true));
+    }
+
+    #[test]
+    fn only_a_free_spectator_can_follow_the_aimed_player() {
+        assert_eq!(spectator_follow_target(true, 2, Some(7)), Some(7));
+        assert_eq!(spectator_follow_target(false, 2, Some(7)), None);
+        assert_eq!(spectator_follow_target(true, 2, None), None);
+        assert_eq!(spectator_follow_target(true, 2, Some(2)), None);
+        assert_eq!(spectator_follow_target(true, 2, Some(32)), None);
     }
 }

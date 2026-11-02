@@ -83,6 +83,8 @@ pub(crate) struct Runtime {
     face_pipeline: gpu::FacePipelines,
     authored_face_pipeline: gpu::FacePipelines,
     day_clock: Option<(wgpu::Buffer, wgpu::BindGroup)>,
+    /// The hour and day length last written by [`Self::follow_day_clock`].
+    followed: std::cell::Cell<[f32; 2]>,
 }
 
 impl Runtime {
@@ -172,6 +174,7 @@ impl Runtime {
             face_pipeline,
             radiance: 1.,
             day_clock: None,
+            followed: std::cell::Cell::new([f32::NAN; 2]),
         })
     }
 

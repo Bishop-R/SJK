@@ -212,7 +212,12 @@ A card comes with a few shards beside its credits (the card pack, `card_shards`,
 Since 27/10/2026 (the hub's `tag-toy` branch) an opening may bring a tag instead of the card
 (`tag` in the tables, 150 per mille in every tier, taken from the cards' share; the tag's
 tier rolled as a shader's; [client.md](client.md#tag)); this client's own copy of the
-tables keeps no tags, so the figures below are without them.
+tables keeps no tags, so the figures below are without them. Since 31/10/2026 (the hub's
+`tag-cards` branch, Sol's decision: stingy and flat) a dropped tag comes Holo 4 % of the
+time and Solar 0.5 %, in every tier (`tag_finish` in the tables, per mille, Holo then
+Solar; none from hubs before), said in the opening ("Holo Gonk tag") and kept apart in the
+profile; a Solar tag is a grand find, its chat line saying so ("Sol opened a Rare Holocron:
+Solar Gonk tag!").
 The figures below are with the piles.
 
 Per holocron:
@@ -402,6 +407,21 @@ goes, in all three places the SJK chat shows ([hub-chat.md](hub-chat.md#how-a-li
   the prize (`DropMark::find`, [feed.rs](../crates/sjk-identity/src/feed.rs)); the
   words are [holocrons/line.rs](../crates/sjk-viewer/src/holocrons/line.rs)'s. Muted
   players' finds and unknown tiers are left out as drops are.
+- **How a find looks** (01/11/2026, Sol's request): in all three views a drop's or
+  find's mark is the holocron's or crystal's own picture (`gfx/sjk/holocron_<tier>`,
+  [holocrons/icons.rs](../crates/sjk-viewer/src/holocrons/icons.rs), drawn 1.3 times a
+  tick's side), the gem only where the picture is missing; in the game's chat it starts
+  the line, in place of SJK's emblem. In the game's chat the prize's words are drawn in
+  the prize's own colour (the blade's tier, a card's rarity or rank), the rest of the
+  line in the holocron's; a find of a blade skin the client knows draws that blade after
+  the picture, small and live as the Collection's swatches draw it, fading with its
+  line. The hub's `item` (the shader's unlock id) comes through as `FindMark::skin`; a
+  hub without it gives the colour from the shader's tier and no blade. While the
+  composer is open, resting the pointer on the blade shows it large in a card above the
+  line (its tier in its colour, its name, the blade), as long as the pointer stays on
+  it ([chat/find_blade.rs](../crates/sjk-viewer/src/chat/find_blade.rs)).
+  `debug_find [tier] [blade id or #number]` puts a made-up find of a blade in the feed
+  (a Legendary Kyber Crystal and a Mythical blade by default), nothing sent.
 
 ### Staff
 
@@ -585,3 +605,11 @@ for 150, a Rare for 400, source `bought`, outside the caps) are live since 21/10
 Collection's Forge ([cards.md](cards.md#the-forge)).
 Saber shaders drop already
 ([unlockables.md](unlockables.md#holocron-shader-drops)).
+
+## Profile banner prizes
+
+Openings may award a counted profile banner instead of a card and credits, when
+the hub supplies a banner share. Other prize shares stay unchanged, and crystals
+still give shaders only. The reveal shows the cover and links its use to Collection
+> Banners. See [profile banners](profile-banners.md#echo-rewards-and-ownership) for
+the first catalogue, proposed balance and inventory rules.

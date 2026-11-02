@@ -94,20 +94,24 @@ fn r8_vol(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         light += mix(deep, bio, 0.3 + 0.4 * wv * wv) * (halo(d, 0.9 + 0.6 * h11(fi)) * 0.3 + halo(d, 2.0) * 0.06) * (0.6 + 0.6 * wv * wv + 1.5 * jl) * fxOn;
     }
     // ribbons of glowing nebula gas winding slowly round the blade
-    for (var k = 0; k < 3; k++) {
-        let fk = f32(k);
-        var prev = around(1.6, fk / 3.0 - uTime * 0.05, 0.5);
-        for (var j = 1; j <= 12; j++) {
-            let u = f32(j) / 12.0;
-            let yy = 0.5 + u * (L - 1.0);
-            let q = around(1.6 + 1.2 * sin(u * 6.2832 + uTime * 0.4 + fk * 2.0), fk / 3.0 + u * 0.9 - uTime * 0.05, yy);
-            var sg: f32;
-            let d = raySeg(ro, rd, prev, q, &sg);
-            let wv = 0.5 + 0.5 * sin(yy * 0.32 - uTime * 1.1);
-            if yy < top {
-                light += mix(deep, bio, 0.4 + 0.4 * wv) * (halo(d, 0.25) * 0.6 + halo(d, 0.8) * 0.18) * (0.6 + 0.8 * wv * wv) * fxOn;
+    // 31/10/2026: they keep within 2.8 of the axis between 0.5 and L - 0.5, their widest glow 0.8:
+    // a ray further off than three of them skips their 36 pieces
+    if fxNear(ro, rd, 0.5, L - 0.5) - 2.8 <= 2.4 {
+        for (var k = 0; k < 3; k++) {
+            let fk = f32(k);
+            var prev = around(1.6, fk / 3.0 - uTime * 0.05, 0.5);
+            for (var j = 1; j <= 12; j++) {
+                let u = f32(j) / 12.0;
+                let yy = 0.5 + u * (L - 1.0);
+                let q = around(1.6 + 1.2 * sin(u * 6.2832 + uTime * 0.4 + fk * 2.0), fk / 3.0 + u * 0.9 - uTime * 0.05, yy);
+                var sg: f32;
+                let d = raySeg(ro, rd, prev, q, &sg);
+                let wv = 0.5 + 0.5 * sin(yy * 0.32 - uTime * 1.1);
+                if yy < top {
+                    light += mix(deep, bio, 0.4 + 0.4 * wv) * (halo(d, 0.25) * 0.6 + halo(d, 0.8) * 0.18) * (0.6 + 0.8 * wv * wv) * fxOn;
+                }
+                prev = q;
             }
-            prev = q;
         }
     }
     // living motes of light: tiny motes of living light drifting slowly round it

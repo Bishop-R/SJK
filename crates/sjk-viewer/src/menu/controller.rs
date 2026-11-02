@@ -137,6 +137,10 @@ impl ClientMenu {
     pub(super) fn activate_browser_focus(&mut self) -> MenuAction {
         use super::browser_view::{ADDRESS_TOKEN, BACK_TOKEN, FAVOURITE_TOKEN, REFRESH_TOKEN};
         match self.browser_focus {
+            super::browser_view::COPY_IP_TOKEN => {
+                self.copy_selected_server_address();
+                MenuAction::None
+            }
             REFRESH_TOKEN => {
                 self.refresh();
                 MenuAction::None

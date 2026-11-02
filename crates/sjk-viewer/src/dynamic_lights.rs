@@ -9,7 +9,7 @@ use bytemuck::{Pod, Zeroable};
 
 #[path = "dynamic_light_settings.rs"]
 mod settings;
-pub(crate) use settings::Settings;
+pub(crate) use settings::{Settings, TOON_MODELS_CVAR};
 
 #[path = "point_light_grid.rs"]
 mod grid;

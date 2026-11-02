@@ -301,7 +301,23 @@ pub(crate) fn spawn_effect(
             continue;
         }
         if component.kind == ComponentKind::FxRunner {
-            for (nested_index, nested) in component.effects.iter().enumerate() {
+            // `CFxScheduler::PlayEffect` rolls every primitive's rounded `count`, runners
+            // included, and each run plays one random `playFx` entry (`CMediaHandles::
+            // GetHandle`). Playing every entry once regardless made `count 0 0.6` runners
+            // such as `env/beam_lights` (the spawn/teleport beam) throw ~6x the lightning.
+            if component.effects.is_empty() {
+                continue;
+            }
+            let count = component
+                .count
+                .sample(random_unit(component_seed))
+                .round()
+                .max(0.0) as usize;
+            for run_index in 0..count {
+                let run_seed = mix_seed(seed, component_index as u32, run_index as u32);
+                let pick = (random_unit(run_seed.wrapping_add(40)) * component.effects.len() as f32)
+                    as usize;
+                let nested = &component.effects[pick.min(component.effects.len() - 1)];
                 spawn_effect(
                     particles,
                     auxiliary,
@@ -310,7 +326,7 @@ pub(crate) fn spawn_effect(
                     nested,
                     origin,
                     now,
-                    mix_seed(seed, component_index as u32, nested_index as u32),
+                    run_seed,
                     depth + 1,
                     audio,
                     rotation,

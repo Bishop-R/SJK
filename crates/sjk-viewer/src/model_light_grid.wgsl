@@ -33,3 +33,56 @@ fn finish_model_light(position: vec3<f32>, source: EntityLight) -> EntityLight {
     light.directed /= 255.0;
     return light;
 }
+
+// Toon models (`r_toonModels`, bits 1..3 of `point_lights.metadata.y`): stylized,
+// banded light on lit models instead of the smooth falloff, with a rim of light on
+// their silhouette. 0 keeps stock shading; the bit stays clear unless the player opts in.
+fn toon_models() -> bool {
+    return ((point_lights.metadata.y >> 1u) & 3u) != 0u;
+}
+
+// A staircase with soft risers: `x` rounded to whole steps, each step eased over a
+// fifth of its width so the band edges stay smooth at any resolution.
+fn toon_steps(x: f32) -> f32 {
+    let whole = floor(x);
+    return whole + smoothstep(0.4, 0.6, x - whole);
+}
+
+// The rim: grazing view angles (the silhouette) light up, eased in over a narrow band.
+fn toon_rim(position: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let toward = normalize(camera.camera_position - position);
+    let facing = abs(dot(normalize(normal), toward));
+    return smoothstep(0.55, 0.65, 1.0 - facing);
+}
+
+// Shadow and lit tones around a light level: the map's grid often gives a weak direction,
+// so the tones are set apart from the mean (0.65x and 1.15x) instead of taken from it.
+fn toon_tone(mean: vec3<f32>, band: f32) -> vec3<f32> {
+    return mean * mix(0.65, 1.15, band);
+}
+
+// RB_CalcDiffuseColor's light as two tones and a half step between them, by which side
+// faces the light, plus the rim, saturated like stock.
+fn toon_diffuse(position: vec3<f32>, normal: vec3<f32>, light: EntityLight) -> vec3<f32> {
+    let incoming = clamp(dot(normalize(normal), light.direction), 0.0, 1.0);
+    let band = toon_steps(incoming * 2.0) * 0.5;
+    let mean = light.ambient + 0.5 * light.directed;
+    let rim = toon_rim(position, normal) * 0.5 * mean;
+    return min(toon_tone(mean, band) + rim, vec3(1.0));
+}
+
+// Real-time lighting hands models one summed colour with the sun's shadows in it: its
+// brightness goes in half steps (beyond 1 too) without ever dropping below 0.6 of
+// itself, its hue unchanged, and the rim brightens the silhouette.
+fn toon_lit(position: vec3<f32>, normal: vec3<f32>, lit: vec3<f32>) -> vec3<f32> {
+    let level = max(dot(lit, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
+    let stepped = max(toon_steps(level * 2.0) * 0.5, level * 0.6);
+    let banded = lit * stepped / level;
+    return banded + toon_rim(position, normal) * 0.5 * max(banded, vec3(0.1));
+}
+
+// The textured result of a toon-lit stage, a fifth more saturated.
+fn toon_colour(rgb: vec3<f32>) -> vec3<f32> {
+    let grey = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    return max(mix(vec3(grey), rgb, 1.2), vec3(0.0));
+}

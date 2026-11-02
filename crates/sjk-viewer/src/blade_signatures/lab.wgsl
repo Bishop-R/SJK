@@ -173,7 +173,48 @@ fn helix(y: f32, r: f32, turns: f32, phase: f32) -> vec2<f32> {
 // Round 23 (players' reports after the 2026.1021.1 release: hard-edged boxes and lines round
 // the tip when a blade pointed at the camera): it fades in and out softly; it used to switch
 // off at once when looking nearly along the blade.
-fn behindBlade(ro: vec3<f32>, rd: vec3<f32>, t: f32) -> f32 {
+// 31/10/2026 (Sol: the top-tier blades cost too much): what of it depends on the ray alone (where
+// the ray passes the axis, how near, the tip's narrowing) is worked out once per pixel for the
+// view ray (`labRayPrepare`, which saber.wgsl calls before sig_vol, sig_orbit and their solid
+// parts) and read at every piece's point; a ray that never passes behind the body hides nothing,
+// so the rest is skipped. A piece asking for another ray (a shifted one) works its own out. The
+// same values as before. behindBlade only reads what was kept (writing it there kept the shader
+// compiler from dropping calls whose result goes unused: World Shift drew at half speed).
+var<private> bbRo: vec3<f32> = vec3<f32>(1.0e9);
+
+var<private> bbRd: vec3<f32> = vec3<f32>(0.0);
+
+var<private> bbTa: f32 = 0.0;
+
+var<private> bbNear: f32 = 0.0;
+
+var<private> bbAlong: f32 = 0.0;
+
+fn labRayPrepare(ro: vec3<f32>, rd: vec3<f32>) {
+    bbRo = ro;
+    bbRd = rd;
+    bbTa = 0.0;
+    bbNear = 0.0;
+    let a = dot(rd.xz, rd.xz);
+    bbAlong = smoothstep(0.01, 0.04, a);
+    if bbAlong <= 0.0 {
+        return;
+    }
+    let ta = -dot(ro.xz, rd.xz) / a;
+    let y = ro.y + rd.y * ta;
+    let off = ro.xz + rd.xz * ta;
+    let d = length(off);
+    let into = clamp((y - (uLength - 1.4)) / 1.4, 0.0, 1.0);
+    let w = sqrt(max(1.0 - into * into, 0.0));
+    let onBlade = smoothstep(-0.8, -0.2, y) * (1.0 - smoothstep(uLength - 0.15, uLength + 0.05, y));
+    bbTa = ta;
+    bbNear = (1.0 - smoothstep(0.35 * w, 0.8 * w + 0.02, d)) * onBlade;
+}
+
+// The whole of it, from the ray alone: what labRayPrepare keeps, and what a piece asking for
+// another ray (or a module without the cache) works out (written out twice rather than shared
+// through out parameters, which made World Shift draw at a third of its speed on an RTX 5080).
+fn behindBladeFull(ro: vec3<f32>, rd: vec3<f32>, t: f32) -> f32 {
     let a = dot(rd.xz, rd.xz);
     let along = smoothstep(0.01, 0.04, a);
     if along <= 0.0 {
@@ -194,6 +235,23 @@ fn behindBlade(ro: vec3<f32>, rd: vec3<f32>, t: f32) -> f32 {
     let w = sqrt(max(1.0 - into * into, 0.0));
     let onBlade = smoothstep(-0.8, -0.2, y) * (1.0 - smoothstep(uLength - 0.15, uLength + 0.05, y));
     return (1.0 - smoothstep(0.35 * w, 0.8 * w + 0.02, d)) * onBlade * outside * smoothstep(ta + 0.15, ta + 0.7, t) * along;
+}
+
+// For a signature whose header says `@raycache off`, its module calls behindBladeFull in its place
+// (blade_signatures.rs module_source): World Shift drew at a third of its speed reading what was
+// kept, or even with the reading switched off by a constant, on an RTX 5080 (Vulkan).
+fn behindBlade(ro: vec3<f32>, rd: vec3<f32>, t: f32) -> f32 {
+    if ro.x == bbRo.x && ro.y == bbRo.y && ro.z == bbRo.z && rd.x == bbRd.x && rd.y == bbRd.y && rd.z == bbRd.z {
+        if bbNear <= 0.0 || bbAlong <= 0.0 {
+            return 0.0;
+        }
+        let p = ro + rd * t;
+        let outside = smoothstep(0.5, 0.9, length(p.xz));
+        // multiplied in this order: hideD magnifies the last digit a thousandfold where a piece is
+        // nearly hidden
+        return bbNear * outside * smoothstep(bbTa + 0.15, bbTa + 0.7, t) * bbAlong;
+    }
+    return behindBladeFull(ro, rd, t);
 }
 
 // A distance d as seen when h (behindBlade) of it is hidden by the blade: unchanged at 0, out of
@@ -303,9 +361,18 @@ fn blade3(ro: vec3<f32>, rd: vec3<f32>, px: f32, col: vec3<f32>, w: f32, top: f3
 
 // A lightning bolt in three dimensions from a to c: 10 kinks, each pushed off the line in
 // both directions across it by up to jag of its length.
-fn bolt3(ro: vec3<f32>, rd: vec3<f32>, a: vec3<f32>, c: vec3<f32>, seed: f32, jag: f32) -> f32 {
+fn bolt3(ro: vec3<f32>, rd: vec3<f32>, a: vec3<f32>, c: vec3<f32>, seed: f32, jag: f32, px: f32) -> f32 {
     let d = c - a;
     let L = max(length(d), 1.0e-3);
+    // 31/10/2026 (Sol: the top-tier blades cost too much): every point of the bolt lies within
+    // half its length and 0.71 of its zigzag (jag*L) of its middle, so a ray passing further off
+    // than that plus six units and three pixels is further than that from all of it, where the
+    // widest glow a caller gives a bolt (1.5) or a pixel-wide one is under a ten-thousandth: such a
+    // ray skips the ten segments.
+    var tm: f32;
+    if rayPtRaw(ro, rd, (a + c) * 0.5, &tm) - L * (0.5 + 0.71 * jag) > max(6.0, 3.0 * px) {
+        return 1.0e3;
+    }
     let n1 = normalize(cross(d, select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), abs(d.y) < 0.9 * L)));
     let n2 = cross(d / L, n1);
     var best: f32 = 1.0e3;
@@ -466,13 +533,13 @@ fn fxArcs(ro: vec3<f32>, rd: vec3<f32>, px: f32, y0: f32, y1: f32, count: f32, r
         var d: f32 = 1.0e3;
         var d2: f32 = 1.0e3;
         if rayPtRaw(ro, rd, (ea + mid) * 0.5, &t) < 0.55 * length(mid - ea) + 1.8 + px {
-            d = bolt3(ro, rd, ea, mid, k + fi * 1.37 + seed, 0.5);
+            d = bolt3(ro, rd, ea, mid, k + fi * 1.37 + seed, 0.5, px);
         }
         if rayPtRaw(ro, rd, (mid + eb) * 0.5, &t) < 0.55 * length(eb - mid) + 1.8 + px {
-            d = min(d, bolt3(ro, rd, mid, eb, k + fi * 1.37 + seed + 0.5, 0.5));
+            d = min(d, bolt3(ro, rd, mid, eb, k + fi * 1.37 + seed + 0.5, 0.5, px));
         }
         if rayPtRaw(ro, rd, (mid + fork) * 0.5, &t) < 0.55 * length(fork - mid) + 1.8 + px {
-            d2 = bolt3(ro, rd, mid, fork, k * 2.1 + fi + seed, 0.6);
+            d2 = bolt3(ro, rd, mid, fork, k * 2.1 + fi + seed, 0.6, px);
         }
         acc += (arcGlow(d, col, px) + arcGlow(d2, col, px) * 0.55) * env;
     }

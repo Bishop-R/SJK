@@ -11,6 +11,7 @@
 mod cosmetics;
 mod force_fx;
 mod force_motion;
+mod hilt_guard;
 mod lone;
 pub(crate) mod preview;
 mod prop;
@@ -174,6 +175,8 @@ impl GpuState {
             self.vfs.as_ref(),
             &self.shaders,
         );
+        // The News panel's pictures.
+        crate::news_images::service(&mut self.ui_shapes, &self.device, &self.queue);
         // Last frame's preview, if any, is what the profile can show now.
         let ready = self.menu_stage.preview_ready();
         if let Some(menu) = &mut self.client_menu {

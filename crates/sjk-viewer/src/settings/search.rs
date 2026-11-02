@@ -159,6 +159,23 @@ mod tests {
         assert!(scoreboard.contains(&super::super::Line::Heading("HUD")));
     }
 
+    /// A search lists rows from every group at once, so each one's typed value
+    /// must answer to its own token (hub report #203: past row 99 they did not).
+    #[test]
+    fn every_result_takes_a_typed_value() {
+        use crate::menu_widgets::numeric::{VALUE_BASE, VALUE_ROWS, value_row};
+        let rows = rows().len();
+        assert!(
+            rows > 100,
+            "the search is expected to list more than 100 rows"
+        );
+        assert!(rows <= usize::from(VALUE_ROWS));
+        for row in 0..rows {
+            assert_eq!(value_row(VALUE_BASE + row as u16), Some(row));
+        }
+        assert_eq!(value_row(VALUE_BASE - 1), None);
+    }
+
     /// The weak-PC settings are found by their names, console names and what they do.
     #[test]
     fn the_weak_pc_settings_are_found() {

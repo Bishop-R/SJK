@@ -15,11 +15,54 @@ use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, AtomicUsize, Ordering},
+};
 
 use md4::{Digest, Md4};
 
 const DEFAULT_MAX_ASSET_BYTES: u64 = 256 * 1024 * 1024;
+
+static NEXT_GENERATION_ID: AtomicU64 = AtomicU64::new(1);
+static LIVE_GENERATIONS: AtomicUsize = AtomicUsize::new(0);
+static LIVE_PK3_ARCHIVES: AtomicUsize = AtomicUsize::new(0);
+
+/// Process-wide VFS ownership diagnostics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VfsLifetimeStats {
+    /// Distinct VFS generations which still have at least one clone alive.
+    pub live_generations: usize,
+    /// PK3 sources still mounted by any live VFS generation.
+    pub live_pk3_archives: usize,
+}
+
+/// Current process-wide VFS ownership diagnostics.
+pub fn lifetime_stats() -> VfsLifetimeStats {
+    VfsLifetimeStats {
+        live_generations: LIVE_GENERATIONS.load(Ordering::Relaxed),
+        live_pk3_archives: LIVE_PK3_ARCHIVES.load(Ordering::Relaxed),
+    }
+}
+
+struct GenerationLifetime {
+    id: u64,
+}
+
+impl GenerationLifetime {
+    fn new() -> Arc<Self> {
+        LIVE_GENERATIONS.fetch_add(1, Ordering::Relaxed);
+        Arc::new(Self {
+            id: NEXT_GENERATION_ID.fetch_add(1, Ordering::Relaxed),
+        })
+    }
+}
+
+impl Drop for GenerationLifetime {
+    fn drop(&mut self) {
+        LIVE_GENERATIONS.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct MountId(u64);
@@ -115,6 +158,7 @@ pub struct VirtualFileSystem {
     next_mount_id: u64,
     max_asset_bytes: u64,
     read_diagnostics: bool,
+    generation: Arc<GenerationLifetime>,
 }
 
 impl Default for VirtualFileSystem {
@@ -124,6 +168,7 @@ impl Default for VirtualFileSystem {
             next_mount_id: 0,
             max_asset_bytes: DEFAULT_MAX_ASSET_BYTES,
             read_diagnostics: false,
+            generation: GenerationLifetime::new(),
         }
     }
 }
@@ -136,6 +181,11 @@ impl VirtualFileSystem {
 
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Stable identifier shared by clones of this VFS generation.
+    pub fn generation_id(&self) -> u64 {
+        self.generation.id
     }
 
     pub fn with_max_asset_bytes(max_asset_bytes: u64) -> Self {
@@ -280,6 +330,7 @@ impl VirtualFileSystem {
             next_mount_id: self.next_mount_id,
             max_asset_bytes: self.max_asset_bytes,
             read_diagnostics: self.read_diagnostics,
+            generation: GenerationLifetime::new(),
         }
     }
 
@@ -304,6 +355,7 @@ impl VirtualFileSystem {
             next_mount_id,
             max_asset_bytes: self.max_asset_bytes,
             read_diagnostics: self.read_diagnostics,
+            generation: GenerationLifetime::new(),
         })
     }
 
@@ -662,6 +714,15 @@ impl Pk3Source {
             entries,
             archive: Mutex::new(archive),
         })
+        .inspect(|_| {
+            LIVE_PK3_ARCHIVES.fetch_add(1, Ordering::Relaxed);
+        })
+    }
+}
+
+impl Drop for Pk3Source {
+    fn drop(&mut self) {
+        LIVE_PK3_ARCHIVES.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

@@ -555,4 +555,32 @@ mod tests {
             }
         }
     }
+
+    /// JoF's "Fullforce FFA" light template (Speed 1 and Sense 1) costs
+    /// exactly 100 points with free saber skills and 102 without. Power
+    /// indices follow `forcePowers_t`: Speed is 2, Sense (`FP_SEE`) 14.
+    /// Without free saber `BG_LegalizedForcePowers` cuts the first level-1
+    /// power in index order, Speed, and keeps Sense; with it nothing is cut.
+    #[test]
+    fn fullforce_template_keeps_speed_and_sense_with_free_saber_skills() {
+        const FULLFORCE_FFA: &str = "7-1-331330000330001133";
+        let template = ForceAllocation::parse(FULLFORCE_FFA).unwrap();
+        assert_eq!(template.levels[ForcePower::Speed as usize], 1);
+        assert_eq!(template.levels[ForcePower::See as usize], 1);
+        assert_eq!(template.levels[ForcePower::SaberOffense as usize], 1);
+        assert_eq!(template.used_points(true), 100);
+        assert_eq!(template.used_points(false), 102);
+        let saber_only = ForceLegalizeRules {
+            free_saber: true,
+            ..ForceLegalizeRules::default()
+        };
+        let kept = legalize_force_powers(FULLFORCE_FFA, saber_only);
+        assert!(kept.was_legal);
+        assert_eq!(kept.allocation.encode(), FULLFORCE_FFA);
+        let cut = legalize_force_powers(FULLFORCE_FFA, ForceLegalizeRules::default());
+        assert!(!cut.was_legal);
+        assert_eq!(cut.allocation.encode(), "7-1-330330000330001133");
+        assert_eq!(cut.allocation.levels[ForcePower::Speed as usize], 0);
+        assert_eq!(cut.allocation.levels[ForcePower::See as usize], 1);
+    }
 }

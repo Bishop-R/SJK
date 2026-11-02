@@ -10,7 +10,10 @@ const ET_EVENTS: u32 = 18;
 const EV_CLIENTJOIN: u32 = 1;
 const EV_PLAYER_TELEPORT_IN: u32 = 64;
 const EV_PLAYER_TELEPORT_OUT: u32 = 65;
-const EV_SET_FREE_SABER: u32 = 106;
+/// `EV_SET_FREE_SABER` in `entity_event_t` (`codemp/game/bg_public.h`): 106 counting
+/// the two `BASE_COMPAT` power-up events after `EV_OBITUARY` (93), which retail's
+/// protocol 26 keeps. `WP_InitForcePowers` sends it with `HasSetSaberOnly()`.
+pub const EV_SET_FREE_SABER: u32 = 106;
 const EV_SET_FORCE_DISABLE: u32 = 107;
 const ES_POS_BASE: [usize; 3] = [2, 1, 4];
 const ES_TYPE: usize = 8;

@@ -4,6 +4,8 @@ use crate::InfoString;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ServerDialect {
     BaseJka,
+    /// LugorDev Lugormod-v3, identified by its advertised game name.
+    LugormodV3,
     JaPlus {
         capabilities: JaPlusCapabilities,
     },
@@ -58,6 +60,8 @@ impl ServerProfile {
                     info.get_i32("taystJKinfo").unwrap_or_default() as u32,
                 ),
             }
+        } else if is_lugormod_v3_game_name(game_name) && protocol.is_none_or(|p| p == 26) {
+            ServerDialect::LugormodV3
         } else if lower_name.starts_with("basejk") || game_name.is_empty() {
             ServerDialect::BaseJka
         } else {
@@ -82,6 +86,31 @@ impl ServerProfile {
             server_fps,
         }
     }
+}
+
+/// Advertised-name compatibility table. LugorDev/Lugormod-v3 50f42520
+/// `game/g_local.h:64` publishes `^5L^7ugormod ^5v3`. Unversioned mod
+/// directories and other Lugormod generations do not establish this policy.
+const LUGORMOD_V3_NAMES: &[&[u8]] = &[b"lugormod v3"];
+
+/// Match the documented v3 name table, ignoring legacy numeric colour escapes.
+/// This allocation-free query can be used by presentation policy.
+pub fn is_lugormod_v3_game_name(name: &str) -> bool {
+    LUGORMOD_V3_NAMES.iter().any(|prefix| {
+        let mut bytes = name.bytes().peekable();
+        let mut next_plain = || loop {
+            let byte = bytes.next()?;
+            if byte == b'^' && bytes.peek().is_some_and(u8::is_ascii_digit) {
+                bytes.next();
+            } else {
+                return Some(byte);
+            }
+        };
+        prefix
+            .iter()
+            .all(|byte| next_plain().is_some_and(|ch| ch.eq_ignore_ascii_case(byte)))
+            && next_plain().is_none_or(|ch| ch.is_ascii_whitespace() || ch == b'.')
+    })
 }
 
 /// Whether a serverinfo `gamename` (or `getinfo` `game`) names JA+ or one of the
@@ -176,6 +205,42 @@ impl JaPlusCapabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lugormod_v3_name_table_requires_the_advertised_major_version() {
+        for name in [
+            "^5L^7ugormod ^5v3",
+            "Lugormod v3",
+            "lugormod v3.4",
+            "LUGORMOD V3 release",
+        ] {
+            assert!(is_lugormod_v3_game_name(name), "{name}");
+            let info = InfoString::parse(&format!("\\gamename\\{name}\\protocol\\26")).unwrap();
+            assert_eq!(
+                ServerProfile::from_server_info(&info).dialect,
+                ServerDialect::LugormodV3
+            );
+        }
+        for name in [
+            "lugormod",
+            "Lugormod U#",
+            "Lugormod v2",
+            "Lugormod v30",
+            "japro",
+            "basejka",
+            "Lugormod v3extra",
+        ] {
+            assert!(!is_lugormod_v3_game_name(name), "{name}");
+        }
+        for protocol in [25, 27] {
+            let info = InfoString::parse(&format!("\\gamename\\Lugormod v3\\protocol\\{protocol}"))
+                .unwrap();
+            assert_ne!(
+                ServerProfile::from_server_info(&info).dialect,
+                ServerDialect::LugormodV3
+            );
+        }
+    }
 
     #[test]
     fn ja_plus_names_and_their_aliases_are_recognised() {

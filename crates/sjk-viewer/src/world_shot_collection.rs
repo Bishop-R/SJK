@@ -2,7 +2,8 @@
 //! live duel6 in the SJK UI, on a made-up profile (two medals, the Sun blade owned and
 //! worn, some achievements): from the main page, every tab, the model on the menu map's
 //! stage behind Shaders (the Sun, then the locked Storm previewed on the saber), Toys
-//! (the Illuminate holocron by it) and Nameplates (the plate over its head); the same
+//! (the Illuminate holocron by it) and Nameplates (the plate over its head, in each
+//! style); the same
 //! in a 4:3 window; then from the game menu over a match, the model in the page's live
 //! preview; and the page on its own as the classic menus open it. Then the hover cards:
 //! one on a thing of each tab, and one on a tier of the Holocrons tab. The blade skins'
@@ -15,6 +16,8 @@ use crate::profile_hub::{Screen, Tab};
 /// The made-up grant.
 fn sun() -> sjk_identity::Unlock {
     sjk_identity::Unlock {
+        holo: 0,
+        solar: 0,
         id: "saber_sun".to_owned(),
         granted: 1_791_336_225,
         note: "Thanks for testing the blades with us".to_owned(),
@@ -40,6 +43,9 @@ fn preview() -> crate::console::profile_panel::Preview {
             goal: kind.goal,
             unlocked: if index % 2 == 0 { 1_791_336_225 } else { 0 },
             reward: None,
+            name: None,
+            description: None,
+            group: None,
         })
         .collect();
     preview.standings = crate::achievements::standings(&held);
@@ -149,8 +155,21 @@ fn duel6_sjk_collection() {
                 println!("{}", shoot(&mut gpu, 60, name).display());
                 assert!(!overflowed(&gpu), "{name}");
             }
+            // The other styles (`cg_nameplateStyle`), sharing: the capsule, the classic.
+            for (style, name) in [
+                ("1", "duel6-collection-nameplates-capsule"),
+                ("2", "duel6-collection-nameplates-classic"),
+            ] {
+                if let Some(console) = gpu.console.as_mut() {
+                    let _ = console.set_cvar(crate::hud::nameplate::STYLE_CVAR, style);
+                }
+                gpu.ui_epoch -= std::time::Duration::from_millis(3_000);
+                println!("{}", shoot(&mut gpu, 60, name).display());
+                assert!(!overflowed(&gpu), "{name}");
+            }
             if let Some(console) = gpu.console.as_mut() {
                 let _ = console.set_cvar("cg_nameplate", "0");
+                let _ = console.set_cvar(crate::hud::nameplate::STYLE_CVAR, "0");
             }
             // A locked one, previewed on the saber. Rows are counted as a player holding no
             // Unique shader sees the list (the shots below hold none).
@@ -726,6 +745,9 @@ fn duel6_sjk_more_achievements() {
                     goal: standing.kind.goal,
                     unlocked: standing.unlocked.unwrap_or(0),
                     reward: None,
+                    name: None,
+                    description: None,
+                    group: None,
                 })
                 .collect();
             for achievement in &mut held {
@@ -870,9 +892,12 @@ fn duel6_blade_pictures_cost() {
     });
 }
 
-/// The Tags tab (27/10/2026) on the made-up profile with two copies of a Rare tag and
-/// `cg_tag` on it: the free ones held, the rest locked. The pictures come from the
-/// packs `SJK_TEST_PACKS` names (the hub's `assets/dist`, with `sjk_tags.pk3`).
+/// The Tags tab (27/10/2026) on the made-up profile with two copies of a Rare tag, one
+/// of them Holo, and a Solar Gonk tag, and (31/10/2026) a hub that lets credits cards be
+/// tags: a Holo and a Normal copy of SJK Alpha 001; `cg_tag` on the Rare tag in Holo.
+/// The free ones held, the rest locked; the wall scrolled to show the cards too. The
+/// pictures come from the packs `SJK_TEST_PACKS` names (the hub's `assets/dist`, with
+/// `sjk_tags.pk3` and `sjk_cards.pk3`).
 #[test]
 #[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
 fn duel6_sjk_collection_tags() {
@@ -882,6 +907,7 @@ fn duel6_sjk_collection_tags() {
             ("ui_menuStyle", "sjk"),
             (crate::settings::quick::HIDE_CVAR, "1"),
             (crate::tags::CVAR, "tag_ez"),
+            (crate::tags::FINISH_CVAR, "holo"),
             (crate::discord_presence::CVAR, "0"),
         ];
         let Some((mut gpu, _profile)) = open(
@@ -896,15 +922,251 @@ fn duel6_sjk_collection_tags() {
         let ez = sjk_identity::Unlock {
             id: "tag_ez".to_owned(),
             count: 2,
+            holo: 1,
             ..sun()
         };
+        let gonk = sjk_identity::Unlock {
+            id: "tag_gonk".to_owned(),
+            count: 1,
+            solar: 1,
+            ..sun()
+        };
+        let mut profile = preview();
+        if let Some(me) = profile.snapshot.me.as_mut() {
+            me.tag_cards = vec!["credits".to_owned()];
+            me.cards = [("holo", 1), ("normal", 2)]
+                .map(|(finish, count)| sjk_identity::CardStack {
+                    card: Some("sjk_alpha_001".to_owned()),
+                    rarity: "mythical".to_owned(),
+                    finish: finish.to_owned(),
+                    edition: "alpha".to_owned(),
+                    count,
+                    first: 1_791_336_225,
+                    last: 1_791_336_225,
+                })
+                .to_vec();
+        }
         if let Some(console) = gpu.console.as_mut() {
-            console.preview_profile(preview());
-            console.preview_collection(Some(vec![sun(), ez]), 0.8);
+            console.preview_profile(profile);
+            console.preview_collection(Some(vec![sun(), ez, gonk]), 0.8);
             console.open_profile_hub_page(Tab::Tags, ReturnTarget::MainMenu);
         }
         assert_eq!(gpu.profile_hub_tab(), Some(Tab::Tags));
         println!("{}", shoot(&mut gpu, 20, "duel6-collection-tags").display());
         assert!(!overflowed(&gpu));
+        // The card tag chosen, its Holo shown, the wall scrolled down to it.
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_tag_for_shot("sjk_alpha_001", 1);
+        }
+        println!(
+            "{}",
+            shoot(&mut gpu, 20, "duel6-collection-tags-card").display()
+        );
+        assert!(!overflowed(&gpu));
+    });
+}
+
+/// The History tab (31/10/2026) on made-up lines: an Open all of five gathered (opened on
+/// its lines), single openings with a card and a shader, drops, a purchase, a shatter, a
+/// mystery box and a trade, then Load older.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn duel6_sjk_collection_history() {
+    use crate::console::collection_panel::history::tests::{came, ledger, opened};
+    use sjk_identity::history::{BoxLine, HistoryCard, HistoryLine, OpenedLine, TradeLine};
+    on_big_stack(|| {
+        let cvars = [
+            ("ui_menuStyle", "sjk"),
+            (crate::settings::quick::HIDE_CVAR, "1"),
+            (crate::discord_presence::CVAR, "0"),
+        ];
+        let Some((mut gpu, _profile)) = open(
+            "maps/mp/duel6.bsp",
+            [1920, 1080],
+            Some(menu::ClientMenu::new(true, String::new())),
+            &cvars,
+        ) else {
+            return;
+        };
+        let _ = frame(&mut gpu, 10);
+        let now = 1_793_440_000;
+        let mut lines = vec![
+            HistoryLine::Opened(OpenedLine {
+                at: now,
+                tier: "legendary".into(),
+                credits: 240,
+                card: Some(HistoryCard {
+                    card: Some("sjk_alpha_000".into()),
+                    rarity: "legendary".into(),
+                    finish: "holo".into(),
+                }),
+                unlock: "saber_sun".into(),
+                ..OpenedLine::default()
+            }),
+            {
+                let HistoryLine::Came(mut bought) = came(now - 60, "rare", "bought") else {
+                    unreachable!()
+                };
+                bought.price = 400;
+                HistoryLine::Came(bought)
+            },
+        ];
+        lines.extend((0..5).map(|index| {
+            opened(
+                now - 3_600,
+                ["uncommon", "rare", "uncommon", "mythical", "rare"][index],
+                40 + index as i64 * 15,
+                if index == 3 { 12 } else { 0 },
+            )
+        }));
+        lines.extend([
+            HistoryLine::Shards(ledger(now - 7_200, 15, "shatter", "saber_sun")),
+            HistoryLine::Box(BoxLine {
+                at: now - 9_000,
+                outcome: "double".into(),
+                price: 100,
+                won: 200,
+                shards: 0,
+            }),
+            HistoryLine::Box(BoxLine {
+                at: now - 9_100,
+                outcome: "explode".into(),
+                price: 100,
+                ..BoxLine::default()
+            }),
+            HistoryLine::Trade(TradeLine {
+                at: now - 86_400,
+                trade: 3,
+                with: sjk_identity::history::HistoryPartner {
+                    name: "^1Nib^7bles".into(),
+                    verified: true,
+                },
+                gave: vec![sjk_identity::TradeItem {
+                    kind: "holocron".into(),
+                    tier: "rare".into(),
+                    ..Default::default()
+                }],
+                got: vec![sjk_identity::TradeItem {
+                    kind: "shader".into(),
+                    id: Some("saber_sun".into()),
+                    tier: "mythical".into(),
+                    ..Default::default()
+                }],
+            }),
+            came(now - 90_000, "kyber_rare", "achievement"),
+            came(now - 100_000, "rare", "play"),
+            came(now - 100_000, "uncommon", "play"),
+            HistoryLine::Credits(ledger(now - 120_000, 500, "reward", "Bug hunting week")),
+            came(now - 130_000, "mythical", "staff"),
+        ]);
+        let state = sjk_identity::HistoryState {
+            serial: 1,
+            lines,
+            more: true,
+            before: now - 130_000,
+            message: String::new(),
+        };
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_profile(preview());
+            console.preview_collection(Some(vec![sun()]), 0.8);
+            console.preview_history(Some(std::sync::Arc::new(state)));
+            console.open_profile_hub_page(Tab::History, ReturnTarget::MainMenu);
+        }
+        assert_eq!(gpu.profile_hub_tab(), Some(Tab::History));
+        let _ = frame(&mut gpu, 2);
+        // Open the gathered row (the fourth) and choose it.
+        if let Some(console) = gpu.console.as_mut() {
+            console.history_activate_for_shot(3);
+        }
+        println!(
+            "{}",
+            shoot(&mut gpu, 20, "duel6-collection-history").display()
+        );
+        assert!(!overflowed(&gpu));
+    });
+}
+
+/// The Toy Master's "?" on the Toys tab (30/10/2026): plain, then with a toy found, its
+/// hover card naming it, and the found toy's medallion on the Achievements wall, in a
+/// category of its own after the catalogue's.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn duel6_sjk_toy_master() {
+    on_big_stack(|| {
+        let cvars = [
+            ("ui_menuStyle", "sjk"),
+            (crate::settings::quick::HIDE_CVAR, "1"),
+            ("name", "^1Sol^7Vulpes"),
+            (crate::discord_presence::CVAR, "0"),
+        ];
+        let Some((mut gpu, _profile)) = open(
+            "maps/mp/duel6.bsp",
+            [1920, 1080],
+            Some(menu::ClientMenu::new(true, String::new())),
+            &cvars,
+        ) else {
+            return;
+        };
+        let _ = frame(&mut gpu, 10);
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_profile(preview());
+            console.preview_collection(Some(vec![sun()]), 0.8);
+            console.open_profile_hub_page(Tab::Toys, ReturnTarget::MainMenu);
+        }
+        let mut images = Vec::new();
+        gpu.profile_hub_show_for_shot(Tab::Toys);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_hover_for_shot(Some(10));
+        }
+        let path = shoot(&mut gpu, 60, "duel6-toy-master-none");
+        println!("{}", path.display());
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        let mut found = preview();
+        let held = sjk_identity::Achievement {
+            id: "secret_shot".to_owned(),
+            progress: 1,
+            goal: 1,
+            unlocked: 1_791_641_100,
+            reward: Some("kyber_rare".to_owned()),
+            name: Some("Found in a shot".to_owned()),
+            description: Some("You found the Toy Master's toy of the shots.".to_owned()),
+            group: Some(sjk_identity::wire::TOY_MASTER.to_owned()),
+        };
+        let mut all: Vec<sjk_identity::Achievement> = found
+            .standings
+            .iter()
+            .map(|standing| sjk_identity::Achievement {
+                id: standing.kind.id.to_owned(),
+                progress: standing.progress,
+                goal: standing.kind.goal,
+                unlocked: standing.unlocked.unwrap_or(0),
+                reward: None,
+                name: None,
+                description: None,
+                group: None,
+            })
+            .collect();
+        all.push(held);
+        found.standings = crate::achievements::standings(&all);
+        if let Some(console) = gpu.console.as_mut() {
+            console.preview_profile(found);
+            console.preview_collection(Some(vec![sun()]), 0.8);
+            console.collection_hover_for_shot(Some(10));
+        }
+        let path = shoot(&mut gpu, 30, "duel6-toy-master-found");
+        println!("{}", path.display());
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        gpu.profile_hub_show_for_shot(Tab::Achievements);
+        if let Some(console) = gpu.console.as_mut() {
+            console.collection_hover_for_shot(Some(crate::achievements::ALL.len()));
+        }
+        let path = shoot(&mut gpu, 30, "duel6-toy-master-wall");
+        println!("{}", path.display());
+        assert!(!overflowed(&gpu), "the wall");
+        images.push(image::open(path).expect("the shot").to_rgba8());
+        println!(
+            "{}",
+            sheet(&images, 1, 960, "duel6-toy-master-sheet").display()
+        );
     });
 }

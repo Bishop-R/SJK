@@ -73,6 +73,7 @@ const SHORT_LABELS: &[(&str, &str)] = &[
     ("cg_thirdPersonTargetDamp", "Target damping"),
     ("cg_wallGrabLock", "Lock wall-grab camera"),
     (crate::held_view::LOOK_CVAR, "Free look when held"),
+    ("cg_predictLegacy", "Prediction"),
     ("cg_errorDecay", "Error smoothing"),
     (crate::ghost_replay::SHOWCASE_CVAR, "Showcase tools"),
     (crate::frame_target::aa::exposure::MIN_EV, "Max darken, EV"),
@@ -99,6 +100,61 @@ pub(super) fn classic_label<'a>(cvar: &str, label: &'a str) -> (&'a str, Timing)
 /// a code: each `(cvar, value, name)`. A value not listed is shown as it is
 /// written ([`super::classic_view::choice_label`]).
 const CHOICE_NAMES: &[(&str, &str, &str)] = &[
+    (
+        crate::chat::incoming_color::CVAR,
+        "0",
+        crate::chat::incoming_color::LABELS[0],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "1",
+        crate::chat::incoming_color::LABELS[1],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "2",
+        crate::chat::incoming_color::LABELS[2],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "3",
+        crate::chat::incoming_color::LABELS[3],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "4",
+        crate::chat::incoming_color::LABELS[4],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "5",
+        crate::chat::incoming_color::LABELS[5],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "6",
+        crate::chat::incoming_color::LABELS[6],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "7",
+        crate::chat::incoming_color::LABELS[7],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "8",
+        crate::chat::incoming_color::LABELS[8],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "9",
+        crate::chat::incoming_color::LABELS[9],
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "10",
+        crate::chat::incoming_color::LABELS[10],
+    ),
     (crate::chat_sounds::MASTER_CVAR, "0", "Off"),
     (crate::chat_sounds::MASTER_CVAR, "1", "On"),
     (crate::chat_sounds::MASTER_CVAR, "2", "Distinct (EJK)"),
@@ -157,9 +213,14 @@ const CHOICE_NAMES: &[(&str, &str, &str)] = &[
     (crate::hud::lagometer::CVAR, "1", "Graph"),
     (crate::hud::lagometer::CVAR, "2", "Graph + speed"),
     (crate::hud::lagometer::CVAR, "3", "No backdrop"),
+    ("cg_predictLegacy", "0", "Current"),
+    ("cg_predictLegacy", "255", "As in 2026.1028.1"),
     (crate::audio::SKIN_SOUNDS_CVAR, "0", "Off"),
     (crate::audio::SKIN_SOUNDS_CVAR, "1", "With normal"),
     (crate::audio::SKIN_SOUNDS_CVAR, "2", "Only skin"),
+    (crate::hud::nameplate::STYLE_CVAR, "0", "Holo"),
+    (crate::hud::nameplate::STYLE_CVAR, "1", "Capsule"),
+    (crate::hud::nameplate::STYLE_CVAR, "2", "Classic"),
     ("cg_nameplateOutline", "0", "Off"),
     ("cg_nameplateOutline", "1", "Faint"),
     ("cg_nameplateOutline", "2", "Strong"),
@@ -220,6 +281,7 @@ pub(super) fn choice_name(cvar: &str, value: &str) -> Option<&'static str> {
         .map(|(_, _, shown)| *shown)
         .or_else(|| crate::away_emote::choice_name(cvar, value))
         .or_else(|| crate::chat_sounds::choice_name(cvar, value))
+        .or_else(|| crate::text::system_font::choice_name(cvar, value))
 }
 
 /// What the detail column says, in gold, while the SJK renderer is on and a
@@ -425,10 +487,18 @@ const HELP: &[(&str, &str)] = &[
         "Shows only server-marked private game chat for this map. Console history and SJK hub chat stay available.",
     ),
     (
+        crate::chat::quiet::CVAR,
+        "Hides all chat but your duel partner's and whispers, and their sounds, until the map changes. Also `quiet`.",
+    ),
+    (
         crate::audio::SKIN_SOUNDS_CVAR,
         "A blade skin's own ignition, swings and hum: off (normal saber sounds), over the normal ones, or instead of them.",
     ),
     ("cg_footsteps", "Footstep sounds, yours and other players'."),
+    (
+        crate::sound_sonar::CVAR,
+        "For deaf and hard-of-hearing players: arcs round the crosshair point to the sounds played. Needs sound output (not s_initsound 0).",
+    ),
     (
         crate::footprints::PRINTS_CVAR,
         "Steps on sand, snow, mud and dirt kick up dust and leave footprints for ten seconds, as in the original game.",
@@ -490,6 +560,18 @@ const HELP: &[(&str, &str)] = &[
         "Off: Banana peel sounds are not played on this PC, yours or other players'. The toy still works and is still seen.",
     ),
     (
+        crate::toy_sounds::Toy::Master.cvar(),
+        "Off: the toys the Toy Master hides on maps play their shows in silence on this PC.",
+    ),
+    (
+        crate::text::system_font::CHAT_CVAR,
+        "A font from this PC for the chat. What it lacks (Cyrillic, CJK, emoji) comes from SJK's fonts.",
+    ),
+    (
+        crate::text::system_font::CONSOLE_CVAR,
+        "A font from this PC for the console, kept to its even grid. What it lacks comes from SJK's fonts.",
+    ),
+    (
         crate::toy_sounds::Toy::Fishing.cvar(),
         "Off: your casts, bites and catches are silent. The toy still works.",
     ),
@@ -527,6 +609,10 @@ const HELP: &[(&str, &str)] = &[
         "Shows the HUD; off hides it, for screenshots and recordings.",
     ),
     ("cg_hudScale", "Size of the HUD: higher is larger."),
+    (
+        crate::hud_edit::COMMAND,
+        "Drag the HUD's elements over the game with the mouse; right-click one to put it back.",
+    ),
     (
         crate::hud::RadialPlacement::SPREAD_CVAR,
         "SJK radial HUD only: moves the health and armour meters left and the Force and ammo meters right, farther from your character.",
@@ -579,6 +665,10 @@ const HELP: &[(&str, &str)] = &[
     (
         "cg_nameplate",
         "Nameplates over players, and your health, shield and Force for SJK players on your server. Off: neither.",
+    ),
+    (
+        crate::hud::nameplate::STYLE_CVAR,
+        "Holo: your picture in a hexagon by a plate. Capsule: a pill, the bars under it. Classic: the name over a plate of bars.",
     ),
     (
         "cg_nameplateRange",
@@ -668,6 +758,14 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
+        "cl_unfocusedChatbox",
+        "Shows your automatic chat bubble while unfocused or minimized. Open chat, console and menus still show their normal bubble.",
+    ),
+    (
+        crate::console::chat_log::CVAR,
+        "Log all game-server chat, including team/PMs before filters, in this profile's chatlogs/chat.log. Off by default.",
+    ),
+    (
         "cg_chatBoxFontSize",
         "Size of chat messages and their rows; 1 is EternalJK's size, higher is larger and wraps sooner.",
     ),
@@ -710,6 +808,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::chat::options::BACKDROP_CVAR,
         "A dark band behind each chat line, so it reads over bright maps: how dark, in per cent. 0 shows none.",
+    ),
+    (
+        crate::chat::incoming_color::CVAR,
+        "Colour public All chat text. Names, team/admin chat, whispers and SJK chat keep their colours. 0 keeps originals.",
     ),
     (
         crate::chat::options::OUTLINE_CVAR,
@@ -789,6 +891,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::saber_clash_flare::SIZE_CVAR,
         "Size of the saber clash flare: 1 as in the original game, 0 to 2.",
+    ),
+    (
+        crate::saber_core::CVAR,
+        "How thick the white core down a lit blade is drawn: 1 as in the original game, 0.5 to 2. The glow around it stays the same.",
     ),
     (
         crate::impacts::FLESH_SPARKS_CVAR,
@@ -980,6 +1086,10 @@ const HELP: &[(&str, &str)] = &[
         "Off: stock locks; JA+ lets you look and aim the kick-off. On locks JA+ too, preventing aim during the hold.",
     ),
     (
+        "cg_predictLegacy",
+        "Current follows the server. As in 2026.1028.1 undoes the prediction changes made since; some moves get corrected.",
+    ),
+    (
         crate::held_view::LOOK_CVAR,
         "On lets the mouse look around while a kick, knockdown, kiss or grapple holds your view; the camera may shake.",
     ),
@@ -1011,6 +1121,14 @@ const HELP: &[(&str, &str)] = &[
     (
         "sith.downloads",
         "The S community's maps, skins and extras, into the game's base folder. Off until you turn it on; Enter opens the card.",
+    ),
+    (
+        "jof.contentAuto",
+        "Off by default. With JoF content on, checks at start and every hour and fetches what changed in the groups marked Auto.",
+    ),
+    (
+        "sith.cloudAuto",
+        "Off by default. With the Sith cloud on, checks at start and every hour and fetches what changed in the groups marked Auto.",
     ),
     (
         "jof.contentSource",
@@ -1250,8 +1368,16 @@ const HELP: &[(&str, &str)] = &[
         "Players whose view has not moved for 3 minutes, or with [AFK] in their name, show faint below the others.",
     ),
     (
-        "cg_showClientIDs",
+        crate::scoreboard::style::IDS_CVAR,
         "Shows each player's client number on the scoreboard.",
+    ),
+    (
+        crate::scoreboard::style::SJK_IDS_CVAR,
+        "Shows each player's client number on SJK's scoreboard, small before the name.",
+    ),
+    (
+        crate::scoreboard::style::DEATHS_RANK_CVAR,
+        "Lists players by score minus deaths where deaths show, fewer deaths first on a tie. Off keeps the server's order.",
     ),
     (
         crate::jof_tag::CVAR,
@@ -1330,6 +1456,10 @@ const HELP: &[(&str, &str)] = &[
         "The glow around sabers and glowing surfaces: on everything that glows, or on sabers only.",
     ),
     (
+        crate::frame_target::aa::glow::NO_SABERS_CVAR,
+        "Saber blades and trails get no glow halo, so each saber's details show; the rest still glows.",
+    ),
+    (
         "r_dynamicGlowStyle",
         "How the glow is blurred: like the original renderer, or like EternalJK's Vulkan one.",
     ),
@@ -1402,6 +1532,10 @@ const HELP: &[(&str, &str)] = &[
         "Lights models at every pixel rather than once each, so they match the light around them.",
     ),
     (
+        crate::dynamic_lights::TOON_MODELS_CVAR,
+        "Cartoon-style shading on players and other models: light in soft bands with a bright rim around them. Only you see it.",
+    ),
+    (
         "r_cubeMapping",
         "Captures each map's surroundings so metal and shiny surfaces reflect their room.",
     ),
@@ -1449,6 +1583,10 @@ const HELP: &[(&str, &str)] = &[
     (
         "r_dayHour",
         "The hour of the sun, 0 to 24, when the sun and sky are on.",
+    ),
+    (
+        "r_dayClock",
+        "Day and night follow your PC's clock; without Sun and sky the nights are darker.",
     ),
     (
         "r_dayMinutes",

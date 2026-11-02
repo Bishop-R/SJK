@@ -52,7 +52,7 @@ impl GpuState {
                 !local_prediction::predicts_local_view(player.movement_flags()),
             )
         {
-            return Err("freecam: only available while alive and on foot".into());
+            return Err("freecam: only available while alive, on foot and not in a duel".into());
         }
         let console = self.console.as_mut().ok_or("Console unavailable")?;
         console.set_cvar("cg_freeCamera", if on { "1" } else { "0" });

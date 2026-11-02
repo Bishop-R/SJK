@@ -206,7 +206,7 @@ fn base_orbit(ro: vec3<f32>, rd: vec3<f32>, px: f32) -> vec3<f32> {
         if h11(k * 2.7 + fi) > 0.35 + 0.4 * sw {
             continue;
         }
-        let d = bolt3(ro, rd, vec3(0.0, p.y + (h11(k + fi) - 0.5) * 3.0, 0.0), p, k + fi * 1.7, 0.45);
+        let d = bolt3(ro, rd, vec3(0.0, p.y + (h11(k + fi) - 0.5) * 3.0, 0.0), p, k + fi * 1.7, 0.45, px);
         col += boltLight(d, hot, px) * (1.0 - q) * (1.0 - q);
     }
     return col * uFx;

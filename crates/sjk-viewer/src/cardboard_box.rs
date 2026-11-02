@@ -208,6 +208,8 @@ pub(crate) struct CardboardBox {
     use_held: bool,
     /// Other players' boxes lifted here, and when.
     lifted: [Option<Instant>; SLOTS],
+    /// Who lifted the player's own box last, and when that was heard (Surprise!).
+    lifted_by: Option<(u16, Instant)>,
     /// The slots seen dead in the last snapshot (bits).
     dead: u64,
     /// The way a lifted box is pushed, by slot, until it falls.
@@ -246,6 +248,7 @@ impl Default for CardboardBox {
             use_pressed: false,
             use_held: false,
             lifted: [None; SLOTS],
+            lifted_by: None,
             dead: 0,
             pushed: [None; SLOTS],
             shown: [None; SLOTS],
@@ -323,6 +326,11 @@ impl CardboardBox {
     /// The music on boxed players this frame.
     pub(crate) fn music(&self) -> &[Music] {
         &self.music
+    }
+
+    /// Who lifted the player's own box last, and when that was heard.
+    pub(crate) fn lifted_by(&self) -> Option<(u16, Instant)> {
+        self.lifted_by
     }
 
     /// Whether the box of `slot` (not the player's own) was lifted here and is hidden
@@ -621,6 +629,12 @@ impl GpuState {
     /// `toy_box`: put the box on, or take it off.
     pub(crate) fn toggle_cardboard_box(&mut self) {
         self.cardboard_box.toggle();
+        self.chat.receive(
+            sjk_client::ServerEventKind::CenterPrint,
+            crate::toy_switch_words::switched("Cardboard box", self.cardboard_box.on()),
+            None,
+            Instant::now(),
+        );
     }
 
     /// The frame's toy logic, after the looks: the own life, the hub's events (`events`,
@@ -678,6 +692,9 @@ impl GpuState {
             let toward = origin_of(usize::from(event.slot))
                 .zip(at)
                 .and_then(|(from, at)| level_way(from, at));
+            if Some(event.target) == own && self.cardboard_box.on {
+                self.cardboard_box.lifted_by = Some((u16::from(event.slot), now));
+            }
             self.cardboard_box
                 .spotted(event.target, own, origin_of(target), shows, toward, now);
         }
@@ -698,6 +715,13 @@ impl GpuState {
             {
                 self.cardboard_box.lift(target, at.to_array(), from, now);
                 crate::player_identity::toy_event(TOY, EVENT_SPOTTED, target);
+                // Alert!: the boxes of different players lifted, by the name shown.
+                if self.toys_count()
+                    && let Some(name) =
+                        crate::player_identity::shown_name(game_state, usize::from(target))
+                {
+                    crate::achievements::note_name(crate::achievements::Counter::BoxSpotted, &name);
+                }
             }
         }
         // Deaths in the box, of the players in this snapshot.

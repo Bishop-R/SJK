@@ -594,7 +594,7 @@ impl Hax {
     }
 
     /// The slot the player steers, while steering.
-    fn steering(&self) -> Option<u8> {
+    pub(crate) fn steering(&self) -> Option<u8> {
         match self.role {
             Role::Controlling { target, .. } => Some(target),
             _ => None,
@@ -717,6 +717,7 @@ impl GpuState {
     /// `toy_hax`: turn the toy on or off.
     pub(crate) fn toggle_hax(&mut self) {
         self.hax.toggle();
+        self.hax_centre(crate::toy_switch_words::switched("Hax", self.hax.on()));
     }
 
     /// Say `text` on the centre of the screen.
@@ -913,6 +914,10 @@ impl GpuState {
                 {
                     let at = now + TRAP_MS;
                     relay(Event::Trap(at), slot);
+                    // It's a Trap!: a hacker caught.
+                    if self.toys_count() {
+                        crate::achievements::note(crate::achievements::Counter::HaxTraps);
+                    }
                     crate::player_identity::toy_event(TOY, &format!("{TRAP_PREFIX}{at}"), slot);
                     self.hax.trap((1 << own) | (1 << slot), at, false);
                     self.hax.role = Role::Trapped {

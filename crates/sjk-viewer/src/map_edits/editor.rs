@@ -3,17 +3,75 @@
 //! map's document at once and sent to the hub with `mapedit_publish`.
 //!
 //! While `mapedit` is on, the world-note key only selects (its outline shows what an
-//! edit will touch); it opens no note.
+//! edit will touch); it opens no note. Every command that changes the map's edits is one
+//! step of [`History`], which `mapedit_undo` and `mapedit_redo` walk.
 
-use super::document::{Kind, Scope};
+use super::document::{Edit, Kind, Scope};
 use crate::GpuState;
 use crate::world_notes::{EditTarget, Scene};
 use glam::Vec3;
 
 /// How many surfaces `mapedit_hide group` takes at most.
 const GROUP_LIMIT: usize = 256;
-/// Degrees `mapedit_turn` turns by without a number.
+/// Degrees `mapedit_turn` turns by without a number, and a notch of the wheel turns a
+/// grabbed model by.
 const TURN_STEP: f32 = 15.0;
+/// Steps [`History`] keeps each way.
+const HISTORY_STEPS: usize = 100;
+/// The commands that may change the map's edits: each one that does is a step to undo.
+const CHANGES: &[&str] = &[
+    "mapedit_hide",
+    "mapedit_place",
+    "mapedit_turn",
+    "mapedit_move",
+    "mapedit_scale",
+    "mapedit_grab",
+    "mapedit_remap",
+    "mapedit_delete",
+];
+
+/// The editor's steps on one map: the edits as they were before each change, to undo,
+/// and as they were before each undo, to redo. Cleared when the map changes or the hub
+/// brings another staff member's version.
+#[derive(Default)]
+pub(crate) struct History {
+    undo: Vec<Vec<Edit>>,
+    redo: Vec<Vec<Edit>>,
+}
+
+impl History {
+    /// A change made the edits differ from `before`: a new step, and nothing to redo.
+    fn changed(&mut self, before: Vec<Edit>) {
+        if self.undo.len() == HISTORY_STEPS {
+            self.undo.remove(0);
+        }
+        self.undo.push(before);
+        self.redo.clear();
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+
+    /// Whether there is a step to undo, and one to redo.
+    pub(crate) fn can(&self) -> (bool, bool) {
+        (!self.undo.is_empty(), !self.redo.is_empty())
+    }
+}
+
+/// The edit a step changes between `from` and `to`, as `to` has it when it is there: what
+/// an undo or a redo names.
+fn stepped<'a>(from: &'a [Edit], to: &'a [Edit]) -> Option<&'a Edit> {
+    to.iter()
+        .find(|edit| !from.contains(edit))
+        .or_else(|| from.iter().find(|edit| !to.contains(edit)))
+}
+
+/// A path's last part: `models/a/door.md3` is `door.md3`.
+pub(crate) fn short_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
 
 /// The editor's state in one world.
 pub(crate) struct Editor {
@@ -51,6 +109,14 @@ impl Editor {
     /// Where new edits apply.
     pub(crate) fn scope(&self) -> Scope {
         self.scope
+    }
+
+    /// Make placed edit `id` the one the placed model's controls act on.
+    pub(crate) fn set_current(&mut self, id: u32) {
+        if self.current != Some(id) {
+            self.current = Some(id);
+            self.grabbing = false;
+        }
     }
 }
 
@@ -93,7 +159,14 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "mapedit_scope",
         "Map editor: new edits for all servers or only this server",
     ),
-    ("mapedit_undo", "Map editor: remove the newest edit"),
+    (
+        "mapedit_undo",
+        "Map editor: undo the last change to this map's edits",
+    ),
+    (
+        "mapedit_redo",
+        "Map editor: redo the change mapedit_undo took back",
+    ),
     ("mapedit_list", "Map editor: list this map's edits"),
     ("mapedit_delete", "Map editor: remove the edit of an id"),
     (
@@ -148,6 +221,27 @@ impl GpuState {
         if !self.map_edits.editor.active {
             return Err("Turn the map editor on first: mapedit".into());
         }
+        let before = CHANGES.contains(&name).then(|| self.map_edit_edits());
+        let result = self.map_edit_change(name, args);
+        if let Some(before) = before
+            && result.is_ok()
+            && before != self.map_edit_edits()
+        {
+            self.map_edits.history.changed(before);
+        }
+        result
+    }
+
+    /// This map's edits as they stand (none without a document).
+    fn map_edit_edits(&self) -> Vec<Edit> {
+        self.map_edits
+            .document
+            .as_ref()
+            .map_or_else(Vec::new, |document| document.edits.clone())
+    }
+
+    /// A command of the editor while it is on.
+    fn map_edit_change(&mut self, name: &str, args: &[String]) -> Result<Vec<String>, String> {
         match name {
             "mapedit_hide" => self.map_edit_hide(args),
             "mapedit_place" => self.map_edit_place(args),
@@ -188,15 +282,8 @@ impl GpuState {
             "mapedit_grab" => self.map_edit_grab(),
             "mapedit_remap" => self.map_edit_remap(args),
             "mapedit_scope" => self.map_edit_scope(args),
-            "mapedit_undo" => {
-                let newest = self
-                    .map_edits
-                    .document
-                    .as_ref()
-                    .and_then(|document| document.edits.iter().map(|edit| edit.id).max())
-                    .ok_or("No edits on this map")?;
-                self.map_edit_delete(newest)
-            }
+            "mapedit_undo" => self.map_edit_step(true),
+            "mapedit_redo" => self.map_edit_step(false),
             "mapedit_delete" => {
                 let [id] = args else {
                     return Err("usage: mapedit_delete <id> (mapedit_list shows them)".into());
@@ -226,6 +313,8 @@ impl GpuState {
             self.close_map_edit_panel();
             return Ok(vec!["Map editor off".into()]);
         }
+        // Start from the hub's latest copies.
+        crate::player_identity::refresh_map_edits();
         // A map without a document has no checksum read yet: read it now.
         if self.map_edits.map().is_none() {
             self.map_edits.lookup = super::Lookup::Idle;
@@ -242,7 +331,8 @@ impl GpuState {
             ),
             "  mapedit_hide [group], mapedit_place [model], mapedit_remap <shader|->".into(),
             "  mapedit_turn [deg], mapedit_move <up|x y z>, mapedit_scale <f>, mapedit_grab".into(),
-            "  mapedit_scope [all|server], mapedit_list, mapedit_undo, mapedit_delete <id>".into(),
+            "  mapedit_scope [all|server], mapedit_list, mapedit_delete <id>".into(),
+            "  mapedit_undo, mapedit_redo step through this map's changes".into(),
             "  mapedit_publish sends the map's edits to every SJK player".into(),
         ])
     }
@@ -280,20 +370,17 @@ impl GpuState {
         }
     }
 
-    /// The world-note key while the editor is on: select only.
+    /// The world-note key while the editor is on: a grabbed model is put down where it is
+    /// drawn; else what is under the crosshair is selected. Either way the panel opens.
     pub(crate) fn map_edit_select(&mut self) {
-        let text = match self.map_edit_pick() {
-            Some(summary) => {
-                format!("{summary}\nMap editor: mapedit_hide, mapedit_remap, mapedit_place")
-            }
-            None => "Nothing under the crosshair".to_owned(),
-        };
-        self.chat.receive(
-            sjk_client::ServerEventKind::CenterPrint,
-            text,
-            None,
-            std::time::Instant::now(),
-        );
+        if self.map_edits.editor.grabbing {
+            let result = self.map_edit_command("mapedit_grab", &[]);
+            self.map_edits.panel.answer(result);
+        } else {
+            let picked = self.map_edit_pick().is_some();
+            self.map_edit_picked(picked, "Nothing under the crosshair");
+        }
+        self.open_map_edit_panel();
     }
 
     pub(super) fn map_edit_pick(&mut self) -> Option<String> {
@@ -461,8 +548,11 @@ impl GpuState {
         let id = self.map_edit_document()?.add(kind, server);
         self.map_edits.editor.current = Some(id);
         self.map_edit_saved(format!(
-            "Edit {id}: {model} placed at {:.0} {:.0} {:.0} (mapedit_turn, _move, _grab move it)",
-            aim.hit.x, aim.hit.y, aim.hit.z
+            "Edit {id}: {} placed at {:.0} {:.0} {:.0} (mapedit_turn, _move, _grab move it)",
+            short_name(&model),
+            aim.hit.x,
+            aim.hit.y,
+            aim.hit.z
         ))
     }
 
@@ -615,6 +705,56 @@ impl GpuState {
         self.map_edit_saved(format!("Edit {id}: {from} drawn as {to}"))
     }
 
+    /// Undo the last change to this map's edits (`undo`), or redo the last undone.
+    fn map_edit_step(&mut self, undo: bool) -> Result<Vec<String>, String> {
+        // The map's checksum first: a step is taken only when it can be saved.
+        self.map_edit_document()?;
+        let history = &mut self.map_edits.history;
+        let from = if undo {
+            &mut history.undo
+        } else {
+            &mut history.redo
+        };
+        let Some(edits) = from.pop() else {
+            return Err(if undo {
+                "Nothing to undo".into()
+            } else {
+                "Nothing to redo".into()
+            });
+        };
+        let document = self.map_edit_document()?;
+        let now = std::mem::replace(&mut document.edits, edits);
+        document.unpublished = true;
+        let line = stepped(&now, &document.edits).map_or_else(
+            || "the edits".to_owned(),
+            |edit| match document.edits.iter().find(|kept| kept.id == edit.id) {
+                Some(kept) => kept.label(),
+                None => format!("{} taken away", edit.label()),
+            },
+        );
+        let present = document
+            .edits
+            .iter()
+            .map(|edit| edit.id)
+            .collect::<Vec<_>>();
+        let history = &mut self.map_edits.history;
+        if undo {
+            history.redo.push(now);
+        } else {
+            history.undo.push(now);
+        }
+        // The placed model the controls act on may be gone.
+        let editor = &mut self.map_edits.editor;
+        if editor.current.is_some_and(|id| !present.contains(&id)) {
+            editor.current = None;
+            editor.grabbing = false;
+        }
+        self.map_edit_saved(format!(
+            "{}: {line}",
+            if undo { "Undone" } else { "Redone" }
+        ))
+    }
+
     fn map_edit_delete(&mut self, id: u32) -> Result<Vec<String>, String> {
         let removed = self
             .map_edit_document()?
@@ -675,7 +815,7 @@ impl GpuState {
         let Some(outcome) = crate::player_identity::map_edits_published() else {
             return;
         };
-        let line = match outcome {
+        let result = match outcome {
             Ok((map, checksum, revision)) => {
                 let folder = self.map_edits_folder();
                 if let Some(document) = self
@@ -692,15 +832,50 @@ impl GpuState {
                         crate::log::progress(format_args!("map edits not saved: {error}"));
                     }
                 }
-                format!("Map edits of {map} published (hub revision {revision})")
+                Ok(format!(
+                    "Published: every SJK player gets {map}'s edits (hub revision {revision})"
+                ))
             }
-            Err(error) => format!("^1Map edits not published: {error}"),
+            Err(error) => Err(format!("Not published: {error}")),
         };
+        let line = match &result {
+            Ok(line) => line.clone(),
+            Err(error) => format!("^1Map edits {}", error.replacen("Not", "not", 1)),
+        };
+        crate::log::progress(format_args!("map edits: {line}"));
         self.chat.receive(
             sjk_client::ServerEventKind::Print,
             line,
             None,
             std::time::Instant::now(),
         );
+        let panel = &mut self.map_edits.panel;
+        panel.answer(result.map(|line| vec![line]));
+        panel.stale();
+    }
+
+    /// The mouse wheel while a placed model is grabbed: it turns the model (by a degree
+    /// with `fine`, Shift held) instead of changing weapon. Whether it took the wheel.
+    pub(crate) fn map_edit_wheel(&mut self, up: bool, fine: bool) -> bool {
+        let editor = &self.map_edits.editor;
+        if !editor.active || !editor.grabbing {
+            return false;
+        }
+        let Some(id) = editor.current else {
+            return false;
+        };
+        let Some((origin, mut angles)) = self
+            .map_edits
+            .placed
+            .iter()
+            .find(|placed| placed.id == id)
+            .map(|placed| (placed.origin, placed.angles))
+        else {
+            return false;
+        };
+        let step = if fine { 1.0 } else { TURN_STEP };
+        angles[1] = (angles[1] + if up { step } else { -step }).rem_euclid(360.0);
+        self.map_edits.preview_placement(id, origin, angles);
+        true
     }
 }

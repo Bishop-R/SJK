@@ -120,6 +120,8 @@ pub(crate) enum InputAction {
     Banana,
     /// `banana_drop`: drop a banana peel ([`crate::banana`]).
     DropBanana,
+    /// `toy_propgun`: hold the chosen prop gun and fire it, or not ([`crate::propgun`]).
+    PropGun,
     /// `toy_tag`: stick the chosen tag where the crosshair meets the world
     /// ([`crate::tags`]).
     StickTag,
@@ -338,6 +340,7 @@ impl GameplayInput {
                     | crate::box_hunt::COMMAND
                     | crate::banana::COMMAND
                     | crate::banana::DROP_COMMAND
+                    | crate::propgun::COMMAND
                     | crate::tags::COMMAND
                     | "cameracontrol"
             )
@@ -472,13 +475,10 @@ impl GameplayInput {
         if let Some(slot) = force_abilities::command_slot(&name) {
             return Some(InputAction::ForceAbility(slot));
         }
+        if let Some(action) = chat_action(&name) {
+            return Some(action);
+        }
         match name.as_str() {
-            "messagemode" => Some(InputAction::MessageMode(false)),
-            "messagemode2" => Some(InputAction::MessageMode(true)),
-            "messagemode3" => Some(InputAction::TargetMessage(false)),
-            "messagemode4" => Some(InputAction::TargetMessage(true)),
-            "messagemode5" => Some(InputAction::SjkMessageMode),
-            "messagemode6" => Some(InputAction::AdminMessageMode),
             "togglecamera" => Some(InputAction::ToggleCamera),
             "sabertoggle" => Some(InputAction::SaberToggle),
             "saberstyle" => Some(InputAction::SaberStyle),
@@ -518,6 +518,7 @@ impl GameplayInput {
             crate::box_hunt::COMMAND => Some(InputAction::BoxHunt),
             crate::banana::COMMAND => Some(InputAction::Banana),
             crate::banana::DROP_COMMAND => Some(InputAction::DropBanana),
+            crate::propgun::COMMAND => Some(InputAction::PropGun),
             crate::tags::COMMAND => match words.next().map(str::to_ascii_lowercase).as_deref() {
                 Some("clear" | "off") => Some(InputAction::ClearTag),
                 _ => Some(InputAction::StickTag),
@@ -576,6 +577,23 @@ fn button_for_command(command: &str) -> Option<GameButton> {
         "scores" => Some(GameButton::Scores),
         _ => None,
     }
+}
+
+/// The chat a bound command opens: `messagemode` (All) and `messagemode2` (Team),
+/// `messagemode3`/`messagemode4` (whispers), `messagemode5` (SJK chat) and
+/// `messagemode6` (Admin chat); `None` for any other command.
+pub(crate) fn chat_action(command: &str) -> Option<InputAction> {
+    let name = command.split_ascii_whitespace().next()?;
+    let action = match name.to_ascii_lowercase().as_str() {
+        "messagemode" => InputAction::MessageMode(false),
+        "messagemode2" => InputAction::MessageMode(true),
+        "messagemode3" => InputAction::TargetMessage(false),
+        "messagemode4" => InputAction::TargetMessage(true),
+        "messagemode5" => InputAction::SjkMessageMode,
+        "messagemode6" => InputAction::AdminMessageMode,
+        _ => return None,
+    };
+    Some(action)
 }
 
 impl super::GpuState {
@@ -666,6 +684,7 @@ impl super::GpuState {
             Some(InputAction::BoxHunt) => self.toggle_box_hunt(),
             Some(InputAction::Banana) => self.toggle_banana(),
             Some(InputAction::DropBanana) => self.drop_banana(),
+            Some(InputAction::PropGun) => self.toggle_propgun(),
             Some(InputAction::FlipKick) => {
                 let restricted = self.live_session.as_ref().is_some_and(|session| {
                     session
@@ -905,6 +924,7 @@ mod tests {
             ("toy_tag OFF", InputAction::ClearTag),
             ("toy_banana", InputAction::Banana),
             ("banana_drop", InputAction::DropBanana),
+            ("toy_propgun", InputAction::PropGun),
         ] {
             assert!(GameplayInput::recognizes(command), "{command}");
             assert_eq!(input.apply(command), Some(action), "{command}");

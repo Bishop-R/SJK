@@ -498,6 +498,12 @@ impl Order66 {
         Some(order.sender)
     }
 
+    /// Whether the order heard or given was given by the player in `slot`.
+    fn given_by(&self, slot: usize) -> bool {
+        self.order
+            .is_some_and(|order| usize::from(order.sender) == slot)
+    }
+
     /// Whether `now` lies in the order's window, where holders who die blow up.
     fn in_window(&self, now: i32) -> bool {
         self.order.is_some_and(|order| {
@@ -540,6 +546,10 @@ impl GpuState {
     /// `toy_order66`: turn the toy on or off.
     pub(crate) fn toggle_order66(&mut self) {
         self.order66.toggle();
+        self.order66_centre(crate::toy_switch_words::switched(
+            "Order 66",
+            self.order66.on(),
+        ));
     }
 
     /// Say `text` on the centre of the screen.
@@ -804,7 +814,32 @@ impl GpuState {
             }
         };
         let blown = self.order66.deaths(seen, dead, now, holds);
+        if let Some(own) = own
+            && blown & !(1 << own) != 0
+            && self.order66.given_by(own)
+        {
+            self.order66_victims(blown & !(1 << own), own);
+        }
         self.order66_blow_up(blown);
+    }
+
+    /// The player's own order brought down `victims` (bits by slot), the player being
+    /// in slot `own`: Wipe Them Out counts the most of one order, I Am the Senate the
+    /// players by name.
+    fn order66_victims(&self, victims: u64, own: usize) {
+        let Some(session) = self.live_session.as_ref().filter(|_| self.toys_count()) else {
+            return;
+        };
+        let all = self.order66.blasted & !(1 << own);
+        crate::achievements::note_best(
+            crate::achievements::Counter::Order66Best,
+            u64::from(all.count_ones()),
+        );
+        for slot in (0..SLOTS).filter(|slot| victims & 1 << slot != 0) {
+            if let Some(name) = crate::player_identity::shown_name(session.game_state(), slot) {
+                crate::achievements::note_name(crate::achievements::Counter::Order66Victims, &name);
+            }
+        }
     }
 
     /// Blow the players in `blown` (bits by slot) up as an order does, where the latest

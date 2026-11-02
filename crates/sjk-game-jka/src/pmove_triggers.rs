@@ -18,7 +18,17 @@ impl Predictor {
         }
         // CG_TouchTriggerPrediction uses the hull left by the final Pmove slice,
         // not posture flags that PM_Footsteps may have changed afterwards.
-        let (minimums, maximums) = self.box_bounds();
+        let (minimums, maximums) = if self.legacy_prediction(predict_legacy::TRIGGER_HULL) {
+            // 2026.1028.1's box, rebuilt from the posture flags.
+            let top = if self.state.movement_flags & (PMF_DUCKED | 4) != 0 {
+                self.state.crouching_height
+            } else {
+                self.state.standing_height
+            };
+            ([-15.0, -15.0, -24.0], [15.0, 15.0, top])
+        } else {
+            self.box_bounds()
+        };
         for entity in entities {
             if entity.kind == 2 && self.state.movement_type != 4 {
                 let number = usize::from(entity.number);

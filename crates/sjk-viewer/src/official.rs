@@ -54,13 +54,13 @@ pub(crate) const ANNOUNCE_HELP: &str = "SJK team tool";
 /// `debug_announce [release|long]`: rehearse an announcement offline.
 pub(crate) const DEBUG_ANNOUNCE_COMMAND: &str = "debug_announce";
 pub(crate) const DEBUG_ANNOUNCE_HELP: &str =
-    "Rehearse an SJK team announcement, nothing sent: debug_announce [news|release|long]";
+    "Rehearse an SJK team announcement, nothing sent: debug_announce [news|release|long|picture]";
 /// `debug_reward [list]`: rehearse a contributor reward offline.
 pub(crate) const DEBUG_REWARD_COMMAND: &str = "debug_reward";
 pub(crate) const DEBUG_REWARD_HELP: &str =
     "Rehearse a contributor reward and its round, nothing sent: debug_reward [list]";
-/// What `announce` says to anyone but the creator.
-pub(crate) const CREATOR_ONLY: &str = "Only SJK's creator can announce";
+/// What `announce` says to anyone but the SJK team (staff, the creator among them).
+pub(crate) const STAFF_ONLY: &str = "Only the SJK team can announce";
 
 /// Numbers rehearsals start at: far above anything the hub has made.
 const REHEARSAL_ID: u64 = 4_000_000_000;
@@ -99,6 +99,9 @@ pub(crate) fn older_than(installed: &str, version: &str) -> bool {
     }
 }
 
+/// A picture chosen for an announcement: its bytes and type, or why there are none.
+type Picked = Result<(Vec<u8>, &'static str), String>;
+
 /// The client's side of announcements and rewards.
 #[derive(Default)]
 pub(crate) struct Official {
@@ -113,9 +116,13 @@ pub(crate) struct Official {
     later: bool,
     /// Rewards whose card a match gave.
     carded: Vec<u64>,
-    /// The serials of the last claim and announcement outcomes followed.
+    /// The serials of the last claim, announcement and news picture outcomes followed.
     claim_serial: u64,
     announce_serial: u64,
+    image_serial: u64,
+    /// The picture the composer's Ctrl+I is choosing: the file dialog's thread answers
+    /// with its bytes and type, or why there are none.
+    picking: Option<std::sync::mpsc::Receiver<Picked>>,
     /// The rewards' revision the round list last read.
     rewards_revision: u64,
     /// Rehearsals: announcements, rewards waiting and rounds, made up offline.
@@ -145,6 +152,57 @@ impl Official {
             .as_ref()
             .map(|seen| seen.to_show(list))
             .unwrap_or_default()
+    }
+
+    /// The seen file of `key_id`, read from `directory` when another key's was held.
+    fn seen_for(&mut self, directory: &Path, key_id: &str) -> &mut seen::Seen {
+        if self
+            .seen
+            .as_ref()
+            .is_none_or(|seen| seen.key_id() != key_id)
+        {
+            self.seen = Some(seen::Seen::load(directory, key_id));
+        }
+        directory.clone_into(&mut self.directory);
+        self.seen.get_or_insert_with(seen::Seen::default)
+    }
+
+    fn save_seen(&self) {
+        if let Some(seen) = &self.seen
+            && let Err(error) = seen.save(&self.directory)
+        {
+            crate::log::progress(format_args!(
+                "announcements: cannot write {}: {error}",
+                seen::FILE
+            ));
+        }
+    }
+
+    /// The highest announcement `key_id` read on the News panel, given the hub's `list`
+    /// ([`seen::Seen::read_given`]); `u64::MAX` while nothing can be decided yet.
+    pub(crate) fn news_read(
+        &mut self,
+        directory: &Path,
+        key_id: &str,
+        list: &[Announcement],
+    ) -> u64 {
+        let (read, decided) = self.seen_for(directory, key_id).read_given(list);
+        if decided {
+            self.save_seen();
+        }
+        read
+    }
+
+    /// Count announcement `id` and those before it as read on the News panel.
+    pub(crate) fn mark_news_read(&mut self, id: u64) {
+        if self.seen.as_mut().is_some_and(|seen| seen.mark_read(id)) {
+            self.save_seen();
+        }
+    }
+
+    /// The rehearsed announcements (`debug_announce`), newest last.
+    pub(crate) fn rehearsed(&self) -> &[Announcement] {
+        &self.rehearsed
     }
 
     /// Count announcements `ids` as shown and write the file.
@@ -199,15 +257,24 @@ pub(crate) fn rehearsal_announcement(kind: &str, id: u64, at: i64) -> Result<Ann
             true,
             "A new SJK release is out.\n\n- Announcements in SJK chat\n- Contributor reward rounds with Claim",
         ),
+        "picture" => (
+            false,
+            "A picture an announcement shows (a rehearsal has none to read, so its frame shows):\n[[image:0123456789abcdef]]\nAnd a line under it.",
+        ),
         "long" => (
             false,
-            "This rehearsal holds every kind of line an announcement can.\n\nA paragraph that runs long enough to wrap onto several lines of the card, so the wrapping, the margins and the line height can all be checked by eye.\n\n- A first point\n- A second point that is long enough to wrap onto a second line under its bullet\n- A third\n\nOne\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight\nNine\nTen\nEleven\nTwelve",
+            "This rehearsal holds every kind of line an announcement can: a link to [your Collection](open:collection), one to [a setting](setting:cg_nameplate) and a chip, `news`.\n\n[[switch:cg_nameplate]]\n\nA paragraph that runs long enough to wrap onto several lines of the card, so the wrapping, the margins and the line height can all be checked by eye.\n\n- A first point\n- A second point that is long enough to wrap onto a second line under its bullet\n- A third\n\nOne\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight\nNine\nTen\nEleven\nTwelve",
         ),
         other => {
             return Err(format!(
-                "{DEBUG_ANNOUNCE_COMMAND}: {other} is none of news, release, long"
+                "{DEBUG_ANNOUNCE_COMMAND}: {other} is none of news, release, long, picture"
             ));
         }
+    };
+    let images: BTreeMap<String, [u32; 2]> = if kind == "picture" {
+        [("0123456789abcdef".to_owned(), [1600, 900])].into()
+    } else {
+        BTreeMap::new()
     };
     Ok(Announcement {
         id,
@@ -224,7 +291,23 @@ pub(crate) fn rehearsal_announcement(kind: &str, id: u64, at: i64) -> Result<Ann
         } else {
             String::new()
         },
+        images,
     })
+}
+
+/// The picture at `path` for an upload: its bytes and type, refused when it is too big
+/// for the hub or not a PNG or a JPEG.
+fn read_news_image(path: &Path) -> Picked {
+    let bytes = std::fs::read(path).map_err(|error| format!("Cannot read the picture: {error}"))?;
+    if bytes.len() > sjk_identity::news::NEWS_UPLOAD_MAX {
+        return Err("The picture is over 3 MB: make it smaller first.".to_owned());
+    }
+    let mime = match image::guess_format(&bytes) {
+        Ok(image::ImageFormat::Png) => "image/png",
+        Ok(image::ImageFormat::Jpeg) => "image/jpeg",
+        _ => return Err("Only PNG and JPEG pictures.".to_owned()),
+    };
+    Ok((bytes, mime))
 }
 
 /// A made-up reward and its round for `debug_reward`.
@@ -323,6 +406,7 @@ impl crate::GpuState {
         pending.extend(rewards.pending.iter().map(|reward| (reward.clone(), false)));
         self.follow_claim(claim, &pending);
         self.follow_announce(announce);
+        self.follow_news_image();
         // The round list follows the rounds as they are read.
         if rewards_revision != self.official.rewards_revision {
             self.official.rewards_revision = rewards_revision;
@@ -493,6 +577,84 @@ impl crate::GpuState {
         }
     }
 
+    /// Ctrl+I in the composer: the system's file dialog on a thread of its own (it
+    /// blocks), then the picture read for the upload.
+    fn pick_news_image(&mut self) {
+        let (answer, picked) = std::sync::mpsc::channel();
+        self.official.picking = Some(picked);
+        let spawned = std::thread::Builder::new()
+            .name("sjk-news-picture".to_owned())
+            .spawn(move || {
+                let picked = crate::file_dialog::pick_file(
+                    "A picture for the announcement",
+                    "Pictures",
+                    &["png", "jpg", "jpeg"],
+                )
+                .ok_or_else(|| "No picture chosen.".to_owned())
+                .and_then(|path| read_news_image(&path));
+                let _ = answer.send(picked);
+            });
+        if spawned.is_err()
+            && let Some(Page::Compose(composer)) = self.official.window.page.as_mut()
+        {
+            composer.uploading = false;
+            "The file dialog could not open.".clone_into(&mut composer.message);
+        }
+    }
+
+    /// The picture chosen is sent to the hub; the hub's answer puts its line in the text.
+    fn follow_news_image(&mut self) {
+        if let Some(picked) = self.official.picking.as_ref()
+            && let Ok(picked) = picked.try_recv()
+        {
+            self.official.picking = None;
+            match picked {
+                Ok((bytes, mime)) => {
+                    let sent = crate::player_identity::with_service(|service| {
+                        service.upload_news_image(bytes, mime);
+                    });
+                    if sent.is_none()
+                        && let Some(Page::Compose(composer)) = self.official.window.page.as_mut()
+                    {
+                        composer.uploading = false;
+                        "Turn the SJK identity on to upload pictures"
+                            .clone_into(&mut composer.message);
+                    } else if let Some(Page::Compose(composer)) = self.official.window.page.as_mut()
+                    {
+                        "Uploading the picture...".clone_into(&mut composer.message);
+                    }
+                }
+                Err(why) => {
+                    if let Some(Page::Compose(composer)) = self.official.window.page.as_mut() {
+                        composer.uploading = false;
+                        composer.message = why;
+                    }
+                }
+            }
+        }
+        let outcome =
+            crate::player_identity::with_snapshot(|snapshot| snapshot.news_image.clone()).flatten();
+        let Some((serial, outcome)) =
+            outcome.filter(|(serial, _)| *serial != self.official.image_serial)
+        else {
+            return;
+        };
+        self.official.image_serial = serial;
+        let Some(Page::Compose(composer)) = self.official.window.page.as_mut() else {
+            return;
+        };
+        if !composer.uploading {
+            return;
+        }
+        match outcome {
+            Ok(image) => composer.add_image(&image.image),
+            Err(why) => {
+                composer.uploading = false;
+                composer.message = why;
+            }
+        }
+    }
+
     /// Open what a line or a command names.
     fn open_target(&mut self, target: Target) {
         match target {
@@ -536,17 +698,9 @@ impl crate::GpuState {
         }
     }
 
+    /// Read `announcement` in full: the News panel on it.
     fn open_announcement(&mut self, announcement: Announcement) {
-        let older = announcement.is_release()
-            && older_than(crate::build_info::VERSION, &announcement.version);
-        self.official.open(
-            Page::Announcement {
-                announcement,
-                older,
-                scroll: 0,
-            },
-            true,
-        );
+        self.open_news_on(&announcement);
     }
 
     /// Open the round list on round `round` (or the newest), reading the rounds again.
@@ -610,22 +764,6 @@ impl crate::GpuState {
                 self.official.asked = false;
                 self.official.later = true;
             }
-            Choice::Update => {
-                self.official.window.page = None;
-                self.official.asked = false;
-                if crate::update::available().is_some() {
-                    if crate::update::click_notice() == crate::update::NoticeClick::Restart {
-                        self.quit_requested = true;
-                    }
-                } else if let Some(console) = self.console.as_mut() {
-                    console.open_update_panel();
-                }
-            }
-            Choice::WhatsNew => {
-                self.official.window.page = None;
-                self.official.asked = false;
-                self.preview_whats_new();
-            }
             Choice::Claim { id, rehearsal } => {
                 if rehearsal {
                     // Nothing is sent: the rehearsal goes, the next shows.
@@ -660,6 +798,7 @@ impl crate::GpuState {
                     "Turn the SJK identity on to claim it".clone_into(message);
                 }
             }
+            Choice::PickImage => self.pick_news_image(),
             Choice::Send(request) => {
                 if crate::player_identity::with_service(|service| service.announce(request))
                     .is_none()
@@ -717,8 +856,8 @@ impl crate::GpuState {
 
     /// `announce`: the composer, for the creator only (the hub refuses anyone else too).
     pub(crate) fn announce_command(&mut self) -> Result<Vec<String>, String> {
-        if !crate::player_identity::is_creator() {
-            return Err(CREATOR_ONLY.to_owned());
+        if !crate::player_identity::is_staff() {
+            return Err(STAFF_ONLY.to_owned());
         }
         if !matches!(self.official.window.page, Some(Page::Compose(_))) {
             self.official.open(Page::Compose(Composer::default()), true);

@@ -19,7 +19,7 @@ pub mod source;
 pub mod store;
 
 pub use manifest::{Asset, Group, GroupKind, Manifest, Target};
-pub use plan::{Plan, Selection};
+pub use plan::{AutoGroups, Plan, Selection};
 pub use source::{Directory, Source, SourceChoice};
 pub use store::{AssetState, Snapshot, Store};
 

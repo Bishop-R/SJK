@@ -46,6 +46,13 @@ pub(crate) fn load_shaders(vfs: &VirtualFileSystem) -> ShaderCatalog {
     shader_authority::load(vfs, search_paths::startup().protect_shaders)
 }
 
+pub(crate) fn load_shaders_until(
+    vfs: &VirtualFileSystem,
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> Option<ShaderCatalog> {
+    shader_authority::load_until(vfs, search_paths::startup().protect_shaders, cancelled)
+}
+
 pub(crate) fn load_bsp_from_vfs(
     vfs: &VirtualFileSystem,
     map_path: &str,

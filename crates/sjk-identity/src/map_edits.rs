@@ -72,13 +72,54 @@ pub fn valid_map(map: &str) -> bool {
         && !map.contains("..")
 }
 
+/// Why a publish or a look at the hub's list failed, in staff's words.
+pub fn refusal(error: &HubError) -> String {
+    let words = match error {
+        HubError::Rejected { code, message, .. } => match code.as_str() {
+            "not_staff" => "Only SJK staff publish map edits.",
+            "not_registered" => "Your identity is not registered at the SJK hub yet.",
+            "staff_quota" | "rate_limited" => "Too many requests: wait a moment.",
+            "edits_too_large" | "too_large" => "Too many edits for the hub: 2048 at most, 256 KiB.",
+            "bad_map" => "The hub takes no edits for a map of that name.",
+            _ => return format!("The hub refused it ({code}): {message}"),
+        },
+        // A hub from before map edits has no such route.
+        HubError::Protocol(why)
+            if why.starts_with("status 404") || why.starts_with("status 405") =>
+        {
+            "This SJK hub does not keep map edits yet: it needs its map edits update."
+        }
+        HubError::Network(_) => "Cannot reach the SJK hub.",
+        other => return other.to_string(),
+    };
+    words.to_owned()
+}
+
 /// What one look at the hub's list did.
 #[derive(Debug, Default, PartialEq)]
 pub struct Refresh {
+    /// Documents the hub lists.
+    pub listed: usize,
     /// Documents written or removed.
     pub changed: usize,
     /// Why the look fell short, if it did.
     pub problem: Option<String>,
+}
+
+impl Refresh {
+    /// One line for the log: what the hub lists and what changed, or why it fell short.
+    pub fn summary(&self) -> String {
+        match &self.problem {
+            Some(problem) => format!("not in step with the hub: {problem}"),
+            None => format!(
+                "{} map{} on the hub, {} cop{} changed",
+                self.listed,
+                if self.listed == 1 { "" } else { "s" },
+                self.changed,
+                if self.changed == 1 { "y" } else { "ies" }
+            ),
+        }
+    }
 }
 
 /// A copy in the folder: its revision, and whether it holds unpublished work.
@@ -108,18 +149,21 @@ pub fn refresh(hub: &mut dyn Hub, identity: &Identity, dir: &Path) -> Refresh {
         Ok(entries) => entries,
         Err(error) => {
             return Refresh {
-                changed: 0,
-                problem: Some(error.to_string()),
+                problem: Some(refusal(&error)),
+                ..Refresh::default()
             };
         }
     };
     if let Err(error) = std::fs::create_dir_all(dir) {
         return Refresh {
-            changed: 0,
             problem: Some(format!("{}: {error}", dir.display())),
+            ..Refresh::default()
         };
     }
-    let mut refresh = Refresh::default();
+    let mut refresh = Refresh {
+        listed: entries.len(),
+        ..Refresh::default()
+    };
     let mut listed = BTreeSet::new();
     for entry in entries.iter().filter(|entry| valid_map(&entry.map)) {
         let name = file_name(&entry.map, entry.checksum);
@@ -155,7 +199,7 @@ pub fn refresh(hub: &mut dyn Hub, identity: &Identity, dir: &Path) -> Refresh {
                     }
                 }
             }
-            Err(error) => refresh.problem = Some(error.to_string()),
+            Err(error) => refresh.problem = Some(refusal(&error)),
         }
     }
     // A published copy the hub no longer lists was deleted there.
@@ -285,6 +329,53 @@ mod tests {
         assert_eq!(refresh(&mut hub, &identity, &dir).changed, 1);
         assert!(!path.exists());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refusals_are_worded_for_staff() {
+        let rejected = |code: &str| HubError::Rejected {
+            status: 403,
+            code: code.to_owned(),
+            message: "why".to_owned(),
+        };
+        assert_eq!(
+            refusal(&rejected("not_staff")),
+            "Only SJK staff publish map edits."
+        );
+        assert_eq!(
+            refusal(&rejected("odd")),
+            "The hub refused it (odd): why",
+            "an unknown code keeps the hub's words"
+        );
+        // A hub from before map edits answers its default 404 page.
+        assert_eq!(
+            refusal(&HubError::Protocol("status 404, not JSON".to_owned())),
+            "This SJK hub does not keep map edits yet: it needs its map edits update."
+        );
+        assert_eq!(
+            refusal(&HubError::Network("timed out".to_owned())),
+            "Cannot reach the SJK hub."
+        );
+        let off = "the SJK identity is off: turn it on with cl_identity 1";
+        assert_eq!(refusal(&HubError::NotConnected(off.to_owned())), off);
+    }
+
+    #[test]
+    fn a_refresh_sums_itself_up_for_the_log() {
+        let done = Refresh {
+            listed: 3,
+            changed: 1,
+            problem: None,
+        };
+        assert_eq!(done.summary(), "3 maps on the hub, 1 copy changed");
+        let failed = Refresh {
+            problem: Some("Cannot reach the SJK hub.".to_owned()),
+            ..Refresh::default()
+        };
+        assert_eq!(
+            failed.summary(),
+            "not in step with the hub: Cannot reach the SJK hub."
+        );
     }
 
     #[test]

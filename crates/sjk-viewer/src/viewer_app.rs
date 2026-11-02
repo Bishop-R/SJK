@@ -115,6 +115,7 @@ impl ApplicationHandler for ViewerApplication {
                 if let Some(address) = self.initial_connect.take() {
                     gpu.begin_address_join(address);
                 }
+                crate::vfs_lifetime::log("initial world attach", gpu.vfs.as_ref());
                 self.gpu = Some(gpu);
             }
             Err(error) => {
