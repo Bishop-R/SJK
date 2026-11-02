@@ -226,9 +226,14 @@ fn the_reverb_stays_bounded_and_dies_away() {
     let mut loudest = 0.0_f32;
     // Four seconds of full-scale noise in the largest room.
     for chunk in input.chunks(BLOCK / 2) {
-        for (frame, sample) in out.chunks_exact_mut(2).zip(chunk) {
+        for ((frame, send), sample) in out
+            .chunks_exact_mut(2)
+            .zip(effects.send.iter_mut())
+            .zip(chunk)
+        {
             frame[0] = *sample;
             frame[1] = -*sample;
+            *send = *sample;
         }
         effects.apply_reverb(&mut out);
         for sample in &out {
@@ -239,6 +244,7 @@ fn the_reverb_stays_bounded_and_dies_away() {
     assert!(loudest < 4.0, "loudest {loudest}");
     // Then silence: the tail fades out within three seconds.
     let mut tail = 0.0_f32;
+    effects.send.fill(0.0);
     for block in 0..(RATE as usize * 3 / (BLOCK / 2)) {
         out.fill(0.0);
         effects.apply_reverb(&mut out);
@@ -262,9 +268,9 @@ fn a_larger_room_rings_longer() {
             effects.apply_reverb(&mut out);
         }
         out.fill(0.0);
-        out[0] = 1.0;
-        out[1] = 1.0;
+        effects.send[0] = 1.0;
         effects.apply_reverb(&mut out);
+        effects.send[0] = 0.0;
         // Energy left half a second later.
         let mut energy = 0.0;
         for block in 0..(RATE as usize / (BLOCK / 2)) {
@@ -358,4 +364,59 @@ fn spatial_mix_cost() {
         "128 voices + 32 loops, {BLOCK}-sample block: off {off:.1} us, on {on:.1} us \
          (budget {budget:.0} us)"
     );
+}
+
+/// The tail a short click leaves once it has ended, from `request`'s voice.
+fn tail_after_click(request: PlayRequest) -> f32 {
+    let mut mixer = mixer(4, 0);
+    mixer.set_spatial_effects(true);
+    mixer.set_reverb(ReverbParams {
+        wet: 1.0,
+        size: 1.0,
+    });
+    let click = mixer.sound_bank_mut().register_pcm(&[0.8; 32], RATE);
+    let mut out = vec![0.0; BLOCK];
+    // Let the room's wet level glide up first.
+    for _ in 0..200 {
+        mixer.render(&mut out);
+    }
+    mixer.play(click, request);
+    mixer.render(&mut out);
+    (0..40)
+        .map(|_| {
+            mixer.render(&mut out);
+            out.iter()
+                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+        })
+        .fold(0.0, f32::max)
+}
+
+#[test]
+fn only_sounds_placed_in_the_world_ring_with_the_room() {
+    let placed_tail = tail_after_click(placed(1, [100.0, 0.0, 0.0]));
+    assert!(placed_tail > 1.0e-4, "placed tail {placed_tail}");
+    // A menu cue, the announcer, the player's own listener-relative sounds: dry.
+    let local = PlayRequest {
+        origin: None,
+        attenuation: Attenuation::None,
+        ..placed(2, [0.0; 3])
+    };
+    assert_eq!(tail_after_click(local), 0.0);
+    // Placed but global (no falloff): dry too.
+    let global = PlayRequest {
+        attenuation: Attenuation::None,
+        ..placed(3, [100.0, 0.0, 0.0])
+    };
+    assert_eq!(tail_after_click(global), 0.0);
+}
+
+#[test]
+fn a_long_render_with_room_acoustics_is_mixed_in_parts() {
+    let mut mixer = mixer(4, 0);
+    mixer.set_spatial_effects(true);
+    let tone = mixer.sound_bank_mut().register_pcm(&noise(20_000), RATE);
+    mixer.play(tone, placed(1, [100.0, 0.0, 0.0]));
+    let mut out = vec![0.0; spatial_fx::SEND_FRAMES * 2 * 2 + 6];
+    mixer.render(&mut out);
+    assert!(out[spatial_fx::SEND_FRAMES * 2 + 10] != 0.0);
 }

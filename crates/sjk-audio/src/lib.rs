@@ -999,12 +999,20 @@ impl Mixer {
 
     /// Mix interleaved stereo samples without allocating.
     pub fn render(&mut self, out: &mut [f32]) {
+        // Room acoustics mix into a fixed send: a longer block is mixed in parts.
+        let send_samples = spatial_fx::SEND_FRAMES * 2;
+        if self.effects.enabled && out.len() > send_samples {
+            for part in out.chunks_mut(send_samples) {
+                self.render(part);
+            }
+            return;
+        }
         out.fill(0.0);
         let frames = (out.len() / 2).max(1);
-        let occlusion_step = self
-            .effects
-            .enabled
-            .then(|| self.effects.occlusion_step(frames));
+        let occlusion_step = self.effects.enabled.then(|| {
+            self.effects.send[..frames].fill(0.0);
+            self.effects.occlusion_step(frames)
+        });
         for index in 0..self.voices.len() {
             let voice = self.voices[index];
             if !voice.active {
@@ -1060,7 +1068,14 @@ impl Mixer {
                 let delta = (end - start) / frames as f32;
                 let (mut occlusion, mut lowpass) = (start, voice.lowpass);
                 let coefficient = self.effects.muffle_coefficient;
-                for frame in out.chunks_exact_mut(2) {
+                // Only sounds placed in the world ring with the room: the reverb's send.
+                let send_gain = if occludable(&voice.request) {
+                    (gains[0] + gains[1]) * 0.5
+                } else {
+                    0.0
+                };
+                let send = &mut self.effects.send[..frames];
+                for (frame, send) in out.chunks_exact_mut(2).zip(send.iter_mut()) {
                     if cursor >= sound.samples.len() {
                         active = false;
                         break;
@@ -1070,6 +1085,7 @@ impl Mixer {
                     let heard = spatial_fx::occlude(sample, &mut lowpass, coefficient, occlusion);
                     frame[0] += heard * gains[0];
                     frame[1] += heard * gains[1];
+                    *send += heard * send_gain;
                     cursor += 1;
                 }
                 self.voices[index].occlusion = end;
@@ -1119,8 +1135,10 @@ impl Mixer {
                 continue;
             }
             let mut gains = [0.0; 2];
-            // Room acoustics: the group's occlusion, each loop's weighted by its loudness.
+            // Room acoustics: the group's occlusion, each loop's weighted by its loudness,
+            // and what its loops placed in the world send to the reverb.
             let (mut weight, mut occlusion_start, mut occlusion_end) = (0.0_f32, 0.0, 0.0);
+            let mut send_gain = 0.0_f32;
             for loop_voice in &self.loops[index..] {
                 if !loop_audible(loop_voice, generation, open) || loop_voice.handle != handle {
                     continue;
@@ -1140,6 +1158,9 @@ impl Mixer {
                         (0.0, 0.0)
                     };
                     weight += loudness;
+                    if occludable(&loop_voice.request) {
+                        send_gain += loudness * 0.5;
+                    }
                     occlusion_start += start * loudness;
                     occlusion_end += end * loudness;
                 }
@@ -1181,7 +1202,9 @@ impl Mixer {
                 let delta = (occlusion_end - occlusion_start) / frames as f32;
                 let (mut occlusion, mut lowpass) = (occlusion_start, self.loops[index].lowpass);
                 let coefficient = self.effects.muffle_coefficient;
-                for frame in out.chunks_exact_mut(2) {
+                let send_gain = send_gain.min(1.0) * self.master_gain * SAMPLE_STEP;
+                let send = &mut self.effects.send[..frames];
+                for (frame, send) in out.chunks_exact_mut(2).zip(send.iter_mut()) {
                     let base = cursor.floor() as usize;
                     let fraction = (cursor - base as f64) as f32;
                     let low = base % sound.samples.len();
@@ -1195,6 +1218,7 @@ impl Mixer {
                     let heard = spatial_fx::occlude(sample, &mut lowpass, coefficient, occlusion);
                     frame[0] += heard * gains[0];
                     frame[1] += heard * gains[1];
+                    *send += heard * send_gain;
                     cursor += f64::from(pitch);
                 }
                 self.loops[index].lowpass = lowpass;

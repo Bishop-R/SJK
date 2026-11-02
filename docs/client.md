@@ -1711,8 +1711,10 @@ three things the 2003 mixer lacks, in SJK's own mixer (no Steam Audio, no librar
   units (not the sky) and their mean distance give a size (64 units a cupboard, 1024 a
   hall) and a wet level (at most 0.6, less the more open), which a small Schroeder
   reverb in the mixer (four combs and two allpasses an ear, Freeverb's lengths) glides
-  to over 0.4 s. It takes the effects mix, the player's own sounds included, never the
-  music; out of a map the room is dry.
+  to over 0.4 s. Its input is a send (a fixed buffer of 4096 frames in the mixer)
+  that only voices and loops placed in the world and fading with distance feed, the
+  player's own placed sounds included; menu cues, the announcer, listener-relative and
+  global sounds and the music stay dry. Out of a map the room is dry.
 
 Only numbers cross to the audio thread, on the usual command queue
 (`AudioCommand::SpatialEffects`, `SourceOcclusion`, `Reverb`;
@@ -1723,7 +1725,7 @@ and the reverb allocate nothing (checked with `assert_no_alloc`). Off, nothing i
 traced or sent and the mixer takes its plain path, its output bit for bit what it was
 (`switched_off_the_mix_is_bit_identical_whatever_was_measured`). Measured on Windows
 11 in release (`spatial_mix_cost`, ignored test), a 128-frame block with 128 voices and
-32 loops busy took about 26 us off and 52 us on, against its 2.9 ms of playback. Unit
+32 loops busy took about 23 us off and 53 us on, against its 2.9 ms of playback. Unit
 tests: the hearing point, occlusion from rays and its glide, muffling, loops, the room
 from its rays, the reverb bounded and dying away, a larger room ringing longer. Not yet
 heard in a game.

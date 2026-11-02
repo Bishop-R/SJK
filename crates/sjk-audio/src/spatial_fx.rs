@@ -11,6 +11,9 @@
 
 use crate::SourceId;
 
+/// Frames the reverb's send holds: a longer render is mixed in parts of this.
+pub(crate) const SEND_FRAMES: usize = 4_096;
+
 /// How many sources' occlusion the mixer remembers, for voices that start after
 /// their source was measured.
 pub(crate) const OCCLUSION_SOURCES: usize = 64;
@@ -80,6 +83,10 @@ pub(crate) struct SpatialEffects {
     pub(crate) muffle_coefficient: f32,
     sample_rate: f32,
     reverb: Reverb,
+    /// The mono mix of the world-placed voices and loops of the block, the reverb's
+    /// input; the mixer fills it, so menu, announcer and listener-relative sounds
+    /// stay dry.
+    pub(crate) send: Box<[f32]>,
     target: ReverbParams,
     current: ReverbParams,
 }
@@ -95,6 +102,7 @@ impl SpatialEffects {
             muffle_coefficient: one_pole_coefficient(MUFFLE_CUTOFF_HZ, rate),
             sample_rate: rate,
             reverb: Reverb::new(sample_rate),
+            send: vec![0.0; SEND_FRAMES].into_boxed_slice(),
             target: ReverbParams::default(),
             current: ReverbParams::default(),
         }
@@ -142,9 +150,10 @@ impl SpatialEffects {
         glide_fraction(frames, self.sample_rate, OCCLUSION_GLIDE_SECONDS)
     }
 
-    /// Add the reverb of the effects mix in `out` (interleaved stereo) to it.
+    /// Add the reverb of the block's send ([`Self::send`]) to `out` (interleaved
+    /// stereo, at most [`SEND_FRAMES`] frames).
     pub(crate) fn apply_reverb(&mut self, out: &mut [f32]) {
-        let frames = out.len() / 2;
+        let frames = (out.len() / 2).min(SEND_FRAMES);
         if frames == 0 {
             return;
         }
@@ -166,8 +175,8 @@ impl SpatialEffects {
         let wet_step = (end.wet - start.wet) / frames as f32;
         let mut wet = start.wet;
         let mut loudest = 0.0_f32;
-        for frame in out.chunks_exact_mut(2) {
-            let input = (frame[0] + frame[1]) * 0.5 * REVERB_INPUT_GAIN;
+        for (frame, send) in out.chunks_exact_mut(2).zip(&self.send[..frames]) {
+            let input = send * REVERB_INPUT_GAIN;
             let [left, right] = self.reverb.process(input, feedback, damping);
             loudest = loudest.max(left.abs()).max(right.abs());
             wet += wet_step;

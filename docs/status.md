@@ -6,7 +6,7 @@ and a small room reverb, in SJK's own mixer after the idea of VisionJK's `v_spat
 (Blackwolf); see [3D sound](client.md#3d-sound). Verified on Windows 11: fmt, workspace
 build, tests and Clippy; with it off the mixer's output is bit-identical to before (unit
 test), mixing and the render thread's tick allocate nothing, and the mixer took about
-52 us a block on against 26 us off with every voice and loop busy (release, 2.9 ms
+53 us a block on against 23 us off with every voice and loop busy (release, 2.9 ms
 budget). Not verified: heard in a game; the strengths (muffling, reverb level) are
 first guesses to tune by ear.
 
