@@ -177,14 +177,25 @@ impl PlayerTrade {
         self.state == "done"
     }
 
-    /// How it ended, in the player's words, for an ended trade; empty while it runs.
+    /// How it ended, in the player's words, for an ended trade; empty while it runs. A
+    /// finished trade says new items are in the collection only when the other side
+    /// gave some.
     pub fn ending(&self) -> String {
-        let name = crate::chat::for_display(&self.with.name);
+        let name = crate::chat::name_for_display(&self.with.name);
         match self.state.as_str() {
-            "done" => "Trade complete. Your new items are in your collection.".to_owned(),
+            // What the reader received decides the words (hub report #208: a trade the
+            // other side put nothing into said new items were in the collection).
+            "done" => match (self.theirs.items.len(), self.mine.items.is_empty()) {
+                (0, true) => "Trade complete. Nothing changed hands.".to_owned(),
+                (0, false) => {
+                    format!("Trade complete. You gave your offer to {name}^7 and received nothing.")
+                }
+                (1, _) => "Trade complete. Your new item is in your collection.".to_owned(),
+                _ => "Trade complete. Your new items are in your collection.".to_owned(),
+            },
             // The hub ends a request as `busy` when one of the two took another trade.
             "declined" if self.reason == "busy" && self.asker => {
-                format!("{name} is trading with someone else.")
+                format!("{name}^7 is trading with someone else.")
             }
             "declined" if self.reason == "busy" => {
                 "The request closed: you are trading with someone else.".to_owned()
@@ -195,7 +206,7 @@ impl PlayerTrade {
             "cancelled" if self.reason == "removed" => {
                 "The trade ended: an account was removed.".to_owned()
             }
-            "declined" if self.asker => format!("{name} declined the trade."),
+            "declined" if self.asker => format!("{name}^7 declined the trade."),
             "declined" => "You declined the trade.".to_owned(),
             "cancelled" => "The trade was cancelled.".to_owned(),
             "expired" if self.updated == self.created => {
@@ -670,12 +681,16 @@ mod tests {
         };
         assert_eq!(
             busy(true, "declined", "busy").ending(),
-            " is trading with someone else."
+            "^7 is trading with someone else."
         );
         assert_eq!(
             busy(false, "declined", "busy").ending(),
             "The request closed: you are trading with someone else."
         );
+        // The other's name stops its colours before the words, as the finished trade's does.
+        let mut refused = busy(true, "declined", "");
+        refused.with.name = "^1Zed".to_owned();
+        assert_eq!(refused.ending(), "^1Zed^7 declined the trade.");
         assert_eq!(
             busy(true, "cancelled", "removed").ending(),
             "The trade ended: an account was removed."
@@ -688,6 +703,57 @@ mod tests {
         assert_eq!(
             ended.ending(),
             "The hub stopped the trade: one of you reached the day's limit of Mythical holocrons received."
+        );
+    }
+
+    /// Hub report #208: a finished trade says new items are in the collection only when
+    /// the other side gave some; one item reads in the singular; a trade they put nothing
+    /// into says so, with their name as the other endings carry it.
+    #[test]
+    fn a_finished_trade_says_what_was_received() {
+        let shader = |id: &str| TradeItem {
+            kind: "shader".to_owned(),
+            id: Some(id.to_owned()),
+            ..TradeItem::default()
+        };
+        let done = |mine: Vec<TradeItem>, theirs: Vec<TradeItem>| PlayerTrade {
+            state: "done".to_owned(),
+            with: TradePartner {
+                name: "^1Zed".to_owned(),
+                ..TradePartner::default()
+            },
+            mine: TradeSide {
+                items: mine,
+                ..TradeSide::default()
+            },
+            theirs: TradeSide {
+                items: theirs,
+                ..TradeSide::default()
+            },
+            ..PlayerTrade::default()
+        };
+        assert_eq!(
+            done(vec![shader("a")], Vec::new()).ending(),
+            "Trade complete. You gave your offer to ^1Zed^7 and received nothing."
+        );
+        assert_eq!(
+            done(Vec::new(), vec![shader("b")]).ending(),
+            "Trade complete. Your new item is in your collection."
+        );
+        assert_eq!(
+            done(vec![shader("a")], vec![shader("b"), shader("c")]).ending(),
+            "Trade complete. Your new items are in your collection."
+        );
+        assert_eq!(
+            done(Vec::new(), Vec::new()).ending(),
+            "Trade complete. Nothing changed hands."
+        );
+        // A name's clan marks show as in the window's headline, not dropped.
+        let mut marked = done(vec![shader("a")], Vec::new());
+        marked.with.name = "jof\u{bb}jk\u{ab}belyash".to_owned();
+        assert_eq!(
+            marked.ending(),
+            "Trade complete. You gave your offer to jof\u{bb}jk\u{ab}belyash^7 and received nothing."
         );
     }
 

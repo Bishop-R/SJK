@@ -273,6 +273,26 @@ tie, numbered 1 to 20, the joining row last and unnumbered; the classic board's 
 and its rows in the same order. Not verified: the header's place with the ranking in game
 (it gave the server's before this change), team games, the what's-new card's switch.
 
+## Finished trade: what was received
+
+30/10/2026, `fix/trade-done-message`, based on `main` `487f296f` (hub report #208): a
+finished trade always said "Trade complete. Your new items are in your collection.",
+even when the other side gave nothing. `PlayerTrade::ending` now words it from what the
+reader received: "Your new items are in your collection" (or "item is" for one), "You
+gave your offer to <name> and received nothing", or "Nothing changed hands". The ended
+trade's card and the toast over play both read it ([sjk-ui.md](sjk-ui.md#trading)).
+The endings took the name through the message alphabet, which dropped clan marks such as
+`»` and `«`; they now take it through `name_for_display`, as the window's headline does.
+The toast's 660-wide card cut the longer endings off ("...and rec..."); it now measures
+its words and grows wider, centred, so they stay whole on one line (up to 1800); over
+play its key hint stays at the card's right edge, however wide. Every ending that names
+the other player stops the name's colours after it ("<name>^7 declined the trade.",
+"... is trading with someone else."). Verified: unit tests (the four cases, a marked name,
+a declined trade's name, the toast fitting its words on one line, the key hint at the
+right edge of a usual and a wide card), the toast's picture, fmt, the workspace's build,
+tests and Clippy; in game on Windows, the words and the names with their marks. Not
+verified in game: the key hint and the declined trade's colours after Sol's review.
+
 ## Local incoming chat colour
 
 30/10/2026, `feat/chat-color`, based on `main` `82c8c185`: archived `cg_chatColor`

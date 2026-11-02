@@ -2434,7 +2434,14 @@ every menu style, on the 16:9 frame:
   in a gold ring, their name in its colours, "Nib wants to trade" (Rajdhani 24) with the request's seconds in gold, a muted
   line, a thin gold bar running down smoothly (to the fraction of a second, not in steps),
   and the key: Esc answer (or Esc open), 40 above the card's foot, clear of the bar. It also tells
-  for six seconds how a trade ended, or why a request was refused. What the window and
+  for six seconds how a trade ended, or why a request was refused. A finished trade says
+  "Your new items are in your collection" (or "item is", for one) only when the other
+  side gave something; one they put nothing into says "You gave your offer to <name> and
+  received nothing" (hub report #208, `PlayerTrade::ending`), the name with its clan marks
+  (`« » •`, as the window's headline shows it). The toast keeps its words on one line and
+  never cuts them: it is 660 wide, and wider, still centred, when the headline (measured in
+  the display font, with room for the clock, key hint or Open trade beside it) or the line
+  needs it, up to 1800. What the window and
   the toast already said goes on to the next map's world with the shell: a world that
   began without it took the hub's last refusal for a new one and showed it again at every
   map change (Creyon's screenshot, 26/10/2026: "Two accounts on one connection cannot
