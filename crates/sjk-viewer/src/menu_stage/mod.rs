@@ -11,6 +11,7 @@
 mod cosmetics;
 mod force_fx;
 mod force_motion;
+mod hilt_guard;
 mod lone;
 pub(crate) mod preview;
 mod prop;

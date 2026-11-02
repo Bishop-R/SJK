@@ -38,6 +38,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - On JA+ servers the dual sabers' forward jump attack no longer sinks you into the floor when nobody is in front: as on the server, your feet only lift to sail over a player ahead _(Blackwolf1337, after JA+)_
 
 - The Toy Master's toys can put on longer shows in steps: the players around one dance at its beat with a glowing ring on the ground showing how far it reaches, then float weightless (in looks only, your view stays your own), and at the end it throws out credits, kyber shards and holocrons that bounce and land: Use takes one, first come first served _(Sol)_
+- Hilts: choosing an empty hilt from the community list (such as Empty Hilt (Stance)) no longer closes the game, and no longer closes it at every start after: it shows the blade with no hilt, and a hilt the menu cannot show falls back to the stock one and says so in the log _(Slash, after hub report #214)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

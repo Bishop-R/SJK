@@ -334,7 +334,11 @@ on the 16:9 frame, dark behind the form on the left and clear over the model.
   side, Right hand and Left hand, three lines each (four until 23/10/2026). The hilts come in the game's
   load order, as JoF EJK lists them (`legacy_saber_load_order`), the retail game's
   first under a "Jedi Academy" line with their count and the community's after them
-  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). The hilt search
+  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). A hilt
+  with no mesh (a community "empty hilt", only its `*blade1` tag, for a stance with the
+  blade alone) shows its blades and no hilt; a hilt the stage cannot show is logged and the
+  hand holds `single_1`, and one the game closed while loading is left out at the next
+  start (`crashes/stage-hilt.txt`, `menu_stage/hilt_guard.rs`; hub report #214). The hilt search
   (10/10/2026, Sol's request) is a field at the right of the lists' heading line
   (beside Left hand for Dual), drawn as the Character page's Search ("Search
   hilts", then the words typed and "N found"): Enter or a click types in it, and
