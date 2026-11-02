@@ -38,7 +38,7 @@ pub(crate) enum Element {
     Vote,
     /// The jetpack's fuel bar.
     Jetpack,
-    /// SJK's vehicle HUD strip.
+    /// The vehicle's HP: SJK's vector strip, or the layouts' `vehicle_*` widgets.
     Vehicle,
     /// The weapon, Force and inventory selectors.
     Selection,
@@ -236,6 +236,7 @@ pub(crate) fn widget_element(id: &str, radial: bool) -> Option<Element> {
         "weapon_value" | "weapon_label" | "ammo_value" | "ammo_label" | "ammo_arc" => {
             Element::Weapon
         }
+        "vehicle_arc" | "vehicle_value" | "vehicle_label" | "vehicle_meter" => Element::Vehicle,
         "match_timer" => Element::Timer,
         "vote_panel" => Element::Vote,
         _ => return None,
@@ -425,6 +426,7 @@ mod tests {
         assert_eq!(widget_element("ammo_arc", true), Some(Element::Force));
         assert_eq!(widget_element("ammo_value", false), Some(Element::Weapon));
         assert_eq!(widget_element("left_pill", true), Some(Element::Vitals));
+        assert_eq!(widget_element("vehicle_arc", true), Some(Element::Vehicle));
         assert_eq!(widget_element("crosshair", false), None);
         assert_eq!(widget_element("lagometer", false), None);
         for layout in [
