@@ -500,6 +500,10 @@ const HELP: &[(&str, &str)] = &[
         "For deaf and hard-of-hearing players: arcs round the crosshair point to the sounds played. Needs sound output (not s_initsound 0).",
     ),
     (
+        crate::audio::spatial::CVAR,
+        "Sounds heard from your head, quieter and duller behind walls and shut doors, and rooms ring, a hall longer than a corridor.",
+    ),
+    (
         crate::footprints::PRINTS_CVAR,
         "Steps on sand, snow, mud and dirt kick up dust and leave footprints for ten seconds, as in the original game.",
     ),

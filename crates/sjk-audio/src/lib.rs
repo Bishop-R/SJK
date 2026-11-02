@@ -14,6 +14,9 @@ use std::fmt;
 use std::io::Cursor;
 
 mod id3;
+mod spatial_fx;
+
+pub use spatial_fx::{MAX_REVERB_WET, ReverbParams};
 
 /// Opaque index of decoded PCM in a [`SoundBank`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -390,6 +393,11 @@ struct Voice {
     request: PlayRequest,
     cursor: usize,
     started: u64,
+    /// Room acoustics only ([`Mixer::set_spatial_effects`]): how occluded the voice
+    /// sounds now, where it glides to, and its lowpass filter's memory.
+    occlusion: f32,
+    occlusion_target: f32,
+    lowpass: f32,
 }
 
 impl Default for Voice {
@@ -406,6 +414,9 @@ impl Default for Voice {
             },
             cursor: 0,
             started: 0,
+            occlusion: 0.0,
+            occlusion_target: 0.0,
+            lowpass: 0.0,
         }
     }
 }
@@ -418,6 +429,10 @@ struct LoopVoice {
     velocity: [f32; 3],
     generation: u64,
     cursor: f64,
+    /// As [`Voice`]'s; a group of loops sharing a sound filters through its first's.
+    occlusion: f32,
+    occlusion_target: f32,
+    lowpass: f32,
 }
 
 impl Default for LoopVoice {
@@ -435,6 +450,9 @@ impl Default for LoopVoice {
             velocity: [0.0; 3],
             generation: 0,
             cursor: 0.0,
+            occlusion: 0.0,
+            occlusion_target: 0.0,
+            lowpass: 0.0,
         }
     }
 }
@@ -479,6 +497,9 @@ pub struct Mixer {
     background: Option<BackgroundTrack>,
     doppler: DopplerConfig,
     protected_channels: &'static [ChannelId],
+    /// Opt-in occlusion and reverb ([`Self::set_spatial_effects`]); off, the mix
+    /// is the plain one.
+    effects: spatial_fx::SpatialEffects,
 }
 
 /// The loudest a channel's bus ([`Mixer::set_channel_gain`]) plays its sounds.
@@ -538,6 +559,7 @@ impl Mixer {
             background: None,
             doppler: config.doppler,
             protected_channels: config.protected_channels,
+            effects: spatial_fx::SpatialEffects::new(config.sample_rate),
         }
     }
 
@@ -632,12 +654,16 @@ impl Mixer {
             return false;
         };
         self.serial = self.serial.wrapping_add(1);
+        let occlusion = self.effects.occlusion_of(request.source);
         self.voices[index] = Voice {
             active: true,
             handle,
             request,
             cursor: offset,
             started: self.serial,
+            occlusion,
+            occlusion_target: occlusion,
+            lowpass: 0.0,
         };
         true
     }
@@ -754,6 +780,43 @@ impl Mixer {
     pub fn stop_effects(&mut self) {
         self.voices.fill(Voice::default());
         self.loops.fill(LoopVoice::default());
+        self.effects.clear();
+    }
+
+    /// Switch the room acoustics on or off: occlusion of the sources measured with
+    /// [`Self::set_source_occlusion`] and the reverb set by [`Self::set_reverb`]. Off
+    /// (the default), the mix is exactly the plain one; those settings are kept and
+    /// apply again when switched on.
+    pub fn set_spatial_effects(&mut self, enabled: bool) {
+        self.effects.enabled = enabled;
+    }
+
+    /// How occluded `source` is from the listener: 0 in the open, 1 fully behind a
+    /// wall (heard quieter and lowpassed). Its voices and loops glide there over
+    /// about 50 ms; voices it starts later begin there. Only positional, attenuated
+    /// voices take it. Allocation-free.
+    pub fn set_source_occlusion(&mut self, source: SourceId, amount: f32) {
+        let amount = if amount.is_finite() {
+            amount.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        self.effects.remember(source, amount);
+        for voice in &mut self.voices {
+            if voice.request.source == source {
+                voice.occlusion_target = amount;
+            }
+        }
+        for loop_voice in &mut self.loops {
+            if loop_voice.request.source == source {
+                loop_voice.occlusion_target = amount;
+            }
+        }
+    }
+
+    /// The room the listener is in, for the reverb; the reverb glides there.
+    pub fn set_reverb(&mut self, params: ReverbParams) {
+        self.effects.set_reverb(params);
     }
 
     /// Begin rebuilding the current frame's loop set.
@@ -838,6 +901,7 @@ impl Mixer {
         else {
             return false;
         };
+        let occlusion = self.effects.occlusion_of(request.source);
         self.loops[index] = LoopVoice {
             active: true,
             handle,
@@ -845,6 +909,9 @@ impl Mixer {
             velocity,
             generation: self.loop_generation,
             cursor: self.rendered_frames as f64,
+            occlusion,
+            occlusion_target: occlusion,
+            lowpass: 0.0,
         };
         true
     }
@@ -933,6 +1000,11 @@ impl Mixer {
     /// Mix interleaved stereo samples without allocating.
     pub fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
+        let frames = (out.len() / 2).max(1);
+        let occlusion_step = self
+            .effects
+            .enabled
+            .then(|| self.effects.occlusion_step(frames));
         for index in 0..self.voices.len() {
             let voice = self.voices[index];
             if !voice.active {
@@ -976,15 +1048,43 @@ impl Mixer {
                 .find(|(channel, _)| *channel == voice.request.channel)
                 .map_or(self.master_gain, |(_, gain)| *gain);
             let scale = gain * SAMPLE_STEP;
-            for frame in out.chunks_exact_mut(2) {
-                if cursor >= sound.samples.len() {
-                    active = false;
-                    break;
+            if let Some(step) = occlusion_step {
+                // Room acoustics: the same mix, each sample through the voice's
+                // occlusion, which glides across the block.
+                let (start, end) = if occludable(&voice.request) {
+                    let start = voice.occlusion;
+                    (start, start + (voice.occlusion_target - start) * step)
+                } else {
+                    (0.0, 0.0)
+                };
+                let delta = (end - start) / frames as f32;
+                let (mut occlusion, mut lowpass) = (start, voice.lowpass);
+                let coefficient = self.effects.muffle_coefficient;
+                for frame in out.chunks_exact_mut(2) {
+                    if cursor >= sound.samples.len() {
+                        active = false;
+                        break;
+                    }
+                    let sample = f32::from(sound.samples[cursor]) * scale;
+                    occlusion += delta;
+                    let heard = spatial_fx::occlude(sample, &mut lowpass, coefficient, occlusion);
+                    frame[0] += heard * gains[0];
+                    frame[1] += heard * gains[1];
+                    cursor += 1;
                 }
-                let sample = f32::from(sound.samples[cursor]) * scale;
-                frame[0] += sample * gains[0];
-                frame[1] += sample * gains[1];
-                cursor += 1;
+                self.voices[index].occlusion = end;
+                self.voices[index].lowpass = lowpass;
+            } else {
+                for frame in out.chunks_exact_mut(2) {
+                    if cursor >= sound.samples.len() {
+                        active = false;
+                        break;
+                    }
+                    let sample = f32::from(sound.samples[cursor]) * scale;
+                    frame[0] += sample * gains[0];
+                    frame[1] += sample * gains[1];
+                    cursor += 1;
+                }
             }
             for other in index..self.voices.len() {
                 if other == index || (merged && same_sample(&self.voices[other], &voice)) {
@@ -993,7 +1093,10 @@ impl Mixer {
                 }
             }
         }
-        self.render_loops(out);
+        self.render_loops(out, occlusion_step);
+        if self.effects.enabled {
+            self.effects.apply_reverb(out);
+        }
         self.render_background(out);
         self.rendered_frames = self.rendered_frames.wrapping_add((out.len() / 2) as u64);
         for sample in out {
@@ -1001,7 +1104,7 @@ impl Mixer {
         }
     }
 
-    fn render_loops(&mut self, out: &mut [f32]) {
+    fn render_loops(&mut self, out: &mut [f32], occlusion_step: Option<f32>) {
         let (generation, open) = (self.loop_generation, self.loop_frame_open);
         for index in 0..self.loops.len() {
             if !loop_audible(&self.loops[index], generation, open) {
@@ -1016,6 +1119,8 @@ impl Mixer {
                 continue;
             }
             let mut gains = [0.0; 2];
+            // Room acoustics: the group's occlusion, each loop's weighted by its loudness.
+            let (mut weight, mut occlusion_start, mut occlusion_end) = (0.0_f32, 0.0, 0.0);
             for loop_voice in &self.loops[index..] {
                 if !loop_audible(loop_voice, generation, open) || loop_voice.handle != handle {
                     continue;
@@ -1026,6 +1131,35 @@ impl Mixer {
                 });
                 gains[0] += spatial[0] * loop_voice.request.volume;
                 gains[1] += spatial[1] * loop_voice.request.volume;
+                if let Some(step) = occlusion_step {
+                    let loudness = (spatial[0] + spatial[1]) * loop_voice.request.volume.abs();
+                    let (start, end) = if occludable(&loop_voice.request) {
+                        let start = loop_voice.occlusion;
+                        (start, start + (loop_voice.occlusion_target - start) * step)
+                    } else {
+                        (0.0, 0.0)
+                    };
+                    weight += loudness;
+                    occlusion_start += start * loudness;
+                    occlusion_end += end * loudness;
+                }
+            }
+            if let Some(step) = occlusion_step {
+                for loop_voice in &mut self.loops[index..] {
+                    if loop_audible(loop_voice, generation, open)
+                        && loop_voice.handle == handle
+                        && occludable(&loop_voice.request)
+                    {
+                        loop_voice.occlusion +=
+                            (loop_voice.occlusion_target - loop_voice.occlusion) * step;
+                    }
+                }
+                if weight > f32::EPSILON {
+                    occlusion_start /= weight;
+                    occlusion_end /= weight;
+                } else {
+                    (occlusion_start, occlusion_end) = (0.0, 0.0);
+                }
             }
             gains[0] = gains[0].min(1.0) * self.master_gain * SAMPLE_STEP;
             gains[1] = gains[1].min(1.0) * self.master_gain * SAMPLE_STEP;
@@ -1042,20 +1176,44 @@ impl Mixer {
                 self.loops[index].velocity,
             );
             let mut cursor = self.loops[index].cursor;
-            for frame in out.chunks_exact_mut(2) {
-                let base = cursor.floor() as usize;
-                let fraction = (cursor - base as f64) as f32;
-                let low = base % sound.samples.len();
-                let high = (low + 1) % sound.samples.len();
-                // In 16-bit steps; the gains carry the step back to [-1, 1].
-                let (low, high) = (
-                    f32::from(sound.samples[low]),
-                    f32::from(sound.samples[high]),
-                );
-                let sample = low + (high - low) * fraction;
-                frame[0] += sample * gains[0];
-                frame[1] += sample * gains[1];
-                cursor += f64::from(pitch);
+            if occlusion_step.is_some() {
+                let frames = (out.len() / 2).max(1);
+                let delta = (occlusion_end - occlusion_start) / frames as f32;
+                let (mut occlusion, mut lowpass) = (occlusion_start, self.loops[index].lowpass);
+                let coefficient = self.effects.muffle_coefficient;
+                for frame in out.chunks_exact_mut(2) {
+                    let base = cursor.floor() as usize;
+                    let fraction = (cursor - base as f64) as f32;
+                    let low = base % sound.samples.len();
+                    let high = (low + 1) % sound.samples.len();
+                    let (low, high) = (
+                        f32::from(sound.samples[low]),
+                        f32::from(sound.samples[high]),
+                    );
+                    let sample = low + (high - low) * fraction;
+                    occlusion += delta;
+                    let heard = spatial_fx::occlude(sample, &mut lowpass, coefficient, occlusion);
+                    frame[0] += heard * gains[0];
+                    frame[1] += heard * gains[1];
+                    cursor += f64::from(pitch);
+                }
+                self.loops[index].lowpass = lowpass;
+            } else {
+                for frame in out.chunks_exact_mut(2) {
+                    let base = cursor.floor() as usize;
+                    let fraction = (cursor - base as f64) as f32;
+                    let low = base % sound.samples.len();
+                    let high = (low + 1) % sound.samples.len();
+                    // In 16-bit steps; the gains carry the step back to [-1, 1].
+                    let (low, high) = (
+                        f32::from(sound.samples[low]),
+                        f32::from(sound.samples[high]),
+                    );
+                    let sample = low + (high - low) * fraction;
+                    frame[0] += sample * gains[0];
+                    frame[1] += sample * gains[1];
+                    cursor += f64::from(pitch);
+                }
             }
             for loop_voice in &mut self.loops[index..] {
                 if loop_audible(loop_voice, generation, open) && loop_voice.handle == handle {
@@ -1116,6 +1274,12 @@ impl Mixer {
             .filter(|loop_voice| loop_voice.active)
             .count()
     }
+}
+
+/// Whether a voice can be occluded: placed in the world and fading with distance
+/// (a listener-relative or global sound is never behind a wall).
+fn occludable(request: &PlayRequest) -> bool {
+    request.origin.is_some() && request.attenuation != Attenuation::None
 }
 
 /// Whether a loop belongs to the set being mixed: re-added this frame, or, while
@@ -1293,6 +1457,8 @@ mod voice_steal_tests;
 mod music_offset_tests;
 #[cfg(test)]
 mod pcm16_tests;
+#[cfg(test)]
+mod spatial_fx_tests;
 
 /// Counts allocator calls inside `assert_no_alloc` blocks (`pcm16_tests`).
 #[cfg(all(test, debug_assertions))]

@@ -245,6 +245,12 @@ pub(super) enum AudioCommand {
     Gains(f32, f32, f32, f32),
     Doppler(bool),
     Separation(f32),
+    /// Room acoustics on or off (`s_spatial`, `audio_spatial.rs`).
+    SpatialEffects(bool),
+    /// How occluded a source is from the listener, 0 to 1.
+    SourceOcclusion(SourceId, f32),
+    /// The room round the listener, for the reverb.
+    Reverb(sjk_audio::ReverbParams),
     Shutdown,
 }
 
@@ -290,6 +296,8 @@ pub(super) struct AudioOutput {
     lengths: std::cell::RefCell<Vec<Arc<AtomicU32>>>,
     /// The world sounds sent lately, for the sound sonar (`sound_sonar.rs`).
     pub(super) sonar: crate::sound_sonar::Sonar,
+    /// The world sounds sent lately and the room, for 3D sound (`audio_spatial.rs`).
+    pub(super) spatial: crate::audio::spatial::Tracker,
 }
 
 enum DecodeJob {
@@ -382,6 +390,7 @@ impl AudioOutput {
             show: false,
             started: std::collections::VecDeque::with_capacity(64),
             sonar: crate::sound_sonar::Sonar::default(),
+            spatial: crate::audio::spatial::Tracker::default(),
             cache: std::cell::RefCell::new(Vec::new()),
             lengths: std::cell::RefCell::new(Vec::new()),
         };
@@ -422,6 +431,7 @@ impl AudioOutput {
             AudioCommand::StopEffects | AudioCommand::StopAll => self.sonar.clear(),
             _ => {}
         }
+        self.spatial.observe(&command, Instant::now());
         // Never wait for good on a callback that stopped (its device went away): the
         // game would stop answering. Every frame sends its state again.
         let pushed = self.feed.push(&mut self.commands, command, feed::PATIENCE);
@@ -730,6 +740,11 @@ fn apply_command(mixer: &mut Mixer, command: AudioCommand) -> bool {
             mixer.set_doppler_enabled(enabled);
         }
         AudioCommand::Separation(value) => mixer.set_separation(value),
+        AudioCommand::SpatialEffects(enabled) => mixer.set_spatial_effects(enabled),
+        AudioCommand::SourceOcclusion(source, amount) => {
+            mixer.set_source_occlusion(source, amount);
+        }
+        AudioCommand::Reverb(room) => mixer.set_reverb(room),
         AudioCommand::Shutdown => return false,
     }
     true

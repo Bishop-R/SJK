@@ -4,20 +4,17 @@ use super::*;
 impl crate::GpuState {
     /// Update the process-lifetime listener and gains before completing this render frame.
     pub(crate) fn finish_audio_frame(
-        &self,
+        &mut self,
         audio: &mut Option<GameAudio>,
         forward: glam::Vec3,
         right: glam::Vec3,
     ) {
         if let Some(audio) = audio {
-            audio.listener(
-                self.camera_position,
-                forward,
-                right,
-                glam::Vec3::Z,
-                glam::Vec3::ZERO,
-            );
+            // `s_spatial`: heard from the player's head, panned by the camera's axes.
+            let hearing = self.audio_hearing_point(audio.spatial_enabled());
+            audio.listener(hearing, forward, right, glam::Vec3::Z, glam::Vec3::ZERO);
             audio.sync_gains(self.console.as_ref());
+            self.spatial_audio_frame(audio, hearing, right);
             #[cfg(feature = "mod-jof")]
             {
                 let dialogue = self
@@ -201,6 +198,9 @@ impl GameAudio {
             self.output.sonar.clear();
         }
         self.output.sonar.enabled = sonar;
+        self.output.spatial.enabled = console
+            .and_then(|console| console.bool_cvar(spatial::CVAR))
+            .unwrap_or(false);
         let mode = console
             .and_then(|console| console.integer_cvar(SKIN_SOUNDS_CVAR))
             .unwrap_or(1);
@@ -211,6 +211,11 @@ impl GameAudio {
                 .and_then(|console| console.bool_cvar("s_doppler"))
                 .unwrap_or(true),
         ));
+    }
+
+    /// Whether 3D sound (`s_spatial`) is on, as of the last [`Self::sync_gains`].
+    pub(crate) fn spatial_enabled(&self) -> bool {
+        self.output.spatial.enabled
     }
 
     /// The world sounds sent lately, for the sound sonar (`sound_sonar.rs`).
