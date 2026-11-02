@@ -272,6 +272,11 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Sound sonar",
+        cvar: crate::sound_sonar::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Footprints and dust",
         cvar: crate::footprints::PRINTS_CVAR,
         kind: ValueKind::Bool,

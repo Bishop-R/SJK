@@ -491,6 +491,10 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_footsteps", "Footstep sounds, yours and other players'."),
     (
+        crate::sound_sonar::CVAR,
+        "For deaf and hard-of-hearing players: arcs round the crosshair point to the sounds played. Needs sound output (not s_initsound 0).",
+    ),
+    (
         crate::footprints::PRINTS_CVAR,
         "Steps on sand, snow, mud and dirt kick up dust and leave footprints for ten seconds, as in the original game.",
     ),

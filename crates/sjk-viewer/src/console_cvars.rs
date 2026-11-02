@@ -513,6 +513,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
         ),
         CvarDefinition::new("cg_footsteps", true, archive, "Play footstep sounds"),
         CvarDefinition::new(
+            crate::sound_sonar::CVAR,
+            false,
+            archive,
+            "Sound sonar: arcs round the crosshair point toward the sounds you hear",
+        ),
+        CvarDefinition::new(
             crate::team_sabers::TEAM_COLORS_CVAR,
             true,
             archive,

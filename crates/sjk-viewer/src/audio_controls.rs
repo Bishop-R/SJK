@@ -190,6 +190,13 @@ impl GameAudio {
         self.footsteps = console
             .and_then(|console| console.bool_cvar("cg_footsteps"))
             .unwrap_or(true);
+        let sonar = console
+            .and_then(|console| console.bool_cvar(crate::sound_sonar::CVAR))
+            .unwrap_or(false);
+        if self.output.sonar.enabled && !sonar {
+            self.output.sonar.clear();
+        }
+        self.output.sonar.enabled = sonar;
         let mode = console
             .and_then(|console| console.integer_cvar(SKIN_SOUNDS_CVAR))
             .unwrap_or(1);
@@ -200,6 +207,11 @@ impl GameAudio {
                 .and_then(|console| console.bool_cvar("s_doppler"))
                 .unwrap_or(true),
         ));
+    }
+
+    /// The world sounds sent lately, for the sound sonar (`sound_sonar.rs`).
+    pub(crate) fn sonar(&self) -> &crate::sound_sonar::Sonar {
+        &self.output.sonar
     }
 
     /// Keep background music fed while no live snapshot is producing loops.

@@ -1665,6 +1665,29 @@ sounds near the player differently from the others whenever they moved, and the 
 hum, a loop on the view, crackled (Toad's report). Unit test:
 `a_snapshot_leaves_the_listener_where_the_frame_put_it`; not yet heard in a game.
 
+## Sound sonar
+
+`cg_soundSonar` (Settings > Sound, Sound sonar; off by default; Dawson's idea for deaf
+and hard-of-hearing players) draws a short arc round the crosshair toward each world
+sound the client plays, ahead being up: light blue steps (`CHAN_BODY`), orange shots
+and swings (`CHAN_WEAPON`), green voices, yellow for the rest (explosions, clashes,
+Force, items, toys). Louder at the listener (the sound's own volume and falloff) is
+thicker and brighter; each fades over a second, and one source's sounds of a kind share
+an arc. It is fed where the audio output sends a positional one-shot
+(`AudioOutput::send`, [sound_sonar.rs](../crates/sjk-viewer/src/sound_sonar.rs), a
+24-entry ring), so it shows nothing the speakers do not get: muted players, `cg_footsteps
+0` and sounds past their falloff stay hidden, and the player's own, listener-relative,
+ambient, announcer, menu and music sounds and loops are left out. The volume cvars do
+not hide it, since it is for players who cannot hear. It needs an audio output: with
+`s_initsound 0` or no sound device nothing is sent, so the sonar shows nothing. Its
+memory is cleared when the setting goes off and when the output stops the effects (a
+new map's gamestate) or everything (`soundstop`); out of a game it draws nothing. A
+deliberate choice: the arcs give a sound's full direction round the player, ahead,
+behind and to either side, which stereo panning alone does not, as other games' sound
+visualisers do for accessibility; they add nothing the speakers do not get. Drawn with
+the HUD (`cg_drawHud`), following `cg_hudScale`. Unit tests: the bearing, the ring, the
+filters, the fade and falloff, the arc's place and scale.
+
 ## Voice volume
 
 `s_volumeVoice` (Settings > Sound, Voice volume; 0 to 1, default 1) is the loudness of

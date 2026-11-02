@@ -338,6 +338,7 @@ mod sjk_packs;
 mod sky_stage;
 mod small_card_notice;
 mod snapshot_presentation;
+mod sound_sonar;
 mod static_models;
 mod stock_blades;
 mod support_links;
@@ -2091,6 +2092,7 @@ impl GpuState {
         if stock_vehicle {
             hud_visibility.vehicle = false;
         }
+        self.update_sound_sonar(game_audio.as_ref());
         let hud_style = menu_hud::HudStyle::read(self.console.as_ref());
         // The radial look is laid out for the bundled font (Inter), whatever
         // `cg_classicHudFont` says: its numbers are aligned to that font's metrics.

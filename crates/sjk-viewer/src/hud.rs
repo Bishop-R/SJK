@@ -33,6 +33,7 @@ pub(crate) mod portrait;
 mod radial;
 pub(crate) mod rocket_lock;
 mod selection;
+mod sound_sonar;
 pub(crate) mod targeting;
 pub(crate) mod team_logo;
 pub(crate) mod team_outline;
@@ -65,7 +66,8 @@ const WIDGET_LIMIT: usize = 64;
 const DRAW_LIMIT: usize = 384
     + kill_feed::CAPACITY * kill_feed::ENTRY_COMMANDS
     + movement::AURA_COMMANDS
-    + movement_keys::COMMANDS;
+    + movement_keys::COMMANDS
+    + sound_sonar::COMMANDS;
 const DEFAULT_LAYOUT: &str = include_str!("../assets/hud/default.json");
 /// The weapon name fades over this long at the end of its life.
 const WEAPON_FADE_MS: u64 = 600;
@@ -253,6 +255,8 @@ pub(crate) struct HudOverlay {
     toy_hack_left: Option<f32>,
     /// The Monitor toy's charge ring and hit marker (`monitor.rs`).
     monitor_marks: MonitorMarks,
+    /// The sound sonar's arcs this frame (`crate::sound_sonar`).
+    sound_sonar: crate::sound_sonar::Markers,
     lagometer: sjk_client::LagometerSamples,
     /// `cg_lagometer` 2 and 3's numbers and speed history ([`lagometer`]).
     lagometer_readout: lagometer::Readout,
@@ -466,6 +470,7 @@ impl HudOverlay {
             jetpack_fuel: None,
             toy_hack_left: None,
             monitor_marks: MonitorMarks::default(),
+            sound_sonar: Default::default(),
             lagometer: sjk_client::LagometerSamples::new(),
             lagometer_readout: lagometer::Readout::default(),
             default_document: HudLayoutDocument::from_json(DEFAULT_LAYOUT)
@@ -517,6 +522,11 @@ impl HudOverlay {
     /// The Monitor toy's marks on the crosshair this frame.
     pub(crate) fn set_monitor_marks(&mut self, marks: MonitorMarks) {
         self.monitor_marks = marks;
+    }
+
+    /// The sound sonar's arcs this frame.
+    pub(crate) fn set_sound_sonar(&mut self, markers: crate::sound_sonar::Markers) {
+        self.sound_sonar = markers;
     }
 
     /// Build, lay out and retain the HUD widget draw list. `user_scale` is
@@ -688,6 +698,16 @@ impl HudOverlay {
                 viewport,
                 [x * viewport[0], y * viewport[1]],
                 self.monitor_marks,
+            );
+        }
+        if visibility.hud {
+            let [x, y] = self.targeting.center(viewport);
+            sound_sonar::emit(
+                &mut self.draw_list,
+                viewport,
+                [x * viewport[0], y * viewport[1]],
+                user_scale,
+                &self.sound_sonar,
             );
         }
         let mut output = HudLayout::default();
