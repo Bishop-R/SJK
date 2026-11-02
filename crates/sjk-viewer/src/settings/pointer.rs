@@ -58,7 +58,7 @@ impl SettingsMenu {
                 .and_then(|offset| dropdown.shown_pick(usize::from(offset)));
             match (event.kind, pick) {
                 (UiEventKind::Wheel, _) => {
-                    dropdown.scroll_by(event.delta.map_or(0, |delta| -delta.y.signum() as i32));
+                    dropdown.scroll_by(event.delta.map_or(0, |delta| wheel_rows(delta.y)));
                 }
                 (UiEventKind::HoverEnter | UiEventKind::Hover, Some(index)) => {
                     dropdown.highlighted = index;
@@ -125,7 +125,7 @@ impl SettingsMenu {
             // A classic panel with more rows than fit scrolls them.
             match event.kind {
                 UiEventKind::Wheel => {
-                    let direction = event.delta.map_or(0, |delta| -delta.y.signum() as i32);
+                    let direction = event.delta.map_or(0, |delta| wheel_rows(delta.y));
                     classic.scroll_by(direction * super::classic_view::CLASSIC_WHEEL_ROWS);
                     return SettingsResult::None;
                 }
@@ -142,7 +142,7 @@ impl SettingsMenu {
             }
         }
         if event.kind == UiEventKind::Wheel {
-            self.wheel(event.delta.map_or(0, |delta| -delta.y.signum() as i32));
+            self.wheel(event.delta.map_or(0, |delta| wheel_rows(delta.y)));
             return SettingsResult::None;
         }
         if matches!(event.kind, UiEventKind::HoverEnter | UiEventKind::Hover) {
@@ -307,5 +307,30 @@ impl SettingsMenu {
         console.set_cvar(setting.cvar, &value);
         self.refresh(console);
         true
+    }
+}
+
+/// Rows one wheel step moves: up for a positive delta, down for a negative one, none
+/// for a sideways step (`f32::signum` gives 1 for +0.0, which scrolled up a row).
+fn wheel_rows(delta_y: f32) -> i32 {
+    if delta_y > 0.0 {
+        -1
+    } else if delta_y < 0.0 {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(test)]
+mod wheel_tests {
+    use super::wheel_rows;
+
+    #[test]
+    fn a_sideways_wheel_step_scrolls_no_row() {
+        assert_eq!(wheel_rows(0.0), 0);
+        assert_eq!(wheel_rows(-0.0), 0);
+        assert_eq!(wheel_rows(1.0), -1);
+        assert_eq!(wheel_rows(-3.0), 1);
     }
 }
