@@ -2802,6 +2802,13 @@ Implementation: [resident worlds](../crates/sjk-viewer/src/resident_world.rs),
 [world handoff](../crates/sjk-viewer/src/session_transition.rs) and
 [destination preparation](../crates/sjk-viewer/src/portal.rs).
 
+A built world (`GpuState`, about 600 KiB) crosses from the install worker to the
+main thread boxed: through the worker's channel, `WorldInstallPoll::Ready`,
+`take_world`, `poll_world_install` and `adopt_world`. Moved by value, each step
+was a stack copy, and the main thread's nested frames (`window_event` 3.1 MB,
+`Destination::poll`, `WorldInstallTask::poll` and the channel's `try_recv` about
+1.9 MB each) overflowed its 8 MiB while joining JoF's public server (02/11/2026).
+
 Losing window focus releases held gameplay controls and discards gameplay actions
 already queued for that frame. Synthetic key events on refocus cannot re-press a
 held modifier such as Alt. This allows a saber throw already sent to the server

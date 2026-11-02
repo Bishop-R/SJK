@@ -76,9 +76,9 @@ fn map_changes_vram() {
             .expect("the next map is built");
             let (peak, _) = live(&gpu.device);
             worst = worst.max(peak);
-            let mut adopted = gpu.adopt_world(built);
+            let mut adopted = gpu.adopt_world(Box::new(built));
             attach_target(&mut adopted, size);
-            gpu = adopted;
+            gpu = *adopted;
             let _ = frame(&mut gpu, 4);
             let (total, by_label) = live(&gpu.device);
             eprintln!(
@@ -170,9 +170,9 @@ fn map_change_unloaded_vram() {
             None,
         ))
         .expect("the empty world is built");
-        let mut empty = gpu.adopt_world(empty);
+        let mut empty = gpu.adopt_world(Box::new(empty));
         attach_target(&mut empty, size);
-        gpu = empty;
+        gpu = *empty;
         let _ = frame(&mut gpu, 4);
         let (unloaded, labels) = live(&gpu.device);
         let mut labels: Vec<_> = labels.into_iter().collect();
@@ -421,9 +421,9 @@ fn card_faces_vram_audit() {
             "audit: map change peak (picture menu with faces + siege_desert) {:.0} MiB",
             peak as f64 / MIB
         );
-        let mut adopted = gpu.adopt_world(built);
+        let mut adopted = gpu.adopt_world(Box::new(built));
         attach_target(&mut adopted, size);
-        gpu = adopted;
+        gpu = *adopted;
         let _ = frame(&mut gpu, (count as u32) / 2 + 20);
         let (in_map, by_label) = live(&gpu.device);
         eprintln!(

@@ -254,7 +254,7 @@ impl ApplicationHandler for ViewerApplication {
                 }
                 // A world without a session built again by a graphics reload.
                 if let Some(rebuilt) = gpu.poll_rebuild() {
-                    *gpu = rebuilt;
+                    *gpu = *rebuilt;
                     gpu.configure_audio(&mut self.game_audio);
                 }
             }

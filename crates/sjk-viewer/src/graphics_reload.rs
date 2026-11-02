@@ -298,7 +298,7 @@ impl crate::GpuState {
 
     /// The rebuilt world once it is ready, the shell handed to it; the caller makes it the
     /// current world. A failed rebuild keeps the old world and says why.
-    pub(crate) fn poll_rebuild(&mut self) -> Option<crate::GpuState> {
+    pub(crate) fn poll_rebuild(&mut self) -> Option<Box<crate::GpuState>> {
         let rebuild = self.graphics_reload.rebuild.as_mut()?;
         // Not over a join: the menu world it leaves is the one parked, and a menu world
         // coming back waits until the menus are back again.
@@ -394,7 +394,7 @@ impl crate::GpuState {
         Some(world)
     }
 
-    fn fail_rebuild(&mut self, error: &str) -> Option<crate::GpuState> {
+    fn fail_rebuild(&mut self, error: &str) -> Option<Box<crate::GpuState>> {
         if self
             .graphics_reload
             .rebuild

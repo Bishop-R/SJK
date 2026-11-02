@@ -96,7 +96,10 @@ pub(crate) use load::{WorldLoadPoll, WorldLoadTask};
 
 /// One complete replacement world built against the retained GPU context.
 pub(crate) struct WorldInstallTask {
-    receiver: Receiver<Result<GpuState, String>>,
+    // Boxed: a world is ~600 KiB, and every by-value move of one (through the
+    // channel, the poll result, the adoption) is a stack copy on the main thread,
+    // whose nested frames overflowed its 8 MiB joining JoF (02/11/2026).
+    receiver: Receiver<Result<Box<GpuState>, String>>,
     cancelled: Arc<std::sync::atomic::AtomicBool>,
     /// The worker's answer once it has arrived, until `poll` hands it out.
     result: Option<Result<Box<GpuState>, String>>,
@@ -108,9 +111,12 @@ pub(crate) struct WorldInstallTask {
 
 pub(crate) enum WorldInstallPoll {
     Pending,
-    Ready(GpuState),
+    Ready(Box<GpuState>),
     Failed(String),
 }
+
+// The poll result stays pointer-sized (see `WorldInstallTask::receiver`).
+const _: () = assert!(std::mem::size_of::<WorldInstallPoll>() <= 64);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LoadStage {
@@ -193,6 +199,7 @@ impl WorldInstallTask {
                         input,
                         Some(&worker_cancel),
                     ))
+                    .map(Box::new)
                     .map_err(|error| error.to_string())
                 });
                 let _ = sender.send(result);
@@ -213,7 +220,7 @@ impl WorldInstallTask {
     pub(crate) fn settled(&mut self) -> bool {
         if self.result.is_none() {
             self.result = match self.receiver.try_recv() {
-                Ok(result) => Some(result.map(Box::new)),
+                Ok(result) => Some(result),
                 Err(TryRecvError::Empty) => None,
                 Err(TryRecvError::Disconnected) => {
                     Some(Err("world installer stopped unexpectedly".into()))
@@ -228,7 +235,7 @@ impl WorldInstallTask {
             return WorldInstallPoll::Pending;
         }
         match self.result.take() {
-            Some(Ok(world)) => WorldInstallPoll::Ready(*world),
+            Some(Ok(world)) => WorldInstallPoll::Ready(world),
             Some(Err(error)) => WorldInstallPoll::Failed(error),
             None => WorldInstallPoll::Pending,
         }
@@ -258,7 +265,7 @@ impl Drop for WorldInstallTask {
 }
 
 impl GpuState {
-    pub(crate) fn poll_world_install(&mut self) -> Result<Option<GpuState>, Box<dyn Error>> {
+    pub(crate) fn poll_world_install(&mut self) -> Result<Option<Box<GpuState>>, Box<dyn Error>> {
         if self.is_menu_world {
             return self.poll_destination();
         }
@@ -551,7 +558,7 @@ impl GpuState {
         }
     }
 
-    pub(crate) fn adopt_world(&mut self, mut loaded: GpuState) -> GpuState {
+    pub(crate) fn adopt_world(&mut self, mut loaded: Box<GpuState>) -> Box<GpuState> {
         self.hand_shell_to(&mut loaded);
         if let Some(console) = &mut loaded.console {
             crate::chat::pm_only::reset(console);
