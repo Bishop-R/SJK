@@ -742,6 +742,7 @@ enum Command {
     /// The in-game name the player now wears.
     Name(String),
     SetBio(String),
+    SetBanner(String),
     /// The name emoji to show at the right of the player's name, empty for none.
     SetEmoji(String),
     /// The counts the client keeps for its achievements, by id.
@@ -1673,6 +1674,7 @@ impl Worker {
                 }
             }
             Command::SetBio(bio) => self.set_bio(&bio),
+            Command::SetBanner(id) => self.set_banner(&id),
             Command::SetEmoji(emoji) => self.set_emoji(&emoji),
             Command::Achievements(counts) => self.counts = counts,
             Command::Staff(request) => self.staff(&request),
@@ -2250,6 +2252,25 @@ impl Worker {
             Ok(profile) => {
                 snapshot.set_me(profile);
                 snapshot.notice = Some("saved".to_owned());
+            }
+            Err(error) => snapshot.notice = Some(error.to_string()),
+        });
+    }
+
+    fn set_banner(&mut self, id: &str) {
+        let outcome = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => hub.set_banner(&self.identity, id),
+            _ => {
+                self.update(|snapshot| {
+                    snapshot.notice = Some("not connected to the hub".to_owned())
+                });
+                return;
+            }
+        };
+        self.update(|snapshot| match outcome {
+            Ok(profile) => {
+                snapshot.set_me(profile);
+                snapshot.notice = Some("banner saved".to_owned());
             }
             Err(error) => snapshot.notice = Some(error.to_string()),
         });
@@ -4189,6 +4210,11 @@ impl Service {
         let _ = self.commands.send(Command::Name(name));
     }
 
+    /// Equip a profile banner. The hub validates supported ids and current ownership.
+    pub fn set_banner(&self, id: String) {
+        let _ = self.commands.send(Command::SetBanner(id));
+    }
+
     /// Change the player's bio at the hub.
     pub fn set_bio(&self, bio: String) {
         let _ = self.commands.send(Command::SetBio(bio));
@@ -4638,6 +4664,7 @@ mod tests {
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: name.to_owned(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: crate::Tick::None,
@@ -4677,6 +4704,12 @@ mod tests {
         }
         fn set_bio(&mut self, _: &Identity, bio: &str) -> Result<Profile, HubError> {
             self.record(format!("bio {bio}")).map(|()| profile(""))
+        }
+        fn set_banner(&mut self, _: &Identity, id: &str) -> Result<Profile, HubError> {
+            self.record(format!("banner {id}"))?;
+            let mut profile = profile("");
+            profile.banner = id.into();
+            Ok(profile)
         }
         fn set_emoji(&mut self, _: &Identity, emoji: &str) -> Result<Profile, HubError> {
             self.record(format!("emoji {emoji}")).map(|()| Profile {
@@ -4724,6 +4757,7 @@ mod tests {
             let opened: Vec<crate::wire::Opened> = ids
                 .iter()
                 .map(|&id| crate::wire::Opened {
+                    banner: None,
                     holocron: id,
                     // 77 is a kyber crystal.
                     tier: if id == 77 { "kyber_rare" } else { "rare" }.to_owned(),
@@ -7564,6 +7598,25 @@ mod tests {
         );
         worker.handle(Command::SetBio("  hello   there ".to_owned()), t0);
         assert_eq!(fake.log().last().unwrap(), "bio hello there");
+    }
+
+    #[test]
+    fn profile_banner_equipment_uses_the_worker_and_authoritative_profile() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, snapshot) = worker(&fake, t0);
+        worker.handle(Command::SetBanner("banner_jedi_archives".into()), t0);
+        assert!(!fake.log().iter().any(|line| line.starts_with("banner")));
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.tick(t0);
+        worker.handle(Command::SetBanner("banner_jedi_archives".into()), t0);
+        assert_eq!(fake.log().last().unwrap(), "banner banner_jedi_archives");
+        assert_eq!(
+            lock(&snapshot).me.as_ref().unwrap().banner.as_ref(),
+            "banner_jedi_archives"
+        );
+        worker.handle(Command::SetBanner(String::new()), t0);
+        assert_eq!(lock(&snapshot).me.as_ref().unwrap().banner.as_ref(), "");
     }
 
     #[test]

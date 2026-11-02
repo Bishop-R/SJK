@@ -70,6 +70,16 @@ test: Scroll to the end with more than 100 lines: Load older adds older lines on
 test: On a hub without the endpoint: "History unavailable", "keeps no history yet".
 note: Needs the hub's history branch deployed.
 
+[banners]
+area: Menus & settings
+title: Profile banners (#319, Lumaya): covers on Profile and cards, Collection > Banners
+change: Collection > Banners previews six covers (one free), wears one through the hub.
+change: Holocron openings may add a banner on top of the prize, once the hub enables them.
+test: Collection > Banners: the free cover wears; held covers show copies; Profile header.
+test: Player card and SJK chat sender cards show the worn cover; unknown ids fall back.
+test: Holocron odds: Banner bonus row only on a hub with banners on, 0 otherwise.
+note: Hub banner drops stay off until SJK_HUB_BANNER_MIN_CLIENT is set (hub shared #6).
+
 [pr-batch-1102c]
 area: Gameplay
 title: PRs 02/11 c: vehicle HP per HUD style, Lugormod v3 prediction

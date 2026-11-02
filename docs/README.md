@@ -28,6 +28,7 @@ and changed together. Begin with the status page, then the architecture.
 | [Mystery boxes](mystery-boxes.md) | Boxes SJK's creator places on maps, opened by players for credits: the hub's roll, the reach, the creator's commands |
 | [The Toy Master](toy-master.md) | Secret toys SJK's creator hides on maps: what the hub sends, presses and shows, the "?" and the hidden achievements, the creator's commands |
 | [Map edits](map-edits.md) | SJK's own map fixes drawn by SJK clients: hidden props and surfaces, placed models, remaps, per server; the staff editor and the hub copies |
+| [Profile banners](profile-banners.md) | Collectible profile covers, Echo rewards, equip/unequip and compatibility |
 | [Unlockables and looks](unlockables.md) | Blade skins and other unlockables, and looks every SJK player sees through the hub |
 
 [AGENTS.md](../AGENTS.md) defines the documentation maintenance rules. Update the

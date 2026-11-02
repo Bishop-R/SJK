@@ -1624,6 +1624,51 @@ pub(crate) fn avatar_version(key_id: &str) -> Option<String> {
     known
 }
 
+/// Avatar from presence first, with a static banner from the cached profile.
+/// Unknown profiles are requested once without delaying a known presence avatar.
+pub(crate) fn card_appearance(key_id: &str) -> Option<(String, &'static str)> {
+    let mut runtime = lock();
+    let runtime = &mut *runtime;
+    let service = runtime.service.as_ref()?;
+    let (known, has_profile) = service.with_snapshot(|snapshot| {
+        let profile = snapshot
+            .me
+            .as_ref()
+            .filter(|profile| profile.key_id == key_id)
+            .or_else(|| snapshot.profiles.get(key_id));
+        let presence = snapshot
+            .players
+            .iter()
+            .find(|player| player.key_id == key_id);
+        (
+            appearance(presence.map(|player| player.avatar.as_str()), profile),
+            profile.is_some(),
+        )
+    });
+    if !has_profile && !runtime.picture_lookups.iter().any(|key| key == key_id) {
+        if runtime.picture_lookups.len() == PICTURE_LOOKUPS {
+            runtime.picture_lookups.remove(0);
+        }
+        runtime.picture_lookups.push(key_id.to_owned());
+        service.look_up(key_id.to_owned());
+    }
+    known
+}
+
+fn appearance(
+    presence_avatar: Option<&str>,
+    profile: Option<&sjk_identity::Profile>,
+) -> Option<(String, &'static str)> {
+    presence_avatar
+        .or_else(|| profile.map(|profile| profile.avatar.as_str()))
+        .map(|avatar| {
+            (
+                avatar.to_owned(),
+                crate::profile_card::banner::equipped(profile),
+            )
+        })
+}
+
 /// Ask the hub for another player's profile (their bio).
 pub(crate) fn look_up(key_id: &str) {
     if let Some(service) = lock().service.as_ref() {
@@ -1643,6 +1688,28 @@ pub(crate) fn shutdown() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_presence_avatar_is_available_without_a_profile_and_overrides_stale_cache() {
+        assert_eq!(
+            appearance(Some("current"), None),
+            Some(("current".into(), ""))
+        );
+        assert_eq!(appearance(Some(""), None), Some(("".into(), "")));
+        assert_eq!(appearance(None, None), None);
+        let profile: sjk_identity::Profile = serde_json::from_str(
+            r#"{"key_id":"aa","key":"bb","name":"Player","bio":"","verified":false,"created":5,"avatar":"cached"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            appearance(Some("current"), Some(&profile)),
+            Some(("current".into(), ""))
+        );
+        assert_eq!(
+            appearance(None, Some(&profile)),
+            Some(("cached".into(), ""))
+        );
+    }
 
     #[test]
     fn the_log_tells_each_change_of_the_hub_status_once() {

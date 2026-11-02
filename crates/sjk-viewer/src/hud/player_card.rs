@@ -2153,6 +2153,7 @@ mod tests {
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: "Sol".to_owned(),
+            banner: "".into(),
             bio: "\n  Fox of the JoF, maker of SJK.  \nSecond line".to_owned(),
             verified: true,
             tick: sjk_identity::Tick::None,
@@ -2309,6 +2310,7 @@ mod tests {
         // An older hub's profile, or none yet: no marks, no lines.
         let bare = ProfileFacts::of(&sjk_identity::Profile {
             staff: false,
+            banner: "".into(),
             bio: String::new(),
             created: 0,
             achievements: Vec::new(),

@@ -554,7 +554,7 @@ pull requests merged into SJK, most of them bringing SJK in line with EternalJK
 - #321 a finished trade's toast says what it gave and received, names shown in full.
 - #236 JoF hats as in JoF EJK: their pictures from the old EternalJK folder, McFox two-sided.
 
-Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 87 pull requests
+Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 88 pull requests
 merged into SJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa)):
 
@@ -689,6 +689,8 @@ merged into SJK
   profile's `chatlogs/chat.log`.
 - #274 each predicted rider and vehicle leaves out its own pilot or chassis, as in OpenJK.
 - #316 SJK chat: six shared emoji reactions on public messages.
+- #319 profile banners: collectible covers on the Profile and player card, Collection >
+  Banners, a bonus roll on holocron openings once the hub turns them on.
 - #287 Lugormod v3 servers: own movement predicted as the server moves the player (scale,
   stand-up clearance, FFA admin jetpack, baton rolls).
 

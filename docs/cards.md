@@ -117,7 +117,13 @@ Credits, any whole number in the range, equally likely:
 | Legendary | 80 to 120 | 100 |
 | Mythical | 250 to 350 | 300 |
 
-About 35 credits a card opening on average; counting the openings that bring a shader or a
+The averages below describe the legacy built-in fallback, before a supporting hub
+supplies its tag/banner shares. The live loot table recalculates from the hub's
+actual odds. [Profile banners](profile-banners.md#echo-rewards-and-ownership) use a
+proposed 10% share taken from cards, with no card or credits on a banner opening.
+This reduces card frequency and average credits; shader/tag/shard-pile shares stay.
+
+Under those fallback tables, about 35 credits a card opening on average; counting the openings that bring a shader or a
 pile of kyber shards instead (no credits), about 17.5 credits a holocron found, so about 140
 a day under the holocrons' daily cap of 8.
 

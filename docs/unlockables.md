@@ -1630,3 +1630,9 @@ catalogue does not list, the ceremony still shows it, by the name the hub sent, 
 holocron's colour, with its blade if the hub's pack brought one, the crate spin ending on a
 "?" tile; it reads "update SJK to see it in your Collection". The Collection lists it once
 the client knows it.
+
+## Profile covers
+
+[Profile banners](profile-banners.md) share the hub's counted unlock inventory but
+have their own catalogue and Collection tab. They are identity equipment, not saber
+skins or game-server looks; blade-only trade, craft and shatter actions exclude them.

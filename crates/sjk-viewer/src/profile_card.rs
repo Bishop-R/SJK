@@ -9,6 +9,9 @@
 //! none, the card draws their initial on a colour of their own. [`avatar`] draws a
 //! player's picture that way wherever a screen shows one.
 
+#[path = "profile_banner.rs"]
+pub(crate) mod banner;
+
 use crate::menu::sjk::{Frame, color, text};
 use crate::menu_widgets::{MenuCanvas, TextFamily};
 use sjk_ui::{Color, DrawCommand, FontWeight, Rect, TextAlign};
@@ -41,6 +44,7 @@ pub(crate) struct Summary {
     pub(crate) key_id: String,
     /// Their picture's version, empty for none.
     pub(crate) avatar: String,
+    pub(crate) banner: &'static str,
     pub(crate) hub: HubState,
     pub(crate) verified: bool,
     /// Their tick, as the hub sent it.
@@ -64,6 +68,7 @@ static SUMMARY: Mutex<Summary> = Mutex::new(Summary {
     skin: None,
     key_id: String::new(),
     avatar: String::new(),
+    banner: "",
     hub: HubState::Off,
     verified: false,
     tick: sjk_identity::Tick::None,
@@ -83,6 +88,7 @@ pub(crate) static NOBODY: Summary = Summary {
     skin: None,
     key_id: String::new(),
     avatar: String::new(),
+    banner: "",
     hub: HubState::Off,
     verified: false,
     tick: sjk_identity::Tick::None,
@@ -188,6 +194,7 @@ pub(crate) fn summarise(
             .filter(|_| enabled)
             .map(|me| me.avatar.clone())
             .unwrap_or_default(),
+        banner: banner::equipped(me.filter(|_| enabled)),
         hub,
         verified: online && me.is_some_and(|me| me.verified),
         tick: me
@@ -292,12 +299,13 @@ pub(crate) fn draw(canvas: &mut MenuCanvas, frame: &Frame, card: &Card<'_>, toke
     let s = frame.s;
     let [x, y, width, height] = AREA;
     let area = frame.rect(x, y, width, height);
+    let _ = canvas.draw_list_mut().push(DrawCommand::PushRoundedClip {
+        rect: area,
+        radius: 18.0 * s,
+    });
+    banner::draw(canvas, area, card.summary.banner);
+    let _ = canvas.draw_list_mut().push(DrawCommand::PopClip);
     if card.lit {
-        let _ = canvas.draw_list_mut().push(DrawCommand::RoundedRect {
-            rect: area,
-            radius: 18.0 * s,
-            color: color::alpha(color::SPACE, 0.6),
-        });
         let _ = canvas.draw_list_mut().push(DrawCommand::Border {
             rect: area,
             radius: 18.0 * s,
@@ -523,6 +531,7 @@ mod tests {
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: "Sol".to_owned(),
+            banner: "".into(),
             bio: String::new(),
             verified: true,
             tick: sjk_identity::Tick::None,

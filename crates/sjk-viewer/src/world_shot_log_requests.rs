@@ -19,6 +19,7 @@ fn profile(key: &str, name: &str) -> sjk_identity::Profile {
         key_id: key.to_owned(),
         key: String::new(),
         name: name.to_owned(),
+        banner: "".into(),
         bio: String::new(),
         verified: false,
         tick: sjk_identity::Tick::None,

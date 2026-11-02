@@ -249,6 +249,15 @@ impl Panel {
     }
 
     fn left_column(&mut self, frame: &Frame, inputs: &Inputs<'_>, who: &Who) {
+        let profile = inputs
+            .snapshot
+            .filter(|_| inputs.enabled)
+            .and_then(|snapshot| snapshot.me.as_ref());
+        crate::profile_card::banner::draw(
+            &mut self.ui,
+            frame.rect(LEFT_X - 12.0, TOP - 12.0, LEFT_WIDTH + 24.0, 148.0),
+            crate::profile_card::banner::equipped(profile),
+        );
         let s = frame.s;
         // The player's picture: a click (or Enter) opens the picture panel.
         let lit = self.focus == Focus::Picture || self.ui.token_hovered(PICTURE_TOKEN);
@@ -1356,6 +1365,7 @@ mod tests {
             key_id: "0123456789abcdef".to_owned(),
             key: String::new(),
             name: "^1Ш^7Sol^3Vulpes^7 the Long Named".to_owned(),
+            banner: "".into(),
             bio: format!(
                 "{}\n\nline three\n{}",
                 "Äöüß word ".repeat(30),

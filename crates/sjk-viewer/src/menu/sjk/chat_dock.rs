@@ -240,14 +240,19 @@ impl Dock {
 
     /// Give the sender card on show its player's picture version (`picture`, from their
     /// key) until it is known. Called before the page is built, outside any lock.
-    pub(crate) fn picture_sender_card(&mut self, picture: impl FnOnce(&str) -> Option<String>) {
+    pub(crate) fn picture_sender_card(
+        &mut self,
+        picture: impl FnOnce(&str) -> Option<(String, &'static str)>,
+    ) {
         if let Some(card) = self
             .sender_card
             .as_mut()
             .filter(|card| card.person.avatar.is_none())
             && let Some(key_id) = &card.person.key_id
+            && let Some((avatar, banner)) = picture(key_id)
         {
-            card.person.avatar = picture(key_id);
+            card.person.avatar = Some(avatar);
+            card.person.banner = banner;
         }
     }
 
@@ -1244,6 +1249,7 @@ fn person(line: &DockLine<'_>) -> crate::sender_card::Person {
         emoji: line.emoji.to_owned(),
         medals: crate::medals::Medals::default(),
         place: crate::sender_card::Place::Unknown,
+        banner: "",
         avatar: None,
         note: None,
         safety: false,

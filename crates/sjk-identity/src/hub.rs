@@ -399,6 +399,12 @@ pub trait Hub: Send {
             "this hub client does not send pictures".to_owned(),
         ))
     }
+    /// Equip a profile banner, or empty to unequip; the hub validates ownership.
+    fn set_banner(&mut self, _identity: &Identity, _id: &str) -> Result<Profile, HubError> {
+        Err(HubError::Protocol(
+            "profile banners need an updated hub".to_owned(),
+        ))
+    }
     /// Set the identity's name emoji (`crate::name_emoji`, checked; empty takes it
     /// away), leaving its bio and name as they are; the hub answers with the key's
     /// profile.
@@ -1510,6 +1516,15 @@ impl Hub for HttpHub {
     fn set_bio(&mut self, identity: &Identity, bio: &str) -> Result<Profile, HubError> {
         let body = json!({ "bio": bio });
         parse(self.send(Some(identity), "PUT", "/v1/profile", Some(body))?)
+    }
+
+    fn set_banner(&mut self, identity: &Identity, id: &str) -> Result<Profile, HubError> {
+        parse(self.send(
+            Some(identity),
+            "PUT",
+            "/v1/profile/banner",
+            Some(json!({"id": id})),
+        )?)
     }
 
     fn set_emoji(&mut self, identity: &Identity, emoji: &str) -> Result<Profile, HubError> {

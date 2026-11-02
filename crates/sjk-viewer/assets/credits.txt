@@ -268,7 +268,7 @@ link: Creyon's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr
 
 [Lumaya]
 github: lumayaa
-role: Contributor: 87 merged pull requests
+role: Contributor: 88 merged pull requests
 medal: early_contributor
 did: #24 Saber blades stop at walls instead of shining through them
 did: #29 Free camera: /freecam flies the camera away from your body
@@ -337,6 +337,7 @@ did: #331 One switch for the away chat bubble, unfocused or minimized
 did: #332 Save game chat logs, a switch in Settings > Chat
 did: #274 Riders and vehicles predicted with their own collision exclusions
 did: #316 Emoji reactions on SJK chat messages
+did: #319 Profile banners: covers to collect, wear and show on your card
 did: #287 Lugormod v3: own movement predicted as the server moves you
 link: Lumaya's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa
 

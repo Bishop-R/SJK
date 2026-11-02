@@ -3108,6 +3108,7 @@ mod tests {
             key_id: "0123456789abcdef".into(),
             key: String::new(),
             name: "Sol".into(),
+            banner: "".into(),
             bio: String::new(),
             verified: false,
             tick: sjk_identity::Tick::None,

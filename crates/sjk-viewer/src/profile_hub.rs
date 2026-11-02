@@ -80,12 +80,14 @@ pub(crate) enum Tab {
     Forge,
     /// The cards opening holocrons brought, and the credits.
     Cards,
+    /// Collectible profile covers from Echo openings.
+    Banners,
     /// What came, was opened, spent and traded, newest first (31/10/2026).
     History,
 }
 
 const PROFILE_TABS: [Tab; 4] = [Tab::Character, Tab::Saber, Tab::Force, Tab::Profile];
-const COLLECTION_TABS: [Tab; 10] = [
+const COLLECTION_TABS: [Tab; 11] = [
     Tab::Medals,
     Tab::Achievements,
     Tab::Shaders,
@@ -95,10 +97,11 @@ const COLLECTION_TABS: [Tab; 10] = [
     Tab::Holocrons,
     Tab::Forge,
     Tab::Cards,
+    Tab::Banners,
     Tab::History,
 ];
 const PROFILE_LABELS: [&str; 4] = ["Character", "Saber", "Force", "SJK Profile"];
-const COLLECTION_LABELS: [&str; 10] = [
+const COLLECTION_LABELS: [&str; 11] = [
     "Medals",
     "Achievements",
     "Shaders",
@@ -108,6 +111,7 @@ const COLLECTION_LABELS: [&str; 10] = [
     HOLOCRONS,
     FORGE,
     "Cards",
+    "Banners",
     "History",
 ];
 
@@ -122,7 +126,7 @@ pub(crate) const FORGE: &str = "Forge";
 
 impl Tab {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 14] = [
+    pub(crate) const ALL: [Self; 15] = [
         Self::Character,
         Self::Saber,
         Self::Force,
@@ -136,6 +140,7 @@ impl Tab {
         Self::Holocrons,
         Self::Forge,
         Self::Cards,
+        Self::Banners,
         Self::History,
     ];
 
@@ -159,7 +164,8 @@ impl Tab {
             Self::Holocrons => 6,
             Self::Forge => 7,
             Self::Cards => 8,
-            Self::History => 9,
+            Self::Banners => 9,
+            Self::History => 10,
         }
     }
 
@@ -289,7 +295,7 @@ fn row_gap_in(
 
 /// How much the row's names and counts shrink to stand within the frame: 1 while they fit
 /// with at least [`MIN_GAP`] between them, less only when even that is too wide (the
-/// Collection's nine tabs at the largest text style, 27/10/2026).
+/// Collection's ten tabs at the largest text style).
 fn row_fit(labels: &[&str], counts: &[String], widen: f32) -> f32 {
     row_fit_in(labels, counts, widen, crate::text::style::current())
 }
@@ -312,7 +318,8 @@ fn row_fit_in(
                 * widen
         })
         .sum();
-    let room = ROW_RIGHT - ROW_X - MIN_GAP * labels.len().saturating_sub(1) as f32;
+    // Leave half a pixel for rounding when many scaled widths are accumulated.
+    let room = ROW_RIGHT - ROW_X - MIN_GAP * labels.len().saturating_sub(1) as f32 - 0.5;
     if content > room && content > 0.0 {
         room / content
     } else {
@@ -806,7 +813,8 @@ mod tests {
         assert_eq!(Tab::Nameplates.next(true), Tab::Holocrons);
         assert_eq!(Tab::Holocrons.next(true), Tab::Forge);
         assert_eq!(Tab::Forge.next(true), Tab::Cards);
-        assert_eq!(Tab::Cards.next(true), Tab::History);
+        assert_eq!(Tab::Cards.next(true), Tab::Banners);
+        assert_eq!(Tab::Banners.next(true), Tab::History);
         assert_eq!(Tab::History.next(true), Tab::Medals);
         assert_eq!(Tab::Achievements.next(true), Tab::Shaders);
         for screen in [Screen::Profile, Screen::Collection] {
@@ -828,8 +836,9 @@ mod tests {
         assert_eq!(collection_tab_of(TOKEN + 6), Some(Tab::Holocrons));
         assert_eq!(collection_tab_of(TOKEN + 7), Some(Tab::Forge));
         assert_eq!(collection_tab_of(TOKEN + 8), Some(Tab::Cards));
-        assert_eq!(collection_tab_of(TOKEN + 9), Some(Tab::History));
-        assert_eq!(collection_tab_of(TOKEN + 10), None);
+        assert_eq!(collection_tab_of(TOKEN + 9), Some(Tab::Banners));
+        assert_eq!(collection_tab_of(TOKEN + 10), Some(Tab::History));
+        assert_eq!(collection_tab_of(TOKEN + 11), None);
         assert_eq!(collection_tab_of(TOKEN - 1), None);
     }
 
