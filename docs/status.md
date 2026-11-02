@@ -1,3 +1,29 @@
+## Heimdall's time nudge kicks at low frame rates
+
+02/11/2026, `personal/heimdall-catchup`, based on `main` `3d9e8fe2`, Krieger's and
+Slash's reports (Discord #bugs; Krieger on 2026.1101.1 Linux, Slash on 2026.1102.1,
+neither through the launcher): Heimdall, JoF's anti-cheat, kicked them with "Set
+/cl_timeNudge 0" at random moments of ordinary play, a few times in 15 minutes. The
+23/10 clock fix (below) is in both builds, and nothing that stamps commands changed
+since. What remained different from JoF EJK: its `cl_cmdratecap` makes at most one
+command a frame stamped with the frame's server time, while SJK's grid
+([command_rate.rs](../crates/sjk-client/src/command_rate.rs)) filled every 8 ms slot a
+slow frame passed, stamped in the past (one 8 ms old at 60 FPS, three up to 24 ms old
+at 30 FPS) and rounded every stamp down. On a server known to cap commands
+([server_caps.rs](../crates/sjk-viewer/src/server_caps.rs), only JoF) commands are now
+paced as `cl_cmdratecap` does (`Pacing::OnePerFrame`): one a frame at most, stamped now,
+on an accumulator that keeps 125 a second on average; `pmove_fixed` servers and every
+other server keep the grid, which the gameplay FPS needs to move like 333 at any frame
+rate. `gameplay_fps_nocap 1` also brings the grid back on JoF. Below 125 FPS a JoF
+player now moves in frame-sized steps, as with JoF EJK. Krieger saw no kicks after
+choosing a gameplay FPS of 125 instead of Auto, which on JoF sends the same 8 ms step
+with the default `com_maxfps`, so that is likely chance unless their `com_maxfps` was
+below 125 (asked). Verified on Windows 11: unit tests (59 FPS against 40 snapshots a
+second with 17 to 1346 ms hitches: commands at most 31 ms behind the server, the
+clock's own lag, against 47 to 54 ms with the grid; 125 a second at 333 FPS; no stamp
+twice). Not verified: in a game, on JoF, or that Heimdall judges this (it is closed
+source).
+
 ## Static profile banners
 
 31/10/2026, `feat/profile-banners`, client code `56a9b774` (including `main`

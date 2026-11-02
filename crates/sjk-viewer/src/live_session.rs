@@ -205,16 +205,16 @@ impl GpuState {
         let now = Instant::now();
         crate::emote_end_debug::observe_frame(now);
         let server_time = self.server_clock.server_time(now);
-        let step =
-            self.console
-                .as_mut()
-                .map_or(sjk_client::command_rate::COMMAND_MILLIS, |console| {
-                    console.set_frame_cap(frame_cap);
-                    console.command_step()
-                });
-        let due = self
-            .command_schedule
-            .due(server_time, self.server_clock.anchored(), now, step);
+        let (step, pacing) = self.console.as_mut().map_or(
+            (sjk_client::command_rate::COMMAND_MILLIS, Default::default()),
+            |console| {
+                console.set_frame_cap(frame_cap);
+                (console.command_step(), console.command_pacing())
+            },
+        );
+        let due =
+            self.command_schedule
+                .due(server_time, self.server_clock.anchored(), now, step, pacing);
         if let Some(console) = &self.console {
             session.set_packet_dup(console.packet_dup());
         }

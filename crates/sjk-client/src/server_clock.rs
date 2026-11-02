@@ -234,7 +234,7 @@ impl ServerClock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command_rate::CommandSchedule;
+    use crate::command_rate::{CommandSchedule, Pacing};
     use std::time::Duration;
 
     const START: i64 = 10_000;
@@ -246,8 +246,8 @@ mod tests {
     /// hitch of `hitch` ms at 2 s, and return the largest lag behind the
     /// server's time of any command stamped after it. `per_snapshot` adjusts on
     /// every snapshot read, as the client did until 23/10/2026; otherwise once a
-    /// frame after the queue is read, as stock does.
-    fn worst_lag_after_hitch(step: i32, hitch: i64, per_snapshot: bool) -> i64 {
+    /// frame after the queue is read, as stock does. `pacing` spreads the commands.
+    fn worst_lag_after_hitch(step: i32, hitch: i64, per_snapshot: bool, pacing: Pacing) -> i64 {
         let base = Instant::now();
         let at = |ms: i64| base + Duration::from_millis(ms as u64);
         let mut clock = ServerClock::new(START as i32, at(0));
@@ -279,7 +279,7 @@ mod tests {
                 clock.adjust(now);
             }
             let stamp = clock.server_time(now);
-            for &command in schedule.due(stamp, true, now, step).as_slice() {
+            for &command in schedule.due(stamp, true, now, step, pacing).as_slice() {
                 if hitched.is_some() {
                     worst = worst.max(START + real - i64::from(command));
                 }
@@ -292,7 +292,7 @@ mod tests {
     fn a_hitch_keeps_commands_on_the_servers_time() {
         for step in [8, 7, 4, 3] {
             for hitch in [150, 400, 1_346] {
-                let lag = worst_lag_after_hitch(step, hitch, false);
+                let lag = worst_lag_after_hitch(step, hitch, false, Pacing::Grid);
                 // The oldest of a frame's catch-up commands (32 ms back), the
                 // grid and the snapshot interval the clock trails by.
                 assert!(
@@ -304,9 +304,29 @@ mod tests {
     }
 
     #[test]
+    fn one_per_frame_never_stamps_behind_the_clock() {
+        // JoF's pacing (`cl_cmdratecap`): no catch-up command and no rounding down,
+        // so commands trail the server only as much as the clock does (a snapshot
+        // interval and a frame, as stock), where the grid's catch-up adds up to 32 ms
+        // more (Heimdall's time nudge kicks, 02/11/2026).
+        for hitch in [17, 150, 400, 1_346] {
+            let lag = worst_lag_after_hitch(8, hitch, false, Pacing::OnePerFrame);
+            let grid = worst_lag_after_hitch(8, hitch, false, Pacing::Grid);
+            assert!(
+                lag <= SNAPSHOT_MILLIS + FRAME_MILLIS,
+                "hitch {hitch} ms: commands {lag} ms behind"
+            );
+            assert!(
+                grid - lag >= 8,
+                "hitch {hitch} ms: grid {grid} ms, one per frame {lag} ms"
+            );
+        }
+    }
+
+    #[test]
     fn adjusting_on_every_queued_snapshot_put_commands_a_second_behind() {
         for step in [8, 7, 4, 3] {
-            let lag = worst_lag_after_hitch(step, 1_346, true);
+            let lag = worst_lag_after_hitch(step, 1_346, true, Pacing::Grid);
             assert!(lag > 1_000, "step {step} ms: {lag} ms");
         }
     }
