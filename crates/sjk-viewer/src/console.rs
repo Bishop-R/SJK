@@ -482,6 +482,15 @@ impl ViewerConsole {
         )
     }
 
+    /// How a frame slower than the command step spreads its commands: the known
+    /// server's own client's way ([`crate::server_caps`]), unless the player lifted the
+    /// caps, else one per slot of the grid.
+    pub(crate) fn command_pacing(&self) -> sjk_client::command_rate::Pacing {
+        self.server_cap
+            .filter(|_| !self.server_caps_lifted() && self.pmove_fixed_msec().is_none())
+            .map_or_else(Default::default, |cap| cap.pacing)
+    }
+
     /// The server's known command cap ([`crate::server_caps`]), lifted or not.
     pub(crate) fn server_cap(&self) -> Option<&'static crate::server_caps::ServerCap> {
         self.server_cap

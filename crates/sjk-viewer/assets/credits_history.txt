@@ -9,6 +9,32 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 02/11/2026 | - | JoF: one command a frame stamped now, as cl_cmdratecap (Heimdall kicks)
+- 211208b |  | JoF: one command a frame stamped now, as cl_cmdratecap (Heimdall kicks)
++ 02/11/2026 | - | Joins: box the built world so the main thread's stack holds
+- b426eea |  | Joins: box the built world so the main thread's stack holds
++ 02/11/2026 | - | PR batch 02/11 c: changelog, credits, debug panel for #318 and #287
+- 03f62da |  | PR batch 02/11 c: changelog, credits, debug panel for #318 and #287
++ 02/11/2026 | - | HUD edit: #318's vehicle widgets move with the Vehicle element
+- 91d82fa |  | HUD edit: #318's vehicle widgets move with the Vehicle element
++ 02/11/2026 | - | Grand-find rehearsal and its world shot carry #316's reactions field
+- 0bd2144 |  | Grand-find rehearsal and its world shot carry #316's reactions field
++ 02/11/2026 | - | Settings: a sideways wheel step no longer scrolls a list up a row (#303)
+- a5bf7fd |  | Settings: a sideways wheel step no longer scrolls a list up a row (#303)
++ 02/11/2026 | - | Chat: a draft refused past four pieces reopens in the composer (#306)
+- 04127cc |  | Chat: a draft refused past four pieces reopens in the composer (#306)
++ 02/11/2026 | - | PR batch 02/11 b: changelog under a new Unreleased, credits, debug panel
+- 05e8a06 |  | PR batch 02/11 b: changelog under a new Unreleased, credits, debug panel
++ 02/11/2026 | - | Release 2026.1102.1
+- 6b0c58d |  | Release 2026.1102.1
++ 02/11/2026 | - | Toy Master: play the show's song twice as loud
+- 118cab6 |  | Toy Master: play the show's song twice as loud
++ 02/11/2026 | - | PR batch 02/11: credits, debug panel, chat logs off by default, guntele crouch box
+- 97dd896 |  | PR batch 02/11: credits, debug panel, chat logs off by default, guntele crouch box
++ 02/11/2026 | - | Settings help: keep the away bubble and chat log entries apart after the #331/#332 merge
+- 14c4f6e |  | Settings help: keep the away bubble and chat log entries apart after the #331/#332 merge
++ 02/11/2026 | - | PR batch 02/11: tests after the merge (flush config, chat log opt-in), changelog settings first, debug panel lines
+- 12873dc |  | PR batch 02/11: tests after the merge (flush config, chat log opt-in), changelog settings first, debug panel lines
 + 02/11/2026 | - | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
 - 3b1d9cd |  | Prop gun toy: a fake gun from a pk3, its bolts knock opted-in players down
 + 02/11/2026 | - | Prop gun: turn the world model onto the hand as the game's own world guns are
@@ -2507,6 +2533,23 @@
 - 46efdd7 |  | Predict the JA+ dual jump-attack hull over a player ahead
 
 = Creyon
++ 02/11/2026 | SJK #321 | Trading: say what a finished trade gave, show names in full, keep the toast's line whole
+- cdfac4c |  | Trading: say new items are in the collection only when some were received
+- 6274f27 |  | Trading: show names in full in trade endings, keep the toast's line whole
+- a41c5e9 |  | Trading: keep the toast's key hint at the right edge, stop name colours
++ 02/11/2026 | SJK #236 | JoF hats as in JoF EJK: jaPRO's copies, old-folder pictures, two-sided McFox (#192)
+- 1b69d3a |  | Draw JoF's hats as JoF EJK does
+- 1bfc118 |  | Read the hats' models once per mount, and no shader scripts
++ 02/11/2026 | SJK #317 | Scoreboard: client numbers on SJK's board, rank by score minus deaths
+- 21111f2 |  | Scoreboard: client numbers, rank by score minus deaths, deaths shown
+- 599758e |  | Keep cg_scoreDeaths at EJK's default 1 (defaults rule)
+- 9b573c0 |  | Scoreboard: client numbers off by default, server's places unless ranked
+- 60c22be |  | Scoreboard: shorten the SJK board's ID row label to fit its column
+- 2b62afd |  | Scoreboard: lay out a list from seven arguments again
+- 6b570b8 |  | Scoreboard: with the deaths ranking, the header gives the listed place
++ 02/11/2026 | SJK #328 | Collection: choose shaders by a click only; New shaders get a "New" sticker and gold outline until clicked
+- 72f1bc1 |  | Collection: choose shaders by a click only, outline New ones in gold
+- 18eb289 |  | Collection: a click on a New shader sees it at once
 + 31/10/2026 | SJK #320 | Chat GIFs: hide chosen GIFs on this PC, a Hidden tab to show them again
 - 4d8595a |  | Chat GIFs: hide chosen GIFs on this PC, a Hidden tab to show them again
 - e9afed7 |  | CI: run the checks again
@@ -2761,6 +2804,9 @@
 - 0874042 |  | Decode print and cp text as legacy bytes
 
 = Lukas
++ 02/11/2026 | SJK #306 | Send long chat drafts as complete messages
+- a7f9d96 |  | Split long chat messages before sending
+- 6c702fd |  | Address split chat review findings
 + 30/10/2026 | SJK #304 | Let spectators follow the crosshair player
 - 4de76ec |  | Let spectators follow the crosshair player
 + 30/10/2026 | SJK #198 | Add VFS headroom and lifetime diagnostics
@@ -2808,6 +2854,34 @@
 - ddfe116 |  | Fix Linux clipboard integration
 
 = Lumaya
++ 02/11/2026 | SJK #319 | Add collectible profile banners as bonus Echo rewards
+- 687aef5 |  | Start the approved profile banner implementation
+- cbf34cd |  | Implement collectible static profile banners and Echo rewards
+- a1af5ee |  | Refine banner previews and keep the extended tab row within bounds
+- 6d5e7b1 |  | Update the Collection tab boundary fixture for banners
+- de8529e |  | Keep card corners and focus outlines above banner artwork
+- b8f88df |  | Tidy the shared card appearance lookup and snapshot imports
+- 4d4f9a4 |  | Share equipped banner ids across profile snapshots
+- c2b90b0 |  | Document banner verification and show the equipped covers
+- 66ac9f1 |  | Reveal profile banners as bonuses beside ordinary rewards
+- 56a9b77 |  | Cover maximum banner batches with advancing keypress times
+- a5efced |  | Record banner review verification and refresh screenshots
++ 02/11/2026 | SJK #287 | Predict Lugormod-v3 player bounds, rolls and jetpack movement
+- 78b94c9 |  | Add snapshot-backed Lugormod-v3 movement prediction
++ 02/11/2026 | SJK #316 | Add shared emoji reactions to SJK chat messages
+- 69c4304 |  | Document planned shared SJK chat reactions
+- 320bbfd |  | Add shared emoji reactions to the SJK chat page
+- c53e454 |  | Format reaction test imports
+- 0351f55 |  | Place the chat UI guide beside implemented features
+- 66dea16 |  | Expire failed chat reaction notices and add release notes
+- 157c827 |  | Refresh reaction verification and the merged UI screenshot
++ 02/11/2026 | SJK #332 | Enable chat logs by default and expose the Settings switch
+- 82bf637 |  | Claim default-on chat logging
+- 897a552 |  | Enable received game-chat logs by default with a Settings switch
++ 02/11/2026 | SJK #331 | Use one switch for automatic away chat bubbles
+- 5cb91d1 |  | Claim the minimized chat bubble fix
+- a88c3b1 |  | Honor the minimized chat bubble switch before unfocused state
+- b3f07c8 |  | Use one chat bubble switch for unfocused and minimized windows
 + 31/10/2026 | SJK #274 | Apply vehicle and rider collision exclusions per predicted actor
 - 71172a6 |  | Record the missing per-entity vehicle collision exclusions
 - f5e5223 |  | Separate pilot and chassis collision exclusions during prediction
@@ -3049,6 +3123,41 @@
 - fed9acd |  | Hide duel opponents' bars and send nothing while duelling
 
 = Slash
++ 02/11/2026 | SJK #318 | Vehicle HUD per HUD style: vehicle HP only, in each style's own look
+- 84f1304 |  | Vehicle HUD per HUD style: hull only, in each style's own look
+- 2033c58 |  | SJK classic vehicle bar: label the line HP instead of HULL
++ 02/11/2026 | SJK #303 | Fonts: pick a font installed on the PC (Saturn's idea)
+- 7e514ee |  | Start work on fonts from the PC (Saturn's idea)
+- d70dcdc |  | Draw chat and console in a font installed on the PC
+- 6486496 |  | Harden system fonts against broken files and stale loads
+- 900c18e |  | Fonts: a scrolling font list, Linux font folders, credit
++ 02/11/2026 | SJK #302 | Quiet mode: only the duel opponent and whispers reach the chat (Lex's idea)
+- 700117d |  | Start work on a quiet mode for chat (Lex's idea)
+- 80bc82c |  | Add quiet mode: hide chat but the duel partner and whispers
+- 51b5330 |  | Quiet mode: hide ambiguous and forged lines, keep the duel partner
++ 02/11/2026 | SJK #301 | Sound sonar: show which way sounds come from (Dawson's idea)
+- b5fe0e7 |  | Start work on a sound direction indicator (Dawson's idea)
+- 864cbc9 |  | Add a sound sonar for deaf and hard-of-hearing players
+- 1a902a9 |  | Keep fresh sonar sounds, clear it on a map change, say its limits
++ 02/11/2026 | SJK #295 | HUD edit mode: move HUD elements with the mouse (Lex's idea)
+- 466c014 |  | sjk-ui: move and measure what part of a draw list drew
+- e89c536 |  | HUD edit mode: drag the HUD's elements with the mouse
++ 02/11/2026 | SJK #330 | Player card: a second saber's own shader shows too (#224)
+- d5fbee0 |  | Player card: a second saber's own shader shows too (#224)
+- 091826c |  | Changelog: credit the player card line to Slash, after hub report #224
++ 02/11/2026 | SJK #324 | Trading: chat opens and shows over the trade window (#215)
+- b20378b |  | Let the chat open and show over the trade window (hub #215)
+- 8e3232f |  | CHANGELOG: name PR #324 in the trade chat line
++ 02/11/2026 | SJK #327 | JA+ guntele: a distance teleports you level and stops before walls and floors (#218)
+- 223d8d1 |  | JA+ guntele: a distance teleports you level and stops before walls (#218)
+- 20482e6 |  | Merge main: guntele line under a new Unreleased
++ 02/11/2026 | SJK #329 | Day clock: no crash while loading graphics, safe day sky on DX12 (#219)
+- fa686fa |  | Day clock: no crash while loading graphics, safe day sky on DX12 (hub #219)
++ 02/11/2026 | SJK #325 | Achievements: Long Distance Call counts monitor hits from 40 m (#216, #220)
+- b069026 |  | Achievements: Long Distance Call counts monitor hits from 40 m (#216, #220)
+- 92e6d7e |  | Achievements: credit for #325 (Long Distance Call)
++ 02/11/2026 | SJK #326 | Hilts: an empty community hilt no longer closes the game at every start (#214)
+- 5315721 |  | Hilts: an empty community hilt no longer closes the game, or every start after (hub #214)
 + 31/10/2026 | SJK #323 | Duels: fakenoclip and freecam no longer make you take no damage (#209)
 - cf43dcc |  | Keep fakenoclip and freecam out of duels (hub #209)
 + 31/10/2026 | SJK #322 | Melee kick: holding it no longer freezes your kick on its last frame

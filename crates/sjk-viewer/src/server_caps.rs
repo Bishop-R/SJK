@@ -19,6 +19,9 @@ pub(crate) struct ServerCap {
     pub(crate) name: &'static str,
     /// The shortest step it takes, in milliseconds.
     pub(crate) step: i32,
+    /// How a frame slower than the step spreads its commands: the family's own
+    /// client's way, which its anti-cheat expects.
+    pub(crate) pacing: sjk_client::command_rate::Pacing,
 }
 
 impl ServerCap {
@@ -37,6 +40,11 @@ pub(crate) const KNOWN: &[ServerCap] = &[
         family: "jof",
         name: "JoF",
         step: sjk_client::command_rate::COMMAND_MILLIS,
+        // One command a frame stamped now, as `cl_cmdratecap`: Heimdall, JoF's
+        // anti-cheat, kicked SJK players for a time nudge while the grid's catch-up
+        // commands went out stamped up to 32 ms in the past (Krieger, Slash,
+        // 02/11/2026).
+        pacing: sjk_client::command_rate::Pacing::OnePerFrame,
     },
 ];
 
@@ -63,6 +71,7 @@ mod tests {
         use sjk_mod::ServerKind::{BaseJka, JaPlus};
         let jof = find(&server(JaPlus, r"\gamename\JA+ Mod v2.5\V\2.5B0")).unwrap();
         assert_eq!((jof.name, jof.step, jof.per_second()), ("JoF", 8, 125));
+        assert_eq!(jof.pacing, sjk_client::command_rate::Pacing::OnePerFrame);
         assert!(find(&server(JaPlus, r"\V\2.4B7")).is_none());
         assert!(find(&server(BaseJka, r"\V\2.5B0")).is_none());
     }

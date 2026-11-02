@@ -26,6 +26,16 @@
 //! [`CATCH_UP_MILLIS`] of them; after a longer hitch the older slots are skipped
 //! rather than sent as a burst.
 //!
+//! On a server known to cap commands (JoF's, `server_caps` in the viewer) it paces
+//! them as JoF EJK's `cl_cmdratecap` does instead ([`Pacing::OnePerFrame`]): at most
+//! one command a frame, stamped with the server time of that frame, on an
+//! accumulator that keeps one a step on average. The grid's catch-up commands are
+//! stamped in the past (a 60 FPS frame sends one 8 ms old, a 30 FPS frame three up
+//! to 24 ms old) and its stamps are rounded down, so on JoF SJK's commands trailed
+//! the server's time by 10 to 40 ms more than JoF EJK's whenever the frame rate fell
+//! below 125; JoF's anti-cheat (Heimdall) kicked SJK players with "Set
+//! /cl_timeNudge 0" (Krieger and Slash, 02/11/2026).
+//!
 //! [`PacketPacer`] is `cl_maxpackets` (`CL_ReadyToSendPacket`): commands wait
 //! for a packet, which leaves at most every `1000 / cl_maxpackets` ms and
 //! carries all of them.
@@ -90,6 +100,18 @@ pub fn command_step(
     step.max(server_floor.unwrap_or(1))
 }
 
+/// How commands are spread over a frame slower than the step.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Pacing {
+    /// One command per slot of the step's grid, back to [`CATCH_UP_MILLIS`]: the
+    /// gameplay FPS's movement at any frame rate, and no slot shared on a
+    /// `pmove_fixed` server.
+    #[default]
+    Grid,
+    /// JoF EJK's `cl_cmdratecap`: at most one command a frame, stamped now.
+    OnePerFrame,
+}
+
 /// The server times of the commands due this frame, oldest first.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DueCommands {
@@ -115,6 +137,9 @@ pub struct CommandSchedule {
     last_stamp: Option<i32>,
     /// While the clock stamps 0, the next command is due at this instant.
     unanchored_due: Option<Instant>,
+    /// [`Pacing::OnePerFrame`]'s accumulator (`cmdratecap_lastFireTime`), in
+    /// server time: the next command is due a step after it.
+    fired: Option<i32>,
 }
 
 impl CommandSchedule {
@@ -128,18 +153,21 @@ impl CommandSchedule {
     /// unanchored clock stamps 0 (stock `cl.serverTime` during a map load); its
     /// commands still leave every step of real time, so packets keep
     /// acknowledging the server. A changed step starts its grid at the next
-    /// boundary after the last command, never on a slot already sent.
+    /// boundary after the last command, never on a slot already sent. With
+    /// [`Pacing::OnePerFrame`] see [`Self::one_per_frame`].
     pub fn due(
         &mut self,
         server_time: i32,
         anchored: bool,
         now: Instant,
         step: i32,
+        pacing: Pacing,
     ) -> DueCommands {
         let step = step.max(1);
         let mut due = DueCommands::default();
         if !anchored {
             self.last_stamp = None;
+            self.fired = None;
             if self.unanchored_due.is_none_or(|at| now >= at) {
                 let interval = Duration::from_millis(step as u64);
                 let next = self.unanchored_due.unwrap_or(now) + interval;
@@ -150,6 +178,10 @@ impl CommandSchedule {
             return due;
         }
         self.unanchored_due = None;
+        if pacing == Pacing::OnePerFrame {
+            return self.one_per_frame(server_time, step);
+        }
+        self.fired = None;
         let slot = server_time.div_euclid(step);
         let newest = slot * step;
         let catch_up = (CATCH_UP_MILLIS / step).clamp(1, MAX_CATCH_UP as i32);
@@ -167,6 +199,34 @@ impl CommandSchedule {
             due.push(slot * step);
         }
         self.last_stamp = Some(newest);
+        due
+    }
+
+    /// `CL_CreateNewCommands` with `cl_cmdratecap` (JoF EJK `cl_input.cpp`): no
+    /// command until a step has passed since the accumulator, which then moves on by
+    /// exactly a step (so the rate averages one a step) or, more than two steps
+    /// behind after a hitch, to now. The command is stamped `server_time`, never in
+    /// the past, and always after the previous one.
+    fn one_per_frame(&mut self, server_time: i32, step: i32) -> DueCommands {
+        let mut due = DueCommands::default();
+        if let Some(last) = self.last_stamp
+            && server_time <= last
+        {
+            if last - server_time <= RESTART_MILLIS {
+                return due;
+            }
+            // A new time line: start again.
+            self.fired = None;
+        }
+        let fired = match self.fired {
+            Some(fired) if server_time - fired < step => return due,
+            Some(fired) if server_time - (fired + step) > 2 * step => server_time,
+            Some(fired) => fired + step,
+            None => server_time,
+        };
+        self.fired = Some(fired);
+        self.last_stamp = Some(server_time);
+        due.push(server_time);
         due
     }
 }
@@ -205,7 +265,13 @@ mod tests {
 
     fn stamps(schedule: &mut CommandSchedule, server_time: i32) -> Vec<i32> {
         schedule
-            .due(server_time, true, Instant::now(), COMMAND_MILLIS)
+            .due(
+                server_time,
+                true,
+                Instant::now(),
+                COMMAND_MILLIS,
+                Pacing::Grid,
+            )
             .as_slice()
             .to_vec()
     }
@@ -249,34 +315,40 @@ mod tests {
         let start = Instant::now();
         let at = |ms| start + Duration::from_millis(ms);
         assert_eq!(
-            schedule.due(0, false, at(0), COMMAND_MILLIS).as_slice(),
+            schedule
+                .due(0, false, at(0), COMMAND_MILLIS, Pacing::Grid)
+                .as_slice(),
             [0]
         );
         assert!(
             schedule
-                .due(0, false, at(5), COMMAND_MILLIS)
+                .due(0, false, at(5), COMMAND_MILLIS, Pacing::Grid)
                 .as_slice()
                 .is_empty()
         );
         assert_eq!(
-            schedule.due(0, false, at(8), COMMAND_MILLIS).as_slice(),
+            schedule
+                .due(0, false, at(8), COMMAND_MILLIS, Pacing::Grid)
+                .as_slice(),
             [0]
         );
         // After a long stall, one command, not a burst.
         assert_eq!(
-            schedule.due(0, false, at(500), COMMAND_MILLIS).as_slice(),
+            schedule
+                .due(0, false, at(500), COMMAND_MILLIS, Pacing::Grid)
+                .as_slice(),
             [0]
         );
         assert!(
             schedule
-                .due(0, false, at(503), COMMAND_MILLIS)
+                .due(0, false, at(503), COMMAND_MILLIS, Pacing::Grid)
                 .as_slice()
                 .is_empty()
         );
         // Anchoring starts the grid at once.
         assert_eq!(
             schedule
-                .due(12_345, true, at(504), COMMAND_MILLIS)
+                .due(12_345, true, at(504), COMMAND_MILLIS, Pacing::Grid)
                 .as_slice(),
             [12_344]
         );
@@ -315,7 +387,7 @@ mod tests {
         let mut schedule = CommandSchedule::default();
         let mut at = |time| {
             schedule
-                .due(time, true, Instant::now(), gameplay_step(333))
+                .due(time, true, Instant::now(), gameplay_step(333), Pacing::Grid)
                 .as_slice()
                 .to_vec()
         };
@@ -333,16 +405,69 @@ mod tests {
         let mut schedule = CommandSchedule::default();
         let step = gameplay_step(333);
         assert_eq!(
-            schedule.due(1_002, true, Instant::now(), step).as_slice(),
+            schedule
+                .due(1_002, true, Instant::now(), step, Pacing::Grid)
+                .as_slice(),
             [1_002]
         );
         // Now 125: the next 8 ms boundary after 1_002 is 1_008.
-        let due = schedule.due(1_004, true, Instant::now(), 8);
+        let due = schedule.due(1_004, true, Instant::now(), 8, Pacing::Grid);
         assert!(due.as_slice().is_empty());
         assert_eq!(
-            schedule.due(1_009, true, Instant::now(), 8).as_slice(),
+            schedule
+                .due(1_009, true, Instant::now(), 8, Pacing::Grid)
+                .as_slice(),
             [1_008]
         );
+    }
+
+    fn one_per_frame(schedule: &mut CommandSchedule, server_time: i32) -> Vec<i32> {
+        schedule
+            .due(
+                server_time,
+                true,
+                Instant::now(),
+                COMMAND_MILLIS,
+                Pacing::OnePerFrame,
+            )
+            .as_slice()
+            .to_vec()
+    }
+
+    #[test]
+    fn one_per_frame_stamps_the_frames_time_never_the_past() {
+        let mut schedule = CommandSchedule::default();
+        assert_eq!(one_per_frame(&mut schedule, 2_003), [2_003]);
+        // 60 FPS: one command a frame, stamped now, not the slots it passed.
+        assert_eq!(one_per_frame(&mut schedule, 2_020), [2_020]);
+        assert_eq!(one_per_frame(&mut schedule, 2_037), [2_037]);
+        // A hitch: one command, stamped now.
+        assert_eq!(one_per_frame(&mut schedule, 2_437), [2_437]);
+        // The accumulator starts again from the hitch: nothing for a step.
+        assert!(one_per_frame(&mut schedule, 2_444).is_empty());
+        assert_eq!(one_per_frame(&mut schedule, 2_445), [2_445]);
+    }
+
+    #[test]
+    fn one_per_frame_averages_one_a_step_at_high_frame_rates() {
+        let mut schedule = CommandSchedule::default();
+        // 333 FPS for a second: 125 commands (cl_cmdratecap's accumulator), each
+        // later than the one before.
+        let mut stamps = Vec::new();
+        for frame in 0..333 {
+            stamps.extend(one_per_frame(&mut schedule, 10_000 + frame * 3));
+        }
+        assert!((124..=126).contains(&stamps.len()), "{}", stamps.len());
+        assert!(stamps.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn one_per_frame_waits_for_a_clock_set_back_and_restarts_on_a_new_time_line() {
+        let mut schedule = CommandSchedule::default();
+        assert_eq!(one_per_frame(&mut schedule, 5_000), [5_000]);
+        assert!(one_per_frame(&mut schedule, 4_990).is_empty());
+        assert!(one_per_frame(&mut schedule, 5_000).is_empty());
+        assert_eq!(one_per_frame(&mut schedule, 300), [300]);
     }
 
     #[test]

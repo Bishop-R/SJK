@@ -13,6 +13,7 @@ Format, read by the client (crates/sjk-viewer/src/changelog_data.rs, whose
 tests check this file):
 - "## <version> | <dd/mm/yyyy>" starts a release ("## Unreleased" for main
   after the last release, without a date);
+- JoF: your moves leave as JoF EJK sends them, one a frame stamped with the moment it is made, instead of filling the frame's missed 8 ms with moves stamped in the past; below 125 FPS those made Heimdall, JoF's anti-cheat, kick for `cl_timeNudge` though it was 0 _(Sol, after JoF EJK; Krieger's and Slash's reports)_
 - other lines up to the first item are the release's introduction;
 - "> <Heading>: <sentence>" lines before the first item are the release's short
   recap (3 to 6 lines, shown by the what's-new card after an update); every release

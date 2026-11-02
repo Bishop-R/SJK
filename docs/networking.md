@@ -673,6 +673,13 @@ Servers that estimate a player's time nudge from how far commands trail their ti
 that as a large `cl_timeNudge`; JoF's anti-cheat (Heimdall) kicked Slash for it with
 "Set /cl_timeNudge 0 in your console!". Tests in `server_clock.rs` play 59 FPS against
 40 snapshots a second through 150, 400 and 1346 ms hitches at 8, 7, 4 and 3 ms steps.
+On JoF (a server in
+[server_caps.rs](../crates/sjk-viewer/src/server_caps.rs)) commands are paced as JoF EJK's
+`cl_cmdratecap` instead of on the grid: at most one a frame, stamped with the frame's
+server time, on an accumulator that keeps 125 a second on average and starts again after a
+hitch (`Pacing::OnePerFrame`). The grid's catch-up commands, stamped up to 32 ms in the
+past whenever the frame rate fell below 125, made SJK's commands trail the server 10 to
+40 ms more than JoF EJK's, and Heimdall kicked for a time nudge again (02/11/2026).
 The userinfo's `cg_displayNetSettings` (JA+ and jaPRO read the time nudge from it)
 always says `125 0 125` ([compat_profile.rs](../crates/sjk-client/src/compat_profile.rs)).
 
