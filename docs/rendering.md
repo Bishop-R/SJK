@@ -490,6 +490,7 @@ first drawn) and keys only a later remap uses. Not measured on a GPU; compare th
 | `r_cubeMapping` | Reflection probes on specular-mapped surfaces (rend2's name and meaning); default 1, needs `r_specularMapping`, applies after a graphics reload |
 | `r_cubeMapSize` | Reflection probe face size, a power of two 32–512; default 128, applies after a graphics reload |
 | `r_floorReflections` | Polished floors mirror the scene (see [Floor reflections](#floor-reflections)); default 1, live |
+| `r_toonModels` | Toon shading on players and other lit models, 1 on, 0 stock (default); live, archived. See [Toon models](#toon-models) |
 | `r_DynamicGlow` | Halo around `glow` shader stages: 0 off, 1 on (default), 2 saber blades only, 3 the glow alone (debug); live. See [Dynamic glow](#dynamic-glow) |
 | `r_dynamicGlowStyle` | Glow blur: 1 EternalJK rd-vulkan's (default), 0 retail rd-vanilla's; live |
 | `r_dynamicGlowNoSabers` | 1 keeps saber blades and trails out of the dynamic glow, everything else keeps it; default 0, live, archived |
@@ -1690,6 +1691,40 @@ populated-match benchmark. Workspace build/tests, formatting and the production
 release build passed; Cargo runs no bundled regression tests. The owner accepted
 the release playtest on 2026-10-02. Broader live-animation checks, other GPUs and
 exhaustive quality/map coverage remain open.
+
+## Toon models
+
+`r_toonModels 1` (Sol's request, 02/11/2026; Settings > Graphics > Image, "Toon
+models"; off by default, as stock) draws players and every other model lit by
+`rgbGen lightingDiffuse` or `lightingDiffuseEntity` in a stylized, cartoon-like way. It
+is a look in the spirit of current stylized shooters, made from the game's own light;
+it changes only what the viewer sees.
+
+- **Bands.** In stock lighting, `toon_diffuse` (`model_light_grid.wgsl`) replaces
+  `RB_CalcDiffuseColor`'s smooth falloff: the side facing the grid's light direction
+  gets a lit tone, the far side a shadow tone, with a half step between and soft
+  edges (`toon_steps`). The tones are 0.65x and 1.15x the model's mean light (ambient
+  plus half the directed light) rather than ambient and ambient plus directed,
+  because many maps' grids give a weak direction and stock's two ends barely differ.
+  It runs per pixel even with `r_modelPixelLight 0`: bands per vertex would follow
+  the triangles.
+- **Real-time lighting.** There a model's light is one sum with the sun's shadows in
+  it (`model_sun_color`, `sun_realtime_buffer.wgsl`), so `toon_lit` steps its
+  brightness in halves, never below 0.6 of the light, keeping its hue.
+- **Rim.** The silhouette, where the surface turns away from the camera, gets half the
+  model's light again on top (`toon_rim`), the bright edge of the style.
+- **Colour.** The textured result of those stages is a fifth more saturated
+  (`toon_colour`, `world_lighting_mode.wgsl`); other stages of the same shader
+  (additive shine, glow) are unchanged.
+
+The setting is bits 1..3 of the scene-light block's model word
+(`point_lights.metadata.y`, beside `r_modelPixelLight` in bit 0), so it switches live
+with no pipeline rebuild. Cost: a few arithmetic operations per model pixel.
+
+Limits: JA skins have shading painted in, so the result reads as stylized JA rather
+than flat cartoon colours; there are no ink outlines yet; the menu's character
+preview keeps stock shading. `world_shot_toon.rs` renders stock and toon side by
+side from a demo (`SJK_TEST_DEMO`, an ignored test).
 
 ## Entity render effects
 

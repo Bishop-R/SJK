@@ -8158,3 +8158,13 @@ test: Spawn or teleport: a few bolts from the green beam to the walls, not a sto
 test: Blaster deflects and sparks: one or two smoke puffs, black or grey, not both every time.
 test: Saber clashes and blocks: one or two smoke puffs.
 note: Effect sounds still ignore their count, and runner delays are still not applied.
+
+[toon-models]
+area: Rendering & effects
+title: Toon models: cartoon-style banded shading with a rim (r_toonModels, off by default)
+change: Lit models get a lit tone, a shadow tone and a half step between, plus a bright rim.
+change: Textured result a fifth more saturated; works in stock and real-time lighting.
+test: Settings > Graphics > Image > Toon models on: players look banded, edges lit; live switch.
+test: Try r_dayNight 0 and 1, bright and dark maps, saber glow and shiny hilts stay as before.
+test: Check weapons, NPCs and vehicles too; tell if any looks wrong or too bright.
+note: First pass: no ink outlines yet; the menu character preview keeps stock shading.

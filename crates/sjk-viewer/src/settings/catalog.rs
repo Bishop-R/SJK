@@ -1908,6 +1908,11 @@ pub(super) const RENDER_IMAGE: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Toon models",
+        cvar: crate::dynamic_lights::TOON_MODELS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Reflection probes (reload)",
         cvar: "r_cubeMapping",
         kind: ValueKind::Bool,

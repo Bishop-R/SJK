@@ -336,6 +336,8 @@ mod lagometer_shots;
 mod rig_model_shots;
 #[path = "world_shot_team_outline.rs"]
 mod team_outline_shots;
+#[path = "world_shot_toon.rs"]
+mod toon_shots;
 
 #[path = "world_shot_collection.rs"]
 mod collection;

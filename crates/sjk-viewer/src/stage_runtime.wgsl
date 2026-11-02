@@ -293,12 +293,20 @@ fn generated_color(input: VertexOutput) -> vec4<f32> {
     var color = vec4(1.0);
     let rgb_kind = i32(stage.generators.x);
     var diffuse = input.lighting_diffuse.rgb;
+    // Bit 0: `r_modelPixelLight`; bits 1..3: `r_toonModels`, which needs each pixel's
+    // own normal (bands drawn per vertex would follow the triangles).
     if point_lights.metadata.y != 0u && input.light_ambient.a != 0.0 &&
         (rgb_kind == 4 || rgb_kind == 9) {
         var light = EntityLight(input.light_ambient.rgb,
             input.light_directed, input.light_direction);
-        if model_grid.bounds.w != 0u { light = spatial_model_light(input.world_position); }
-        diffuse = diffuse_light(input.world_normal, light);
+        if (point_lights.metadata.y & 1u) != 0u && model_grid.bounds.w != 0u {
+            light = spatial_model_light(input.world_position);
+        }
+        if toon_models() {
+            diffuse = toon_diffuse(input.world_position, input.world_normal, light);
+        } else {
+            diffuse = diffuse_light(input.world_normal, light);
+        }
     }
     if rgb_kind == 1 { color = vec4(vec3(1.0), color.a); }
     if rgb_kind == 2 || rgb_kind == 3 { color = vec4(input.color.rgb, color.a); }

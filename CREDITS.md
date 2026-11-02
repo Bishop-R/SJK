@@ -418,6 +418,8 @@ includes:
   Mythical blade on the GPU and ranks them, and every blade change is timed against
   `main` from now on; the top-tier blades then drawn about a quarter faster with the same
   look (the blade's hiding worked out once per pixel, far lightning bolts skipped);
+- toon models (02/11/2026): `r_toonModels` draws lit models with banded light, a rim
+  and livelier colour, live and off by default;
 - SJK Alpha (19/10/2026), the first collection of cards: the Mythical rarity, the
   Credits and Meme kinds, and card 1, "Bishop", honouring the author of JKR (art by
   Sol, AI-assisted: a rusted helmet portrait).

@@ -1491,6 +1491,10 @@ const HELP: &[(&str, &str)] = &[
         "Lights models at every pixel rather than once each, so they match the light around them.",
     ),
     (
+        crate::dynamic_lights::TOON_MODELS_CVAR,
+        "Cartoon-style shading on players and other models: light in soft bands with a bright rim around them. Only you see it.",
+    ),
+    (
         "r_cubeMapping",
         "Captures each map's surroundings so metal and shiny surfaces reflect their room.",
     ),

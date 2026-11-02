@@ -195,6 +195,7 @@ did: Maps with external lightmaps (q3map2 -external) load and are lit (after EJK
 did: Sky cloud layers: a sky shader's scrolling stages drawn over its box (after JKA)
 did: tcGen vector stages: textures projected in world space, as in JKA
 did: Collection marks: worn, favourite, locked and New saber shaders, the lock held by the hub
+did: Toon models: cartoon-style banded shading with a bright rim, an option off by default
 link: https://github.com/Sol-Vulpes/SJK
 link: https://sol-vulpes.github.io/SJK/
 
