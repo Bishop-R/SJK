@@ -265,6 +265,9 @@ pub(crate) struct Body {
     pub(crate) knocks: Vec<Knock>,
     pub(crate) scrapes: Vec<Knock>,
     lowest: f32,
+    /// How hard it falls, units a second squared: [`GRAVITY`], or none while it floats
+    /// (the Toy Master's shows, `toy_master::float`).
+    gravity: f32,
 }
 
 /// A number in 0..1 from `seed` and `salt`, the same on every client.
@@ -354,6 +357,7 @@ impl Body {
             knocks: Vec::with_capacity(JOINTS),
             scrapes: Vec::with_capacity(JOINTS),
             lowest: feet.z - FLOOR_DEPTH,
+            gravity: GRAVITY,
         }
     }
 
@@ -367,6 +371,13 @@ impl Body {
     /// shown a step late, which no one sees).
     pub(crate) fn between(&self, fraction: f32) -> [Vec3; JOINTS] {
         std::array::from_fn(|joint| self.earlier[joint].lerp(self.points[joint], fraction))
+    }
+
+    /// Float weightless, or fall again (waking the body).
+    pub(crate) fn weightless(&mut self, floating: bool) {
+        self.gravity = if floating { 0.0 } else { GRAVITY };
+        self.still = 0;
+        self.restless = 0;
     }
 
     /// Steps taken since the moment.
@@ -562,7 +573,7 @@ impl Body {
             self.ride[joint] = shift;
             carried |= shift != Vec3::ZERO;
         }
-        let fall = Vec3::new(0.0, 0.0, -GRAVITY * STEP * STEP);
+        let fall = Vec3::new(0.0, 0.0, -self.gravity * STEP * STEP);
         let mut touched = [None; JOINTS];
         for (joint, touch) in touched.iter_mut().enumerate() {
             let at = self.points[joint];

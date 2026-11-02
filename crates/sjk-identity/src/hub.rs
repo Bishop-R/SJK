@@ -616,6 +616,21 @@ pub trait Hub: Send {
         ))
     }
 
+    /// Take drop `drop` of toy `id`'s show on `server` in map load `round`
+    /// (`POST /v1/secrets/take`).
+    fn take_secret_drop(
+        &mut self,
+        _identity: &Identity,
+        _id: i64,
+        _server: &str,
+        _round: i32,
+        _drop: u32,
+    ) -> Result<crate::toy_master::Took, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not take the Toy Master's drops".to_owned(),
+        ))
+    }
+
     /// SJK's creator: hide a toy (`POST /v1/creator/secret`); answers its id.
     fn place_secret(
         &mut self,
@@ -1892,6 +1907,22 @@ impl Hub for HttpHub {
             "POST",
             "/v1/secrets/use",
             Some(json!({ "secret": id, "server": server, "round": round, "presses": presses })),
+        )?)
+    }
+
+    fn take_secret_drop(
+        &mut self,
+        identity: &Identity,
+        id: i64,
+        server: &str,
+        round: i32,
+        drop: u32,
+    ) -> Result<crate::toy_master::Took, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/secrets/take",
+            Some(json!({ "secret": id, "server": server, "round": round, "drop": drop })),
         )?)
     }
 

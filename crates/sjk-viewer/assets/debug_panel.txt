@@ -8114,7 +8114,19 @@ test: face a toy: the Use key cap and ??? by the crosshair; none while it is shr
 test: play the show with another player near it: their model spins and squishes, feet down.
 test: in third person your own model dances too; first person and aim are unchanged.
 test: without the SJK extras pack the log says the show's sound is missing.
-note: The song is in the Sith cloud's SJK Extras group (sound/sjk/toys/oiia.mp3).
+note: The show's sound is in the Sith cloud's SJK Extras group.
+
+[toy-master-steps]
+area: Gameplay
+title: Toy Master: shows in steps, ring, floating, drops to take
+change: A show runs in steps on its song: dance, a ring on the ground, everyone floating.
+change: Floating is looks only (ragdoll bodies, no gravity); view and aim are unchanged.
+change: The toy throws credits, shards and holocrons; Use takes one at rest, first wins.
+test: play a stepped show to the end with a second SJK player inside the ring.
+test: 34 s: both dance and the ring shows; 62 s: both float; 100 s: they fall, then stand.
+test: 108 s: drops fly and land in the same spots on both clients; Use takes one.
+test: the other client sees it vanish; History says Taken from a Toy Master's toy.
+note: Needs the hub's toy-show-steps (PR #10) and the SJK Extras' unofficial_sjk_toys.pk3.
 
 [chat-find-blades]
 area: Console & chat

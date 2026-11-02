@@ -518,6 +518,7 @@ pub(super) fn came_text(came: &Came) -> String {
         "achievement" => format!("Earned {a} {name} from an achievement"),
         "bought" => format!("Bought {a} {name}"),
         "box" => format!("{} {name} from a mystery box", capitalised(a)),
+        "toy" => format!("{} {name} a Toy Master's toy threw out", capitalised(a)),
         "reward" => with_note(format!("Reward: {a} {name}"), &came.note),
         _ => with_note(format!("Received {a} {name}"), &came.note),
     }
@@ -573,6 +574,7 @@ pub(super) fn credits_text(ledger: &Ledger) -> String {
             "Another player's mystery box blew up: what they paid came to you".to_owned()
         }
         "mystery_box" => "Mystery box".to_owned(),
+        "toy" => "Taken from a Toy Master's toy".to_owned(),
         reason => with_note(format!("Credits: {}", capitalised(reason)), &ledger.note),
     }
 }
@@ -588,6 +590,7 @@ pub(super) fn shards_text(ledger: &Ledger) -> String {
         }
         "staff" => with_note("A gift from the SJK team".to_owned(), &ledger.note),
         "reward" => with_note("Contributor reward".to_owned(), &ledger.note),
+        "toy" => "Taken from a Toy Master's toy".to_owned(),
         reason => with_note(
             format!("Kyber shards: {}", capitalised(reason)),
             &ledger.note,
@@ -737,6 +740,7 @@ pub(super) fn group_row(run: &[&HistoryLine]) -> Row {
                     "achievement" => format!("Earned {noun}{breakdown} from achievements"),
                     "bought" => format!("Bought {noun}{breakdown}"),
                     "box" => format!("{noun}{breakdown} from mystery boxes"),
+                    "toy" => format!("{noun}{breakdown} the Toy Master's toys threw out"),
                     "reward" => with_note(format!("Reward: {noun}{breakdown}"), &came.note),
                     _ => format!("Received {noun}{breakdown}"),
                 }
@@ -999,6 +1003,24 @@ pub(crate) mod tests {
                 ..Came::default()
             }),
             "A Legendary Holocron from a mystery box"
+        );
+        // A Toy Master's drop names no toy, whatever the hub noted.
+        assert_eq!(
+            came_text(&Came {
+                tier: "uncommon".into(),
+                source: "toy".into(),
+                note: "kind".into(),
+                ..Came::default()
+            }),
+            "An Uncommon Holocron a Toy Master's toy threw out"
+        );
+        assert_eq!(
+            credits_text(&ledger(0, 25, "toy", "kind")),
+            "Taken from a Toy Master's toy"
+        );
+        assert_eq!(
+            shards_text(&ledger(0, 5, "toy", "kind")),
+            "Taken from a Toy Master's toy"
         );
         assert_eq!(
             came_text(&Came {

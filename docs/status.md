@@ -1116,6 +1116,15 @@ Collection > Toys has the Toy Master's "?". Verified: unit tests on both sides, 
 workspace checks, world shots of the "?", the wall and a hub toy in each phase. Not
 verified: in a game with a hub.
 
+02/11/2026, `personal/toy-master-steps` (hub branch `toy-show-steps`): shows in steps
+(the players dance, a ring shows the reach, everyone there floats in looks only) and
+drops that give real credits, kyber shards and holocrons, first come first served.
+Verified: unit tests of the steps' timing, the drops' and the floating bodies' physics
+against a flat world (the same seed lands the same way), the hub's roll and take; world
+shots on duel6 of the ring (`duel6-toy-master-ring`) and of the landed drops
+(`duel6-toy-master-drops`). Not verified: in a game with a hub, with other players
+dancing and floating, nor that two clients land a drop in the same spot on a real map.
+
 Slash's test the same day: `give all` showed no jetpack. It did hold one, but the server
 never set `EF_JETPACK` on a player (only on NPCs), so no pack hung on the back; the
 player's think now sets it from the held jetpack, as `ClientThink_real` does. A new cheat,
