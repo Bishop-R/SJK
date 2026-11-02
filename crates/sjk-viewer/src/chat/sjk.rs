@@ -129,6 +129,7 @@ impl ChatOverlay {
         now: Instant,
     ) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
