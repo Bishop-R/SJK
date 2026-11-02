@@ -203,7 +203,8 @@ impl SettingsMenu {
                         return SettingsResult::OpenIdentity;
                     } else if matches!(setting.kind(), ValueKind::AssetBrowser) {
                         return SettingsResult::OpenAssets;
-                    } else if matches!(setting.kind(), ValueKind::ContentCard) {
+                    } else if matches!(setting.kind(), ValueKind::ContentCard | ValueKind::HudEdit)
+                    {
                         return SettingsResult::OpenContent(setting.cvar);
                     } else if matches!(setting.kind(), ValueKind::ImportPage) {
                         return SettingsResult::OpenImport;

@@ -500,6 +500,7 @@ impl Group {
                 crate::menu_hud::STYLE_CVAR,
                 crate::menu_hud::FILES_CVAR,
                 "cg_hudScale",
+                crate::hud_edit::COMMAND,
                 crate::hud::RadialPlacement::SPREAD_CVAR,
                 crate::hud::RadialPlacement::HEIGHT_CVAR,
                 "cg_classicHudFont",

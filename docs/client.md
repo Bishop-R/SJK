@@ -3382,6 +3382,42 @@ the layout as bundled ([hud.rs](../crates/sjk-viewer/src/hud.rs), `RadialPlaceme
 which moves each widget of `RADIAL_STATUS` by its side: an arc's from its sweep, the
 rest from their offset).
 
+### Moving HUD elements
+
+The HUD edit mode moves the HUD's elements with the mouse (Lex's idea, #ideas
+29/10/2026). Settings > HUD "Move HUD elements" (or the `hud_edit` command, in a match
+or a demo) closes the menus and outlines every movable element that shows, with its
+name, over the game; a small "Move the HUD" panel holds Reset all and Done. Drag an
+element to move it; right-click it, or point at it and press Delete, to put it back;
+Escape, Enter or Done leave (back to the game menu when the mode was opened from it).
+`hud_edit reset <element>` and `hud_edit reset all` do the same from the console
+([hud_edit.rs](../crates/sjk-viewer/src/hud_edit.rs)).
+
+An element with position cvars of its own is moved by changing them, in their units,
+so the console and the mode agree: the lagometer (`cg_lagometerX`, `cg_lagometerY`),
+the movement keys (`cg_movementKeysX`, `cg_movementKeysY`), the speedometer
+(`cg_speedometerX`, `cg_speedometerY`), the kill feed (`cg_killfeedX`, `cg_killfeedY`),
+the personal score (`cg_drawScoreX`, `cg_drawScoreY`) and the chat (`cg_chatBoxX`,
+`cg_chatBoxHeight`); a reset sets their defaults. The others keep an offset in
+`cg_hudOffsets`, `id:x,y` pairs in 480-line units (the screen's height over 480 pixels a
+unit on both axes, right and down positive), an element left out being where its HUD
+puts it: `vitals` (health and armour), `force` (Force and saber style, and the radial
+look's ammo, which sits in its right pill), `weapon` (weapon name and ammo), `timer`,
+`vote`, `jetpack`, `vehicle`, `selection` (the weapon, Force and inventory selectors),
+`flags` (CTF flags and team scores) and `follow` (the followed player's name)
+([placement.rs](../crates/sjk-viewer/src/hud/placement.rs)). The layouts' widgets move
+in the layout pass, the rest by moving what they drew
+(`sjk_ui::DrawList::translate_from`); with the game-data HUD, `vitals` moves its left
+menu block and `force` its right one (Force, ammo and score line), whatever
+`cg_hudScale` is. Offsets apply on top of the radial sliders above.
+
+Not movable yet: the crosshair (`cg_crosshairX`/`Y` move it by hand), its name, the
+warm-up and interruption notices, the frame rate and timer in the upper right, the
+power-up and inventory icons, the text-only game HUD (`cg_hudFiles 1`), the stock
+vehicle HUD drawn from the game's pictures, centre prints and the scoreboard. Only
+what shows at the moment can be dragged: the vote panel during a vote, the lagometer
+with `cg_lagometer` on, the jetpack bar with a jetpack, and so on.
+
 The upper right stacks the readouts as JoF EJK's `CG_DrawUpperRight` does, in every
 HUD style ([console_overlay.rs](../crates/sjk-viewer/src/console_overlay.rs)): with
 `cg_drawFPS` the frame rate ("125fps", JoF EJK's big console characters, measured over

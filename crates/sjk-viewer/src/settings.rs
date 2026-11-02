@@ -734,7 +734,8 @@ impl SettingsMenu {
                         return SettingsResult::OpenIdentity;
                     } else if matches!(setting.kind(), ValueKind::AssetBrowser) {
                         return SettingsResult::OpenAssets;
-                    } else if matches!(setting.kind(), ValueKind::ContentCard) {
+                    } else if matches!(setting.kind(), ValueKind::ContentCard | ValueKind::HudEdit)
+                    {
                         return SettingsResult::OpenContent(setting.cvar);
                     } else if matches!(setting.kind(), ValueKind::ImportPage) {
                         return SettingsResult::OpenImport;
@@ -922,6 +923,7 @@ impl SettingsMenu {
                 ValueKind::GameplayFps => crate::gameplay_fps::row_text(console),
                 ValueKind::AssetBrowser => "Browse packs".to_owned(),
                 ValueKind::ContentCard => "Choose and download".to_owned(),
+                ValueKind::HudEdit => "Edit".to_owned(),
                 ValueKind::SoundPreview => PREVIEW_TEXT.to_owned(),
                 ValueKind::Quality => crate::graphics_quality::shown(console).to_owned(),
                 ValueKind::Bool if derived_switch(setting.cvar).is_some() => {
@@ -1382,6 +1384,7 @@ mod tests {
                     | ValueKind::ImportPage
                     | ValueKind::AssetBrowser
                     | ValueKind::ContentCard
+                    | ValueKind::HudEdit
                     | ValueKind::SoundPreview
                     | ValueKind::Quality
             ) {

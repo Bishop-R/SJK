@@ -27,6 +27,7 @@ pub(crate) mod nameplate;
 pub(crate) mod nameplate_math;
 mod npc_class;
 pub(crate) mod options;
+pub(crate) mod placement;
 pub(crate) mod player_card;
 pub(crate) mod portrait;
 mod radial;
@@ -271,6 +272,11 @@ pub(crate) struct HudOverlay {
     radial_base: HudLayoutDocument,
     radial_document: HudLayoutDocument,
     radial_placement: RadialPlacement,
+    /// Where the player moved the elements without cvars of their own
+    /// ([`placement::OFFSETS_CVAR`]).
+    offsets: placement::Offsets,
+    /// The box each element drew in the last layout, for the HUD edit mode.
+    pub(crate) element_bounds: placement::Bounds,
 }
 
 /// Where the player wants the radial look's status meters (Lex's idea, 29/10/2026: too
@@ -484,7 +490,14 @@ impl HudOverlay {
             radial_document: HudLayoutDocument::from_json(RADIAL_LAYOUT)
                 .expect("bundled radial HUD document is valid"),
             radial_placement: RadialPlacement::default(),
+            offsets: placement::Offsets::default(),
+            element_bounds: placement::Bounds::default(),
         }
+    }
+
+    /// Place the elements the player moved ([`placement`]).
+    pub(crate) fn set_offsets(&mut self, offsets: placement::Offsets) {
+        self.offsets = offsets;
     }
 
     /// Place the radial look's status meters as the player asks (laid out again only
@@ -594,16 +607,26 @@ impl HudOverlay {
         let hero_scale = crate::ui_scale::height_scale(viewport[1]) * user_scale.clamp(0.25, 2.0);
         // Layout runs in logical pixels: the screen's size is its physical size over the scale.
         let logical_screen = [viewport[0] / dpi_scale, viewport[1] / dpi_scale];
+        // Each widget's movable element ([`placement`]), and how far the player moved
+        // it, in logical pixels.
+        let radial = look == HudLook::Radial;
+        let mut elements = [None; WIDGET_LIMIT];
         self.tree.clear();
         for (index, widget) in document.widgets.iter().take(WIDGET_LIMIT).enumerate() {
+            elements[index] = placement::widget_element(&widget.id, radial);
+            let moved = elements[index].map_or([0.0; 2], |element| {
+                self.offsets
+                    .pixels(element, viewport)
+                    .map(|pixels| pixels / dpi_scale)
+            });
             let _ = self.tree.add(Widget {
                 id: WidgetId(index as u32),
                 parent: None,
                 layout: LayoutKind::Anchored {
                     anchor: widget.anchor,
                     offset: Vec2::new(
-                        widget.offset.x + widget.offset_fraction.x * logical_screen[0],
-                        widget.offset.y + widget.offset_fraction.y * logical_screen[1],
+                        widget.offset.x + widget.offset_fraction.x * logical_screen[0] + moved[0],
+                        widget.offset.y + widget.offset_fraction.y * logical_screen[1] + moved[1],
                     ),
                 },
                 size: widget.size,
@@ -675,10 +698,16 @@ impl HudOverlay {
         let pulse = Tween::pulse(0.68, 1.0, time_ms, self.theme.motion.slow);
         // Bottom of what stands at the top right, which the kill feed goes under.
         let mut top_right = 0.0_f32;
+        self.element_bounds.clear();
         for (index, (widget, rect)) in document.widgets.iter().zip(rectangles).enumerate() {
             if !visible[index] {
                 continue;
             }
+            let start = self.draw_list.len();
+            let element = elements[index].or_else(|| {
+                (widget.binding.as_deref() == Some("lagometer"))
+                    .then_some(placement::Element::Lagometer)
+            });
             widgets::emit(
                 &mut self.draw_list,
                 self.theme,
@@ -701,21 +730,37 @@ impl HudOverlay {
                 },
                 &mut output,
             );
+            if let Some(element) = element {
+                self.element_bounds
+                    .add(element, self.draw_list.bounds_from(start));
+            }
         }
         if visibility.hud {
+            use placement::Element;
+            let start = self.draw_list.len();
             jetpack_fuel::emit(&mut self.draw_list, viewport, user_scale, self.jetpack_fuel);
+            self.place_from(Element::Jetpack, start, viewport);
             if visibility.vehicle {
+                let start = self.draw_list.len();
                 self.vehicle
                     .emit(&mut self.draw_list, self.theme, viewport, user_scale);
+                self.place_from(Element::Vehicle, start, viewport);
             }
+            let start = self.draw_list.len();
             self.speed.emit(&mut self.draw_list, self.theme, viewport);
+            self.place_from(Element::Speedometer, start, viewport);
+            let start = self.draw_list.len();
             self.movement_keys.emit(&mut self.draw_list, viewport);
+            self.place_from(Element::MovementKeys, start, viewport);
+            let start = self.draw_list.len();
             follow::emit(
                 &mut self.draw_list,
                 &self.followed_name,
                 viewport,
                 dpi_scale,
             );
+            self.place_from(Element::Follow, start, viewport);
+            let start = self.draw_list.len();
             let selector = self.selector.filter(|_| visibility.selection);
             match selector {
                 Some(view) if !view.inventory && self.force_wheel_bar => force_wheel::emit(
@@ -735,6 +780,7 @@ impl HudOverlay {
                     user_scale,
                 ),
             }
+            self.place_from(Element::Selection, start, viewport);
             top_right = top_right.max(self.emit_family(viewport));
             self.icons.flags_in_boxes = self.flag_status.flags_in_boxes(visibility);
             top_right = top_right.max(self.icons.emit(
@@ -753,6 +799,7 @@ impl HudOverlay {
                     self.upper_right_timer,
                 ));
             }
+            let start = self.draw_list.len();
             self.kill_feed.emit(
                 &mut self.draw_list,
                 kill_feed::Area::below(viewport, hero_scale, dpi_scale, top_right, options),
@@ -763,8 +810,11 @@ impl HudOverlay {
                 font,
                 self.theme,
             );
+            self.place_from(Element::KillFeed, start, viewport);
+            let start = self.draw_list.len();
             self.flag_status
                 .emit(&mut self.draw_list, viewport, &self.icons, visibility);
+            self.place_from(Element::Flags, start, viewport);
             self.guides.emit(&mut self.draw_list, viewport, time_ms);
         }
         // CG_DrawWeaponSelect does not follow cg_drawHud: only the row's own
@@ -773,6 +823,18 @@ impl HudOverlay {
             crate::weapon_select::emit_icons(&mut self.draw_list, &self.icons, shown, viewport);
         }
         output
+    }
+
+    /// Move what `element` drew from command `start` on where the player put it, when
+    /// it keeps its place in [`placement::OFFSETS_CVAR`] (the others read their own
+    /// cvars as they draw), and keep its box for the edit mode.
+    fn place_from(&mut self, element: placement::Element, start: usize, viewport: [f32; 2]) {
+        if element.binding() == placement::Binding::Free {
+            let [dx, dy] = self.offsets.pixels(element, viewport);
+            self.draw_list.translate_from(start, dx, dy);
+        }
+        self.element_bounds
+            .add(element, self.draw_list.bounds_from(start));
     }
 
     /// Settle the status values and meters on a fixed state, for the layout snapshots

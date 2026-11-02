@@ -277,6 +277,7 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
     ("colorstring", "Configure outgoing chat colors"),
     ("vid_restart", "Reapply video settings (device is retained)"),
     (crate::fps_help::COMMAND, crate::fps_help::HELP),
+    (crate::hud_edit::COMMAND, crate::hud_edit::HELP),
     (crate::emote_help::COMMAND, crate::emote_help::HELP),
     (crate::emote_picker::COMMAND, crate::emote_picker::HELP),
     (crate::news_panel::COMMAND, crate::news_panel::HELP),
@@ -1285,6 +1286,7 @@ impl crate::GpuState {
             crate::ghost_replay::COMMAND => return self.ghost_command(args),
             crate::mimic::COMMAND => return self.mimic_command(args),
             crate::fps_help::COMMAND => return self.fps_help_command(),
+            crate::hud_edit::COMMAND => return self.hud_edit_command(args),
             crate::emote_help::COMMAND => return self.emote_help_command(),
             crate::emote_picker::COMMAND => return self.emote_picker_command(),
             crate::news_panel::COMMAND => {

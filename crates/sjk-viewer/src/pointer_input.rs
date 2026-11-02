@@ -250,6 +250,7 @@ impl GpuState {
     /// Keyboard catchers also advertise BUTTON_TALK, as CL_CmdButtons does.
     pub(crate) fn key_catcher_active(&self) -> bool {
         self.game_menu
+            || self.hud_edit.is_open()
             || self.text_dialog.is_open()
             // The SJK team's window, which may show in the middle of play.
             || self.official.window.is_open()
@@ -336,6 +337,11 @@ impl GpuState {
             if let Some(console) = &mut self.console {
                 console.handle_pointer(event);
             }
+            return true;
+        }
+        // The HUD edit mode takes the pointer over the game it edits.
+        if self.hud_edit.is_open() && !self.text_dialog.is_open() {
+            self.hud_edit_pointer(event);
             return true;
         }
         // The dialog is drawn over everything and takes the keys first; the pointer too.

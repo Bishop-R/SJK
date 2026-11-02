@@ -362,6 +362,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "SJK radial HUD: how much higher its meters sit, in per cent of the screen (-20 lower to 40 higher)",
         ),
         CvarDefinition::new(
+            crate::hud::placement::OFFSETS_CVAR,
+            "",
+            archive,
+            "Where hud_edit moved the HUD's elements: id:x,y pairs in 480-line units, right and down positive (vitals:0,-20 timer:40,0)",
+        ),
+        CvarDefinition::new(
             "cg_thirdPersonRange",
             80.0,
             archive,

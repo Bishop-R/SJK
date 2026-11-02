@@ -73,6 +73,9 @@ pub(super) enum ValueKind {
     /// Sith cloud (`sith.downloads`, `crate::sith_cloud`); the row's cvar is the command.
     #[cfg_attr(not(feature = "mod-jof"), allow(dead_code))]
     ContentCard,
+    /// Open the HUD edit mode over the game (`hud_edit`, [`crate::hud_edit`]); the
+    /// row's cvar is the command.
+    HudEdit,
     /// `cl_gameplayFps`: Left/Right step through the presets (125, 142, 250,
     /// 333); Enter opens the card that explains it and takes any value
     /// ([`crate::gameplay_fps`]).
@@ -557,6 +560,11 @@ pub(super) const HUD: &[Setting] = &[
             max: 1.5,
             step: 0.05,
         },
+    },
+    Setting {
+        label: "Move HUD elements",
+        cvar: crate::hud_edit::COMMAND,
+        kind: ValueKind::HudEdit,
     },
     Setting {
         label: "Radial HUD spacing",

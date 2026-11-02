@@ -589,6 +589,10 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_hudScale", "Size of the HUD: higher is larger."),
     (
+        crate::hud_edit::COMMAND,
+        "Drag the HUD's elements over the game with the mouse; right-click one to put it back.",
+    ),
+    (
         crate::hud::RadialPlacement::SPREAD_CVAR,
         "SJK radial HUD only: moves the health and armour meters left and the Force and ammo meters right, farther from your character.",
     ),

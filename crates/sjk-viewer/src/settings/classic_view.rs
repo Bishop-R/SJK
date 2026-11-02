@@ -656,6 +656,7 @@ impl SettingsMenu {
                 | ValueKind::ImportPage
                 | ValueKind::AssetBrowser
                 | ValueKind::ContentCard
+                | ValueKind::HudEdit
                 | ValueKind::SoundPreview
                 | ValueKind::GameplayFps
                 | ValueKind::Quality => {
@@ -884,6 +885,7 @@ impl SettingsMenu {
                 "ENTER to enable or disable installed PK3 packs for the next start"
             }
             ValueKind::ContentCard => "ENTER to choose and download",
+            ValueKind::HudEdit => "ENTER to drag the HUD's elements over the game",
             ValueKind::SoundPreview => "ENTER or a click to hear the sound chosen above",
         });
         if self
@@ -1049,6 +1051,7 @@ pub(super) fn row_default(console: &ViewerConsole, setting: &Setting) -> RowDefa
             | ValueKind::ImportPage
             | ValueKind::AssetBrowser
             | ValueKind::ContentCard
+            | ValueKind::HudEdit
             | ValueKind::SoundPreview
     ) {
         return RowDefault::default();
