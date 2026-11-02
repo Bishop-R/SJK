@@ -70,6 +70,19 @@ test: Scroll to the end with more than 100 lines: Load older adds older lines on
 test: On a hub without the endpoint: "History unavailable", "keeps no history yet".
 note: Needs the hub's history branch deployed.
 
+[pr-batch-1102b]
+area: Menus & settings
+title: PRs 02/11 b: HUD edit, sonar, quiet mode, PC fonts, scoreboard IDs, reactions, long chat
+change: Slash: #295 move HUD with the mouse; #301 sound sonar; #302 quiet; #303 fonts from PC.
+change: Creyon: #317 scoreboard IDs + deaths rank; #321 trade toast; #236 JoF hats from EJK.
+change: #316 SJK chat emoji reactions (Lumaya); #306 long chat drafts in up to 4 pieces (Lukas).
+test: hud_edit: drag the health and chat boxes, reset one; positions kept after a restart.
+test: cg_soundSonar 1: arcs point at footsteps/shots behind you. quiet: only duel + whispers.
+test: Settings > Chat font: pick a PC font, long list scrolls; a sideways wheel does not move.
+test: cg_scoreboardIDs 1 + cg_scoreboardDeathsRank 1 on SJK's board. Finish a trade: toast.
+test: Profile with a JoF hat: its own picture. SJK chat: react to a message, count shows.
+test: Type a 400-char message: sent as pieces. Past 4 pieces: refused, the draft stays open.
+
 [pr-batch-1102]
 area: Gameplay
 title: PRs 02/11: hilt and day-sky crashes, trade chat, card shaders, guntele, chat logs

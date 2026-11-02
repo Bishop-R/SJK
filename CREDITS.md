@@ -429,7 +429,7 @@ includes:
 Creyon and Lumaya wear the SJK team's Contributor medal, shown on their
 cards of the in-game credits page.
 
-Creyon ([Creyon94](https://github.com/Creyon94)), contributor and tester, has 74
+Creyon ([Creyon94](https://github.com/Creyon94)), contributor and tester, has 77
 pull requests merged into SJK, most of them bringing SJK in line with EternalJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ACreyon94)):
 
@@ -549,8 +549,12 @@ pull requests merged into SJK, most of them bringing SJK in line with EternalJK
   again.
 - #328 Collection > Shaders and the Forge choose a shader only on a click; a new shader wears
   a New sticker and a gold outline until clicked.
+- #317 client numbers on SJK's scoreboard too (`cg_scoreboardIDs`, off) and Rank by score minus
+  deaths (`cg_scoreboardDeathsRank`, off).
+- #321 a finished trade's toast says what it gave and received, names shown in full.
+- #236 JoF hats as in JoF EJK: their pictures from the old EternalJK folder, McFox two-sided.
 
-Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 85 pull requests
+Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 86 pull requests
 merged into SJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa)):
 
@@ -684,8 +688,9 @@ merged into SJK
 - #332 Save game chat logs (`cl_logChat`, off by default): received game chat in the
   profile's `chatlogs/chat.log`.
 - #274 each predicted rider and vehicle leaves out its own pilot or chassis, as in OpenJK.
+- #316 SJK chat: six shared emoji reactions on public messages.
 
-Lukas ([LukasMoudry](https://github.com/LukasMoudry)), contributor, has 19 pull requests
+Lukas ([LukasMoudry](https://github.com/LukasMoudry)), contributor, has 20 pull requests
 merged into SJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ALukasMoudry)):
 
@@ -729,8 +734,10 @@ merged into SJK
   of their game files sooner, and logs how many game-file sets are still held.
 - #304 a free spectator sees the name of the player under the crosshair and follows them
   with a left click; a click on nobody does what it did.
+- #306 long game-chat messages sent whole, as up to four messages split at a word; at the
+  merge a draft refused past four pieces stays in the composer.
 
-Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 85 pull requests merged
+Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 89 pull requests merged
 into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash)):
 
 - #114 Tab completes the cfg file argument of `exec`, `execq`, `writeconfig` and `write`
@@ -889,6 +896,12 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
   `dxcompiler.dll` loads maps again (hub report #219).
 - #330 the player card shows a second saber's or a staff's other half's own shader (hub
   report #224).
+- #295 HUD edit mode (`hud_edit`): move HUD elements with the mouse, after Lex's idea.
+- #301 sound sonar (`cg_soundSonar`, off): arcs round the crosshair toward the sounds you hear,
+  after Dawson's idea.
+- #302 quiet mode (`quiet`): only the duel opponent and whispers reach the chat, after Lex's idea.
+- #303 chat and console fonts installed on the PC (`cg_chatFont`, `con_font`), after Saturn's
+  idea.
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,
