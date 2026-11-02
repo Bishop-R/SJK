@@ -134,6 +134,10 @@ pub(crate) struct ChatOverlay {
     chat_text: [(u32, u32); 2],
     combat: combat::Combat,
     input: Option<Editor>,
+    /// The draft just submitted to the game server, put back by
+    /// [`Self::settle_submitted`] when sending refuses it (too many pieces once
+    /// `%W%` and the chat prefix and suffix are expanded), so the text is not lost.
+    submitted: Option<Editor>,
     modifiers: winit::keyboard::ModifiersState,
     roster: ChatRoster,
     scroll: usize,
@@ -279,6 +283,7 @@ impl ChatOverlay {
             chat_text: [(0, 0); 2],
             combat: combat::Combat::default(),
             input: None,
+            submitted: None,
             modifiers: winit::keyboard::ModifiersState::empty(),
             roster: ChatRoster::default(),
             scroll: 0,
@@ -676,6 +681,15 @@ impl ChatOverlay {
 
     pub(crate) fn is_typing(&self) -> bool {
         self.input.is_some()
+    }
+
+    /// After a submitted draft went to the sender: dropped when it was sent, the
+    /// composer reopened on it when it was refused.
+    pub(crate) fn settle_submitted(&mut self, sent: bool) {
+        let draft = self.submitted.take();
+        if !sent && self.input.is_none() {
+            self.input = draft;
+        }
     }
 
     /// Hand the open composer, its channel and draft, to the next world's chat, so a

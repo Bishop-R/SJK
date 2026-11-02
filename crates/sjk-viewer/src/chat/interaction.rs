@@ -141,7 +141,7 @@ impl ChatOverlay {
             let (channel, recipient) = (input.channel, input.recipient);
             self.sent_on(channel, recipient);
         }
-        self.input = None;
+        self.submitted = self.input.take();
         self.scroll = 0;
         self.unread = 0;
         result.map_or(ChatInputResult::None, ChatInputResult::Submit)
@@ -291,7 +291,8 @@ impl crate::GpuState {
         }
         match self.chat.handle_key(event) {
             ChatInputResult::Submit(command) => {
-                self.send_chat_command(&command, None);
+                let sent = self.send_chat_command(&command, None);
+                self.chat.settle_submitted(sent);
             }
             ChatInputResult::Sjk(text) => {
                 // Staff's Shift+Enter keeps it out of the server's All chat.
@@ -334,7 +335,12 @@ impl crate::GpuState {
     }
 
     /// Composer and console messages share the real server's reliable channel.
-    pub(crate) fn send_chat_command(&mut self, command: &str, console_colors: Option<(u16, u32)>) {
+    /// False when the message was refused (more than four pieces); nothing was sent.
+    pub(crate) fn send_chat_command(
+        &mut self,
+        command: &str,
+        console_colors: Option<(u16, u32)>,
+    ) -> bool {
         let values = self.chat_substitution_values();
         let command = super::substitutions::command(
             command,
@@ -348,10 +354,10 @@ impl crate::GpuState {
         // A whisper to a player who takes encrypted ones goes through the SJK hub
         // instead (`e2e_whispers.rs`).
         if self.route_encrypted_whisper(&command) {
-            return;
+            return true;
         }
         let Some(commands) = self.outgoing_chat_parts(&command) else {
-            return;
+            return false;
         };
         let origin = if commands.len() > 1 {
             sjk_client::ReliableCommandOrigin::ChatPart
@@ -372,6 +378,7 @@ impl crate::GpuState {
             });
             self.send_chat_to_server_from(&command, recipient, origin);
         }
+        true
     }
 
     /// Send a chat command through the game server even when it could have been an
