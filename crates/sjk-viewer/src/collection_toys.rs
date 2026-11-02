@@ -169,8 +169,13 @@ const TOYS: [Toy; TOY_COUNT] = [
         tag: "Play your tracks to the players close by.",
         title: "Boombox",
         what: "Carry an 80s stereo on your shoulder, playing your tracks to the SJK players standing close by. Tracks are sound/boombox/<name>.mp3 files in your pk3s; others hear one when they have it too. For verified players.",
-        more: Some("boombox in the console lists your tracks; boombox next skips one."),
-        commands: &[("toy_boombox", "Your key")],
+        more: Some(
+            "boombox in the console lists your tracks; boombox next skips one. The place key stands it on the floor in front of you, playing from there (quieter behind it); again picks it up.",
+        ),
+        commands: &[
+            ("toy_boombox", "Your key"),
+            (crate::boombox::PLACE_COMMAND, "Place key"),
+        ],
         switch: "Play",
         sight: Some((crate::toy_sight::BOOMBOX, "See and hear others' boomboxes")),
         token: BOOMBOX_TOKEN,

@@ -50,6 +50,10 @@ pub(super) fn register(shell: &mut sjk_shell::Shell) -> Result<(), sjk_shell::Co
             "Toy: Boombox on or off (a stereo on your shoulder playing your boombox tracks to the SJK players close by; verified players)",
         ),
         (
+            crate::boombox::PLACE_COMMAND,
+            "Stand your boombox on the floor in front of you (putting it on first), its music playing from there; again picks it back up",
+        ),
+        (
             crate::drone::COMMAND,
             "Toy: Drone on or off (on, players may peek at you; freecam and peek fly a drone others see)",
         ),

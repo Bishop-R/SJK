@@ -475,6 +475,7 @@ link: Milamber's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3A
 github: Blackwolf1337
 role: Contributor: 1 merged pull request
 did: #333 JA+ dual jump attack: feet lift only over a player ahead, as the server does
+did: Inspiration: VisionJK's boombox, standing on the floor, gave SJK's boombox its place on the floor (boombox_place)
 link: Blackwolf1337's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337
 
 == Art

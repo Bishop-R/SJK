@@ -935,6 +935,10 @@ request merged into SJK
   player stands within 70 units ahead (every time with `dmflags` 256), as the JA+ 2.4 B7
   server does, so the attacker no longer sinks into the floor with nobody in front.
 
+Blackwolf's VisionJK client inspired the boombox on the floor (03/11/2026, with his
+agreement): `boombox_place` stands SJK's boombox on the floor, its music quieter behind it,
+as VisionJK's does; SJK's code is its own.
+
 ## Art
 
 Reyced made Solfox, a fox player model (`models/players/solfox`), for Sol in October

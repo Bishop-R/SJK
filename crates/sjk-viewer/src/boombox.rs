@@ -15,6 +15,13 @@
 //!   [`MIN_RANGE`] to [`MAX_RANGE`] units). It plays at full volume within a third of
 //!   that and fades to nothing at the edge; a listener further away does not play it
 //!   at all.
+//! - **On the floor** (after VisionJK's boombox, by Blackwolf; Sol's go, 03/11/2026):
+//!   [`PLACE_COMMAND`] stands the stereo on the floor in front of the player (or under
+//!   them with no floor ahead), facing the way they look, and again picks it back up onto
+//!   the shoulder. The music then plays from the box, with the same range, quieter behind
+//!   it ([`BEHIND_SHARE`], [`heard_from`]). One box a player; it goes when picked up, with
+//!   the toy turned off, on a new map or server, and when its owner leaves or drops off
+//!   the hub.
 //!
 //! No game server knows of it, and the hub never carries sound. The stereo is a toy in
 //! the player's look (`looks.rs`, [`TOY`]), so every SJK player on the server draws it on
@@ -24,7 +31,11 @@
 //! SJK player who comes within reach, one event every [`SEND_GAP`], and again every
 //! [`RETELL`]. A listener plays the track from where it is now (the server's time minus
 //! the start) when they have a file of that id and size, and says once in the console
-//! which track they lack otherwise; a track not told again for [`LOST`] stops.
+//! which track they lack otherwise; a track not told again for [`LOST`] stops. A box on
+//! the floor is told to every SJK player on the server, before its music and again every
+//! [`RETELL`]: `put_<x>_<y>_<z>_<yaw>` (the floor point in whole units, each client
+//! finding the floor under it itself, and the way it faces in degrees), `take` when it
+//! is picked up; one not told again for [`LOST`] goes.
 
 use crate::GpuState;
 use crate::actor_instance::ActorInstance;
@@ -34,6 +45,8 @@ use std::time::{Duration, Instant};
 
 /// The toy's console command: put the stereo on, or take it off.
 pub(crate) const COMMAND: &str = "toy_boombox";
+/// Stand the stereo on the floor, or pick it back up.
+pub(crate) const PLACE_COMMAND: &str = "boombox_place";
 /// The tracks' command (`boombox [id|next|prev|play|stop]`).
 pub(crate) const TRACK_COMMAND: &str = "boombox";
 /// [`TRACK_COMMAND`]'s console help.
@@ -82,6 +95,21 @@ const EF_DEAD: u32 = 1 << 1;
 const EF_NODRAW: u32 = 1 << 8;
 /// `PMF_FOLLOW`.
 const PMF_FOLLOW: u16 = 4096;
+/// A box is stood this far ahead of the player's origin, the way they look.
+pub(crate) const PLACE_REACH: f32 = 40.0;
+/// Short of a wall in the way, it stands this far from it.
+const WALL_GAP: f32 = 8.0;
+/// The floor is looked for this far under the spot; a floor steeper than this (its
+/// normal's height) takes no box.
+const FLOOR_SEARCH: f32 = 128.0;
+const FLAT_ENOUGH: f32 = 0.7;
+/// The music of a box on the floor comes from this high over the floor (its speakers).
+const SPEAKER_HEIGHT: f32 = 8.0;
+/// Right behind a box on the floor its music is this share as loud as in front (after
+/// VisionJK's boombox); beside it, as loud.
+pub(crate) const BEHIND_SHARE: f32 = 0.45;
+/// The furthest a spot's coordinate may be (whole units).
+const MAX_COORD: i32 = 65_536;
 
 /// A bundled file's bytes, by its name in `assets/boombox`.
 macro_rules! bundled {
@@ -179,15 +207,62 @@ struct Song {
     id: String,
 }
 
+/// Where a box stands on the floor, as relayed: the floor point in whole units (each
+/// client finds the floor under it itself) and the way it faces, in degrees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Spot {
+    pub(crate) at: [i32; 3],
+    pub(crate) yaw: u16,
+}
+
+impl Spot {
+    /// The spot of a box resting at `rest`, facing `yaw` degrees.
+    pub(crate) fn new(rest: Vec3, yaw: f32) -> Self {
+        Self {
+            at: rest
+                .to_array()
+                .map(|c| (c.round() as i32).clamp(-MAX_COORD, MAX_COORD)),
+            yaw: (yaw.rem_euclid(360.0).round() as u16) % 360,
+        }
+    }
+
+    /// The way it faces, in radians.
+    fn radians(self) -> f32 {
+        f32::from(self.yaw).to_radians()
+    }
+}
+
+/// A box on the floor: its spot, where it rests here, and when it was last told of (the
+/// other players').
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Standing {
+    spot: Spot,
+    rest: Vec3,
+    at: Instant,
+}
+
+impl Standing {
+    /// Where its music comes from.
+    fn speaker(&self) -> Vec3 {
+        self.rest + Vec3::Z * SPEAKER_HEIGHT
+    }
+}
+
 /// A relayed event of the toy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Event {
     Play(Song),
     Stop,
+    /// The sender's box stands on the floor.
+    Put(Spot),
+    /// The sender picked their box up.
+    Take,
 }
 
 const PLAY_PREFIX: &str = "play_";
 const STOP: &str = "stop";
+const PUT_PREFIX: &str = "put_";
+const TAKE: &str = "take";
 
 impl Event {
     fn text(&self) -> String {
@@ -197,12 +272,30 @@ impl Event {
                 song.moment, song.bytes, song.range, song.id
             ),
             Self::Stop => STOP.to_owned(),
+            Self::Put(spot) => {
+                let [x, y, z] = spot.at;
+                format!("{PUT_PREFIX}{x}_{y}_{z}_{}", spot.yaw)
+            }
+            Self::Take => TAKE.to_owned(),
         }
     }
 
     fn parse(event: &str) -> Option<Self> {
         if event == STOP {
             return Some(Self::Stop);
+        }
+        if event == TAKE {
+            return Some(Self::Take);
+        }
+        if let Some(put) = event.strip_prefix(PUT_PREFIX) {
+            let mut parts = put.split('_');
+            let mut number = || parts.next()?.parse::<i32>().ok();
+            let at = [number()?, number()?, number()?];
+            let yaw = u16::try_from(number()?).ok().filter(|yaw| *yaw < 360)?;
+            if parts.next().is_some() || at.iter().any(|c| c.abs() > MAX_COORD) {
+                return None;
+            }
+            return Some(Self::Put(Spot { at, yaw }));
         }
         let mut words = event.strip_prefix(PLAY_PREFIX)?.splitn(4, '_');
         let moment = words.next()?.parse().ok()?;
@@ -232,6 +325,55 @@ struct Heard {
 struct Sounding {
     path: String,
     moment: i32,
+    /// It plays at a place (not in both ears).
+    spatial: bool,
+}
+
+/// Who was told of something (bits by slot) and when, told again after [`RETELL`].
+#[derive(Clone, Copy, Debug)]
+struct Told {
+    bits: u64,
+    at: [Option<Instant>; SLOTS],
+}
+
+impl Default for Told {
+    fn default() -> Self {
+        Self {
+            bits: 0,
+            at: [None; SLOTS],
+        }
+    }
+}
+
+impl Told {
+    /// Keep only `near` (bits) as told, and forget those told [`RETELL`] ago.
+    fn refresh(&mut self, near: u64, now: Instant) {
+        self.bits &= near;
+        for (slot, at) in self.at.iter_mut().enumerate() {
+            if self.bits & 1 << slot == 0 {
+                *at = None;
+            } else if at.is_some_and(|at| now.saturating_duration_since(at) >= RETELL) {
+                self.bits &= !(1 << slot);
+                *at = None;
+            }
+        }
+    }
+
+    fn mark(&mut self, slot: u8, now: Instant) {
+        self.bits |= 1 << slot;
+        self.at[usize::from(slot)] = Some(now);
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// What to tell a player next: the box on the floor, or the track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Telling {
+    Box,
+    Music,
 }
 
 /// A change to what plays, for the audio.
@@ -262,10 +404,18 @@ pub(crate) struct Boombox {
     /// The player's own track playing, if any.
     playing: Option<Song>,
     server: Option<SocketAddr>,
-    /// Who was told of the own track (bits) and when.
-    told: u64,
-    told_at: [Option<Instant>; SLOTS],
+    /// The map the boxes stand on (`sv_serverid`: a new map changes it).
+    server_id: Option<i32>,
+    /// Who was told of the own track.
+    told: Told,
     send_at: Option<Instant>,
+    /// The player's own box on the floor, and who was told of it.
+    down: Option<Standing>,
+    box_told: Told,
+    /// The other players' boxes on the floor, by slot.
+    boxes: [Option<Standing>; SLOTS],
+    /// This frame: the other players' boomboxes are hidden here ([`crate::toy_sight`]).
+    unseen: bool,
     heard: [Option<Heard>; SLOTS],
     sounding: [Option<Sounding>; SLOTS],
     /// Where each other player's music plays from this frame.
@@ -293,9 +443,13 @@ impl Default for Boombox {
             chosen: None,
             playing: None,
             server: None,
-            told: 0,
-            told_at: [None; SLOTS],
+            server_id: None,
+            told: Told::default(),
             send_at: None,
+            down: None,
+            box_told: Told::default(),
+            boxes: [None; SLOTS],
+            unseen: false,
             heard: std::array::from_fn(|_| None),
             sounding: std::array::from_fn(|_| None),
             placed: [None; SLOTS],
@@ -336,7 +490,8 @@ impl Boombox {
         self.cues.drain(..)
     }
 
-    /// Where each other player's music plays from this frame, by slot.
+    /// Where each player's music plays from this frame, by slot: the other players', and
+    /// the player's own from their box on the floor.
     pub(crate) fn placed(&self) -> impl Iterator<Item = (u8, [f32; 3])> + '_ {
         self.placed
             .iter()
@@ -371,6 +526,7 @@ impl Boombox {
     /// the tracks are read again (another server may bring other pk3s).
     fn leave(&mut self) {
         self.stop_own();
+        self.take_own();
         let chosen = self.chosen.take();
         for slot in 0..SLOTS {
             if self.sounding[slot].is_some() {
@@ -404,16 +560,34 @@ impl Boombox {
         );
     }
 
-    /// Take in the relayed events (`heard`, by sender slot) at `now`.
-    fn hear(&mut self, heard: impl IntoIterator<Item = (u8, Event)>, now: Instant) {
-        for (slot, event) in heard {
-            let Some(entry) = self.heard.get_mut(usize::from(slot)) else {
+    /// A new map on the server: every box is gone from the floor (the player's own
+    /// returns to the shoulder; the others' clients forget it themselves).
+    fn new_map(&mut self) {
+        self.down = None;
+        self.box_told.clear();
+        self.boxes = [None; SLOTS];
+    }
+
+    /// Take in the relayed events (`heard`, by sender slot, with where a box told of
+    /// rests here; ignored for the other events) at `now`.
+    fn hear(&mut self, heard: impl IntoIterator<Item = (u8, Event, Vec3)>, now: Instant) {
+        for (slot, event, rest) in heard {
+            let slot = usize::from(slot);
+            if slot >= SLOTS {
                 continue;
-            };
-            *entry = match event {
-                Event::Play(song) => Some(Heard { song, at: now }),
-                Event::Stop => None,
-            };
+            }
+            match event {
+                Event::Play(song) => self.heard[slot] = Some(Heard { song, at: now }),
+                Event::Stop => self.heard[slot] = None,
+                Event::Put(spot) => {
+                    self.boxes[slot] = Some(Standing {
+                        spot,
+                        rest,
+                        at: now,
+                    });
+                }
+                Event::Take => self.boxes[slot] = None,
+            }
         }
         for entry in &mut self.heard {
             if entry
@@ -423,46 +597,72 @@ impl Boombox {
                 *entry = None;
             }
         }
-    }
-
-    /// The players to tell of the own track now: `near` (bits) are the SJK players
-    /// within reach. One who left reach is told again on coming back, and everyone again
-    /// after [`RETELL`]. At most one a [`SEND_GAP`].
-    fn next_to_tell(&mut self, near: u64, now: Instant) -> Option<u8> {
-        self.told &= near;
-        for (slot, at) in self.told_at.iter_mut().enumerate() {
-            if self.told & 1 << slot == 0 {
-                *at = None;
-            } else if at.is_some_and(|at| now.saturating_duration_since(at) >= RETELL) {
-                self.told &= !(1 << slot);
-                *at = None;
+        for entry in &mut self.boxes {
+            if entry.is_some_and(|standing| now.saturating_duration_since(standing.at) > LOST) {
+                *entry = None;
             }
         }
+    }
+
+    /// The player to tell now, and of what: `near` (bits) are the SJK players within
+    /// reach of the own track (none when nothing plays), `everyone` those to tell of the
+    /// own box on the floor (none when it is not down). The box goes first, the
+    /// players within the track's reach first, so its music starts where it stands. One
+    /// who left is told again on coming back, and everyone again after [`RETELL`]. At
+    /// most one a [`SEND_GAP`].
+    fn next_to_tell(&mut self, near: u64, everyone: u64, now: Instant) -> Option<(u8, Telling)> {
+        self.told.refresh(near, now);
+        self.box_told.refresh(everyone, now);
         if self.send_at.is_some_and(|at| now < at) {
             return None;
         }
-        let untold = near & !self.told;
+        let untold_box = everyone & !self.box_told.bits;
+        let (untold, telling) = if untold_box & near != 0 {
+            (untold_box & near, Telling::Box)
+        } else if untold_box != 0 {
+            (untold_box, Telling::Box)
+        } else {
+            (near & !self.told.bits, Telling::Music)
+        };
         if untold == 0 {
             return None;
         }
         let slot = untold.trailing_zeros() as u8;
-        self.told |= 1 << slot;
-        self.told_at[usize::from(slot)] = Some(now);
+        match telling {
+            Telling::Box => self.box_told.mark(slot, now),
+            Telling::Music => self.told.mark(slot, now),
+        }
         self.send_at = Some(now + SEND_GAP);
-        Some(slot)
+        Some((slot, telling))
+    }
+
+    /// The own box is picked up: everyone told of it hears so.
+    fn take_own(&mut self) {
+        if self.down.take().is_some() {
+            for slot in 0..SLOTS {
+                if self.box_told.bits & 1 << slot != 0 {
+                    relay(&Event::Take, slot as u8);
+                }
+            }
+        }
+        self.box_told.clear();
+    }
+
+    /// Whether the player's own box is on the floor.
+    pub(crate) fn down(&self) -> bool {
+        self.down.is_some()
     }
 
     /// The own track ends: everyone told hears it.
     fn stop_own(&mut self) {
         if self.playing.take().is_some() {
             for slot in 0..SLOTS {
-                if self.told & 1 << slot != 0 {
+                if self.told.bits & 1 << slot != 0 {
                     relay(&Event::Stop, slot as u8);
                 }
             }
         }
-        self.told = 0;
-        self.told_at = [None; SLOTS];
+        self.told.clear();
     }
 }
 
@@ -477,8 +677,10 @@ fn sound(
     now: i32,
 ) {
     let same = match (&*sounding, want) {
-        (Some(playing), Some((path, song, _))) => {
-            playing.path == path && playing.moment == song.moment
+        (Some(playing), Some((path, song, origin))) => {
+            playing.path == path
+                && playing.moment == song.moment
+                && playing.spatial == origin.is_some()
         }
         (None, None) => true,
         _ => false,
@@ -498,6 +700,7 @@ fn sound(
             *sounding = Some(Sounding {
                 path: path.to_owned(),
                 moment: song.moment,
+                spatial: origin.is_some(),
             });
         }
         None => {
@@ -544,6 +747,63 @@ pub(crate) fn instance(
     ))
 }
 
+/// Where a box stood now goes: [`PLACE_REACH`] ahead of a player at `origin` looking
+/// `yaw` degrees, short of a wall, on the floor under that spot, else on the floor under
+/// the player. `trace` says what a small box meets between two points. `None` with no
+/// floor flat enough near under either.
+pub(crate) fn place_spot(
+    origin: Vec3,
+    yaw: f32,
+    mut trace: impl FnMut(Vec3, Vec3) -> Option<crate::banana::Ground>,
+) -> Option<Vec3> {
+    let yaw = yaw.to_radians();
+    let way = Vec3::new(yaw.cos(), yaw.sin(), 0.0);
+    let wanted = origin + way * PLACE_REACH;
+    let ahead = match trace(origin, wanted) {
+        Some(wall) => {
+            let short = wall.stop - way * WALL_GAP;
+            // Not behind the player when the wall is right there.
+            if (short - origin).dot(way) > 0.0 {
+                short
+            } else {
+                origin
+            }
+        }
+        None => wanted,
+    };
+    let mut floor = |from: Vec3| {
+        trace(from, from - Vec3::Z * FLOOR_SEARCH)
+            .filter(|floor| floor.normal.z >= FLAT_ENOUGH && !floor.sky)
+            .map(|floor| floor.stop)
+    };
+    floor(ahead).or_else(|| floor(origin))
+}
+
+/// Where the music of a box with its speakers at `speaker`, facing `yaw` radians, seems
+/// to come from for a listener at `listener`, for a track carrying `range` units: the box
+/// itself in front of it and beside it; behind it, further away along the same line, so
+/// it sounds [`BEHIND_SHARE`] as loud right behind (VisionJK's speaker). The audio fades
+/// a track by distance only ([`crate::GameAudio::play_boombox`]), so the distance does it.
+pub(crate) fn heard_from(speaker: Vec3, yaw: f32, listener: Vec3, range: f32) -> Vec3 {
+    let towards = speaker - listener;
+    let distance = towards.length();
+    if distance < 1.0 {
+        return speaker;
+    }
+    let facing = Vec3::new(yaw.cos(), yaw.sin(), 0.0);
+    // 1 right behind, 0 beside or in front.
+    let behind = (towards / distance).dot(facing).max(0.0);
+    let share = 1.0 - (1.0 - BEHIND_SHARE) * behind;
+    if share >= 1.0 {
+        return speaker;
+    }
+    let full = range * FULL_SHARE;
+    let fade = (range - full).max(1.0);
+    let gain = (1.0 - (distance - full).max(0.0) / fade).clamp(0.0, 1.0);
+    let seeming = full + (1.0 - gain * share) * fade;
+    listener + towards / distance * seeming.max(distance)
+}
+
 /// Whether the game draws a player entity: alive and not hidden.
 fn drawn(entity: &sjk_protocol::EntityState) -> bool {
     entity.entity_type() == ET_PLAYER && entity.e_flags() & (EF_DEAD | EF_NODRAW) == 0
@@ -579,6 +839,7 @@ impl GpuState {
         if self.boombox.on {
             self.boombox.on = false;
             self.boombox.stop_own();
+            self.boombox.take_own();
             self.boombox_centre(&crate::toy_switch_words::switched("Boombox", false));
             return;
         }
@@ -687,8 +948,50 @@ impl GpuState {
         Ok(Vec::new())
     }
 
+    /// `boombox_place`: stand the stereo on the floor in front of the player (putting
+    /// the toy on first), or pick it back up onto the shoulder.
+    pub(crate) fn place_boombox(&mut self) {
+        if self.boombox.down.is_some() {
+            self.boombox.take_own();
+            self.boombox_centre("Boombox back on your shoulder");
+            return;
+        }
+        let Some(session) = self.live_session.as_ref() else {
+            return;
+        };
+        let player = &session.latest_snapshot().player;
+        if player.is_spectator()
+            || player.health() <= 0
+            || player.movement_flags() & PMF_FOLLOW != 0
+        {
+            self.boombox_centre("No boombox to put down right now");
+            return;
+        }
+        let Some(state) = self.local_prediction.predicted_state() else {
+            return;
+        };
+        let origin = Vec3::from_array(state.origin);
+        let yaw = state.view_angles[1];
+        let Some(rest) = place_spot(origin, yaw, |from, to| self.banana_trace(from, to)) else {
+            self.boombox_centre("Nowhere to put the boombox down here");
+            return;
+        };
+        if !self.boombox.on {
+            self.toggle_boombox();
+            if !self.boombox.on {
+                return;
+            }
+        }
+        self.boombox.box_told.clear();
+        self.boombox.down = Some(Standing {
+            spot: Spot::new(rest, yaw),
+            rest,
+            at: Instant::now(),
+        });
+    }
+
     /// The frame's toy logic: the relay's events, what plays here and who to tell of the
-    /// own track.
+    /// own track and box.
     pub(crate) fn update_boombox(&mut self, relay_events: &[sjk_identity::ToyEvent]) {
         let Some(session) = self.live_session.as_ref() else {
             self.boombox.leave();
@@ -701,6 +1004,11 @@ impl GpuState {
             self.boombox.leave();
             self.boombox.server = Some(server);
         }
+        let server_id = session.server_id();
+        if self.boombox.server_id != Some(server_id) {
+            self.boombox.new_map();
+            self.boombox.server_id = Some(server_id);
+        }
         let remote = !session.is_local();
         let snapshot = session.latest_snapshot();
         let game_state = session.game_state();
@@ -712,6 +1020,8 @@ impl GpuState {
         } else {
             0
         };
+        self.boombox.unseen =
+            !crate::toy_sight::seen(self.console.as_ref(), crate::toy_sight::BOOMBOX);
         // The relay's events: a sender counts only when the game shows the name they
         // claimed, the hub verified them, and never one blocked on this PC.
         let heard: Vec<(u8, Event)> = relay_events
@@ -727,14 +1037,31 @@ impl GpuState {
             })
             .filter_map(|event| Some((event.slot, Event::parse(&event.event)?)))
             .collect();
-        self.boombox.hear(heard, now);
-        // A verified player no longer, one who left or one blocked here: their track stops.
+        // A box told of rests on the floor found here under its spot.
+        let mut rested = Vec::new();
+        for (slot, event) in heard {
+            let rest = match &event {
+                Event::Put(spot) => self.banana_rest(spot.at).0,
+                _ => Vec3::ZERO,
+            };
+            rested.push((slot, event, rest));
+        }
+        self.boombox.hear(rested, now);
+        // A verified player no longer, one who left (or dropped off the hub) or one blocked
+        // here: their track stops and their box goes.
         let sjk = self.looks.sjk_slots();
-        for (slot, heard) in self.boombox.heard.iter_mut().enumerate() {
+        for slot in 0..SLOTS {
             if (verified & sjk) & 1 << slot == 0 || self.muted_players.contains(slot as u16) {
-                *heard = None;
+                self.boombox.heard[slot] = None;
+                self.boombox.boxes[slot] = None;
             }
         }
+        let session = self
+            .live_session
+            .as_ref()
+            .expect("the session was there above");
+        let snapshot = session.latest_snapshot();
+        let game_state = session.game_state();
         // Where the players stand: the drawn ones of the snapshot, and the followed one.
         let presentation = i64::from(server_time);
         let world = &self.live_world;
@@ -755,20 +1082,24 @@ impl GpuState {
         {
             origins[slot] = Some(snapshot.player.origin());
         }
-        let own_origin = self
-            .local_prediction
-            .predicted_state()
-            .map_or_else(|| snapshot.player.origin(), |state| state.origin);
+        let own_origin = Vec3::from_array(
+            self.local_prediction
+                .predicted_state()
+                .map_or_else(|| snapshot.player.origin(), |state| state.origin),
+        );
         let listener = self.camera_position;
         // Make sure the tracks are known once anyone plays one here.
         if self.boombox.heard.iter().any(Option::is_some) {
             let _ = self.boombox.tracks(self.vfs.as_deref());
         }
-        // Other players' tracks: played while within range and installed.
+        // Other players' tracks: played while within range and installed, from their box
+        // on the floor when it is down; none while others' boomboxes are hidden here.
         let mut lacking = Vec::new();
         let Boombox {
             tracks,
             heard,
+            boxes,
+            unseen,
             sounding,
             placed,
             lacking: said,
@@ -776,11 +1107,15 @@ impl GpuState {
             ..
         } = &mut self.boombox;
         *placed = [None; SLOTS];
-        for (slot, origin) in origins.iter().copied().enumerate() {
+        for slot in 0..SLOTS {
             if Some(slot as u8) == own {
                 continue;
             }
-            let Some(song) = heard[slot].as_ref().map(|heard| &heard.song) else {
+            let Some(song) = heard[slot]
+                .as_ref()
+                .filter(|_| !*unseen)
+                .map(|heard| &heard.song)
+            else {
                 said[slot] = None;
                 sound(&mut sounding[slot], cues, slot as u8, None, server_time);
                 continue;
@@ -793,13 +1128,27 @@ impl GpuState {
                 sound(&mut sounding[slot], cues, slot as u8, None, server_time);
                 continue;
             };
-            let reach = f32::from(song.range)
+            let range = f32::from(song.range);
+            let reach = range
                 + if sounding[slot].is_some() {
                     MARGIN
                 } else {
                     0.0
                 };
-            let near = origin.filter(|at| Vec3::from_array(*at).distance(listener) <= reach);
+            let from = match boxes[slot] {
+                Some(standing) => Some(heard_from(
+                    standing.speaker(),
+                    standing.spot.radians(),
+                    listener,
+                    range,
+                )),
+                None => origins[slot].map(Vec3::from_array),
+            };
+            let source = boxes[slot].map_or(from, |standing| Some(standing.speaker()));
+            let near = from
+                .zip(source)
+                .filter(|(_, source)| source.distance(listener) <= reach)
+                .map(|(from, _)| from.to_array());
             placed[slot] = near;
             let want = near.map(|at| (track.path.as_str(), song, Some(at)));
             sound(&mut sounding[slot], cues, slot as u8, want, server_time);
@@ -809,60 +1158,105 @@ impl GpuState {
                 .unwrap_or_else(|| "A player".to_owned());
             say_lacking(&mut self.chat, &name, &id);
         }
-        // The player's own track, in both ears.
+        // The player's own track: in both ears, or from their box on the floor while
+        // within its reach.
         if let Some(own) = own {
             let Boombox {
                 on,
                 tracks,
                 playing,
+                down,
                 sounding,
+                placed,
                 cues,
                 ..
             } = &mut self.boombox;
+            let own_slot = usize::from(own);
             let want = playing
                 .as_ref()
                 .filter(|_| *on)
-                .and_then(|song| Some((installed(tracks, song)?.path.as_str(), song, None)));
-            sound(
-                &mut sounding[usize::from(own)],
-                cues,
-                own,
-                want,
-                server_time,
-            );
+                .and_then(|song| Some((installed(tracks, song)?.path.as_str(), song)))
+                .and_then(|(path, song)| match down {
+                    None => Some((path, song, None)),
+                    Some(standing) => {
+                        let range = f32::from(song.range);
+                        let reach = range
+                            + if sounding[own_slot].is_some() {
+                                MARGIN
+                            } else {
+                                0.0
+                            };
+                        (standing.speaker().distance(listener) <= reach).then(|| {
+                            let from = heard_from(
+                                standing.speaker(),
+                                standing.spot.radians(),
+                                listener,
+                                range,
+                            );
+                            placed[own_slot] = Some(from.to_array());
+                            (path, song, Some(from.to_array()))
+                        })
+                    }
+                });
+            sound(&mut sounding[own_slot], cues, own, want, server_time);
             if !self.boombox.on {
                 self.boombox.stop_own();
+                self.boombox.take_own();
             }
         }
-        // Tell the SJK players within reach of the own track.
+        // Tell the SJK players of the own box (all of them) and of the own track (those
+        // within reach of where it plays from).
         self.boombox.listeners = 0;
-        if remote && let (Some(own), Some(song)) = (own, self.boombox.playing.clone()) {
-            self.boombox.listeners = (0..SLOTS)
-                .filter(|&slot| slot != usize::from(own) && sjk & 1 << slot != 0)
-                .filter(|&slot| {
-                    origins[slot].is_some_and(|at| {
-                        Vec3::from_array(at).distance(Vec3::from_array(own_origin))
-                            <= f32::from(song.range)
+        if remote && let Some(own) = own {
+            let others = sjk & !(1 << own);
+            let source = self
+                .boombox
+                .down
+                .as_ref()
+                .map_or(own_origin, Standing::speaker);
+            let within = |reach: f32| {
+                (0..SLOTS)
+                    .filter(|&slot| others & 1 << slot != 0)
+                    .filter(|&slot| {
+                        origins[slot]
+                            .is_some_and(|at| Vec3::from_array(at).distance(source) <= reach)
                     })
-                })
-                .fold(0_u64, |bits, slot| bits | 1 << slot);
-            let reach = f32::from(song.range) + MARGIN * 2.0;
-            let near = (0..SLOTS)
-                .filter(|&slot| slot != usize::from(own) && sjk & 1 << slot != 0)
-                .filter(|&slot| {
-                    origins[slot].is_some_and(|at| {
-                        Vec3::from_array(at).distance(Vec3::from_array(own_origin)) <= reach
-                    })
-                })
-                .fold(0_u64, |bits, slot| bits | 1 << slot);
-            if let Some(slot) = self.boombox.next_to_tell(near, now) {
-                relay(&Event::Play(song), slot);
+                    .fold(0_u64, |bits, slot| bits | 1 << slot)
+            };
+            let range = self
+                .boombox
+                .playing
+                .as_ref()
+                .map(|song| f32::from(song.range));
+            let near = range.map_or(0, |range| {
+                self.boombox.listeners = within(range);
+                within(range + MARGIN * 2.0)
+            });
+            let everyone = if self.boombox.down.is_some() {
+                others
+            } else {
+                0
+            };
+            match self.boombox.next_to_tell(near, everyone, now) {
+                Some((slot, Telling::Box)) => {
+                    if let Some(standing) = self.boombox.down {
+                        relay(&Event::Put(standing.spot), slot);
+                    }
+                }
+                Some((slot, Telling::Music)) => {
+                    if let Some(song) = &self.boombox.playing {
+                        relay(&Event::Play(song.clone()), slot);
+                    }
+                }
+                None => {}
             }
         }
-        // Who carries one drawn: the player, and the verified players whose look has it.
+        // Who carries one drawn on the shoulder: the player, and the verified players whose
+        // look has it, unless their box is on the floor.
         let mut carriers = 0_u64;
         if let Some(own) = own
             && self.boombox.on
+            && self.boombox.down.is_none()
         {
             carriers |= 1 << own;
         }
@@ -870,11 +1264,38 @@ impl GpuState {
             if Some(slot as u8) != own
                 && self.looks.toy(slot, TOY)
                 && (!remote || verified & 1 << slot != 0)
+                && self.boombox.boxes[slot].is_none()
             {
                 carriers |= 1 << slot;
             }
         }
         self.boombox.carriers = carriers;
+    }
+
+    /// Add this frame's boxes on the floor: the player's own, and the others' unless
+    /// hidden here (`cg_toyBoomboxShow` 0).
+    pub(crate) fn submit_boomboxes(&mut self) {
+        let unseen = self.boombox.unseen;
+        let own = self.boombox.down.iter();
+        let others = self.boombox.boxes.iter().flatten().filter(|_| !unseen);
+        let mut standing = own.chain(others).peekable();
+        if standing.peek().is_none() {
+            return;
+        }
+        let Some(mesh) = self
+            .object_meshes
+            .iter()
+            .position(|mesh| mesh.appearance.model == MODEL)
+        else {
+            return;
+        };
+        for standing in standing {
+            self.object_groups[mesh].push(ActorInstance::new(
+                standing.rest.to_array(),
+                Quat::from_rotation_z(standing.spot.radians()).to_array(),
+                [SCALE; 3],
+            ));
+        }
     }
 
     /// Play and stop the boombox tracks, move the others' music with them, and free the
@@ -1065,19 +1486,91 @@ mod tests {
         );
     }
 
+    /// A relayed event of the player in `slot`, with no box to rest.
+    fn from(slot: u8, event: Event) -> [(u8, Event, Vec3); 1] {
+        [(slot, event, Vec3::ZERO)]
+    }
+
     #[test]
     fn a_heard_track_holds_until_stopped_or_lost() {
         let start = Instant::now();
         let mut toy = Boombox::default();
-        toy.hear([(3, Event::Play(song(100, "a")))], start);
+        toy.hear(from(3, Event::Play(song(100, "a"))), start);
         assert!(toy.heard[3].is_some());
         toy.hear([], start + LOST);
         assert!(toy.heard[3].is_some(), "told again in time");
         toy.hear([], start + LOST + Duration::from_secs(1));
         assert!(toy.heard[3].is_none(), "lost");
-        toy.hear([(3, Event::Play(song(100, "a")))], start);
-        toy.hear([(3, Event::Stop)], start);
+        toy.hear(from(3, Event::Play(song(100, "a"))), start);
+        toy.hear(from(3, Event::Stop), start);
         assert!(toy.heard[3].is_none(), "stopped");
+    }
+
+    #[test]
+    fn box_events_read_back_as_written_and_fit_the_relay() {
+        let farthest = Event::Put(Spot {
+            at: [-MAX_COORD; 3],
+            yaw: 359,
+        });
+        let text = farthest.text();
+        assert_eq!(text, "put_-65536_-65536_-65536_359");
+        assert!(text.len() <= 64, "{text}");
+        assert_eq!(Event::parse(&text), Some(farthest));
+        assert_eq!(Event::parse(TAKE), Some(Event::Take));
+        let put = Event::Put(Spot {
+            at: [12, -40, 96],
+            yaw: 90,
+        });
+        assert_eq!(put.text(), "put_12_-40_96_90");
+        assert_eq!(Event::parse(&put.text()), Some(put));
+        // Out of bounds, short or long: refused.
+        for bad in [
+            "put_1_2_3_360",
+            "put_1_2_3",
+            "put_1_2_3_4_5",
+            "put_70000_2_3_4",
+            "put_a_2_3_4",
+            "put_1_2_3_-1",
+            "takes",
+        ] {
+            assert_eq!(Event::parse(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_spot_is_the_rest_in_whole_units_and_the_yaw_in_degrees() {
+        let spot = Spot::new(Vec3::new(10.4, -3.6, 0.5), -90.0);
+        assert_eq!(spot.at, [10, -4, 1]);
+        assert_eq!(spot.yaw, 270);
+        assert_eq!(Spot::new(Vec3::ZERO, 359.7).yaw, 0);
+        assert_eq!(Spot::new(Vec3::splat(1e9), 720.0).at, [MAX_COORD; 3]);
+    }
+
+    #[test]
+    fn a_box_on_the_floor_stays_until_taken_lost_or_a_new_map() {
+        let start = Instant::now();
+        let mut toy = Boombox::default();
+        let spot = Spot {
+            at: [1, 2, 3],
+            yaw: 45,
+        };
+        let rest = Vec3::new(1.0, 2.0, 2.5);
+        toy.hear([(5, Event::Put(spot), rest)], start);
+        assert_eq!(toy.boxes[5].map(|standing| standing.rest), Some(rest));
+        // Its music stopping leaves it standing.
+        toy.hear(from(5, Event::Stop), start);
+        assert!(toy.boxes[5].is_some());
+        toy.hear(from(5, Event::Take), start);
+        assert!(toy.boxes[5].is_none(), "taken");
+        toy.hear([(5, Event::Put(spot), rest)], start);
+        toy.hear([], start + LOST);
+        assert!(toy.boxes[5].is_some(), "told again in time");
+        toy.hear([], start + LOST + Duration::from_secs(1));
+        assert!(toy.boxes[5].is_none(), "lost");
+        toy.hear([(5, Event::Put(spot), rest)], start);
+        toy.down = toy.boxes[5];
+        toy.new_map();
+        assert!(toy.boxes[5].is_none() && toy.down.is_none(), "a new map");
     }
 
     #[test]
@@ -1125,20 +1618,158 @@ mod tests {
         let start = Instant::now();
         let mut toy = Boombox::default();
         let near = 0b1010;
-        assert_eq!(toy.next_to_tell(near, start), Some(1));
-        assert_eq!(toy.next_to_tell(near, start), None, "one a gap");
-        assert_eq!(toy.next_to_tell(near, start + SEND_GAP), Some(3));
+        let music = |slot| Some((slot, Telling::Music));
+        assert_eq!(toy.next_to_tell(near, 0, start), music(1));
+        assert_eq!(toy.next_to_tell(near, 0, start), None, "one a gap");
+        assert_eq!(toy.next_to_tell(near, 0, start + SEND_GAP), music(3));
         assert_eq!(
-            toy.next_to_tell(near, start + SEND_GAP * 2),
+            toy.next_to_tell(near, 0, start + SEND_GAP * 2),
             None,
             "all told"
         );
         // Slot 1 walks away and comes back: told again.
-        assert_eq!(toy.next_to_tell(0b1000, start + SEND_GAP * 3), None);
-        assert_eq!(toy.next_to_tell(near, start + SEND_GAP * 4), Some(1));
+        assert_eq!(toy.next_to_tell(0b1000, 0, start + SEND_GAP * 3), None);
+        assert_eq!(toy.next_to_tell(near, 0, start + SEND_GAP * 4), music(1));
         // Everyone again after the retell.
         let later = start + SEND_GAP * 4 + RETELL;
-        assert_eq!(toy.next_to_tell(near, later), Some(1));
-        assert_eq!(toy.next_to_tell(near, later + SEND_GAP), Some(3));
+        assert_eq!(toy.next_to_tell(near, 0, later), music(1));
+        assert_eq!(toy.next_to_tell(near, 0, later + SEND_GAP), music(3));
+    }
+
+    #[test]
+    fn a_box_down_is_told_to_everyone_before_its_music_the_near_first() {
+        let start = Instant::now();
+        let mut toy = Boombox::default();
+        let near = 0b1000;
+        let everyone = 0b1110;
+        let at = |step: u32| start + SEND_GAP * step;
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(0)),
+            Some((3, Telling::Box)),
+            "the near first"
+        );
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(1)),
+            Some((1, Telling::Box))
+        );
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(2)),
+            Some((2, Telling::Box))
+        );
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(3)),
+            Some((3, Telling::Music))
+        );
+        assert_eq!(toy.next_to_tell(near, everyone, at(4)), None, "all told");
+        // A player who left the server and came back hears of the box again.
+        assert_eq!(toy.next_to_tell(near, 0b1100, at(5)), None);
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(6)),
+            Some((1, Telling::Box))
+        );
+        // Everyone again after the retell.
+        assert_eq!(
+            toy.next_to_tell(near, everyone, at(6) + RETELL),
+            Some((3, Telling::Box))
+        );
+    }
+
+    #[test]
+    fn the_own_track_starts_again_when_its_box_goes_down_or_comes_up() {
+        let mut toy = Boombox::default();
+        let own = song(1_000, "a");
+        toy.sound(0, Some(("sound/boombox/a.mp3", &own, None)), 2_000);
+        assert_eq!(toy.take_cues().count(), 1);
+        // Down: from the box, as far in as the song is.
+        toy.sound(
+            0,
+            Some(("sound/boombox/a.mp3", &own, Some([5.0; 3]))),
+            3_000,
+        );
+        assert!(matches!(
+            toy.take_cues().next(),
+            Some(Cue::Start { origin: Some(_), offset, .. }) if offset == Duration::from_secs(2)
+        ));
+        // Up again: in both ears.
+        toy.sound(0, Some(("sound/boombox/a.mp3", &own, None)), 4_000);
+        assert!(matches!(
+            toy.take_cues().next(),
+            Some(Cue::Start { origin: None, .. })
+        ));
+    }
+
+    /// A floor at height 0 everywhere but over the pit (x past 100), and a wall at x 30
+    /// when `wall`; traced as a point.
+    fn world(wall: bool) -> impl FnMut(Vec3, Vec3) -> Option<crate::banana::Ground> {
+        move |from: Vec3, to: Vec3| {
+            if wall && from.x < 30.0 && to.x >= 30.0 {
+                let s = (30.0 - from.x) / (to.x - from.x);
+                return Some(crate::banana::Ground {
+                    stop: from.lerp(to, s),
+                    normal: Vec3::NEG_X,
+                    sky: false,
+                });
+            }
+            (from.z > 0.0 && to.z <= 0.0 && from.x <= 100.0).then(|| {
+                let s = from.z / (from.z - to.z);
+                crate::banana::Ground {
+                    stop: from.lerp(to, s),
+                    normal: Vec3::Z,
+                    sky: false,
+                }
+            })
+        }
+    }
+
+    #[test]
+    fn a_box_stands_ahead_of_the_player_short_of_a_wall_or_under_them() {
+        let origin = Vec3::new(0.0, 0.0, 24.0);
+        // Looking +Y: ahead, on the floor.
+        let spot = place_spot(origin, 90.0, world(false)).unwrap();
+        assert!(
+            spot.distance(Vec3::new(0.0, PLACE_REACH, 0.0)) < 1e-3,
+            "{spot}"
+        );
+        // Looking at a wall: short of it.
+        let spot = place_spot(origin, 0.0, world(true)).unwrap();
+        assert!(
+            (spot.x - (30.0 - WALL_GAP)).abs() < 1e-3 && spot.z.abs() < 1e-3,
+            "{spot}"
+        );
+        // Over the pit's edge: under the player.
+        let edge = Vec3::new(90.0, 0.0, 24.0);
+        let spot = place_spot(edge, 0.0, world(false)).unwrap();
+        assert!(spot.distance(Vec3::new(90.0, 0.0, 0.0)) < 1e-3, "{spot}");
+        // Over the pit: nowhere.
+        assert_eq!(
+            place_spot(Vec3::new(200.0, 0.0, 24.0), 0.0, world(false)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_box_sounds_as_loud_in_front_and_beside_and_quieter_behind() {
+        let range = 400.0;
+        let gain = |at: Vec3, listener: Vec3| {
+            let full = range * FULL_SHARE;
+            (1.0 - (at.distance(listener) - full).max(0.0) / (range - full)).clamp(0.0, 1.0)
+        };
+        let speaker = Vec3::ZERO;
+        // Facing +X: in front and beside, the box itself.
+        for listener in [Vec3::new(200.0, 0.0, 0.0), Vec3::new(0.0, 200.0, 0.0)] {
+            assert_eq!(heard_from(speaker, 0.0, listener, range), speaker);
+        }
+        for distance in [50.0, 200.0, 300.0] {
+            let behind = Vec3::new(-distance, 0.0, 0.0);
+            let seeming = heard_from(speaker, 0.0, behind, range);
+            let share = gain(seeming, behind) / gain(speaker, behind);
+            assert!((share - BEHIND_SHARE).abs() < 1e-3, "{distance}: {share}");
+            // From the same side: only further away.
+            assert!(seeming.x > 0.0 && seeming.y.abs() < 1e-3);
+        }
+        // Half behind: between the two.
+        let aside = Vec3::new(-150.0, 150.0, 0.0);
+        let share = gain(heard_from(speaker, 0.0, aside, range), aside) / gain(speaker, aside);
+        assert!(share > BEHIND_SHARE && share < 1.0, "{share}");
     }
 }

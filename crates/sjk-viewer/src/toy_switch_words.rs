@@ -58,7 +58,7 @@ pub(crate) const TOYS: [(&str, &str, &str); 12] = [
     (
         "Boombox",
         "toy_boombox",
-        "carry a stereo playing your tracks to players close by; boombox lists them (verified players)",
+        "carry a stereo playing your tracks to players close by, or stand it down with boombox_place; boombox lists them (verified players)",
     ),
     (
         "Monitor",
