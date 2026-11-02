@@ -1049,7 +1049,7 @@ impl GpuState {
         };
         load_profile.mark("player-models")?;
         let mover_catalog = movers::build_catalog(&bsp, &flattened);
-        let decal_surfaces = decal_marks::DecalSurfaces::from_flattened(&flattened, &bsp);
+        let decal_surfaces = decal_marks::DecalSurfaces::from_flattened(&flattened, &bsp, &shaders);
         let mut object_meshes = object_meshes::load(
             &vfs,
             &bsp,

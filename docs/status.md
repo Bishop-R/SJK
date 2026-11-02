@@ -1,3 +1,21 @@
+## Tags: spray sound, odd surfaces
+
+03/11/2026, `personal/tag-spray`, based on `main` `3a209013` (Sol: tag decals sometimes
+glitch on special surfaces; a spray can sound when a tag goes up). Read from the code, no
+in-game report to go by, two causes fixed
+([client.md](client.md#tag)): a tag was projected onto every surface in its box but the
+sky's, so it hung on glass, water and force fields, showed over a grate's holes, stayed
+still on waving flags and water while they moved (fighting their depth), and went twice on
+a wall with a `polygonOffset` poster; and a tag kept at most 48 fragments, so a curved
+patch or a face cut in many triangles lost part of the picture. Tags now keep off such
+surfaces (`decal_marks::tag_unfit`, impact marks unchanged) and project with buffers of
+their own (512 fragments, 128 surfaces); `toy_tag` aimed at such a surface alone refuses
+("A tag does not hold on that surface"). The spray (`sound/sjk/tags/spray.wav`,
+synthesized by `scripts/tag_sounds.py`) plays where a tag goes up, the own one and other
+players' when their look changes to a new tag on this map; `s_toyTagSound` (Settings >
+Sound > Toys) silences it. Verified: unit test of the surface filter, the tag and decal
+tests, clippy. Not verified: in a game (the sound's level and what Sol saw glitch).
+
 ## Heimdall's time nudge kicks at low frame rates
 
 02/11/2026, `personal/heimdall-catchup`, based on `main` `3d9e8fe2`, Krieger's and

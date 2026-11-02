@@ -7,6 +7,8 @@ use super::*;
 
 /// `CONTENTS_SOLID`: what a tag sticks to (not clips, which nobody sees).
 const TAG_MASK: u32 = 1;
+/// The sound source of the sprays.
+const SPRAY_SOURCE: sjk_audio::SourceId = sjk_audio::SourceId(0x5500_0000);
 
 impl GpuState {
     fn tag_centre(&mut self, text: &str) {
@@ -113,6 +115,23 @@ impl GpuState {
             spin,
             finish: (finish.index != 0).then(|| finish.id.to_owned()),
         };
+        // Glass, water, grates, moving surfaces take no tag (`decal_marks::tag_unfit`):
+        // one aimed only at such would stand unseen.
+        let fits = crate::tags::decal(&tag).is_some_and(|request| {
+            let mut scratch = crate::decal_marks::DecalScratch::for_tags();
+            crate::decal_marks::project(
+                &self.decal_surfaces,
+                &self.bsp,
+                &request,
+                &mut scratch,
+                |_| {},
+            ) > 0
+        });
+        if !fits {
+            self.tag_centre("A tag does not hold on that surface");
+            return;
+        }
+        self.tags.sprays.push(Vec3::from_array(tag.at));
         self.tags.stick(server, tag, now);
     }
 
@@ -167,6 +186,55 @@ impl GpuState {
                 None
             };
             self.effect_aux.decals.set_tag(slot, tag);
+        }
+        self.hear_other_sprays(show, map.as_deref(), own_slot);
+    }
+
+    /// Queue the spray of each other player who put a new tag up on this map since the
+    /// last frame (not one whose look just arrived with it, nor any while tags are
+    /// hidden).
+    fn hear_other_sprays(&mut self, show: bool, map: Option<&str>, own_slot: Option<usize>) {
+        self.tags.seen.resize(crate::looks::SLOTS, None);
+        for slot in 0..crate::looks::SLOTS {
+            let now = if Some(slot) == own_slot {
+                None
+            } else {
+                self.looks
+                    .tag_known(slot)
+                    .map(|tag| tag.filter(|tag| Some(tag.map.as_str()) == map).cloned())
+            };
+            let before = std::mem::replace(&mut self.tags.seen[slot], now.clone());
+            if let (Some(before), Some(Some(tag))) = (before, now)
+                && show
+                && before.as_ref() != Some(&tag)
+            {
+                self.tags.sprays.push(Vec3::from_array(tag.at));
+            }
+        }
+    }
+
+    /// Play the sprays of the frame where the tags went up.
+    pub(crate) fn play_tag_sounds(&mut self, audio: &mut Option<crate::GameAudio>) {
+        let Some(audio) = audio.as_mut() else {
+            self.tags.sprays.clear();
+            return;
+        };
+        if self.tags.sound_registered != Some(audio.generation())
+            && let Some(vfs) = self.vfs.as_deref()
+        {
+            audio.register_effect_paths(vfs, [crate::tags::SPRAY_SOUND]);
+            self.tags.sound_registered = Some(audio.generation());
+        }
+        for at in self.tags.sprays.drain(..) {
+            self.tags.sprays_played = self.tags.sprays_played.wrapping_add(1);
+            audio.play_toy(
+                crate::toy_sounds::Toy::Tag,
+                crate::tags::SPRAY_SOUND,
+                1.0,
+                Some(at.to_array()),
+                sjk_audio::SourceId(SPRAY_SOURCE.0 + self.tags.sprays_played % 8),
+                sjk_audio::ChannelId(0),
+            );
         }
     }
 }

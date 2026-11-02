@@ -394,6 +394,11 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Tag spray sound",
+        cvar: crate::toy_sounds::Toy::Tag.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Toy Master sounds",
         cvar: crate::toy_sounds::Toy::Master.cvar(),
         kind: ValueKind::Bool,
