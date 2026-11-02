@@ -22,6 +22,7 @@ const PMF_DUCKED: u16 = 1;
 const DEFAULT_VIEW_HEIGHT: i32 = 36;
 const CONTENTS_SOLID: u32 = 1;
 const STEP_SIZE: f32 = 18.0;
+const WP_STUN_BATON: u8 = 1;
 const WP_MELEE: u8 = 2;
 const WP_SABER: u8 = 3;
 const BOTH_A7_SOULCAL: u16 = 910;
@@ -34,6 +35,9 @@ pub const BOTH_ROLL_R: u16 = 1_170;
 /// Server-selected roll compatibility behavior.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct RollRules {
+    /// Lugormod-v3 public roll rules: baton eligibility, scaled clearance and
+    /// speed threshold (`bg_pmove.c:5027,5061,6839`, reference 50f42520).
+    pub lugormod_v3: bool,
     /// TaystJK `GetFixRoll` result: stock, fix1, fix2, or fix3.
     pub fix_roll: u8,
     /// Either equipped `.sab` definition carries `noRolls 1`.
@@ -62,9 +66,12 @@ impl RollRules {
                 ja_pro_capabilities.contains(JaProCapabilities::FIX_ROLL_3)
                     || tayst_capabilities.contains(TaystJkCapabilities::FIX_ROLL_3),
             ],
-            ServerDialect::BaseJka | ServerDialect::Unknown { .. } => [false; 3],
+            ServerDialect::BaseJka | ServerDialect::LugormodV3 | ServerDialect::Unknown { .. } => {
+                [false; 3]
+            }
         };
         Self {
+            lugormod_v3: matches!(dialect, ServerDialect::LugormodV3),
             fix_roll: if bits[2] {
                 3
             } else if bits[1] {
@@ -163,6 +170,12 @@ pub(crate) fn roll_from_crouch(
     } else {
         40_000.0
     };
+    let threshold = threshold
+        * if rules.lugormod_v3 {
+            state.lugormod.scale()
+        } else {
+            1.0
+        };
     let eligible = if rules.fix_roll > 1 {
         crate::pmove_roll_anim::running(state.legs_anim) || can_roll_from_soulcal(state)
     } else {
@@ -201,7 +214,8 @@ pub(crate) fn try_roll(
     {
         return None;
     }
-    if !matches!(state.weapon, WP_SABER | WP_MELEE)
+    if !(matches!(state.weapon, WP_SABER | WP_MELEE)
+        || rules.lugormod_v3 && state.weapon == WP_STUN_BATON)
         || !can_use_levitation(state, command.server_time, rules.gametype)
         || state.weapon == WP_SABER && rules.saber_forbids_rolls
     {
@@ -222,10 +236,16 @@ pub(crate) fn try_roll(
         return None;
     };
     let end = (Vec3::from_array(state.origin) + displacement).to_array();
+    let width = 15.0
+        * if rules.lugormod_v3 {
+            state.lugormod.scale()
+        } else {
+            1.0
+        };
     let trace = collision.trace(
         state.origin,
-        [-15.0, -15.0, -24.0 + STEP_SIZE],
-        [15.0, 15.0, state.crouching_height],
+        [-width, -width, -24.0 + STEP_SIZE],
+        [width, width, state.crouching_height],
         end,
         CONTENTS_SOLID,
     );

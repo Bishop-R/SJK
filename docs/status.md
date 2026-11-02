@@ -751,6 +751,21 @@ the workspace build, tests and Clippy (no new warning), and the Mods page in
 `menu_snapshot::sjk_settings_snapshot` (`sjk-settings-plugin-options.png`).
 Not verified: switching them in a match on a JA+ or jaPRO server.
 
+## Lugormod-v3 movement prediction
+
+29/10/2026, `feat/prediction-lugormod`, based on `main` `1c1036b2`: native
+movement policy for LugorDev/Lugormod-v3 `50f42520`'s default multiplayer build.
+The [movement adapter](networking.md#lugormod-v3-movement) uses the advertised
+v3 name and existing scale/admin fields for scaled player posture, lower-box
+stand clearance, enhanced FFA jetpacks, public baton rolls and velocity snapping.
+It refreshes with the current dialect; foreign/reused metadata stays inert.
+Windows x64 tests match 248 MSVC-emitted bounds/stand/jetpack branch outputs;
+command, reseed and preview checks cover 8/7/4/3 ms and server switches. Rope
+fields missing from ordinary snapshots, extended Force curves and scaled active
+Force rises use authoritative position interpolation with immediate look.
+Private skills/restrictions, custom build switches, scaled riders/NPCs, full
+Pmove/live gameplay, animation playback and rendered performance remain unverified.
+
 ## Prediction: incomplete command history
 
 29/10/2026, `fix/prediction-command-overflow`, based on `main` `e702b0b1`:

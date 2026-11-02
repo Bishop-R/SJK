@@ -236,6 +236,8 @@ pub struct MovementConfig {
     pub ja_plus: crate::pmove_japlus::JaPlusRules,
     /// jaPRO command policy selected from advertised server capabilities.
     pub ja_pro: crate::pmove_japro::JaProRules,
+    /// Current Lugormod-v3 movement policy.
+    pub lugormod: crate::pmove_lugormod::LugormodRules,
 }
 
 impl Default for MovementConfig {
@@ -258,6 +260,7 @@ impl Default for MovementConfig {
             grapple: None,
             ja_plus: crate::pmove_japlus::JaPlusRules::default(),
             ja_pro: crate::pmove_japro::JaProRules::default(),
+            lugormod: crate::pmove_lugormod::LugormodRules::default(),
         }
     }
 }
@@ -307,6 +310,8 @@ impl Default for HiltSpeedScales {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MovementState {
+    /// Reused Lugormod snapshot fields; inert without its current-server policy.
+    pub lugormod: crate::pmove_lugormod::LugormodState,
     /// Raw jaPRO stat metadata; interpreted only when its dialect is selected.
     pub ja_pro: crate::pmove_japro::JaProState,
     /// Authoritative pickup eligibility fields, separate from predicted grants.
@@ -656,6 +661,7 @@ impl MovementState {
             movement_direction: player.movement_direction(),
             view_angles: player.view_angles(),
             delta_angles: player.delta_angles(),
+            lugormod: crate::pmove_lugormod::LugormodState::from_player(player),
             view_height: player.view_height(),
             standing_height: f32::from(player.standing_height()),
             crouching_height: f32::from(player.crouching_height()),
@@ -1333,6 +1339,7 @@ impl Predictor {
                     game.as_deref_mut(),
                 );
             }
+            self.lugormod_finish_slice();
             self.cleared_box = false;
             if self.state.movement_flags & PMF_JUMP_HELD != 0 {
                 // The C wrapper changes repeated slices to a held, non-analog
@@ -1518,19 +1525,24 @@ impl Predictor {
         let hovering = self.hovering();
         self.sample_water(collision);
         self.water_entry = self.state.water_level;
-        let bounds = self.check_duck(&command, collision);
+        let lugormod = self.lugormod_player();
+        let bounds = if lugormod {
+            self.lugormod_bounds()
+        } else {
+            self.check_duck(&command, collision)
+        };
         // `BG_VehicleAdjustBBoxForOrientation` (`bg_pmove.c:10814-10818`).
-        let bounds = self.vehicle_box(bounds, collision);
+        let mut bounds = self.vehicle_box(bounds, collision);
         self.box_bounds = (bounds.minimums, bounds.maximums);
         // A wall run falls at half gravity (`bg_pmove.c:10726-10730`), until the slice ends.
         let gravity = self.state.gravity;
         let pack_distance = self.activate_new_jetpack(&command, bounds, collision);
         let jetpacking = self.state.movement_type == 1;
-        if jetpacking {
+        if jetpacking && !lugormod {
             self.jetpack_move(&command, bounds, collision);
         } else if self.new_jetpack_active() {
             self.new_jetpack_thrust(&command, bounds, collision, seconds, pack_distance);
-        } else if self.slow_fall {
+        } else if !lugormod && self.slow_fall {
             self.state.gravity = wall_moves::halved_gravity(gravity);
         }
         self.state.legs_timer_at_entry = self.state.legs_timer;
@@ -1561,6 +1573,15 @@ impl Predictor {
                 seconds,
                 game.as_deref_mut(),
             );
+        }
+        if lugormod {
+            bounds = self.lugormod_check_duck(&command, bounds, collision);
+            self.box_bounds = (bounds.minimums, bounds.maximums);
+            if jetpacking {
+                self.jetpack_move(&command, bounds, collision);
+            } else if self.slow_fall {
+                self.state.gravity = wall_moves::halved_gravity(gravity);
+            }
         }
         // PM_GroundTrace precedes PM_DropTimers (bg_pmove.c:10821,10845).
         self.drop_timers(millis);
@@ -2175,7 +2196,7 @@ impl Predictor {
                 forward * f32::from(command.forward_move) + right * f32::from(command.right_move)
             };
             if self.state.movement_type == 1 && !self.slow_fall {
-                wish_velocity *= if command.up_move <= 0 { 0.8 } else { 2.0 };
+                wish_velocity *= self.jetpack_air_control(command);
             } else if self.new_jetpack_active() && !self.slow_fall {
                 wish_velocity *= 1.75;
             }
@@ -2694,3 +2715,6 @@ mod prediction_gametype_tests {
         assert_eq!(predictor.gametype, 9);
     }
 }
+
+#[path = "pmove_lugormod_motion.rs"]
+mod lugormod_motion;
