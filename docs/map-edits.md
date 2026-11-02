@@ -51,9 +51,14 @@ server, or on one server only (`"server": "ip:port"`): the same map can carry fi
 all servers and others for one server's remaps or layout. The map's checksum is read on
 a worker, and only when a document of the map is there or the editor is on.
 
-The identity worker reads the hub's list every 10 minutes once registered (and at once
-when the editor turns on, or after a publish), downloads the documents newer than its
-copies and removes the copies of documents the hub no longer lists. A copy changed on
+The identity worker reads the hub's list every 10 minutes once registered, and at once
+when the editor turns on, after a publish, when `mapedits_sync` (Settings > Game "Sync
+map edits", any player) asks, and when the hub's map edits stamp changes: every presence
+answer (polled every 5 seconds on a server) carries it, the sum of every map's revision,
+which grows with every publish, delete or undo (hub `PROTOCOL.md`, 03/11/2026; an older
+hub leaves it out and only the timed look remains). The first stamp seen on a run counts
+as a change. So a publish reaches the players on a server within seconds. Each look
+downloads the documents newer than its copies and removes the copies of documents the hub no longer lists. A copy changed on
 this PC and not yet published (`"unpublished": true`) is never overwritten or removed.
 The loaded map's document is read again when a copy changes. What each look did goes in
 the log when it changes (`map edits: 3 maps on the hub, 1 copy changed`, or `map edits:

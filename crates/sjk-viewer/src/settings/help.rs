@@ -1034,6 +1034,10 @@ const HELP: &[(&str, &str)] = &[
         "Shows the SJK team's fixes to maps: props removed, models added and textures swapped. Only what you see changes. On by default.",
     ),
     (
+        crate::map_edits::SYNC_COMMAND,
+        "Asks the SJK hub for its latest map fixes now. They also come by themselves within seconds on a server.",
+    ),
+    (
         crate::remap_blocked_maps::SERVER_CVAR,
         "Lets servers swap the map's textures. Off by default; the map's own swaps and SJK's map fixes always apply.",
     ),

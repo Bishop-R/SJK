@@ -36,6 +36,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 = cg_soundSonar: Sound sonar, for deaf and hard-of-hearing players: arcs round the crosshair point toward the sounds you hear.
 = cg_scoreboardIDs: New: each player's client number, small before the name on SJK's scoreboard, as the classic one's Id column shows it.
 
+- SJK map edits arrive within seconds on a server once the SJK team publishes them, instead of up to 10 minutes later; Settings > Game "Sync map edits" (or `mapedits_sync`) asks the hub at once _(Sol)_
 - Move the HUD with the mouse: Settings > HUD "Move HUD elements" (or `hud_edit`) outlines the health, Force, weapon, timer, lagometer, chat, kill feed, movement keys and the rest over the game; drag one to move it, right-click it to put it back _(Slash, PR #295, after Lex's idea)_
 - Sound sonar (Settings > Sound, `cg_soundSonar`, off by default): short arcs round the crosshair point toward the sounds you hear, footsteps, shots and swings, voices, explosions and the rest, each kind its own colour, fading over a second _(Slash, PR #301, after Dawson's idea)_
 - Quiet mode: `quiet` (or Settings > Chat > Quiet mode, `cg_quietMode`) hides public, team, SJK and admin chat and their sounds until you turn it off or the map changes, but for your private duel partner and whispers; your SJK scoreboard row says Quiet _(Slash, PR #302, after Lex Deifaber's idea)_

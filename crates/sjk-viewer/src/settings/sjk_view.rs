@@ -436,6 +436,7 @@ impl SettingsMenu {
             | ValueKind::AssetBrowser
             | ValueKind::ContentCard
             | ValueKind::HudEdit
+            | ValueKind::Run
             | ValueKind::GameplayFps => kit::field(
                 &mut self.ui,
                 frame,
@@ -875,6 +876,7 @@ impl SettingsMenu {
                     ValueKind::GameplayFps => (&["Enter"][..], "explain"),
                     ValueKind::AssetBrowser | ValueKind::ContentCard => (&["Enter"][..], "browse"),
                     ValueKind::HudEdit => (&["Enter"][..], "edit"),
+                    ValueKind::Run => (&["Enter"][..], "do it"),
                     ValueKind::SoundPreview => (&["Enter"][..], "play"),
                     ValueKind::Text => (&["Enter"][..], "type"),
                     _ => (&["Left", "Right"][..], "change"),

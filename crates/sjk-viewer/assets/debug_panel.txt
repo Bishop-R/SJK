@@ -7700,6 +7700,16 @@ test: Search a wall texture, Draw: the hole shows that texture, lit like the wal
 test: O on it again: Draw nothing removes it; mapedit_undo brings it back.
 test: Other caulk faces of the map stay unseen; collision there is as before.
 
+[map-edits-sync]
+area: Rendering & effects
+title: Map edits reach players within seconds; Sync map edits
+change: The hub's presence answer carries a map edits stamp; a change reads the list at once.
+change: Settings > Game "Sync map edits" (mapedits_sync) asks the hub now, for any player.
+note: Needs the hub branch map-edits-sync deployed; an older hub keeps the 10 minute look.
+test: Two clients on one server; staff publish an edit: the other sees it within ~5 seconds.
+test: Settings > Game, Sync map edits, Enter: the console says it asks the hub; log line follows.
+test: cg_mapEdits 0, then mapedits_sync: it says map edits are off.
+
 # ---- Bug reports, 19/10/2026 ----
 
 [bool-settings]

@@ -1001,6 +1001,8 @@ struct Worker {
     /// The folder map edits are kept in, and when the hub's list is next read.
     map_edits_dir: Option<PathBuf>,
     due_map_edits: Instant,
+    /// The hub's map edits stamp the last presence answer carried.
+    map_edits_stamp: Option<i64>,
     /// Serial of the last map edits publication.
     map_edits_serial: u64,
     /// When the hub's mystery boxes are next read, and the last request's serial.
@@ -1304,6 +1306,7 @@ impl Worker {
             assets_dir: None,
             map_edits_dir: None,
             due_map_edits: now,
+            map_edits_stamp: None,
             map_edits_serial: 0,
             due_mystery_boxes: now,
             mystery_box_serial: 0,
@@ -3584,8 +3587,18 @@ impl Worker {
             }
             if now >= self.due_poll {
                 match hub.presence_with_blocks(&server) {
-                    Ok((players, blocks)) => {
+                    Ok(crate::hub::PresenceRead {
+                        players,
+                        blocks,
+                        map_edits,
+                    }) => {
                         self.due_poll = now + POLL_EVERY;
+                        // Staff published (or this is the first look on this run): read
+                        // the map edits' list now, not at the next 10 minute look.
+                        if map_edits.is_some() && map_edits != self.map_edits_stamp {
+                            self.map_edits_stamp = map_edits;
+                            self.due_map_edits = now;
+                        }
                         let mut snapshot = lock(&self.snapshot);
                         if snapshot.players != players || snapshot.map_blocks != blocks {
                             snapshot.players = players;
@@ -4601,6 +4614,8 @@ mod tests {
         /// The collection marks the fake hub keeps; none is a hub from before them, which
         /// sends none with the progress and answers a change with 404.
         marks: Arc<Mutex<Option<crate::wire::UnlockMarks>>>,
+        /// The map edits stamp presence answers carry; none is a hub from before it.
+        edits_stamp: Arc<Mutex<Option<i64>>>,
     }
 
     impl Fake {
@@ -5160,6 +5175,20 @@ mod tests {
         fn presence(&mut self, server: &str) -> Result<Vec<Presence>, HubError> {
             self.record(format!("presence {server}"))
                 .map(|()| self.roster.lock().unwrap().clone())
+        }
+        fn presence_with_blocks(
+            &mut self,
+            server: &str,
+        ) -> Result<crate::hub::PresenceRead, HubError> {
+            self.presence(server)
+                .map(|players| crate::hub::PresenceRead {
+                    players,
+                    blocks: Vec::new(),
+                    map_edits: *self.edits_stamp.lock().unwrap(),
+                })
+        }
+        fn map_edits(&mut self, _: &Identity) -> Result<Vec<crate::map_edits::Entry>, HubError> {
+            self.record("map edits".to_owned()).map(|()| Vec::new())
         }
         fn report(&mut self, _: &Identity, report: &BugReport) -> Result<i64, HubError> {
             self.record(format!("report {}", report.text))?;
@@ -8083,6 +8112,43 @@ mod tests {
                 .count()
                 == 2
         );
+    }
+
+    #[test]
+    fn a_new_map_edits_stamp_in_presence_reads_the_list_at_once() {
+        let fake = Fake::default();
+        *fake.edits_stamp.lock().unwrap() = Some(4);
+        let dir = std::env::temp_dir().join(format!(
+            "sjk-identity-edits-stamp-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let t0 = Instant::now();
+        let (mut worker, _snapshot) = worker(&fake, t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.handle(Command::MapEditsDir(dir.clone()), t0);
+        worker.handle(Command::Enter(here(3, "Sol")), t0);
+        let reads = |fake: &Fake| fake.log().iter().filter(|l| *l == "map edits").count();
+        worker.tick(t0);
+        worker.tick(t0 + Duration::from_millis(10));
+        // The look at start, and one for the first stamp seen on this run.
+        let start = reads(&fake);
+        assert!((1..=2).contains(&start), "{:?}", fake.log());
+        // The same stamp: nothing more until the 10 minute look.
+        worker.tick(t0 + POLL_EVERY);
+        worker.tick(t0 + POLL_EVERY + Duration::from_millis(10));
+        assert_eq!(reads(&fake), start);
+        // Staff published: the next presence answer brings the list at once.
+        *fake.edits_stamp.lock().unwrap() = Some(5);
+        worker.tick(t0 + POLL_EVERY * 2);
+        worker.tick(t0 + POLL_EVERY * 2 + Duration::from_millis(10));
+        assert_eq!(reads(&fake), start + 1, "{:?}", fake.log());
+        // A hub from before the stamp changes nothing.
+        *fake.edits_stamp.lock().unwrap() = None;
+        worker.tick(t0 + POLL_EVERY * 3);
+        worker.tick(t0 + POLL_EVERY * 3 + Duration::from_millis(10));
+        assert_eq!(reads(&fake), start + 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
