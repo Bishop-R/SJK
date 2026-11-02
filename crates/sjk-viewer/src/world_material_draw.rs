@@ -120,12 +120,12 @@ impl Runtime {
         &self,
         queue: &crate::frame_queue::FrameQueue,
         lights: &PointLightList,
-        model_pixels: bool,
+        model_word: u32,
         mode: u32,
         shadows: bool,
     ) {
         let mut block: GpuPointLightBlock = lights.gpu_block();
-        block.metadata[1] = u32::from(model_pixels);
+        block.metadata[1] = model_word;
         block.metadata[2] = mode;
         self.lighting_mode.set(mode);
         // Only the CPU part: its zero shadow header hides the last frame's tiles until

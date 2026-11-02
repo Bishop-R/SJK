@@ -8,6 +8,7 @@ use std::sync::{
 
 #[path = "model_light_settings.rs"]
 mod model;
+pub(crate) use model::TOON_CVAR as TOON_MODELS_CVAR;
 
 /// The static world's shadows on dynamic lights (`dynamic_light_shadows.rs`); SJK's.
 pub(crate) const SHADOWS_CVAR: &str = "r_dynamicLightShadows";
@@ -112,7 +113,7 @@ impl Settings {
         world.update_scene_lighting_mode(
             queue,
             lights,
-            self.1.enabled(),
+            self.1.bits(),
             self.2.bits(),
             self.shadows(),
         );

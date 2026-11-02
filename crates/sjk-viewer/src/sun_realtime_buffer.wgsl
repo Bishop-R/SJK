@@ -69,6 +69,7 @@ fn model_sun_color(input: VertexOutput, original: vec3<f32>) -> vec3<f32> {
     let local = finish_model_light(input.world_position,
         EntityLight(vec3(0.0), vec3(0.0), vec3(0.0)));
     var lit = sun.rgb + highlight + max(dot(normal, local.direction), 0.0)*local.directed;
+    if toon_models() { lit = toon_lit(input.world_position, normal, lit); }
     if rgb == 9 { lit *= input.entity_color.rgb; }
     return lit;
 }
