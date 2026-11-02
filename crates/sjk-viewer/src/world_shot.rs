@@ -417,6 +417,8 @@ mod whats_new;
 mod away_chat_shots;
 #[path = "world_shot_card_scenes.rs"]
 mod card_scenes_shots;
+#[path = "world_shot_chat_logs.rs"]
+mod chat_logs_shots;
 
 #[path = "world_shot_chat_sounds.rs"]
 mod chat_sounds_shots;

@@ -1,24 +1,41 @@
-//! Opt-in chat persistence. Only incoming chat events perform I/O, never HUD frames.
+//! Default-on received game-chat persistence. Only chat events perform I/O.
 use super::*;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Archived game-chat logging mode: 0 off, 1 append, 2 append and synchronize.
+pub(crate) const CVAR: &str = "cl_logChat";
 
 /// Owned log handle and sticky failure latch; retry after disabling logging.
 #[derive(Default)]
 pub(super) struct ChatLog {
     file: Option<File>,
     failed: bool,
+    /// Disabling between messages clears a prior failure on the next event too.
+    reset: Arc<AtomicBool>,
 }
 
 /// TaystJK cl_main.cpp:3456 and cl_cgame.cpp:563-580, 664-675.
-pub(super) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarError> {
+pub(super) fn register(cvars: &mut CvarRegistry) -> Result<ChatLog, sjk_shell::CvarError> {
     cvars.register(CvarDefinition::new(
-        "cl_logChat",
-        0_i64,
+        CVAR,
+        1_i64,
         CvarFlags::ARCHIVE,
         "Append received chat to chatlogs/chat.log; 2 synchronizes each entry",
-    ))
+    ))?;
+    let log = ChatLog::default();
+    let reset = Arc::clone(&log.reset);
+    cvars.on_change(CVAR, move |change| {
+        if matches!(change.current, CvarValue::Integer(0)) {
+            reset.store(true, Ordering::Relaxed);
+        }
+    })?;
+    Ok(log)
 }
 
 impl ViewerConsole {
@@ -28,7 +45,7 @@ impl ViewerConsole {
         if !matches!(kind, Chat | TeamChat) {
             return;
         }
-        let mode = self.integer_cvar("cl_logchat").unwrap_or(0);
+        let mode = self.integer_cvar(CVAR).unwrap_or(1);
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -50,8 +67,11 @@ impl ChatLog {
         time: u64,
         text: &str,
     ) -> std::io::Result<()> {
+        if self.reset.swap(false, Ordering::Relaxed) || mode == 0 {
+            self.file = None;
+            self.failed = false;
+        }
         if mode == 0 {
-            *self = Self::default();
             return Ok(());
         }
         if self.failed {
@@ -115,4 +135,98 @@ fn clean(text: &[u8], output: &mut [u8]) -> usize {
         written -= 1;
     }
     written
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sjk_client::ServerEventKind;
+
+    #[test]
+    fn a_new_profile_logs_received_game_chat_and_appends_after_restart() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = directory.path().join("config.cfg");
+        let path = directory.path().join("chatlogs/chat.log");
+        {
+            let mut console = ViewerConsole::new(config.clone()).unwrap();
+            assert_eq!(console.integer_cvar(CVAR), Some(1));
+            console.log_chat(&ServerEventKind::Print, "not a chat message");
+            assert!(!path.exists(), "no log is created for other server text");
+            console.log_chat(&ServerEventKind::Chat, "^1Player: hello\n");
+            console.log_chat(&ServerEventKind::TeamChat, "^2Teammate: ready");
+        }
+        let mut console = ViewerConsole::new(config).unwrap();
+        console.log_chat(&ServerEventKind::Chat, "Player: back");
+        let saved = std::fs::read_to_string(path).unwrap();
+        let lines: Vec<_> = saved.lines().collect();
+        assert_eq!(lines.len(), 3);
+        for (line, text) in lines
+            .iter()
+            .zip(["Player: hello", "Teammate: ready", "Player: back"])
+        {
+            let (time, body) = line.split_once("] ").unwrap();
+            assert!(time.strip_prefix('[').unwrap().parse::<u64>().is_ok());
+            assert_eq!(body, text);
+        }
+    }
+
+    #[test]
+    fn a_saved_opt_out_stays_off_and_the_switch_persists() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = directory.path().join("config.cfg");
+        std::fs::write(&config, "seta cl_logChat \"0\"\n").unwrap();
+        let mut console = ViewerConsole::new(config.clone()).unwrap();
+        assert_eq!(console.integer_cvar(CVAR), Some(0));
+        console.log_chat(&ServerEventKind::Chat, "off");
+        assert!(!directory.path().join("chatlogs").exists());
+        assert!(console.set_cvar(CVAR, "1"));
+        console.log_chat(&ServerEventKind::Chat, "on");
+        assert!(console.set_cvar(CVAR, "0"));
+        console.log_chat(&ServerEventKind::Chat, "off again");
+        drop(console);
+        let console = ViewerConsole::new(config).unwrap();
+        assert_eq!(console.integer_cvar(CVAR), Some(0));
+        let saved = std::fs::read_to_string(directory.path().join("chatlogs/chat.log")).unwrap();
+        assert_eq!(saved.lines().count(), 1);
+        assert!(saved.ends_with("] on\n"));
+    }
+
+    #[test]
+    fn a_write_failure_can_be_retried_after_off_then_on_without_intervening_chat() {
+        let directory = tempfile::tempdir().unwrap();
+        let obstruction = directory.path().join("chatlogs");
+        std::fs::write(&obstruction, "a file blocks the log directory").unwrap();
+        let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        console.log_chat(&ServerEventKind::Chat, "first failure");
+        assert!(console.chat_log.failed);
+        std::fs::remove_file(obstruction).unwrap();
+        console.log_chat(&ServerEventKind::Chat, "latched failure");
+        assert!(!directory.path().join("chatlogs").exists());
+        assert!(console.set_cvar(CVAR, "0"));
+        assert!(console.set_cvar(CVAR, "1"));
+        console.log_chat(&ServerEventKind::Chat, "recovered");
+        assert!(!console.chat_log.failed);
+        let saved = std::fs::read_to_string(directory.path().join("chatlogs/chat.log")).unwrap();
+        assert!(saved.ends_with("] recovered\n"));
+    }
+
+    #[test]
+    fn synchronized_mode_and_bounded_unicode_cleaning_keep_single_lines() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut log = ChatLog::default();
+        log.append(directory.path(), 2, 42, "^3Al\u{ef}ce:\n hi\t!\u{7f}")
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("chatlogs/chat.log")).unwrap(),
+            "[42] Al\u{ef}ce: hi!\n"
+        );
+        let mut output = [0; 7];
+        let length = clean("\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}".as_bytes(), &mut output);
+        assert_eq!(
+            std::str::from_utf8(&output[..length]).unwrap(),
+            "\u{e9}\u{e9}\u{e9}"
+        );
+        log.append(directory.path(), 0, 43, "disabled").unwrap();
+        assert!(log.file.is_none());
+    }
 }

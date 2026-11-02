@@ -2769,6 +2769,26 @@ before expiry. Players outside the
 received snapshot cannot be watched. Player input and server authority remain
 unchanged. The command is bindable under Settings > Key bindings > Other.
 
+### Chat logs
+
+**Save game chat logs** in Settings > Chat (Advanced SJK UI; classic menus: HUD)
+controls archived `cl_logChat`. New profiles default to 1, enabled; existing
+profiles keep their saved choice. The update's what's-new card also offers the
+switch. `cl_logChat 0` disables recording, `1` appends normally, and the console's
+`2` synchronizes each entry to disk. The Settings switch writes 0 or 1.
+
+Received game-server public, team and private chat is appended to
+`chatlogs/chat.log` beside the active profile's `config.cfg`, before display
+filters such as local player blocks. Each entry is one line prefixed with its
+Unix timestamp in seconds; numeric game colour codes and control bytes are removed,
+Unicode is preserved, and a restart appends to the same file. The file is created
+on the first received chat message. Other server console text, the separate SJK
+hub chat and encrypted whispers are outside this game-chat log.
+
+File I/O happens only when a chat event arrives. A write failure is reported once
+in the console and stops attempts until logging is switched off and back on;
+that retry works even when no chat arrives while the switch is off.
+
 ### Chat in other alphabets
 
 Chat, names and every other text show Russian, Japanese, Chinese, Korean and colour

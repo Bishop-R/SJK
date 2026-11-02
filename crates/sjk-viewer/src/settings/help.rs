@@ -735,6 +735,8 @@ const HELP: &[(&str, &str)] = &[
     (
         "cl_unfocusedChatbox",
         "Shows your automatic chat bubble while unfocused or minimized. Open chat, console and menus still show their normal bubble.",
+        crate::console::chat_log::CVAR,
+        "Log all game-server chat, including team/PMs before filters, in this profile's chatlogs/chat.log. Default on.",
     ),
     (
         "cg_chatBoxFontSize",

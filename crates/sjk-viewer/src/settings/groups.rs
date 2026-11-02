@@ -85,6 +85,7 @@ impl Advanced {
 const CHAT_ROWS: &[&str] = &[
     "cg_drawChat",
     "cl_unfocusedChatbox",
+    crate::console::chat_log::CVAR,
     crate::chat::pm_only::CVAR,
     "cg_chatBoxFontSize",
     crate::chat::emoji::CVAR,
@@ -551,6 +552,7 @@ impl Group {
                 "cg_drawChat",
                 "cl_unfocusedChatbox",
                 crate::chat::pm_only::CVAR,
+                crate::console::chat_log::CVAR,
                 "cg_chatBoxFontSize",
                 crate::chat::emoji::CVAR,
                 crate::chat::reply::REMEMBER_CVAR,
