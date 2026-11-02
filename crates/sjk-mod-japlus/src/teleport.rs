@@ -2,7 +2,7 @@
 //! `amTeleOffset`, `PTelemark` and `PTele` (`codemp/cgame/cg_consolecmds.c:88-162,
 //! 2570-2696`). The client only works out where; the server checks the admin rights.
 
-use sjk_mod::{Host, Me, Player, forward, number, resolve_player};
+use sjk_mod::{Host, Me, Player, Trace, forward, number, resolve_player};
 
 /// How far above the floor a teleport lands, as JA+'s own teleports do.
 const LIFT: f32 = 24.0;
@@ -27,22 +27,65 @@ fn tele(position: [f32; 3], yaw: f32) -> String {
 }
 
 /// `japlus.guntele [distance] [yaw offset]`: to the crosshair's point, or
-/// `distance` along the view.
+/// `distance` straight ahead.
+///
+/// With a distance it departs from EternalJK's `teleGun`, which follows the
+/// view pitch included and so lands under the floor when you look down, or
+/// inside a wall in the way (hub report #218; the change was the player's own
+/// decision): the way is level (yaw only) and the player's box is swept along it
+/// through the map (`trace`, [`Host::trace_player`]), stopping [`WALL_GAP`]
+/// short of the first wall or step. A box that starts inside something solid
+/// (noclip in a wall) lands on the crosshair's point as without a distance, or
+/// stays where it is without one.
 pub(crate) fn gun_tele(
     args: &[String],
     me: Me,
     crosshair: Option<[f32; 3]>,
+    trace: impl Fn([f32; 3], [f32; 3]) -> Option<Trace>,
 ) -> Result<String, String> {
     let yaw = me.view_angles[1];
-    let Some(distance) = args.first() else {
-        let point = crosshair
+    let on_crosshair = || {
+        crosshair
             .filter(|point| *point != [0.0; 3])
-            .ok_or("aim at a surface first")?;
-        return Ok(tele([point[0], point[1], point[2] + LIFT], yaw));
+            .map(|point| [point[0], point[1], point[2] + LIFT])
+    };
+    let Some(distance) = args.first() else {
+        let point = on_crosshair().ok_or("aim at a surface first")?;
+        return Ok(tele(point, yaw));
     };
     let offset = args.get(1).map_or(0.0, |text| number(text));
-    let position = add(me.origin, forward(me.view_angles), number(distance));
+    let position = level_destination(me.origin, yaw, number(distance), trace)
+        .or_else(on_crosshair)
+        .unwrap_or(me.origin);
     Ok(tele(position, yaw + offset))
+}
+
+/// How far short of a wall a distance teleport stops: the server keeps whole
+/// units (`atoi`), which can move the player up to one unit towards it.
+pub(crate) const WALL_GAP: f32 = 2.0;
+
+/// `distance` level along `yaw` from `origin`, stopped [`WALL_GAP`] short of what
+/// the player's box meets on the way (`trace`; nothing in the way without a map);
+/// `None` when the box starts inside something solid.
+fn level_destination(
+    origin: [f32; 3],
+    yaw: f32,
+    distance: f32,
+    trace: impl Fn([f32; 3], [f32; 3]) -> Option<Trace>,
+) -> Option<[f32; 3]> {
+    let direction = forward([0.0, yaw, 0.0]);
+    let wanted = add(origin, direction, distance);
+    let Some(hit) = trace(origin, wanted) else {
+        return Some(wanted);
+    };
+    if hit.start_solid {
+        return None;
+    }
+    if hit.fraction >= 1.0 {
+        return Some(wanted);
+    }
+    let travelled = (distance.abs() * hit.fraction - WALL_GAP).max(0.0);
+    Some(add(origin, direction, travelled.copysign(distance)))
 }
 
 /// The player `get`/`goto` act on: the crosshair's without a name or with `gun`.
@@ -219,18 +262,74 @@ mod tests {
         }
     }
 
+    /// No map: nothing in the way.
+    fn open(_: [f32; 3], _: [f32; 3]) -> Option<Trace> {
+        None
+    }
+
+    /// A map whose box sweeps stop at `fraction`, or start inside something.
+    fn wall(fraction: f32, start_solid: bool) -> impl Fn([f32; 3], [f32; 3]) -> Option<Trace> {
+        move |from, to| {
+            Some(Trace {
+                fraction,
+                end: std::array::from_fn(|axis| from[axis] + (to[axis] - from[axis]) * fraction),
+                start_solid,
+            })
+        }
+    }
+
     #[test]
-    fn gun_tele_lands_on_the_crosshair_point_or_along_the_view() {
+    fn gun_tele_lands_on_the_crosshair_point_or_ahead() {
         assert_eq!(
-            gun_tele(&[], me(), Some([1.0, 2.0, 3.0])).unwrap(),
+            gun_tele(&[], me(), Some([1.0, 2.0, 3.0]), open).unwrap(),
             "amtele 1.000000 2.000000 27.000000 90.000000"
         );
-        assert!(gun_tele(&[], me(), Some([0.0; 3])).is_err());
-        assert!(gun_tele(&[], me(), None).is_err());
-        // 100 units along a view 30 degrees down, turned 45 degrees.
+        assert!(gun_tele(&[], me(), Some([0.0; 3]), open).is_err());
+        assert!(gun_tele(&[], me(), None, open).is_err());
+        // Open space: 100 units straight ahead, level although the view is 30
+        // degrees down (EternalJK went 50 units down, under the floor), turned 45.
         assert_eq!(
-            gun_tele(&args("100 45"), me(), None).unwrap(),
-            "amtele 100.000000 286.602539 -26.000000 135.000000"
+            gun_tele(&args("100 45"), me(), None, open).unwrap(),
+            "amtele 99.999992 300.000000 24.000000 135.000000"
+        );
+        assert_eq!(
+            gun_tele(&args("100"), me(), None, wall(1.0, false)).unwrap(),
+            "amtele 99.999992 300.000000 24.000000 90.000000"
+        );
+    }
+
+    /// Hub report #218: a wall in the way stops the teleport short of it, a
+    /// negative distance included, and never through it.
+    #[test]
+    fn gun_tele_stops_short_of_a_wall_in_the_way() {
+        // The box meets the wall at 120 of 300 units: it lands 118 ahead.
+        assert_eq!(
+            gun_tele(&args("300"), me(), None, wall(0.4, false)).unwrap(),
+            "amtele 99.999992 318.000000 24.000000 90.000000"
+        );
+        // Backwards the same way.
+        assert_eq!(
+            gun_tele(&args("-300"), me(), None, wall(0.4, false)).unwrap(),
+            "amtele 100.000008 82.000000 24.000000 90.000000"
+        );
+        // A wall right in front: it stays where it is.
+        assert_eq!(
+            gun_tele(&args("300"), me(), None, wall(0.0, false)).unwrap(),
+            "amtele 100.000000 200.000000 24.000000 90.000000"
+        );
+    }
+
+    /// Starting inside something solid (noclip in a wall), the sweep says
+    /// nothing: the crosshair's point as without a distance, else where you are.
+    #[test]
+    fn gun_tele_from_inside_a_wall_uses_the_crosshair_or_stays() {
+        assert_eq!(
+            gun_tele(&args("300"), me(), Some([1.0, 2.0, 3.0]), wall(0.0, true)).unwrap(),
+            "amtele 1.000000 2.000000 27.000000 90.000000"
+        );
+        assert_eq!(
+            gun_tele(&args("300"), me(), None, wall(0.0, true)).unwrap(),
+            "amtele 100.000000 200.000000 24.000000 90.000000"
         );
     }
 

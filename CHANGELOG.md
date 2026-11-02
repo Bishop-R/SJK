@@ -43,6 +43,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Achievements: Long Distance Call (a monitor hit from 40 metres or more) unlocks again: the hit was measured after the monitor's flight had been run again from the hand, so it always looked 0 metres long. It now takes where the monitor met the body, 40 metres as the world ping shows them _(Slash, after hub reports #216 and #220)_
 - The player card shows the shader on a second saber, or on a staff's other half, when it is not the first's: a row of its own with its swatch and name _(Slash, after hub report #224)_
 - Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
+- JA+ tools: `japlus.guntele` with a distance (`japlus.guntele 300`, from the console or a quick wheel choice) takes you that far straight ahead, level, and stops just before a wall or step in the way, so it no longer drops you under the floor when you look down or into a wall _(Slash, after hub report #218, Nib)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

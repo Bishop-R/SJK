@@ -49,7 +49,8 @@ they are written against is the [sjk-mod](../crates/sjk-mod/src/lib.rs) crate.
 - **What a mod can do.** A mod sees the game only through
   [`Host`](../crates/sjk-mod/src/lib.rs): it can send a reliable server command,
   read the server's kind, address and serverinfo, the predicted player, the crosshair
-  trace's end point and player, and the roster with where each player is drawn, and
+  trace's end point and player, the roster with where each player is drawn, sweep
+  the player's standing box through the map's world brushes (`trace_player`), and
   read or set a setting. It does not reach the renderer, prediction or the wire.
   Typed mod settings distinguish text, booleans and integer choices. A mod may
   declare scoped userinfo fields through the host; the existing adapter validates
@@ -84,7 +85,7 @@ decimals, as EternalJK's `%f` does.
 
 | Command | From EJK | What it does |
 | --- | --- | --- |
-| `japlus.guntele [distance] [yaw offset]` | `teleGun` | With no arguments: to the crosshair trace's end point, 24 units up, keeping your yaw. With a distance: that far along your view (pitch included) from your predicted origin, the yaw turned by the offset |
+| `japlus.guntele [distance] [yaw offset]` | `teleGun` | With no arguments: to the crosshair trace's end point, 24 units up, keeping your yaw. With a distance: that far straight ahead from your predicted origin, level (your yaw only, so looking down never puts you under the floor), stopping 2 units short of the first wall or step your standing box meets on the way (the server keeps whole units); the yaw turned by the offset. From inside a wall (noclip) it goes to the crosshair's point instead, or nowhere. EJK follows the view pitch included and goes through walls; SJK departs from it here at the player's request (hub report #218) |
 | `japlus.bring [id\|name\|gun] [distance] [yaw offset]` | `get` | Brings a player (the one under the crosshair without a name or with `gun`) in front of you, 100 units by default, facing you. Without a distance it lands level with you, 24 up |
 | `japlus.goto [id\|name\|gun] [distance] [yaw offset]` | `goto` | Teleports you in front of a player as it is drawn, facing it. With only a name you land 24 above its sent position. A player not drawn for a second or more is reached with `amtele <id>` |
 | `japlus.teleoffset x [y [z]]` | `amTeleOffset` | Moves you by whole units from your predicted origin |

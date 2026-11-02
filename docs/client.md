@@ -5918,7 +5918,9 @@ by its groups in Settings:
 | Votes, demos and server | Vote yes, Vote no, Record demo (`record`), Stop recording (`stoprecord`), Reconnect |
 
 A custom choice is a name (up to 24 characters) and any console command (up to
-200), several separated by `;`.
+200), several separated by `;`, run with all its arguments (`japlus.guntele 300`,
+`amtele 3`) as typing it would; the tests pin that it keeps them through the form,
+`wheel.json` and `wheel_commands.json`.
 
 ### Settings
 
