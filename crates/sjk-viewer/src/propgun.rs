@@ -732,41 +732,41 @@ pub(crate) fn looking(pitch: f32, yaw: f32) -> Vec3 {
 mod tests {
     use super::*;
 
-    const RAY: &str = r#"
+    const GUN: &str = r#"
 // A test gun
-name "Ray Gun"
-view models/propguns/raygun/view.md3
+name "Zapper"
+view models/propguns/zapper/view.md3
 viewOffset 1 2 3
 viewScale 0.8
-world models/propguns/raygun/world.md3
+world models/propguns/zapper/world.md3
 worldAngles 0 90 0
-fire sound/propguns/raygun/fire.wav
-fireOwn sound/propguns/raygun/fire_own.wav
-impact sound/propguns/raygun/impact.wav
+fire sound/propguns/zapper/fire.wav
+fireOwn sound/propguns/zapper/fire_own.wav
+impact sound/propguns/zapper/impact.wav
 boltColor 0.2 1 0.3
 boltSpeed 2000
-fireEffect propguns/raygun/muzzle
-boltEffect propguns/raygun/trail
-boltSound sound/propguns/raygun/flight.wav
+fireEffect propguns/zapper/muzzle
+boltEffect propguns/zapper/trail
+boltSound sound/propguns/zapper/flight.wav
 refire 300
 "#;
 
     #[test]
     fn a_gun_file_reads_its_models_sounds_and_numbers() {
-        let gun = Gun::parse("raygun", RAY).unwrap();
-        assert_eq!(gun.name, "Ray Gun");
-        assert_eq!(gun.view.model, "models/propguns/raygun/view.md3");
+        let gun = Gun::parse("zapper", GUN).unwrap();
+        assert_eq!(gun.name, "Zapper");
+        assert_eq!(gun.view.model, "models/propguns/zapper/view.md3");
         assert_eq!(gun.view.offset, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(gun.view.scale, 0.8);
-        assert_eq!(gun.fire_effect.as_deref(), Some("propguns/raygun/muzzle"));
-        assert_eq!(gun.bolt_effect.as_deref(), Some("propguns/raygun/trail"));
+        assert_eq!(gun.fire_effect.as_deref(), Some("propguns/zapper/muzzle"));
+        assert_eq!(gun.bolt_effect.as_deref(), Some("propguns/zapper/trail"));
         assert_eq!(
             gun.bolt_sound.as_deref(),
-            Some("sound/propguns/raygun/flight.wav")
+            Some("sound/propguns/zapper/flight.wav")
         );
         assert!(gun.sounds().any(|path| path.ends_with("flight.wav")));
         assert_eq!(gun.world.angles, Vec3::new(0.0, 90.0, 0.0));
-        assert_eq!(gun.fire, ["sound/propguns/raygun/fire.wav"]);
+        assert_eq!(gun.fire, ["sound/propguns/zapper/fire.wav"]);
         assert_eq!(gun.fire_own.len(), 1);
         assert_eq!(gun.bolt_speed, 2000.0);
         assert_eq!(gun.refire_ms, 300);
@@ -776,12 +776,12 @@ refire 300
 
     #[test]
     fn a_gun_file_without_models_or_with_a_bad_name_or_line_is_refused() {
-        assert!(Gun::parse("raygun", "view a.md3").is_err());
-        assert!(Gun::parse("Ray-Gun", RAY).is_err());
-        let bad = format!("{RAY}\nboltSpeed fast");
-        assert!(Gun::parse("raygun", &bad).unwrap_err().contains("line"));
-        assert!(Gun::parse("raygun", &format!("{RAY}\nwhat 1")).is_err());
-        assert!(Gun::parse("raygun", &format!("{RAY}\nfire ../x.wav")).is_err());
+        assert!(Gun::parse("zapper", "view a.md3").is_err());
+        assert!(Gun::parse("Zap-Gun", GUN).is_err());
+        let bad = format!("{GUN}\nboltSpeed fast");
+        assert!(Gun::parse("zapper", &bad).unwrap_err().contains("line"));
+        assert!(Gun::parse("zapper", &format!("{GUN}\nwhat 1")).is_err());
+        assert!(Gun::parse("zapper", &format!("{GUN}\nfire ../x.wav")).is_err());
     }
 
     #[test]
@@ -793,9 +793,9 @@ refire 300
             Vec3::new(0.0, 1.0, 0.0),
         );
         for event in [
-            Event::Hold("raygun_mk2".to_owned()),
+            Event::Hold("zapper2".to_owned()),
             Event::Put,
-            Event::Fire(shot, "raygun".to_owned()),
+            Event::Fire(shot, "zapper".to_owned()),
         ] {
             assert_eq!(
                 Event::parse(&event.text()),
@@ -805,11 +805,11 @@ refire 300
             );
         }
         assert_eq!(
-            Event::Fire(shot, "raygun".to_owned()).text(),
-            "fire_7_123456_10_-20_30_0_1000_0_raygun"
+            Event::Fire(shot, "zapper".to_owned()).text(),
+            "fire_7_123456_10_-20_30_0_1000_0_zapper"
         );
-        assert_eq!(Event::parse("fire_100_1_0_0_0_1000_0_0_raygun"), None);
-        assert_eq!(Event::parse("fire_1_1_0_0_0_0_0_0_raygun"), None);
+        assert_eq!(Event::parse("fire_100_1_0_0_0_1000_0_0_zapper"), None);
+        assert_eq!(Event::parse("fire_1_1_0_0_0_0_0_0_zapper"), None);
         assert_eq!(Event::parse("hold_Ray"), None);
     }
 
@@ -855,8 +855,8 @@ refire 300
     #[test]
     fn attack_is_kept_from_the_server_only_while_a_gun_is_held() {
         let mut toy = PropGun::default();
-        toy.guns.push(Gun::parse("raygun", RAY).unwrap());
-        toy.chosen = Some("raygun".to_owned());
+        toy.guns.push(Gun::parse("zapper", GUN).unwrap());
+        toy.chosen = Some("zapper".to_owned());
         let mut command = sjk_protocol::UserCommand {
             buttons: 1 | 4,
             ..Default::default()
