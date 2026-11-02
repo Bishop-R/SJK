@@ -2772,8 +2772,8 @@ unchanged. The command is bindable under Settings > Key bindings > Other.
 ### Chat logs
 
 **Save game chat logs** in Settings > Chat (Advanced SJK UI; classic menus: HUD)
-controls archived `cl_logChat`. New profiles default to 1, enabled; existing
-profiles keep their saved choice. The update's what's-new card also offers the
+controls archived `cl_logChat`. It defaults to 0, off, as in stock clients;
+saved choices are kept. The update's what's-new card also offers the
 switch. `cl_logChat 0` disables recording, `1` appends normally, and the console's
 `2` synchronizes each entry to disk. The Settings switch writes 0 or 1.
 

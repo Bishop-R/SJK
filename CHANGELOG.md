@@ -47,8 +47,8 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
 = cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
 - Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
-= cl_logChat: Game-server chat logs are on by default for new profiles. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
-- Chat logs: received game-server chat is saved by default for new profiles, with Save game chat logs in Settings > Chat (classic: HUD); saved choices are kept _(Lumaya)_
+= cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
+- Chat logs: Save game chat logs in Settings > Chat (classic: HUD) saves received game-server chat in your profile's chatlogs/chat.log; off by default _(Lumaya)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

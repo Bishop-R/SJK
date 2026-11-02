@@ -1,4 +1,4 @@
-//! Default-on received game-chat persistence. Only chat events perform I/O.
+//! Opt-in received game-chat persistence (off by default, as in stock clients). Only chat events perform I/O.
 use super::*;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -24,7 +24,7 @@ pub(super) struct ChatLog {
 pub(super) fn register(cvars: &mut CvarRegistry) -> Result<ChatLog, sjk_shell::CvarError> {
     cvars.register(CvarDefinition::new(
         CVAR,
-        1_i64,
+        0_i64,
         CvarFlags::ARCHIVE,
         "Append received chat to chatlogs/chat.log; 2 synchronizes each entry",
     ))?;
@@ -45,7 +45,7 @@ impl ViewerConsole {
         if !matches!(kind, Chat | TeamChat) {
             return;
         }
-        let mode = self.integer_cvar(CVAR).unwrap_or(1);
+        let mode = self.integer_cvar(CVAR).unwrap_or(0);
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -143,13 +143,23 @@ mod tests {
     use sjk_client::ServerEventKind;
 
     #[test]
-    fn a_new_profile_logs_received_game_chat_and_appends_after_restart() {
+    fn an_opted_in_profile_logs_received_game_chat_and_appends_after_restart() {
         let directory = tempfile::tempdir().unwrap();
         let config = directory.path().join("config.cfg");
         let path = directory.path().join("chatlogs/chat.log");
         {
+            let fresh = tempfile::tempdir().unwrap();
+            let mut console = ViewerConsole::new(fresh.path().join("config.cfg")).unwrap();
+            assert_eq!(console.integer_cvar(CVAR), Some(0), "off by default");
+            console.log_chat(&ServerEventKind::Chat, "Player: unlogged");
+            assert!(
+                !fresh.path().join("chatlogs").exists(),
+                "nothing logged until opted in"
+            );
+        }
+        std::fs::write(&config, "seta cl_logChat \"1\"\n").unwrap();
+        {
             let mut console = ViewerConsole::new(config.clone()).unwrap();
-            assert_eq!(console.integer_cvar(CVAR), Some(1));
             console.log_chat(&ServerEventKind::Print, "not a chat message");
             assert!(!path.exists(), "no log is created for other server text");
             console.log_chat(&ServerEventKind::Chat, "^1Player: hello\n");

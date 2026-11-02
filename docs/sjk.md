@@ -81,7 +81,6 @@ migrated, except where the table says so. Where each is documented:
 | `snaps` | 120 (slider to 125) | [status.md](status.md#gameplay-and-interface-defaults) |
 | `com_maxfpsUnfocused` | 30 | [Configuration](client.md#configuration-and-content) |
 | `com_maxfpsMonitor` | off (`com_maxfps` AUTO caps at 125, the monitor's rate unread) | [Configuration](client.md#configuration-and-content) |
-| `cl_logChat` | 1, received game-server chat logs on for new profiles (requested 01/11/2026); saved choices kept | [Chat logs](client.md#chat-logs) |
 | `cl_maxpackets` | 125 | [User commands and move packets](networking.md#user-commands-and-move-packets) |
 | `gameplay_fps` | 0, Auto: movement at the FPS cap, a `pmove_fixed` server's step wins | [Gameplay FPS](client.md#gameplay-fps) |
 | `gameplay_fps_nocap` | 0: the known server caps (JoF's 125) hold | [User commands and move packets](networking.md#user-commands-and-move-packets) |

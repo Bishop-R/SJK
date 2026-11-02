@@ -2855,8 +2855,8 @@ bubble. See [talk balloons](client.md#talk-balloons).
 ## Game chat logs
 
 Settings > Chat in Advanced mode includes **Save game chat logs**, an on/off row
-shared with the classic HUD settings. It defaults on for new profiles and keeps
-saved choices. Its help names the profile's `chatlogs/chat.log` and explains that
+shared with the classic HUD settings. It is off by default, as in stock clients,
+and keeps saved choices. Its help names the profile's `chatlogs/chat.log` and explains that
 received game-server public, team and private chat is saved before display filters.
 The release's what's-new card offers the same switch; console value 2 retains
 synchronized writes. See [chat logs](client.md#chat-logs).

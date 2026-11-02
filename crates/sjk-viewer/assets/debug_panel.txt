@@ -70,6 +70,19 @@ test: Scroll to the end with more than 100 lines: Load older adds older lines on
 test: On a hub without the endpoint: "History unavailable", "keeps no history yet".
 note: Needs the hub's history branch deployed.
 
+[pr-batch-1102]
+area: Gameplay
+title: PRs 02/11: hilt and day-sky crashes, trade chat, card shaders, guntele, chat logs
+change: #326 empty hilt crash; #329 day tint crash + DX12 shaders (Slash).
+change: #324 chat over trade; #325 Long Distance Call 40 m; #330 card second shader (Slash).
+change: #327 guntele N level, stops at walls (crouched box under low ceilings) (Slash).
+change: #328 shaders chosen on click, New outline (Creyon); #331 #332 away bubble, chat logs.
+test: Pick Empty Hilt (Stance) in the hilt list: blade with no hilt, the game stays open.
+test: Sun follows PC clock on, load a map: no crash. Trade open: chat key opens chat on top.
+test: japlus.guntele 300 crouched in a vent goes ahead, not to the crosshair; stops at walls.
+test: Collection > Shaders: hover does not choose, click does; New shaders have gold outline.
+test: Settings > Chat: Save game chat logs off by default; on writes chatlogs/chat.log.
+
 [pr-batch-1031]
 area: Gameplay
 title: PRs 31/10: chat colour, GIF hiding, Change name, melee kick, duel noclip, vehicle clips

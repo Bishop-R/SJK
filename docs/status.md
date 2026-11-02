@@ -88,10 +88,10 @@ saved config. The offline GPU fixture `duel6_settings_away_chat` was inspected:
 the single SJK switch, default, console name and help fit at 1080p. Actual native
 window events and another client's view of the bubble on an isolated server
 remain unverified. See [talk balloons](client.md#talk-balloons).
-## Default-on received game-chat logs
+## Received game-chat logs (opt in)
 
 01/11/2026, `feat/chat-logs`, based on `main` `57f60dde` (requested default):
-`cl_logChat` defaults to 1 for new profiles; saved choices, including 0, stay.
+`cl_logChat` stays 0 by default (stock; at merge on 02/11/2026 the PR's default-on was set back to off under the stock-defaults rule); saved choices stay.
 Save game chat logs is an on/off row in SJK Settings > Chat and the classic HUD
 settings, offered on the update's what's-new card too. Received game-server
 public, team and private chat appends to the profile's `chatlogs/chat.log` before
