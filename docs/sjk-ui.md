@@ -2446,6 +2446,14 @@ every menu style, on the 16:9 frame:
 - **From the main menu:** no game is needed: the toast and the window show over the main
   menu too (the pointer is free there, so the toast is always a button), and Close keeps
   the window closed until the toast's Open trade.
+- **Chatting while trading** (hub report #215): the window keeps the keyboard (Enter
+  for its gold button, Esc to close it) but lets the chat keys through: a key bound to
+  `messagemode` to `messagemode6` (Chat, Team chat, the whispers, SJK chat, Admin chat)
+  opens the composer, the window staying open under it. In a game the chat draws after
+  the window, over its shade, its recent lines too, so the other player's answers show;
+  the composer has the keys until it sends (Enter) or closes (Esc), and the window's
+  buttons still take clicks. Over the main menu the SJK chat key opens the SJK chat page,
+  and the window comes back when the page closes.
 - **Blocked players** (Sol's decision, 24/10/2026): a request from a player blocked on
   this PC is declined without a word (no toast, no window), and no card offers Trade
   with them (the Players page says "You blocked this player"); `trade <player>` and a

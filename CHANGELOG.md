@@ -42,6 +42,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Loading graphics with Sun follows PC clock (`r_dayClock`) or Sun and sky on can no longer close the game: if the sky's day and night tint cannot be built, the map keeps its own sky, and if the game closed while building it, the next start leaves it out once and says so in the console. On DX12 without `dxcompiler.dll` maps load again: the HUD's program, and with Sun and sky the light probes' update, no longer fail to compile _(Slash, after hub report #219)_
 - Achievements: Long Distance Call (a monitor hit from 40 metres or more) unlocks again: the hit was measured after the monitor's flight had been run again from the hand, so it always looked 0 metres long. It now takes where the monitor met the body, 40 metres as the world ping shows them _(Slash, after hub reports #216 and #220)_
 - The player card shows the shader on a second saber, or on a staff's other half, when it is not the first's: a row of its own with its swatch and name _(Slash, after hub report #224)_
+- Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

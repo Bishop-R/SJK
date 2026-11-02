@@ -124,8 +124,13 @@ impl GpuState {
             self.mod_notice_choice(choice);
             return;
         }
-        // And the trade window.
-        if !console_open && self.trades.window.is_open() {
+        // And the trade window, but for the chat: its keys open the composer over the
+        // window, which then has the typing (Enter sends, Escape closes it) so the
+        // players can talk while they trade (#215).
+        if !console_open && self.trades.window.is_open() && !self.chat.is_typing() {
+            if self.trade_window_chat_key(&event) {
+                return;
+            }
             let choice = self.trades.window.handle_key(&event);
             self.trade_window_choice(choice);
             return;

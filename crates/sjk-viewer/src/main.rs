@@ -2438,7 +2438,10 @@ impl GpuState {
                 information_visible,
                 self.chat.wants_history(self.console.as_ref()),
             );
-        if chat_visible {
+        // The trade window shades the menu and drops the text before it: the chat then
+        // draws after it, over it, so the players can talk while they trade (#215).
+        let chat_over_trade = !console_open && self.chat_over_trade_window(trade_shown);
+        if chat_visible && !chat_over_trade {
             self.append_configured_chat(viewport, text_scale, scoreboard_visible);
         }
         self.append_weapon_select_name(viewport);
@@ -2577,6 +2580,7 @@ impl GpuState {
         } else {
             self.world_notes.composer_closed();
         }
+        let mut chat_drawn_over_trade = false;
         if alpha_shown {
             self.append_alpha_card(viewport);
         } else if medal_shown {
@@ -2605,6 +2609,10 @@ impl GpuState {
             self.append_mod_notice_card(viewport);
         } else if trade_shown {
             self.append_trade_window(viewport);
+            if chat_over_trade {
+                self.append_configured_chat(viewport, text_scale, false);
+                chat_drawn_over_trade = true;
+            }
         }
         // A trade running while its window is closed: the toast at the top, over play.
         let trade_toast = self.append_trade_toast(viewport, console_covers_frame || medal_popup);
@@ -2638,7 +2646,7 @@ impl GpuState {
                 .is_open()
                 .then(|| self.quick_wheel.draw_list()),
             information_visible.then(|| self.hud.draw_list()),
-            chat_visible.then(|| self.chat.draw_list()),
+            (chat_visible && !chat_over_trade).then(|| self.chat.draw_list()),
             map_edit_strip.then(|| self.map_edits.strip.0.draw_list()),
             self.ghost
                 .editor
@@ -2674,6 +2682,7 @@ impl GpuState {
             whisper_shown.then(|| self.e2e_whispers.card.draw_list()),
             mod_notice_shown.then(|| self.mod_notice.card.draw_list()),
             trade_shown.then(|| self.trades.window.draw_list()),
+            chat_drawn_over_trade.then(|| self.chat.draw_list()),
             trade_toast.then(|| self.trades.toast.draw_list()),
             alpha_shown.then(|| self.alpha_card.draw_list()),
             unlock_toast.then(|| self.unlock_toast.draw_list()),
