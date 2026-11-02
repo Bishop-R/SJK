@@ -925,7 +925,20 @@ SJK wears JoF EJK's free-choice cosmetics
 whichever hat and cape they like. A hat is any `.md3`
 in `models/cosmetics/hats/`, a cape any in `models/cosmetics/capes/`
 (`models/players/hats/` and `capes/` when the new folders are empty, as older
-packs used them); names of JoF's catalogue are found in either. A name is at
+packs used them); names of JoF's catalogue are found in either. Seven of JoF's hats
+(pumpkin, cap, cringe, fedora, santahat, sombrero, tophat) moved to the new folder but
+their models still name `models/players/hats/<name>` for their surfaces; JoF EJK finds
+those in jaPRO's `japro-assets.pk3`, which holds its own copies of their pictures and
+`japro_hats.shader`. SJK takes those files alone from the EternalJK folder, as it takes
+the crosshairs, and where that pack is not installed copies the same picture from the
+new folder under the old name (`cosmetics::old_folder_pictures`), so they draw as in
+JoF EJK (hub report #192, 28/10/2026: they drew grey; JoF's `jof_hats.shader` in the
+new folder, which no model names, is left unused as there: its pumpkin glows). Hats
+built inside out (JoF's McFox and McSnowFox, most of their triangles wound away from
+their middle) are drawn two-sided, their picture lit as an unscripted surface is
+(`cosmetics::inside_out_shaders`), as JoF EJK shows them solid; their file sorts before
+every other script, so a script defining the same name keeps its own culling. Each mount
+lists and parses the hats' models once for both (`cosmetics::piece_models`). A name is at
 most 13 letters, digits, `_` or `-` and does not start with a digit. JoF's
 launcher installs its pack (`zzz_jof_cosmetics.pk3`) in the `EternalJK` folder:
 SJK mounts every PK3 there that has models in `models/cosmetics/hats/` or
