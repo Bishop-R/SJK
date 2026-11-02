@@ -30,7 +30,15 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
-## Unreleased
+## 2026.1102.1 (Alpha) | 02/11/2026
+
+Toon shading, livelier Toy Master shows, grand finds told in colour and a round of crash fixes.
+
+> Toon models: Cartoon shading for players, off by default.
+> Toy Master: Shows now dance, float and throw out prizes to grab.
+> Grand finds: The chat shows the prize in its colour, with its blade.
+> Fixes: Empty hilts, the day clock and DX12 no longer close the game.
+> Trading: Chat while a trade is open.
 
 = cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
 = cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
@@ -39,7 +47,6 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Grand finds in the game's chat look the part: the line starts with the holocron's or kyber crystal's picture, the prize is written in its own rarity colour, and a blade shows small and live; with the chat open, rest the pointer on it to see it large (`debug_find` rehearses one) _(Sol)_
 - The Toy Master's toys: facing one shows the Use prompt by the crosshair, as at a mystery box, saying only "???"; while a toy's show spins, the players around it spin and squish with it (on your screen only, where they really stand and face is unchanged), and a show whose sound you lack says so in the log, its sound heard once a pack bringing it loads _(Sol)_
 - On JA+ servers the dual sabers' forward jump attack no longer sinks you into the floor when nobody is in front: as on the server, your feet only lift to sail over a player ahead _(Blackwolf1337, after JA+)_
-
 - The Toy Master's toys can put on longer shows in steps: the players around one dance at its beat with a glowing ring on the ground showing how far it reaches, then float weightless (in looks only, your view stays your own), and at the end it throws out credits, kyber shards and holocrons that bounce and land: Use takes one, first come first served _(Sol)_
 - Hilts: choosing an empty hilt from the community list (such as Empty Hilt (Stance)) no longer closes the game, and no longer closes it at every start after: it shows the blade with no hilt, and a hilt the menu cannot show falls back to the stock one and says so in the log _(Slash, after hub report #214)_
 - Loading graphics with Sun follows PC clock (`r_dayClock`) or Sun and sky on can no longer close the game: if the sky's day and night tint cannot be built, the map keeps its own sky, and if the game closed while building it, the next start leaves it out once and says so in the console. On DX12 without `dxcompiler.dll` maps load again: the HUD's program, and with Sun and sky the light probes' update, no longer fail to compile _(Slash, after hub report #219)_
@@ -50,6 +57,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
 - Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
 - Chat logs: Save game chat logs in Settings > Chat (classic: HUD) saves received game-server chat in your profile's chatlogs/chat.log; off by default _(Lumaya)_
+- Cards: a card held in more than one finish shows each one, Normal, Holo, Solar and V, as chips to look at in turn, not only the best _(Sol)_
+- Cards can be of kind Clan, the clan being the card's set (the card reads Clan, JoF) _(Sol)_
+- Effects: the spawn and teleport beam throws as much lightning as retail again, about a sixth of before, as effect runners now roll their count _(Sol)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 
