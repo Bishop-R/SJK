@@ -204,7 +204,7 @@ link: https://sol-vulpes.github.io/SJK/
 
 [Creyon]
 github: Creyon94
-role: Contributor and tester: 73 merged pull requests, EternalJK parity
+role: Contributor and tester: 74 merged pull requests, EternalJK parity
 medal: early_contributor
 did: #2 #7 Duel challenges from names with symbols, centre prints kept whole
 did: #3 The third-person camera damped per frame as EternalJK (cg_cameraFPS)
@@ -260,11 +260,12 @@ did: #297 Blade core thickness: a slider for the white core of a lit blade
 did: #296 Day and night follow the PC's clock, in every graphics preset
 did: #289 Toys say ON and OFF in colour; toy_help explains every toy
 did: #320 Hide chosen chat GIFs on this PC, a Hidden tab shows them again
+did: #328 Shaders chosen by a click; new ones wear a New sticker and gold outline
 link: Creyon's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ACreyon94
 
 [Lumaya]
 github: lumayaa
-role: Contributor: 83 merged pull requests
+role: Contributor: 85 merged pull requests
 medal: early_contributor
 did: #24 Saber blades stop at walls instead of shining through them
 did: #29 Free camera: /freecam flies the camera away from your body
@@ -329,6 +330,8 @@ did: #305 #307 #308 Prediction checked against a real JA+ server, two fixes back
 did: #313 #314 Each prediction fix explained; saber files read in the game's order
 did: #312 Copy a server's IP from the browser or the console
 did: #315 All chat in one colour of your choice
+did: #331 One switch for the away chat bubble, unfocused or minimized
+did: #332 Save game chat logs, a switch in Settings > Chat
 did: #274 Riders and vehicles predicted with their own collision exclusions
 link: Lumaya's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa
 
@@ -358,7 +361,7 @@ link: Lukas's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+
 
 [Slash]
 github: JoFSlash
-role: Contributor: 79 merged pull requests
+role: Contributor: 85 merged pull requests
 did: #114 Tab completes cfg file names after exec and writeconfig
 did: #113 CTF team saber colours, an option
 did: #153 The SJK scoreboard tells who won the Siege round or team match
@@ -440,6 +443,12 @@ did: #309 Force templates keep Force Speed on saber-only servers
 did: #299 A Change name button on the SJK Profile tab
 did: #322 A held melee kick no longer freezes on its last frame
 did: #323 No fakenoclip or freecam in duels
+did: #324 Chat over the trade window
+did: #325 Long Distance Call counts monitor hits from 40 metres again
+did: #326 An empty community hilt no longer closes the game
+did: #327 guntele with a distance: level, stopping short of walls
+did: #329 The day tint can no longer close the game; DX12 maps load again
+did: #330 The player card shows a second saber's own shader
 link: Slash's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash
 
 [Milamber]

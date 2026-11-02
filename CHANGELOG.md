@@ -32,12 +32,24 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+= cl_unfocusedChatbox: One switch now controls the automatic chat bubble while unfocused or minimized; the separate minimized switch has been removed.
+= cl_logChat: Game-server chat logs can now be switched on in Settings. Choose whether to save received public, team and private messages in your profile's chatlogs/chat.log.
+
 - Toon models: an option draws players and other models with cartoon-style shading, light in soft bands with a bright rim around them, only on your screen (Settings > Graphics > Image, `r_toonModels`) _(Sol)_
 - Grand finds in the game's chat look the part: the line starts with the holocron's or kyber crystal's picture, the prize is written in its own rarity colour, and a blade shows small and live; with the chat open, rest the pointer on it to see it large (`debug_find` rehearses one) _(Sol)_
 - The Toy Master's toys: facing one shows the Use prompt by the crosshair, as at a mystery box, saying only "???"; while a toy's show spins, the players around it spin and squish with it (on your screen only, where they really stand and face is unchanged), and a show whose sound you lack says so in the log, its sound heard once a pack bringing it loads _(Sol)_
 - On JA+ servers the dual sabers' forward jump attack no longer sinks you into the floor when nobody is in front: as on the server, your feet only lift to sail over a player ahead _(Blackwolf1337, after JA+)_
 
 - The Toy Master's toys can put on longer shows in steps: the players around one dance at its beat with a glowing ring on the ground showing how far it reaches, then float weightless (in looks only, your view stays your own), and at the end it throws out credits, kyber shards and holocrons that bounce and land: Use takes one, first come first served _(Sol)_
+- Hilts: choosing an empty hilt from the community list (such as Empty Hilt (Stance)) no longer closes the game, and no longer closes it at every start after: it shows the blade with no hilt, and a hilt the menu cannot show falls back to the stock one and says so in the log _(Slash, after hub report #214)_
+- Loading graphics with Sun follows PC clock (`r_dayClock`) or Sun and sky on can no longer close the game: if the sky's day and night tint cannot be built, the map keeps its own sky, and if the game closed while building it, the next start leaves it out once and says so in the console. On DX12 without `dxcompiler.dll` maps load again: the HUD's program, and with Sun and sky the light probes' update, no longer fail to compile _(Slash, after hub report #219)_
+- Achievements: Long Distance Call (a monitor hit from 40 metres or more) unlocks again: the hit was measured after the monitor's flight had been run again from the hand, so it always looked 0 metres long. It now takes where the monitor met the body, 40 metres as the world ping shows them _(Slash, after hub reports #216 and #220)_
+- The player card shows the shader on a second saber, or on a staff's other half, when it is not the first's: a row of its own with its swatch and name _(Slash, after hub report #224)_
+- Trading: you can chat while a trade is open. The chat key (and Team chat, the whispers, SJK chat) opens the chat over the trade window, which stays open, and the chat shows over it, so you can read the other player's answers; Enter sends, Esc closes the chat and leaves the trade as it was _(Slash, PR #324, after hub report #215)_
+- JA+ tools: `japlus.guntele` with a distance (`japlus.guntele 300`, from the console or a quick wheel choice) takes you that far straight ahead, level, and stops just before a wall or step in the way, so it no longer drops you under the floor when you look down or into a wall _(Slash, after hub report #218, Nib)_
+- Collection > Shaders and the Forge: only a click chooses and previews a shader, so moving the mouse to Equip or Break down across other blades no longer changes the one you picked; New shaders you have not looked at yet are outlined in gold besides their New sticker, which goes as soon as you click the shader _(Creyon)_
+- Chat bubble: one switch for unfocused and minimized windows, Chat bubble while away in Settings > Chat (`cl_unfocusedChatbox`); the separate `cl_minimizedChatbox` setting is removed _(Lumaya)_
+- Chat logs: Save game chat logs in Settings > Chat (classic: HUD) saves received game-server chat in your profile's chatlogs/chat.log; off by default _(Lumaya)_
 
 ## 2026.1101.1 (Alpha) | 01/11/2026
 

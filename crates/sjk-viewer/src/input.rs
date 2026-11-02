@@ -472,13 +472,10 @@ impl GameplayInput {
         if let Some(slot) = force_abilities::command_slot(&name) {
             return Some(InputAction::ForceAbility(slot));
         }
+        if let Some(action) = chat_action(&name) {
+            return Some(action);
+        }
         match name.as_str() {
-            "messagemode" => Some(InputAction::MessageMode(false)),
-            "messagemode2" => Some(InputAction::MessageMode(true)),
-            "messagemode3" => Some(InputAction::TargetMessage(false)),
-            "messagemode4" => Some(InputAction::TargetMessage(true)),
-            "messagemode5" => Some(InputAction::SjkMessageMode),
-            "messagemode6" => Some(InputAction::AdminMessageMode),
             "togglecamera" => Some(InputAction::ToggleCamera),
             "sabertoggle" => Some(InputAction::SaberToggle),
             "saberstyle" => Some(InputAction::SaberStyle),
@@ -576,6 +573,23 @@ fn button_for_command(command: &str) -> Option<GameButton> {
         "scores" => Some(GameButton::Scores),
         _ => None,
     }
+}
+
+/// The chat a bound command opens: `messagemode` (All) and `messagemode2` (Team),
+/// `messagemode3`/`messagemode4` (whispers), `messagemode5` (SJK chat) and
+/// `messagemode6` (Admin chat); `None` for any other command.
+pub(crate) fn chat_action(command: &str) -> Option<InputAction> {
+    let name = command.split_ascii_whitespace().next()?;
+    let action = match name.to_ascii_lowercase().as_str() {
+        "messagemode" => InputAction::MessageMode(false),
+        "messagemode2" => InputAction::MessageMode(true),
+        "messagemode3" => InputAction::TargetMessage(false),
+        "messagemode4" => InputAction::TargetMessage(true),
+        "messagemode5" => InputAction::SjkMessageMode,
+        "messagemode6" => InputAction::AdminMessageMode,
+        _ => return None,
+    };
+    Some(action)
 }
 
 impl super::GpuState {

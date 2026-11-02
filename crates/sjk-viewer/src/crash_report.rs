@@ -222,6 +222,11 @@ pub(crate) fn set_directory(config_directory: &Path) {
     state.dir = Some(dir);
 }
 
+/// The folder reports go to, once [`set_directory`] has named it (never in tests).
+pub(crate) fn directory() -> Option<PathBuf> {
+    lock(&STATE).dir.clone()
+}
+
 /// The graphics adapter, as the device was made on it.
 pub(crate) fn set_gpu(info: &wgpu::AdapterInfo) {
     let mut gpu = format!("{} ({:?}", info.name, info.backend);

@@ -1178,4 +1178,37 @@ mod tests {
         assert!(!wheel.canvas.overflowed());
         assert_eq!(wheel.page(), Some(4));
     }
+
+    /// Hub report #218: a custom choice with arguments runs with all of them,
+    /// a mod's command (`japlus.guntele 300`) and a server's (`amtele`) alike.
+    #[test]
+    fn a_custom_choice_runs_with_its_arguments() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console =
+            crate::console::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        let page = console.wheel_pages.add_page("Admin").unwrap();
+        for (label, command) in [("Tele 300", "japlus.guntele 300"), ("Mark", "amtele 3")] {
+            let slot = pages::Slot::Custom {
+                label: label.to_owned(),
+                command: command.to_owned(),
+            };
+            console.wheel_pages.set_choice(page, None, slot).unwrap();
+        }
+        let id = console.wheel_pages.pages()[page].id.clone();
+        // Saved and loaded again, as a new run would.
+        drop(console);
+        let console =
+            crate::console::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        let shown = shown_pages(&console, None, Toys::default());
+        let at = shown_index(&shown, &id).unwrap();
+        let mut wheel = QuickWheel::default();
+        // Two choices: up is the first, down the second.
+        wheel.open(shown.clone(), at, Instant::now());
+        wheel.moved([0.0, -200.0]);
+        let tele = wheel.release().unwrap();
+        assert_eq!(tele, "japlus.guntele 300");
+        wheel.open(shown, at, Instant::now());
+        wheel.moved([0.0, 200.0]);
+        assert_eq!(wheel.release().as_deref(), Some("amtele 3"));
+    }
 }

@@ -126,8 +126,9 @@ pub(crate) enum Counter {
 }
 
 /// How far a monitor must fly to its hit for Long Distance Call (game units, from where
-/// it was thrown: about 40 metres, [`tracker::BOX_NEAR`]'s scale).
-pub(crate) const MONITOR_FAR: f32 = 1_500.0;
+/// it was thrown to its centre where it met the body): 40 metres as the world ping shows
+/// them (39.37 units a metre, `world_ping`); 1500 (38 metres) until 31/10/2026.
+pub(crate) const MONITOR_FAR: f32 = 1_575.0;
 
 impl Counter {
     const COUNT: usize = 40;

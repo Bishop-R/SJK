@@ -1046,7 +1046,7 @@ and in the hub (same ids):
 | Tough Crowd (hidden) | `boombox_tough_crowd` | a player within the boombox's range dead by their own hand or the world's while it plays | client |
 | Tech Support | `monitor_victims_25` | 25 different players struck with the player's monitors | client |
 | Two for One, Strike! (hidden) | `monitor_double`, `monitor_triple` | 2, 3 players struck with one monitor | client |
-| Long Distance Call | `monitor_far` | a player struck with a monitor 1500 units (about 40 metres) or more from where it was thrown (`achievements::MONITOR_FAR`) | client |
+| Long Distance Call | `monitor_far` | a player struck with a monitor 1575 units (40 metres, as the world ping measures) or more from where it was thrown, measured where it met the body (`achievements::MONITOR_FAR`) | client |
 | Bounty Hunter, Big Game Hunter | `box_hunt_mark`, `box_hunt_marks_10` | 1, 10 box hunt marks killed (a free roll won or not) | hub |
 | Still Standing, Most Wanted | `box_hunt_survive`, `box_hunt_survive_5` | 1, 5 marks stayed to the end without a hunter's kill, still in the hunt | hub |
 

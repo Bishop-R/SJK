@@ -13,6 +13,11 @@ const MAX_CLIENTS: u16 = 32;
 const ENTITY_PLAYER: u8 = 1;
 /// `PM_INTERMISSION`.
 const INTERMISSION: u8 = 7;
+/// The standing player box, `DEFAULT_MINS_2` and `DEFAULT_MAXS_2` (`bg_public.h`).
+const PLAYER_MINS: [f32; 3] = [-15.0, -15.0, -24.0];
+const PLAYER_MAXS: [f32; 3] = [15.0, 15.0, 40.0];
+/// The crouched player box's top, `CROUCH_MAXS_2` (`bg_public.h`).
+const PLAYER_CROUCH_MAXS: [f32; 3] = [15.0, 15.0, 16.0];
 
 pub(super) struct ViewerHost<'a> {
     gpu: &'a mut GpuState,
@@ -140,5 +145,31 @@ impl Host for ViewerHost<'_> {
             .as_mut()
             .ok_or("Console unavailable")?
             .try_set_cvar(name, value)
+    }
+
+    /// The standing player box (`DEFAULT_MINS_2`/`DEFAULT_MAXS_2`, 15 wide) through
+    /// the loaded map's world brushes and patches; movers and players are left out.
+    /// A standing box that starts inside something (crouched under a low ceiling,
+    /// in a vent) sweeps again as the crouched box, so only a player truly inside
+    /// a wall reads as `start_solid`.
+    fn trace_player(&self, start: [f32; 3], end: [f32; 3]) -> Option<sjk_mod::Trace> {
+        self.gpu.live_session.as_ref()?;
+        let sweep = |maxs: [f32; 3]| {
+            let bounds = sjk_bsp::Aabb::new(PLAYER_MINS, maxs).ok()?;
+            Some(
+                self.gpu
+                    .bsp
+                    .trace_box(start, end, bounds, sjk_client::pmove::PLAYER_CONTENT_MASK),
+            )
+        };
+        let mut trace = sweep(PLAYER_MAXS)?;
+        if trace.start_solid {
+            trace = sweep(PLAYER_CROUCH_MAXS)?;
+        }
+        Some(sjk_mod::Trace {
+            fraction: trace.fraction,
+            end: trace.end_position,
+            start_solid: trace.start_solid,
+        })
     }
 }

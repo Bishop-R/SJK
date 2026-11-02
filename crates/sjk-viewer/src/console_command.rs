@@ -390,6 +390,38 @@ mod tests {
         assert!(console.mods_listing()[0].contains("^2loaded"));
     }
 
+    /// Hub report #218: what a quick wheel choice queues (`queue_command`, as a
+    /// bind's script) keeps its arguments, for a mod's command and for one the
+    /// server is sent.
+    #[test]
+    fn a_queued_command_keeps_its_arguments() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console =
+            crate::console::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        console.mods.set_server(Some(sjk_mod::Server {
+            kind: sjk_mod::ServerKind::JaPlus,
+            address: "127.0.0.1:29070".into(),
+            info: String::new(),
+        }));
+        console.queue_command("japlus.guntele 300 45").unwrap();
+        console.execute_buffered_frame(None, |_, _| false);
+        assert_eq!(
+            console.client_commands.pending.back().map(Vec::as_slice),
+            Some(
+                &[
+                    "japlus.guntele".to_owned(),
+                    "300".to_owned(),
+                    "45".to_owned()
+                ][..]
+            )
+        );
+        let tokens = ["amtele".to_owned(), "3".to_owned()];
+        assert_eq!(
+            super::forward_payload("amtele 3", &tokens, true),
+            super::ForwardAction::Reliable("amtele 3")
+        );
+    }
+
     /// `jof.downloads` is the client's own command under the JoF tools' prefix:
     /// it runs off a JoF server, where the mod's commands do not.
     #[cfg(feature = "mod-jof")]

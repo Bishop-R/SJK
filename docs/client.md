@@ -2637,10 +2637,18 @@ target name, origin) and the outline is a box round its origin.
 ## Talk balloons
 
 Opening chat, the console or a menu sends the stock talk button and disables
-other movement input while that keyboard catcher is active. As in EternalJK, so
-does a window you alt-tab away from or minimise, so others see you are away:
-`cl_unfocusedChatbox` and `cl_minimizedChatbox` (archived, both 1) turn that off. Players carrying
-the talk flag have a chatbubble over their heads; the connection-trouble icon
+other movement input while that keyboard catcher is active. A window you alt-tab
+away from or minimize sends an automatic away bubble too. **Chat bubble while
+away** in SJK Settings > Chat (Advanced; classic menus: HUD) controls both away
+states through `cl_unfocusedChatbox` (archived, default 1). Set it to 0 to disable
+the automatic bubble in either state. Actual open chat, console and menu key
+catchers keep their normal talk flag.
+
+The separate `cl_minimizedChatbox` setting is removed. Old saved entries of that name
+are discarded on profile load; the saved `cl_unfocusedChatbox` choice is used
+for both states. The update's what's-new card offers this shared switch.
+
+Players carrying the talk flag have a chatbubble over their heads; the connection-trouble icon
 takes priority when the server marks a lost connection. These are upright frame
 billboards using the existing [sprite orientation](rendering.md#billboard-icons).
 Their texture opacity is preserved near walls even with soft particles enabled.
@@ -2760,6 +2768,26 @@ map changes. Missing snapshot data pauses the view; it resumes if data returns
 before expiry. Players outside the
 received snapshot cannot be watched. Player input and server authority remain
 unchanged. The command is bindable under Settings > Key bindings > Other.
+
+### Chat logs
+
+**Save game chat logs** in Settings > Chat (Advanced SJK UI; classic menus: HUD)
+controls archived `cl_logChat`. It defaults to 0, off, as in stock clients;
+saved choices are kept. The update's what's-new card also offers the
+switch. `cl_logChat 0` disables recording, `1` appends normally, and the console's
+`2` synchronizes each entry to disk. The Settings switch writes 0 or 1.
+
+Received game-server public, team and private chat is appended to
+`chatlogs/chat.log` beside the active profile's `config.cfg`, before display
+filters such as local player blocks. Each entry is one line prefixed with its
+Unix timestamp in seconds; numeric game colour codes and control bytes are removed,
+Unicode is preserved, and a restart appends to the same file. The file is created
+on the first received chat message. Other server console text, the separate SJK
+hub chat and encrypted whispers are outside this game-chat log.
+
+File I/O happens only when a chat event arrives. A write failure is reported once
+in the console and stops attempts until logging is switched off and back on;
+that retry works even when no chat arrives while the switch is off.
 
 ### Chat in other alphabets
 
@@ -4424,7 +4452,8 @@ the server already publishes to every client (name with its colour codes, model 
 head icon, saber hilts with their blade colours, the hat and cape worn, bot skill; not
 the duel wins and losses), the saber shader they wear (a live swatch, as the Collection
 draws it, and its name; only when it draws on their blade on this PC: worn by their
-look, its pack loaded) and, when the hub knows the player, their profile picture in
+look, its pack loaded; a second saber's or a staff's other half's own shader, when it
+is not the first's, on a row of its own named "(2nd blade)" or "(other half)") and, when the hub knows the player, their profile picture in
 place of the head icon (the icon then sits small on its lower left corner), SJK's
 emblem, their hub name, a gold VERIFIED, a teal SJK TEAM pill for staff, a gem of the
 rarest holocron tier they hold with its name and the medallions of the medals the SJK
@@ -5917,7 +5946,9 @@ by its groups in Settings:
 | Votes, demos and server | Vote yes, Vote no, Record demo (`record`), Stop recording (`stoprecord`), Reconnect |
 
 A custom choice is a name (up to 24 characters) and any console command (up to
-200), several separated by `;`.
+200), several separated by `;`, run with all its arguments (`japlus.guntele 300`,
+`amtele 3`) as typing it would; the tests pin that it keeps them through the form,
+`wheel.json` and `wheel_commands.json`.
 
 ### Settings
 

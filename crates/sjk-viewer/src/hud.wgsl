@@ -160,4 +160,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         return vec4(0.02, 0.035, 0.06, 0.72);
     }
     discard;
+    // FXC (DX12 without dxcompiler.dll) refuses a function whose last statement is a
+    // discard: error X3507, not all control paths return a value.
+    return vec4(0.0);
 }

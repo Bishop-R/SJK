@@ -733,6 +733,14 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
+        "cl_unfocusedChatbox",
+        "Shows your automatic chat bubble while unfocused or minimized. Open chat, console and menus still show their normal bubble.",
+    ),
+    (
+        crate::console::chat_log::CVAR,
+        "Log all game-server chat, including team/PMs before filters, in this profile's chatlogs/chat.log. Off by default.",
+    ),
+    (
         "cg_chatBoxFontSize",
         "Size of chat messages and their rows; 1 is EternalJK's size, higher is larger and wraps sooner.",
     ),

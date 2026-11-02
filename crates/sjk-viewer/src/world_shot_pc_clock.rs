@@ -7,6 +7,12 @@
 //!
 //! Run: `JKA_GAME_DATA=<GameData> cargo test -p sjk-viewer pc_clock_night -- --ignored
 //! --test-threads=1 --nocapture`.
+//!
+//! `pc_clock_every_preset` loads a map (`PC_CLOCK_MAP`, default the retail
+//! `maps/t1_fatal.bsp` of hub report #219) in each graphics preset with the clock on and
+//! off and draws it, so every pipeline a map load builds, the day tint's among them,
+//! compiles: run it with `WGPU_BACKEND=dx12` too, with and without `dxcompiler.dll` on
+//! the `PATH` (DXC, else FXC); `PC_CLOCK_CASES=Sjk:1,Experimental:1` picks the cases.
 
 use super::*;
 
@@ -104,5 +110,34 @@ fn pc_clock_night() {
 
         let path = sheet(&shots, 2, 640, "pc-clock-night");
         eprintln!("pc clock sheet: {}", path.display());
+    });
+}
+
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn pc_clock_every_preset() {
+    on_big_stack(|| {
+        let map = std::env::var("PC_CLOCK_MAP").unwrap_or_else(|_| "maps/t1_fatal.bsp".into());
+        // `PC_CLOCK_CASES` (e.g. `Sjk:1,Experimental:1`) narrows the sweep: a DX12 load
+        // under FXC takes minutes.
+        let cases = std::env::var("PC_CLOCK_CASES").unwrap_or_default();
+        for level in crate::graphics_quality::Level::ALL {
+            for clock in ["1", "0"] {
+                if !cases.is_empty() && !cases.split(',').any(|c| c == format!("{level:?}:{clock}"))
+                {
+                    continue;
+                }
+                let mut cvars = crate::graphics_quality::preset_cvars(level);
+                cvars.push((
+                    crate::world_materials::shadows::day::live::PC_CLOCK_CVAR,
+                    clock,
+                ));
+                let Some((mut gpu, _profile)) = open(&map, [640, 360], None, &cvars) else {
+                    return;
+                };
+                let shot = frame(&mut gpu, 10);
+                report(&gpu, &format!("{map} {level:?} clock {clock}"), &shot);
+            }
+        }
     });
 }

@@ -429,7 +429,7 @@ includes:
 Creyon and Lumaya wear the SJK team's Contributor medal, shown on their
 cards of the in-game credits page.
 
-Creyon ([Creyon94](https://github.com/Creyon94)), contributor and tester, has 73
+Creyon ([Creyon94](https://github.com/Creyon94)), contributor and tester, has 74
 pull requests merged into SJK, most of them bringing SJK in line with EternalJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ACreyon94)):
 
@@ -547,8 +547,10 @@ pull requests merged into SJK, most of them bringing SJK in line with EternalJK
   lists every toy with what it does, after Blep's idea.
 - #320 hide chosen chat GIFs on this PC, with a Hidden tab in the GIF picker to show them
   again.
+- #328 Collection > Shaders and the Forge choose a shader only on a click; a new shader wears
+  a New sticker and a gold outline until clicked.
 
-Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 83 pull requests
+Lumaya ([lumayaa](https://github.com/lumayaa)), contributor, has 85 pull requests
 merged into SJK
 ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3Alumayaa)):
 
@@ -677,6 +679,10 @@ merged into SJK
 - #312 Copy IP in both server browsers (and Ctrl+C), and `copyServerIP` for the server you
   are on: the address and port only, never a password.
 - #315 All chat colour (`cg_chatColor`): public All chat in one colour of your choice.
+- #331 one switch, Chat bubble while away (`cl_unfocusedChatbox`), for unfocused and
+  minimized windows.
+- #332 Save game chat logs (`cl_logChat`, off by default): received game chat in the
+  profile's `chatlogs/chat.log`.
 - #274 each predicted rider and vehicle leaves out its own pilot or chassis, as in OpenJK.
 
 Lukas ([LukasMoudry](https://github.com/LukasMoudry)), contributor, has 19 pull requests
@@ -724,7 +730,7 @@ merged into SJK
 - #304 a free spectator sees the name of the player under the crosshair and follows them
   with a left click; a click on nobody does what it did.
 
-Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 79 pull requests merged
+Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 85 pull requests merged
 into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash)):
 
 - #114 Tab completes the cfg file argument of `exec`, `execq`, `writeconfig` and `write`
@@ -872,6 +878,17 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
 - #322 holding the melee kick no longer freezes it on its last frame.
 - #323 no `fakenoclip` or `freecam` in duels, where JoF's servers spared the player all
   damage (hub report #209).
+- #325 Long Distance Call counts monitor hits from 40 metres, measured where the monitor
+  met the body (hub reports #216, #220).
+- #324 the chat opens and shows over the trade window (hub report #215).
+- #326 an empty community hilt no longer closes the game, nor at every start after (hub
+  report #214).
+- #327 `japlus.guntele` with a distance goes level and stops short of walls and steps (hub
+  report #218, Nib).
+- #329 the day tint can no longer close the game while graphics load, and DX12 without
+  `dxcompiler.dll` loads maps again (hub report #219).
+- #330 the player card shows a second saber's or a staff's other half's own shader (hub
+  report #224).
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,

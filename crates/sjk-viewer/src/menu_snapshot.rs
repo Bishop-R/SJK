@@ -1776,6 +1776,30 @@ fn player_card(shots: &mut Snapshot) {
         shots.save(name, &state.list, &vertices, true);
     }
     player_card_profile(shots);
+    // Two sabers, each its own shader (the test sample, loaded as the Tidal and the Frost): a row each.
+    let skins = crate::saber_skins::tests::loaded_pair(1);
+    let card = crate::hud::player_card::card_with(
+        &info("n|Fox|t|0|model|kyle|st|single_1|st2|single_2|c1|4|c2|1|"),
+        None,
+        [Some("saber_tidal"), Some("saber_frost")],
+    );
+    let state = State::preview_with(
+        card,
+        [760.0, 470.0],
+        VIEWPORT,
+        false,
+        [skins.get("saber_tidal"), skins.get("saber_frost")],
+    );
+    let mut vertices = Vec::new();
+    crate::ui_renderer::append_text_commands(
+        &state.list,
+        |id| state.resolve_text(id),
+        &mut vertices,
+        &shots.font.font,
+        VIEWPORT,
+        crate::text::TextStyle::NEUTRAL,
+    );
+    shots.save("player-card-two-shaders", &state.list, &vertices, true);
 }
 
 /// The player card of an SJK player with everything the card reads: the Glitch shader
@@ -1881,7 +1905,7 @@ fn player_card_profile(shots: &mut Snapshot) {
             shader,
         );
         let skin = shader.and_then(|id| skins.get(id));
-        let state = State::preview_with(card, [760.0, 470.0], VIEWPORT, pinned, skin);
+        let state = State::preview_with(card, [760.0, 470.0], VIEWPORT, pinned, [skin, None]);
         let mut vertices = Vec::new();
         crate::ui_renderer::append_text_commands(
             &state.list,

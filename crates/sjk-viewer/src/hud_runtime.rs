@@ -364,6 +364,7 @@ pub(crate) fn update(
         };
         let head_icons = &gpu.scoreboard;
         let (looks, skins) = (&gpu.looks, &*gpu.blade_skins);
+        let hilts = gpu.saber_hilts.as_ref();
         let own_slot = crate::looks::ViewSlots::of(session.game_state(), &snapshot.player).own;
         // A player blocked on this PC gets no card, and a pinned one loses their profile.
         let blocked = gpu.muted_players.slots();
@@ -396,7 +397,10 @@ pub(crate) fn update(
                 ^ u64::from(blocked.muted).rotate_left(40),
             entities: &snapshot.entities,
             icon: &|slot| head_icons.head_icon(slot),
-            shader: &|slot| card_shader(looks, skins, own_slot, slot),
+            shader: &|slot| {
+                let pair = holds_pair(session.game_state(), hilts, slot);
+                card_shaders(looks, skins, own_slot, slot, pair)
+            },
             skins,
             looks_revision: looks.revision() ^ skins.generation().rotate_left(32),
             profiles_revision: player_identity::profiles_revision(),
@@ -568,6 +572,7 @@ pub(crate) fn update(
         };
         let head_icons = &gpu.scoreboard;
         let (looks, skins) = (&gpu.looks, &*gpu.blade_skins);
+        let hilts = gpu.saber_hilts.as_ref();
         let own_slot = crate::looks::ViewSlots::of(session.game_state(), &snapshot.player).own;
         gpu.hud.card.update(hud::player_card::Input {
             seen: gpu.crosshair_scan.hit_now(presentation_time),
@@ -588,7 +593,10 @@ pub(crate) fn update(
                 ^ player_identity::vitals_flags(session.game_state()).rotate_left(17),
             entities: &snapshot.entities,
             icon: &|slot| head_icons.head_icon(slot),
-            shader: &|slot| card_shader(looks, skins, own_slot, slot),
+            shader: &|slot| {
+                let pair = holds_pair(session.game_state(), hilts, slot);
+                card_shaders(looks, skins, own_slot, slot, pair)
+            },
             skins,
             looks_revision: looks.revision() ^ skins.generation().rotate_left(32),
             profiles_revision: player_identity::profiles_revision(),
@@ -806,45 +814,77 @@ impl HudUniform {
     }
 }
 
-/// The saber shader the player in `slot` wears, as their blade draws it here: the local
-/// player's own (`own_slot`, gated by their unlocks) or the looks' for another, only
-/// when its pack is loaded. For the player card.
-fn card_shader(
+/// The saber shaders the player in `slot` wears, as their blades draw them here: the first
+/// saber's, then the second saber's (or a staff's other half's) when they hold one
+/// (`pair`, [`holds_pair`]). The local player's own (`own_slot`, gated by their unlocks)
+/// or the looks' for another, each only when its pack is loaded. For the player card.
+fn card_shaders(
     looks: &crate::looks::Looks,
     skins: &crate::saber_skins::LoadedSkins,
     own_slot: Option<usize>,
     slot: u8,
-) -> Option<&'static str> {
+    pair: bool,
+) -> [Option<&'static str>; 2] {
     let slot = usize::from(slot);
-    let id = if own_slot == Some(slot) {
-        looks.own_saber_skin()
+    let (first, second) = if own_slot == Some(slot) {
+        (looks.own_saber_skin(), looks.own().second)
     } else {
-        looks.saber_skin_id(slot)
-    }?;
-    skins.get(id).map(|skin| skin.id)
+        (looks.saber_skin_id(slot), looks.second_skin(slot))
+    };
+    let second = match second {
+        crate::looks::SecondSkin::Same => first,
+        crate::looks::SecondSkin::Own(id) => id,
+    };
+    let loaded = |id: Option<&'static str>| skins.get(id?).map(|skin| skin.id);
+    [loaded(first), loaded(second.filter(|_| pair))]
+}
+
+/// Whether the player in `slot` holds something a second shader goes on, as the world
+/// draws it (`saber_skins::skin_of_blade`): a second saber, or one saber with another half
+/// (a staff's, not a crossguard's side blades).
+fn holds_pair(
+    game: &sjk_protocol::GameState,
+    hilts: Option<&crate::saber::HiltCatalog>,
+    slot: u8,
+) -> bool {
+    let [first, second] = sjk_client::legacy_client_saber_names(game, u16::from(slot));
+    second.is_some()
+        || first
+            .zip(hilts)
+            .is_some_and(|(name, hilts)| hilts.get_any_case(&name).has_other_half())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::card_shader;
-    use crate::looks::{Looks, Worn};
-    use crate::saber_skins::{LoadedSkins, tests::loaded_sample};
+    use super::card_shaders;
+    use crate::looks::{Looks, SecondSkin, Worn};
+    use crate::saber_skins::{
+        LoadedSkins,
+        tests::{loaded_pair, loaded_sample},
+    };
 
-    #[test]
-    fn the_card_names_a_shader_only_when_it_draws_on_the_blade() {
-        let loaded = loaded_sample(1);
-        let tidal = sjk_identity::Look {
-            saber: "saber_tidal".to_owned(),
+    fn look(saber: &str, saber2: Option<&str>) -> sjk_identity::Look {
+        sjk_identity::Look {
+            saber: saber.to_owned(),
             illuminate: false,
             saber_off: Vec::new(),
             toys: Vec::new(),
-            saber2: None,
+            saber2: saber2.map(str::to_owned),
             saber2_off: Vec::new(),
             saber_on: Vec::new(),
             saber2_on: Vec::new(),
             saber_sounds: String::new(),
             tag: None,
+        }
+    }
+
+    #[test]
+    fn the_card_names_a_shader_only_when_it_draws_on_the_blade() {
+        let loaded = loaded_sample(1);
+        let card_shader = |looks: &Looks, skins: &LoadedSkins, own_slot, slot| {
+            card_shaders(looks, skins, own_slot, slot, false)[0]
         };
+        let tidal = look("saber_tidal", None);
         let mut looks = Looks::default();
         looks.replace_roster([(3, "Fox", Some(&tidal))]);
         looks.rebuild(|slot| (slot == 3).then(|| "Fox".to_owned()));
@@ -866,5 +906,55 @@ mod tests {
         assert_eq!(card_shader(&looks, &loaded, Some(1), 1), None);
         looks.set_own(Some(1), Worn::own("", "", |_| true, false));
         assert_eq!(card_shader(&looks, &loaded, Some(1), 1), None);
+    }
+
+    #[test]
+    fn the_card_names_the_second_sabers_shader_only_while_there_is_one() {
+        let loaded = loaded_pair(1);
+        let mut looks = Looks::default();
+        let (same, own, stock) = (
+            look("saber_tidal", None),
+            look("saber_tidal", Some("saber_frost")),
+            look("", Some("saber_frost")),
+        );
+        let unloaded = look("saber_tidal", Some("saber_glitch"));
+        looks.replace_roster([
+            (2, "Fox", Some(&same)),
+            (3, "Kit", Some(&own)),
+            (4, "Vix", Some(&stock)),
+            (5, "Tod", Some(&unloaded)),
+        ]);
+        let names = ["", "", "Fox", "Kit", "Vix", "Tod"];
+        looks.rebuild(|slot| {
+            names
+                .get(usize::from(slot))
+                .filter(|name| !name.is_empty())
+                .map(|name| (*name).to_owned())
+        });
+        let shaders = |slot, pair| card_shaders(&looks, &loaded, None, slot, pair);
+        // No saber of its own: the second wears the first's.
+        assert_eq!(shaders(2, true), [Some("saber_tidal"); 2]);
+        assert_eq!(shaders(3, true), [Some("saber_tidal"), Some("saber_frost")]);
+        // A stock first and a shader on the second.
+        assert_eq!(shaders(4, true), [None, Some("saber_frost")]);
+        // A second whose pack is not loaded here draws stock.
+        assert_eq!(shaders(5, true), [Some("saber_tidal"), None]);
+        // Nothing a second goes on: none, whatever the look says.
+        assert_eq!(shaders(3, false), [Some("saber_tidal"), None]);
+        assert_eq!(shaders(4, false), [None; 2]);
+        // The local player: their own second, gated by their unlocks as the first.
+        let mut worn = Worn::own("saber_tidal", "", |_| true, false);
+        worn.second = SecondSkin::Own(Some("saber_frost"));
+        looks.set_own(Some(1), worn);
+        assert_eq!(
+            card_shaders(&looks, &loaded, Some(1), 1, true),
+            [Some("saber_tidal"), Some("saber_frost")]
+        );
+        worn.second = SecondSkin::Own(None);
+        looks.set_own(Some(1), worn);
+        assert_eq!(
+            card_shaders(&looks, &loaded, Some(1), 1, true),
+            [Some("saber_tidal"), None]
+        );
     }
 }

@@ -11,12 +11,39 @@ impl Runtime {
         format: wgpu::TextureFormat,
         settings: Settings,
     ) {
-        if !settings.enabled {
+        let built = settings
+            .enabled
+            .then(|| {
+                // A compile wgpu rejects, or one the last session closed in, leaves the
+                // map's own sky (hub report #219).
+                crate::day_sky_guard::build(device, || {
+                    self.day_pipelines(device, camera, format, settings)
+                })
+            })
+            .flatten();
+        let Some((clock, box_pipeline, face_pipeline)) = built else {
             self.box_pipeline = self.authored_box_pipeline.clone();
             self.face_pipeline = self.authored_face_pipeline.clone();
             self.day_clock = None;
             return;
-        }
+        };
+        self.day_clock = Some(clock);
+        self.box_pipeline = box_pipeline;
+        self.face_pipeline = face_pipeline;
+    }
+
+    /// The tint's clock buffer and binding and its box and face pipelines.
+    fn day_pipelines(
+        &self,
+        device: &wgpu::Device,
+        camera: &wgpu::BindGroupLayout,
+        format: wgpu::TextureFormat,
+        settings: Settings,
+    ) -> (
+        (wgpu::Buffer, wgpu::BindGroup),
+        wgpu::RenderPipeline,
+        gpu::FacePipelines,
+    ) {
         use wgpu::util::DeviceExt;
         let clock_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("SJK live day clock"),
@@ -53,7 +80,6 @@ impl Runtime {
                 resource: buffer.as_entire_binding(),
             }],
         });
-        self.day_clock = Some((buffer, binding));
         let texture = gpu::texture_layout(device);
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("SJK day sky layout"),
@@ -64,8 +90,11 @@ impl Runtime {
             label: Some("SJK day sky"),
             source: wgpu::ShaderSource::Wgsl(source().into()),
         });
-        self.box_pipeline = gpu::box_pipeline(device, &layout, &shader, format, self.radiance);
-        self.face_pipeline = gpu::face_pipeline(device, &layout, &shader, format, self.radiance);
+        (
+            (buffer, binding),
+            gpu::box_pipeline(device, &layout, &shader, format, self.radiance),
+            gpu::face_pipeline(device, &layout, &shader, format, self.radiance),
+        )
     }
 
     /// Match the directed sun used by surface lighting, shadows and godrays.

@@ -52,6 +52,63 @@ while held, the first-person placing), Clippy on the new code, and world shots o
 private test guns held in first and third person on a demo, with bolts in flight. Not
 verified: anything in a game, two clients seeing each other's guns and shots, a hit
 landing on a live server.
+## Shaders chosen by a click only, New ones outlined in gold
+
+31/10/2026, `fix/collection-click-to-preview` (Creyon), based on `main` `e4447394`: on
+the Collection's Shaders tab, resting the pointer on a blade chose and previewed it (from
+21/10 only over its blade strip), so moving to Equip across other blades changed the
+choice and the preview, and resting a second on a New one saw it. Now only a click (or
+the keys) chooses a shader there and on the Forge's tiles; the pointer shows the hover card
+alone (`Panel::hover_chooses`, `forge::Panel::token`). A New shader clicked is seen at
+once, its sticker gone (with the keys, after its second as before). A New shader not chosen is
+outlined in gold on the wall and has a gold edge down its row in the list, besides its
+sticker ([sjk-ui.md](sjk-ui.md), [unlockables.md](unlockables.md)). Verified: the unit
+tests `resting_on_a_shader_never_chooses_it`, `resting_on_a_tile_never_chooses_it` and
+`a_new_shader_is_outlined_in_gold`, fmt, the workspace's build, tests and Clippy; in game
+on Windows (Creyon, 31/10/2026): a shader stays chosen while the pointer crosses others
+to Equip, and a New one shows its sticker and gold outline until clicked. Not verified: the
+Forge's tiles in game.
+## One automatic away chat bubble switch
+
+01/11/2026, `fix/minimized-chat-bubble`, based on `main` `57f60dde`: one archived
+switch, `cl_unfocusedChatbox` (default 1), controls the automatic bubble whenever
+the window is unfocused or minimized. The separate `cl_minimizedChatbox`
+registration, cache and consumer are removed; a documented retirement table
+removes old saved entries after profile load. The saved unfocused choice is kept.
+Chat bubble while away is available in SJK Settings > Chat and the classic HUD
+settings, and the update's what's-new card offers that same switch. Actual open
+chat/console/menu key catchers retain their normal talk flag. Protocol-26 encoding
+and the window frame caps are unchanged.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy. Focused tests cover all focus/minimize combinations, disabled and nonzero
+values, live callbacks, minimized events before focus loss, and old profiles with
+opposite saved choices, including removal of the obsolete entry from the next
+saved config. The offline GPU fixture `duel6_settings_away_chat` was inspected:
+the single SJK switch, default, console name and help fit at 1080p. Actual native
+window events and another client's view of the bubble on an isolated server
+remain unverified. See [talk balloons](client.md#talk-balloons).
+## Received game-chat logs (opt in)
+
+01/11/2026, `feat/chat-logs`, based on `main` `57f60dde` (requested default):
+`cl_logChat` stays 0 by default (stock; at merge on 02/11/2026 the PR's default-on was set back to off under the stock-defaults rule); saved choices stay.
+Save game chat logs is an on/off row in SJK Settings > Chat and the classic HUD
+settings, offered on the update's what's-new card too. Received game-server
+public, team and private chat appends to the profile's `chatlogs/chat.log` before
+display filters, with Unix timestamps and bounded UTF-8-safe numeric-colour/control
+cleanup. Mode 2 still synchronizes entries. Disabling then enabling clears a
+write-failure latch even without a message while disabled. The separate SJK hub
+chat and encrypted whispers remain outside this game-chat log. I/O is on incoming
+chat events, with no new work on HUD frames.
+
+Verified on Windows x64: formatting, locked workspace build/tests and all-target
+Clippy. Focused temporary-file tests cover default-on receive filtering, append
+across restart, saved opt-outs and switch persistence, synchronized mode, real
+Unicode truncation and retry after a directory-write error. The offline GPU
+fixture `duel6_settings_chat_logs` was inspected: the SJK Chat row, On default,
+console name and help fit at 1080p. Actual live-session logging and non-Windows
+runtime behavior remain unverified; no public-server chat was automated. See
+[chat logs](client.md#chat-logs).
 
 ## Sharp tags, Holo and Solar tags, credits cards as tags
 
@@ -77,6 +134,33 @@ and a Holo tag, a Holo and a Solar credits card, a Solar tag on the floor) and
 verified: in a game against a hub running `tag-cards` (finishes and cards end to end, a
 second client seeing them), frame time with many finished tags, and the art at 512 (the
 pack's pictures are 256).
+## Loading graphics with the day tint cannot close the game (hub report #219)
+
+31/10/2026, `fix/day-clock-load-crash`, based on `main` `e4447394`. A player's game closed
+without a message while loading graphics on a JoF server three times after turning on
+`r_dayClock`, which in the SJK and Vanilla presets builds the sky's day tint
+(`sky_stage::day`), until then built only with Sun and sky on. The exact crash was not
+reproduced: offline, T1_Fatal in the SJK and Vanilla presets with the clock on and off
+loads and draws on Vulkan, also built on a worker with no console and adopted as a map
+change. What the fix covers: the tint's pipelines are built inside `gpu_guard::capture` (`day_sky_guard.rs`),
+so one wgpu rejects leaves the map's own sky; `crashes/day-sky.txt`, written before the
+compile and removed after, makes the start after a session that closed while compiling
+leave the tint out once, with a console line, then try again (as `crashes/stage-hilt.txt`
+does for #214); and on DX12 without `dxcompiler.dll` (FXC) maps load again: `hud.wgsl`
+ended its fragment program with `discard`, which FXC refused (X3507, not all control paths
+return a value), failing every load before the world, and with Sun and sky
+`gi_probes.wgsl`'s `update` returned on a probe's state (a storage read) before its
+workgroup barriers, which FXC refused (X4026); a dead probe now skips the work and returns
+after them. Verified: the unit test
+`a_compile_left_running_is_found_once_and_a_finished_one_not_at_all`, the GPU test
+`a_rejected_compile_falls_back_and_leaves_no_marker` (Vulkan and DX12), the ignored world
+shot `pc_clock_every_preset` (`PC_CLOCK_CASES` narrows it): on DX12 with FXC, T1_Fatal in
+Vanilla and SJK with the clock on and duel6 in Experimental with the clock on; with DXC
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in Experimental; on Vulkan
+T1_Fatal in Vanilla and SJK, clock on and off, and duel6 in SJK and Experimental, clock on.
+Limits: T1_Fatal in Experimental on DX12 stopped at the lamp light cache's page buffer
+(`SJK lamp cache pages` invalid), not a compile, so that case was checked on duel6. fmt,
+the sjk-viewer tests and Clippy.
 
 ## Map editor made easier
 
@@ -173,6 +257,7 @@ workspace recheck is left to CI.
 An offline GPU screenshot with cyan selected confirms body colours and preserved
 identified sender names. Live-server chat and other operating systems remain unverified. Formatting strips only display escapes without new
 per-frame strings, retaining wrapping offsets and emoji markers.
+
 ## Hidden GIFs
 
 30/10/2026, `feat/hide-gifs`, based on `main` `487f296f` (Sol's #ideas recap of 29/10): the
@@ -11449,10 +11534,11 @@ now keeps 256 slots that only those billboards use (`particle_types.rs`); effect
 stop at their own cap (4,096 since the rocket-trail change below). Unit tests replay that frame. No game was started: the busy
 scene Sol saw is not reproduced on screen.
 
-The same branch raises your balloon while the window is unfocused or minimised, as
-EternalJK's `cl_unfocusedChatbox` / `cl_minimizedChatbox` do in `CL_CmdButtons`
-(both 1). A unit test covers the settings; whether commands keep flowing while
-Windows has the window minimised (which the minimised case needs) is unverified.
+At that revision the branch also raised your balloon while unfocused or minimized,
+using EternalJK's two-switch policy in `CL_CmdButtons`. The controls have since
+been consolidated into `cl_unfocusedChatbox` ([talk balloons](client.md#talk-balloons)).
+Whether commands keep flowing while Windows has the window minimized remains
+unverified.
 
 ## Force power presentation
 

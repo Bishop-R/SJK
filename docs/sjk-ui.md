@@ -334,7 +334,11 @@ on the 16:9 frame, dark behind the form on the left and clear over the model.
   side, Right hand and Left hand, three lines each (four until 23/10/2026). The hilts come in the game's
   load order, as JoF EJK lists them (`legacy_saber_load_order`), the retail game's
   first under a "Jedi Academy" line with their count and the community's after them
-  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). The hilt search
+  under "Community" (`HiltLines`; the rule in [AGENTS.md](../AGENTS.md)). A hilt
+  with no mesh (a community "empty hilt", only its `*blade1` tag, for a stance with the
+  blade alone) shows its blades and no hilt; a hilt the stage cannot show is logged and the
+  hand holds `single_1`, and one the game closed while loading is left out at the next
+  start (`crashes/stage-hilt.txt`, `menu_stage/hilt_guard.rs`; hub report #214). The hilt search
   (10/10/2026, Sol's request) is a field at the right of the lists' heading line
   (beside Left hand for Dual), drawn as the Character page's Search ("Search
   hilts", then the words typed and "N found"): Enter or a click types in it, and
@@ -1642,8 +1646,8 @@ for the run.
     pack has not come), the name without "blade" on two lines at most, its state (Worn,
     Yours, "Yours x3", Not owned: "Locked" until 29/10/2026, when the padlock became the
     player's own lock) and the chroma's wheel; its marks: the New sticker on its top edge,
-    the star and the padlock on a dark pill over the blade's right end; the chosen tile
-    lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
+    the star and the padlock on a dark pill over the blade's right end, a New one outlined
+    in gold; the chosen tile lifted over a shadow in a white outline. Left and Right step a tile (on into the next tier's), Up
     and Down a line of tiles, to the same column or the nearest, past the headings.
   - **The list** (from y 400): column heads (Shader, Tier and Yours sort it; "#", the
     blade's number, only while `debug_collectibles` shows numbers; Look, Smith and,
@@ -1921,15 +1925,17 @@ saber shader the Shaders tab, the Forge and the trade window list carries its ma
   whose economy says `marks` (`sjk_identity::MARKS_ABILITY`), detected as `shatter_last`
   is, so against an older hub nothing of them shows and nothing is asked.
 - **New:** a shader the player holds and has not looked at since they got it
-  (holocrons, gifts, trades, crafts): a gold "New" sticker, and the Shaders tab's "2 new"
+  (holocrons, gifts, trades, crafts): a gold "New" sticker, outlined in gold on the wall
+  (a gold edge down its row in the list) while it is not the one chosen (Creyon,
+  31/10/2026), and the Shaders tab's "2 new"
   after the headline. Local, on this PC: `shader-seen.txt` beside `config.cfg`, one shader
   id a line (`shader_marks::FILE`), read at start and written at each change. With no file
   yet, everything held the first time the hub says what the player holds is seen, so a
   player never finds every shader New; a shader no longer held leaves the list (New again
-  when it comes back). A New one chosen on Shaders or in the Forge, by the pointer or the
-  keys, is seen once it has stayed chosen a second (`shader_marks::Look`, `LOOK_MS`):
-  hovering chooses, so a sweep of the pointer across the wall passes over shaders without
-  seeing them (Sol's decision, 29/10/2026). Turning to another tab or closing the page
+  when it comes back). A New one clicked on Shaders or in the Forge is seen at once, its
+  sticker gone (Creyon, 31/10/2026); one reached with the keys is seen once it has stayed
+  chosen a second (`shader_marks::Look`, `LOOK_MS`; Sol's decision, 29/10/2026). Resting the pointer never chooses a shader (31/10/2026;
+  hovering chose one before), so it never sees one either. Turning to another tab or closing the page
   sees the shader chosen only if it had already stayed its second; Mark all seen (N) sees
   them all. Nothing is New
   while the debug collectibles show.
@@ -2442,6 +2448,14 @@ every menu style, on the 16:9 frame:
 - **From the main menu:** no game is needed: the toast and the window show over the main
   menu too (the pointer is free there, so the toast is always a button), and Close keeps
   the window closed until the toast's Open trade.
+- **Chatting while trading** (hub report #215): the window keeps the keyboard (Enter
+  for its gold button, Esc to close it) but lets the chat keys through: a key bound to
+  `messagemode` to `messagemode6` (Chat, Team chat, the whispers, SJK chat, Admin chat)
+  opens the composer, the window staying open under it. In a game the chat draws after
+  the window, over its shade, its recent lines too, so the other player's answers show;
+  the composer has the keys until it sends (Enter) or closes (Esc), and the window's
+  buttons still take clicks. Over the main menu the SJK chat key opens the SJK chat page,
+  and the window comes back when the page closes.
 - **Blocked players** (Sol's decision, 24/10/2026): a request from a player blocked on
   this PC is declined without a word (no toast, no window), and no card offers Trade
   with them (the Players page says "You blocked this player"); `trade <player>` and a
@@ -2827,6 +2841,28 @@ Team/admin chat, whispers and the separate SJK channel keep their own colours.
 Incoming chat colour, cyan selected (offline fixture):
 
 ![Incoming chat colour](images/incoming-chat-colour.png)
+
+## Away chat bubble
+
+Settings > Chat in Advanced mode offers **Chat bubble while away**, shared with
+the classic HUD settings. `cl_unfocusedChatbox` controls both unfocused and
+minimized windows; there is no separate minimized switch. The default remains
+on, saved unfocused choices are kept, and the update's what's-new card offers
+the same switch. Actual chat, console and menu key catchers retain their normal
+bubble. See [talk balloons](client.md#talk-balloons).
+
+![One away bubble switch in SJK Settings](images/away-chat-settings.png)
+## Game chat logs
+
+Settings > Chat in Advanced mode includes **Save game chat logs**, an on/off row
+shared with the classic HUD settings. It is off by default, as in stock clients,
+and keeps saved choices. Its help names the profile's `chatlogs/chat.log` and explains that
+received game-server public, team and private chat is saved before display filters.
+The release's what's-new card offers the same switch; console value 2 retains
+synchronized writes. See [chat logs](client.md#chat-logs).
+
+![Save game chat logs in SJK Settings](images/chat-logs-settings.png)
+
 
 ## Plan
 

@@ -122,6 +122,23 @@ pub trait Host {
     fn cvar(&self, name: &str) -> Option<String>;
     /// Change and save a setting.
     fn set_cvar(&mut self, name: &str, value: &str) -> Result<(), String>;
+    /// Sweep the player's standing box from `start` to `end` through the map's
+    /// world brushes, as movement would; `None` out of a game or without a map.
+    fn trace_player(&self, start: [f32; 3], end: [f32; 3]) -> Option<Trace> {
+        let _ = (start, end);
+        None
+    }
+}
+
+/// Where a box swept through the world stopped ([`Host::trace_player`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Trace {
+    /// How far along it got, 0 to 1 (1: nothing in the way).
+    pub fraction: f32,
+    /// Where the box stopped, clear of what it hit.
+    pub end: [f32; 3],
+    /// The box started inside something solid, so `end` is not to be trusted.
+    pub start_solid: bool,
 }
 
 /// A validated field a loaded mod asks the existing userinfo adapter to send.
