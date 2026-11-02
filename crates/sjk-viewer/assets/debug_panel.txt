@@ -70,6 +70,16 @@ test: Scroll to the end with more than 100 lines: Load older adds older lines on
 test: On a hub without the endpoint: "History unavailable", "keeps no history yet".
 note: Needs the hub's history branch deployed.
 
+[pr-batch-1102c]
+area: Gameplay
+title: PRs 02/11 c: vehicle HP per HUD style, Lugormod v3 prediction
+change: Slash #318: each HUD style shows the piloted vehicle's HP only, in its own look.
+change: Lumaya #287: Lugormod v3 servers only: scale, stand-up, FFA admin jetpack, baton rolls.
+test: On a swoop: radial = yellow arc under crosshair, classic = yellow HP bar, text = number.
+test: cg_hudStyle game on a swoop: the retail swoop HUD, as before.
+test: Local Lugormod v3 server: scaled player walks, crouches, rolls with no snapping back.
+note: #287 untested on a real Lugormod server; revert the merge if players report problems.
+
 [pr-batch-1102b]
 area: Menus & settings
 title: PRs 02/11 b: HUD edit, sonar, quiet mode, PC fonts, scoreboard IDs, reactions, long chat
