@@ -114,7 +114,8 @@ someone else took first, or one gone, is refused in a line. Drops wait a minute 
 the show ends. History lists them as taken from a Toy Master's toy.
 
 Every sound plays on a source of the toy's own (`0x5300_0000` and its id), and the
-show's sound stops when the show ends or the player leaves the map. The sounds are
+show's sound, played twice as loud as its recording (`SHOW_VOLUME`, since 02/11/2026),
+stops when the show ends or the player leaves the map. The sounds are
 looked up again when the game data changes, so a pack that brings the show's sound
 during a session (the Sith cloud's extras) is heard from its next map. A show whose sound
 is not in the game data plays silent and says so in the log (`toy master: the show's
