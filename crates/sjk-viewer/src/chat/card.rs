@@ -523,6 +523,7 @@ mod tests {
         chat.sync_sjk(&state(Default::default()), |_| false, now);
         chat.receive(ServerEventKind::Chat, "Fox: hi".to_owned(), None, now);
         let message = ChatMessage {
+            reactions: Default::default(),
             id: 7,
             at: 0,
             key_id: KEY.to_owned(),

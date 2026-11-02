@@ -391,6 +391,8 @@ mod find_blades_shots;
 #[path = "world_shot_text_sizes.rs"]
 mod text_sizes_shots;
 
+#[path = "world_shot_chat_reactions.rs"]
+mod chat_reactions_shots;
 #[path = "world_shot_chat_readability.rs"]
 mod chat_readability_shots;
 
@@ -3635,6 +3637,7 @@ like this one.",
             .enumerate()
             .map(
                 |(index, (key, name, text, verified))| sjk_identity::ChatMessage {
+                    reactions: Default::default(),
                     id: index as u64 + 1,
                     at: now - (lines.len() - index) as i64 * 140,
                     key_id: (*key).to_owned(),
@@ -3702,6 +3705,8 @@ like this one.",
             person
         };
         let mut listed = sjk_identity::ChatState {
+            reaction: None,
+            own_key: None,
             messages,
             revision: 1,
             online: 7,

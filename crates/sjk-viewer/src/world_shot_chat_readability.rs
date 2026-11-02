@@ -30,6 +30,7 @@ fn ffa3_chat_readability() {
             console.set_open(false);
         }
         let message = |id: u64, name: &str, text: &str| sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

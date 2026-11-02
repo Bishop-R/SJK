@@ -169,9 +169,21 @@ fn lay(message: &ChatMessage, inputs: &Inputs<'_>, measure: &Measure<'_>, s: f32
         ""
     };
     let when = ago(u64::try_from(message.at).unwrap_or(0), inputs.now);
-    let meta = format!("{staff}{when}");
-    let meta_room = width(&meta, META_SIZE, TextFace::Regular) + 24.0;
     let muted = inputs.muted.contains(&message.key_id) && official.is_none();
+    let counts = if muted {
+        [0; 6]
+    } else {
+        sjk_identity::reactions::counts(&message.reactions, None).0
+    };
+    // One allocation, as before: reserve for the bounded reaction suffix too.
+    let mut meta = String::with_capacity(128);
+    use std::fmt::Write as _;
+    let _ = write!(
+        meta,
+        "{staff}{when}{}",
+        sjk_identity::reactions::Summary(counts)
+    );
+    let meta_room = width(&meta, META_SIZE, TextFace::Regular) + 24.0;
     let mut gif = None;
     let text = if let Some(official) = &official {
         official.text.clone()
@@ -330,6 +342,10 @@ impl Panel {
     /// Who reads the chat, or why it cannot be read, and what it is.
     fn status(&mut self, frame: &Frame, inputs: &Inputs<'_>) {
         let s = frame.s;
+        let reaction_error = self.reaction_notice.message(
+            inputs.chat.and_then(|chat| chat.reaction.as_ref()),
+            Instant::now(),
+        );
         let (line, colour) = match inputs.chat {
             _ if !inputs.enabled => (
                 "SJK chat is off (Settings > Network > SJK chat)".to_owned(),
@@ -339,6 +355,9 @@ impl Panel {
                 "The SJK identity is off: turn it on to chat (Settings > Network)".to_owned(),
                 color::EMBER,
             ),
+            Some(_) if reaction_error.is_some() => {
+                (reaction_error.unwrap().to_owned(), color::EMBER)
+            }
             Some(chat) if !chat.live => ("Connecting to the SJK hub...".to_owned(), color::MUTED),
             Some(chat) if chat.online == 1 => {
                 ("1 SJK player reading".to_owned(), color::GOLD_BRIGHT)
@@ -1311,6 +1330,17 @@ impl Panel {
             );
         }
         // No key id here: key ids never show in the game.
+        super::reactions::draw(
+            self,
+            frame,
+            message,
+            [SIDE_X, top + 68.0, SIDE_WIDTH, 36.0],
+            !muted && inputs.enabled,
+            inputs
+                .chat
+                .and_then(|chat| chat.own_key.as_ref())
+                .and_then(|key| std::str::from_utf8(key).ok()),
+        );
         let mut y = top + 110.0;
         kit::button(
             &mut self.ui,

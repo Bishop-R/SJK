@@ -330,6 +330,23 @@ keeps the last definition of a name in path order, so a script defining the same
 wins. That step now takes 22 ms. The whole start is too noisy to show it (medians of 7
 starts: `main` 1,507 ms, first version 1,624, now 1,566).
 
+## Shared SJK chat reactions
+
+31/10/2026, `feat/sjk-chat-reactions`, code `4f081b30` (including `main`
+`677a6073`): the SJK chat page shows shared emoji counts and registered players
+can toggle their own reactions with pointer or keyboard. Failed reaction notices
+expire after five seconds, returning to the reader count or connection status;
+a later failure starts a fresh timeout. A monotonic-clock test covers expiry,
+success and repeated failures. Feed tests cover validation, replacement updates,
+deletion, reconnect and old JSON; immutable reaction lists share storage across
+snapshots. No protocol-26 or game-server chat changes.
+
+Windows x64 formatting, locked workspace build/tests and all-target clippy passed.
+The offline GPU fixture was refreshed after the main merge and inspected: all six
+controls, shared counts and the reader's selected heart are visible. Live hub
+rollout, released-client interoperability and other operating systems remain
+unverified. The matching hub PR #5 still needs Sol's deployment before release.
+
 ## Local incoming chat colour
 
 30/10/2026, `feat/chat-color`, based on `main` `82c8c185`: archived `cg_chatColor`

@@ -99,6 +99,10 @@ pub struct ChatState {
     pub live: bool,
     /// What became of the last message or emote sent.
     pub outcome: Option<ReportOutcome>,
+    /// Result of the most recent reaction request, separate from sending text.
+    pub reaction: Option<ReportOutcome>,
+    /// The registered canonical person id, copied without allocating for UI snapshots.
+    pub own_key: Option<[u8; 16]>,
     /// What became of the last chat ban asked for ([`crate::Service::chat_ban`]).
     pub ban: Option<crate::BanOutcome>,
     /// `None` until the hub being read answered once; then a number that changes with
@@ -444,7 +448,7 @@ impl FeedWorker {
         }
         self.tell_news(&feed);
         if self.chat {
-            self.apply_chat(&mut feed);
+            self.apply_chat(&mut feed, polled.person.as_bytes().try_into().ok());
         }
         queue(&self.emotes, feed.emotes, EMOTES_WAITING);
         let server = polled
@@ -510,10 +514,12 @@ impl FeedWorker {
     }
 
     /// Take an answer's messages, deletions, online count and people into the chat.
-    fn apply_chat(&self, feed: &mut Feed) {
+    fn apply_chat(&self, feed: &mut Feed, own_key: Option<[u8; 16]>) {
         let mut state = lock(&self.state);
         let mut changed =
             !state.live || state.online != feed.online || state.loaded != Some(self.epoch);
+        changed |= state.own_key != own_key;
+        state.own_key = own_key;
         state.live = true;
         state.online = feed.online;
         // The hub lists them now and then: an answer without the list keeps the last.
@@ -564,6 +570,19 @@ impl FeedWorker {
                 .back()
                 .is_some_and(|last| message.id <= last.id)
             {
+                // An after=0 refresh can replay known messages. Refresh their
+                // reactions too, without inserting another chat line.
+                if let Some(held) = state.messages.iter_mut().find(|held| {
+                    held.id == message.id
+                        && held.official.is_none()
+                        && held.holocron.is_none()
+                        && held.key_id == message.key_id
+                        && held.text == message.text
+                }) && held.reactions != message.reactions
+                {
+                    held.reactions = message.reactions;
+                    changed = true;
+                }
                 continue;
             }
             if state.messages.len() == MESSAGES_KEPT {
@@ -571,6 +590,18 @@ impl FeedWorker {
             }
             state.messages.push_back(message);
             changed = true;
+        }
+        for update in feed.reaction_updates.drain(..) {
+            if let Some(message) = state
+                .messages
+                .iter_mut()
+                .find(|m| m.id == update.message && m.holocron.is_none() && m.official.is_none())
+            {
+                if message.reactions != update.reactions {
+                    message.reactions = update.reactions;
+                    changed = true;
+                }
+            }
         }
         state.loaded = Some(self.epoch);
         if changed {
@@ -583,6 +614,7 @@ impl FeedWorker {
 /// empty: the viewer words the line from its tier.
 fn drop_message(drop: DropEvent, own: &str) -> ChatMessage {
     ChatMessage {
+        reactions: Default::default(),
         id: drop.id,
         at: drop.at,
         holocron: Some(DropMark {
@@ -608,6 +640,7 @@ fn drop_message(drop: DropEvent, own: &str) -> ChatMessage {
 /// drop line marked with what the holocron gave, worded by the viewer.
 fn find_message(find: FindEvent, own: &str) -> ChatMessage {
     ChatMessage {
+        reactions: Default::default(),
         id: find.id,
         at: find.at,
         holocron: Some(DropMark {
@@ -648,6 +681,7 @@ fn find_message(find: FindEvent, own: &str) -> ChatMessage {
 /// text is left empty: the viewer words the line.
 fn official_message(id: u64, at: i64, official: Official) -> ChatMessage {
     ChatMessage {
+        reactions: Default::default(),
         id,
         at,
         key_id: String::new(),
@@ -808,6 +842,7 @@ mod tests {
 
     fn message(id: u64, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: "aa".to_owned(),
@@ -926,6 +961,66 @@ mod tests {
             tier: tier.to_owned(),
             verified: true,
         }
+    }
+
+    #[test]
+    fn reconnect_backlog_refreshes_reactions_on_a_known_message() {
+        let t0 = Instant::now();
+        let mut rig = rig(t0);
+        rig.read("https://hub", None);
+        let mut line = message(1, "hello");
+        line.reactions = vec![crate::reactions::Reaction {
+            key_id: "0123456789abcdef".into(),
+            emoji: "like".into(),
+        }]
+        .into();
+        rig.script(answer(2, vec![line]));
+        rig.worker.step(t0);
+        rig.read("https://hub", Some("1.2.3.4:29070"));
+        rig.script(answer(3, vec![message(1, "hello")]));
+        rig.worker.step(t0 + POLL_GAP);
+        assert_eq!(rig.texts(), ["hello"]);
+        assert!(lock(&rig.state).messages[0].reactions.is_empty());
+    }
+
+    #[test]
+    fn reaction_updates_replace_state_without_new_messages_or_resurrection() {
+        let t0 = Instant::now();
+        let mut rig = rig(t0);
+        rig.read("https://hub", None);
+        rig.script(answer(1, vec![message(1, "hello")]));
+        rig.worker.step(t0);
+        let reactions: crate::reactions::State = vec![crate::reactions::Reaction {
+            key_id: "0123456789abcdef".into(),
+            emoji: "heart".into(),
+        }]
+        .into();
+        rig.script(Ok(Feed {
+            next: 2,
+            online: 3,
+            reaction_updates: vec![crate::reactions::Update {
+                id: 2,
+                message: 1,
+                reactions: reactions.clone(),
+            }],
+            ..Feed::default()
+        }));
+        rig.worker.step(t0 + POLL_GAP);
+        assert_eq!(rig.texts(), ["hello"]);
+        assert_eq!(lock(&rig.state).messages[0].reactions, reactions);
+        rig.script(Ok(Feed {
+            next: 3,
+            online: 3,
+            deleted: vec![1],
+            reaction_updates: vec![crate::reactions::Update {
+                id: 3,
+                message: 1,
+                reactions,
+            }],
+            ..Feed::default()
+        }));
+        rig.worker.step(t0 + POLL_GAP * 2);
+        assert!(rig.texts().is_empty());
     }
 
     #[test]

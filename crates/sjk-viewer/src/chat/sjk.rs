@@ -97,6 +97,7 @@ impl ChatOverlay {
     /// ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_holocron(&mut self, tier: &str, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -161,6 +162,7 @@ impl ChatOverlay {
     /// `debug_reward`. The real lines come from the hub's feed ([`Self::sync_sjk`]).
     pub(crate) fn rehearse_official(&mut self, official: sjk_identity::Official, now: Instant) {
         let message = ChatMessage {
+            reactions: Default::default(),
             id: u64::MAX,
             at: 0,
             key_id: String::new(),
@@ -393,6 +395,7 @@ mod tests {
 
     fn message(id: u64, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

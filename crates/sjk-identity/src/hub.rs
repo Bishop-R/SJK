@@ -173,6 +173,18 @@ pub trait Hub: Send {
             "this hub client does not send chat".to_owned(),
         ))
     }
+    /// Set the signed identity's reaction on an existing chat message.
+    fn react(
+        &mut self,
+        _identity: &Identity,
+        _message: u64,
+        _emoji: &str,
+        _active: bool,
+    ) -> Result<(), HubError> {
+        Err(HubError::Protocol(
+            "This hub client does not support chat reactions".into(),
+        ))
+    }
     /// Ban the player of `key_id` from the SJK chat for 24 hours (`POST /v1/chat/ban`):
     /// only a verified or staff identity may, and only a player the hub does not vouch
     /// for ([`crate::ban`]).
@@ -2072,6 +2084,36 @@ impl Hub for HttpHub {
         answer["id"]
             .as_u64()
             .ok_or_else(|| HubError::Protocol("the chat answer has no id".to_owned()))
+    }
+
+    fn react(
+        &mut self,
+        identity: &Identity,
+        message: u64,
+        emoji: &str,
+        active: bool,
+    ) -> Result<(), HubError> {
+        let answer = self
+            .send(
+                Some(identity),
+                "POST",
+                "/v1/chat/reaction",
+                Some(json!({"message":message,"emoji":emoji,"active":active})),
+            )
+            .map_err(|error| match error {
+                HubError::Rejected {
+                    status: 404,
+                    ref code,
+                    ..
+                } if code != "not_found" => {
+                    HubError::Protocol("Chat reactions need an updated hub".into())
+                }
+                other => other,
+            })?;
+        answer["changed"]
+            .as_bool()
+            .ok_or_else(|| HubError::Protocol("Reaction answer has no changed flag".into()))?;
+        Ok(())
     }
 
     fn chat_ban(&mut self, identity: &Identity, key_id: &str) -> Result<ChatBan, HubError> {

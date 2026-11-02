@@ -260,6 +260,7 @@ mod tests {
                     now,
                 );
                 let message = sjk_identity::ChatMessage {
+                    reactions: Default::default(),
                     id: 2,
                     at: 0,
                     key_id: "00000000000000ab".to_owned(),

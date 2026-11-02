@@ -1060,8 +1060,17 @@ pub(crate) fn can_ban() -> bool {
     })
 }
 
-/// Ban the player of `key_id` from the SJK chat for 24 hours; false when the service
-/// has not started. What became of it arrives in the chat's `ban`.
+/// Request the desired reaction state; false when the service has not started.
+/// The result arrives in the chat snapshot's separate reaction outcome.
+pub(crate) fn react(message: u64, emoji: String, active: bool) -> bool {
+    lock()
+        .service
+        .as_ref()
+        .map(|service| service.react(message, emoji, active))
+        .is_some()
+}
+
+/// Request a chat ban for another key.
 pub(crate) fn chat_ban(key_id: String) -> bool {
     lock()
         .service

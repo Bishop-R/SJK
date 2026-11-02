@@ -66,6 +66,7 @@ fn duel6_sjk_chat_gifs_page() {
         .enumerate()
         .map(
             |(index, (key, name, text, verified))| sjk_identity::ChatMessage {
+                reactions: Default::default(),
                 id: index as u64 + 1,
                 at: now - (lines.len() - index) as i64 * 90,
                 key_id: (*key).to_owned(),
@@ -84,6 +85,8 @@ fn duel6_sjk_chat_gifs_page() {
         )
         .collect();
     let state = sjk_identity::ChatState {
+        reaction: None,
+        own_key: None,
         messages,
         revision: 1,
         online: 5,
@@ -224,6 +227,7 @@ fn duel6_sjk_chat_gifs_feed() {
             }
             let message =
                 |id: u64, name: &str, text: &str, verified: bool| sjk_identity::ChatMessage {
+                    reactions: Default::default(),
                     id,
                     at: 0,
                     key_id: format!("{id:016x}"),
@@ -306,6 +310,7 @@ fn tiles() -> Vec<GifId> {
 fn duel6_sjk_chat_gif_picker() {
     let messages = (0..12_u64)
         .map(|n| sjk_identity::ChatMessage {
+            reactions: Default::default(),
             id: n + 1,
             at: 0,
             key_id: format!("{:016x}", n + 1),
@@ -323,6 +328,8 @@ fn duel6_sjk_chat_gif_picker() {
         })
         .collect();
     let state = sjk_identity::ChatState {
+        reaction: None,
+        own_key: None,
         messages,
         revision: 1,
         online: 7,

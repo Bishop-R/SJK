@@ -1620,3 +1620,44 @@ routes yet); Windows; how the feed behaves with many players at once.
   unanswered lines, a copy for a match that ended, and a JoF EJK message's icon. End
   to end with JoF EJK clients on a local server and a local hub, before it moved into
   JoF tools ([status.md](status.md#sjk-chat-on-jof-servers-said-in-all-chat-too)).
+
+## Emoji reactions
+
+On the SJK chat page, select a public message and use one of the six emoji
+buttons in **Chosen message**. A highlighted button is your reaction: activate
+it again to remove it. The buttons show shared counts, and message metadata
+shows a compact count summary. Pointer and keyboard/Tab use the same controls.
+Blocked senders, official notices and reward notifications offer no reaction
+controls. Messages can still be read on older hubs; an unavailable endpoint
+reports that reaction support needs an updated hub instead of posting chat text.
+Reaction errors show for five seconds, then the status line returns to the reader
+count (or the current connection status); a later failure starts a new timeout.
+
+The catalogue is `like` (thumbs up), `heart`, `laugh`, `wow`, `sad`, `fire`.
+`POST /v1/chat/reaction` is signed and takes
+`{"message":<id>,"emoji":"heart","active":true}`. Setting an existing state
+again is a no-op. The hub uses the authenticated canonical person id; callers
+cannot select another player. Removing a reaction changes only that person's
+matching pair. The endpoint enforces chat mutes and applicable bans, a 30-change
+per-minute person quota, and at most 128 person/emoji pairs per message.
+
+A normal message optionally carries `reactions:[{"key_id":"..","emoji":"heart"}]`.
+The feed optionally carries `reaction_updates`, complete replacement snapshots
+`{"id":<feed sequence>,"message":<chat id>,"reactions":[..]}`; an empty list clears
+that message's reactions. Unknown emoji ids, invalid person ids and duplicates
+are dropped, with a bound of 128 pairs. State is shared between cloned display
+snapshots; drawing counts and labels allocates no extra reaction lists or strings.
+Fresh backlog reads refresh reactions on already-known messages, and an update
+for an absent or deleted message cannot recreate it. Reactions are memory-only
+and disappear with chat history on a hub restart.
+
+Reactions use the SJK hub only. They are never appended to message text, sent as
+fake messages, forwarded to a game server or charged against the ordinary message
+quota. Sending a reaction has its own result, so a failure never offers Retry
+for an unrelated message. No JKA protocol-26 fields or codecs change.
+
+The [matching hub PR](https://github.com/Sol-Vulpes/SJK-hub-shared/pull/5) must be
+merged and deployed before shared reactions work on the live service. This client
+PR does not deploy it. Old clients ignore the added JSON fields. Live hub rollout
+and released-client end-to-end behavior remain unverified; source/unit/API and
+windowless UI checks cover the behavior reported in the PR description.

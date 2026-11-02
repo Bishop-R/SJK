@@ -236,6 +236,7 @@ mod tests {
 
     fn message(id: u64, name: &str, text: &str) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id,
             at: 0,
             key_id: format!("{id:016x}"),

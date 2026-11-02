@@ -122,6 +122,7 @@ mod tests {
 
     pub(crate) fn line(official: Official) -> ChatMessage {
         ChatMessage {
+            reactions: Default::default(),
             id: 1,
             at: 0,
             key_id: String::new(),

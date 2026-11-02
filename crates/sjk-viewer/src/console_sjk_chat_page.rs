@@ -136,6 +136,17 @@ impl ViewerConsole {
 
     fn sjk_chat_panel_action(&mut self, action: PanelAction) {
         match action {
+            PanelAction::React {
+                message,
+                emoji,
+                active,
+            } => {
+                if self.bool_cvar("cl_sjkChat") == Some(false) {
+                    self.push_log("^3sjkchat: SJK chat is off");
+                } else if !crate::player_identity::react(message, emoji, active) {
+                    self.push_log("^3sjkchat: turn identity on to react");
+                }
+            }
             PanelAction::None => {}
             PanelAction::Close => self.close_sjk_chat_panel(),
             PanelAction::SendSjkOnly(text) => {
