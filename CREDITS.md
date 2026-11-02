@@ -872,6 +872,8 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
 - #322 holding the melee kick no longer freezes it on its last frame.
 - #323 no `fakenoclip` or `freecam` in duels, where JoF's servers spared the player all
   damage (hub report #209).
+- #325 Long Distance Call counts monitor hits from 40 metres, measured where the monitor
+  met the body (hub reports #216, #220).
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,

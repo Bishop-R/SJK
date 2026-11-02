@@ -804,6 +804,16 @@ impl GpuState {
             let Some(shown) = self.monitor.find(hit.by.thrower, hit.by.number) else {
                 continue;
             };
+            // How far it flew to the body: read before the flight takes the bounce, as a
+            // bounce heard after its step runs the flight again from the hand.
+            let far = shown
+                .flight
+                .reach_at(u32::from(hit.by.step))
+                .unwrap_or_else(|| {
+                    let origin = Vec3::from_array(shown.flight.throw().origin.map(|c| c as f32));
+                    shown.flight.centre().distance(origin)
+                })
+                >= crate::achievements::MONITOR_FAR;
             let when = i64::from(shown.flight.throw().moment)
                 + i64::from(hit.by.step) * i64::from(STEP_MS);
             // The bounce foreseen gives way to the real one.
@@ -815,8 +825,6 @@ impl GpuState {
             }
             shown.rest = None;
             let at = Some(shown.flight.centre());
-            let origin = Vec3::from_array(shown.flight.throw().origin.map(|c| c as f32));
-            let far = shown.flight.centre().distance(origin) >= crate::achievements::MONITOR_FAR;
             if Some(hit.struck) != own {
                 self.monitor
                     .others_struck
