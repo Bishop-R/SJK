@@ -168,7 +168,9 @@ each entry with its source: `amlogin` (JA+ admin login, JoF's too), `login`,
 chat) and `clanwhois` (JoF), whose arguments are masked, and `loginpass`, which makes
 `japlus.loginPass1-3` secret cvars. Its chat commands, `say_team_mod`, `clansay`,
 `amsay` and `ampsay`, keep a line typed with one out of the session log, crash
-reports and log uploads ([identity.md](identity.md#crash-reports)). The console shows `amlogin ********` in its echo,
+reports and log uploads, and divide a message over the server chat limit into complete
+word-boundary pieces through the same outgoing chat path as stock chat
+([identity.md](identity.md#crash-reports)). The console shows `amlogin ********` in its echo,
 listings and binds, and keeps no password in the scrollback, `qconsole.log`, the
 session log, crash reports or log uploads ([client.md](client.md#passwords-in-the-console)).
 The table applies from startup whatever the server and `mod_japlus`, and no setting

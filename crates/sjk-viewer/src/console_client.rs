@@ -873,7 +873,7 @@ impl crate::GpuState {
             .chat
             .reply_target()
             .map_err(|why| why.line().to_owned())?;
-        let Some(command) = sjk_client::chat_command(
+        let Some(command) = sjk_client::chat_command_full(
             sjk_client::ChatDestination::Player(target.slot()),
             &args.join(" "),
         ) else {

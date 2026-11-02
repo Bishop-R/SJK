@@ -3,7 +3,7 @@
 use super::Channel;
 use crate::console::line_edit::{LineEdit, Motion};
 use crate::input::dead_key::{DeadKey, TypingField, keep_caret};
-use sjk_client::{CHAT_INPUT_BYTES, ChatTarget, chat_input_fits};
+use sjk_client::{CHAT_DRAFT_CHARS, ChatTarget};
 use std::ops::Range;
 use winit::keyboard::{Key, KeyCode};
 
@@ -20,7 +20,7 @@ pub(super) struct Editor {
 impl Editor {
     pub(super) fn new(channel: Channel) -> Self {
         Self {
-            text: String::with_capacity(CHAT_INPUT_BYTES),
+            text: String::with_capacity(CHAT_DRAFT_CHARS),
             edit: LineEdit::default(),
             channel,
             recipient: None,
@@ -36,12 +36,12 @@ impl Editor {
         self.dead = dead;
     }
 
-    /// Insert typed or pasted text. The draft's length counts the bytes it is
-    /// sent with, escapes included (`%` takes three bytes, `"` two), as EternalJK's
-    /// chat field does, so a full field is never cut short when it is sent.
+    /// Insert typed or pasted text into the bounded multi-message draft.
     pub(super) fn insert(&mut self, value: &str) {
-        self.edit
-            .insert_fitting(&mut self.text, value, chat_input_fits);
+        self.edit.insert_fitting(&mut self.text, value, |text| {
+            text.chars().count() <= CHAT_DRAFT_CHARS
+                && sjk_client::chat_commands(sjk_client::ChatDestination::Global, text).is_ok()
+        });
     }
 
     pub(super) fn key(&mut self, key: KeyCode, control: bool, shift: bool) -> bool {
@@ -93,22 +93,14 @@ mod length_tests {
     use super::*;
 
     #[test]
-    fn the_field_stops_where_the_sent_message_would_be_cut() {
+    fn the_field_keeps_at_most_four_messages() {
         let mut editor = Editor::new(Channel::Global);
-        editor.insert(&"%".repeat(CHAT_INPUT_BYTES));
-        assert_eq!(editor.text, "%".repeat(CHAT_INPUT_BYTES / 3));
-
-        let mut editor = Editor::new(Channel::Global);
-        editor.insert(&"a".repeat(CHAT_INPUT_BYTES - 2));
+        editor.insert(&"%".repeat(CHAT_DRAFT_CHARS + 100));
+        let commands = sjk_client::chat_commands(sjk_client::ChatDestination::Global, &editor.text)
+            .expect("the editor refuses a fifth message");
+        assert_eq!(commands.len(), sjk_client::MAX_CHAT_PIECES);
+        let full = editor.text.clone();
         editor.insert("%");
-        assert_eq!(editor.text.len(), CHAT_INPUT_BYTES - 2);
-        editor.insert("\"");
-        assert!(editor.text.ends_with('"'));
-        editor.insert("a");
-        assert_eq!(editor.text.len(), CHAT_INPUT_BYTES - 1);
-
-        let sent = sjk_client::chat_command(sjk_client::ChatDestination::Global, &editor.text)
-            .expect("global chat");
-        assert!(sent.ends_with("a''\""), "{sent}");
+        assert_eq!(editor.text, full);
     }
 }

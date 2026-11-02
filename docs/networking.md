@@ -112,12 +112,14 @@ other character (Cyrillic, Japanese) is drawn from the wide-glyph atlas
 ([rendering.md](rendering.md#characters-beyond-the-code-page)).
 
 A chat line holds at most `MAX_SAY_TEXT` - 1 (149) bytes; the server cuts a
-longer one (`Cmd_Say_f`). The chat field counts a draft by the bytes it is sent
-with, escapes included and the whole line encoded as above
-(`chat_input_fits`, [chat.rs](../crates/sjk-client/src/chat.rs)): a Russian line
-in Windows-1251 holds 149 letters as EternalJK's does, a Japanese, Chinese or
-Korean line in UTF-8 about 49 characters (an emoji takes 4 bytes, a family up to 25),
-and the sent command is cut at a whole character, never in the middle of one.
+longer one (`Cmd_Say_f`). SJK divides one draft into at most four such lines, at a
+word where possible. The chat field counts each piece by the bytes it is sent with,
+escapes included and the whole line encoded as above (`chat_commands`,
+[chat.rs](../crates/sjk-client/src/chat.rs)): a Russian piece in Windows-1251 holds
+149 letters as EternalJK's does, a Japanese, Chinese or Korean piece in UTF-8 about
+49 characters (an emoji takes 4 bytes, a family up to 25), and no piece cuts a
+character or escape. The active `^` colour is repeated in the next piece and counts
+inside its limit.
 
 A player's name is read from the bytes of the `n` key of its `CS_PLAYERS`
 configstring and decoded on its own (`LegacyClientInfo::name`,
@@ -656,6 +658,9 @@ dropped, as the server drops a stock client's extras. Pressing a hug bind twenty
 used to queue twenty hugs, still firing one a second after the player stopped. Chat
 (`say`, `say_team`, `tell`, typed or bound) is not queued twice while identical chat
 waits, but is never dropped: a message is still worth reading late, a late action is not.
+The pieces of one submitted draft are kept separately, including identical ones. A
+bind or console command queued behind them does not expire while it waits, so a team
+switch or `kill` pressed during the draft is not silently lost.
 What the player sends (chat, binds, console commands) goes ahead of the client's own
 `score` requests still waiting (every two seconds while dead or holding the
 scoreboard), so chat no longer queues a second each behind them (27/10/2026, hub

@@ -3065,7 +3065,16 @@ Ctrl+arrows and Ctrl+Backspace/Delete, Shift-selection, Ctrl+A/C/X/V,
 Ctrl+Insert to copy and Shift+Insert to paste. Click places the caret, drag selects,
 and double-click selects a token. Selected text is highlighted; typing/pasting
 replaces it. Clipboard text keeps colour escapes, strips controls and obeys the
-existing chat byte limit. Pasting never sends a message. Dead keys type as in
+1,200-character storage bound and the smaller four-message submission bound. Pasting
+never sends a message. On submission, a draft that exceeds the game server's 149-byte
+escaped-message budget is sent completely as at most four messages, split at a word
+where possible and at a character boundary for one oversized word. A fifth piece is
+refused; commands entered outside the composer get a warning instead. This is shared
+by All, Team, Admin, whispers and declared mod-chat commands, including an encrypted
+whisper the player chooses to send unencrypted from its failure card. An encrypted
+whisper within the hub's 900-byte limit remains one message. The last `^` colour of
+each piece starts the next one, within its 149-byte budget.
+Dead keys type as in
 the console (see below): `^` then a digit is a colour code, `^` then `e` is `ê`.
 
 Actions use server-provided sender slots and current roster generations. Old
@@ -7224,11 +7233,11 @@ byte 0xB0) and `"` as `''`. The chat box shows those back as `%` and `"`, as
 EternalJK's `CG_ChatBox_AddString` does (`cg_draw.c:9897-9916`), so SJK and
 EternalJK players see each other's `%` and quotes; a client without this shows
 `°/.` and `''`. As in EternalJK, the console's copy of a chat line keeps the
-escapes, and two apostrophes typed together show as a quote. The composer counts
-a draft's length as it will be sent (`%` takes four bytes, `"` two), so it stops
-accepting characters where the sent message would otherwise be cut
-([chat.rs](../crates/sjk-client/src/chat.rs) `chat_command`, `chat_unescape`,
-`chat_input_cost`).
+escapes, and two apostrophes typed together show as a quote. Each piece of a long
+draft counts its escaped legacy bytes (`%` takes three bytes, `"` two) and stays at
+or below 149 bytes; neither a Unicode character nor either escape is cut, and the
+active colour is repeated at the start of the next piece
+([chat.rs](../crates/sjk-client/src/chat.rs) `chat_commands`, `chat_unescape`).
 
 ### Chat emojis
 
