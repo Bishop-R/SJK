@@ -519,6 +519,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Sound sonar: arcs round the crosshair point toward the sounds you hear",
         ),
         CvarDefinition::new(
+            crate::audio::spatial::CVAR,
+            false,
+            archive,
+            "3D sound: heard from your head, muffled behind walls and doors, rooms ring",
+        ),
+        CvarDefinition::new(
             crate::team_sabers::TEAM_COLORS_CVAR,
             true,
             archive,

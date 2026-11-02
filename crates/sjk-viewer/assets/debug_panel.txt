@@ -37,6 +37,17 @@ test: Second SJK client: sees the box where it stands, hears it from there, and 
 test: Second client with See and hear others' boomboxes off: no box and no music.
 note: Not verified in game. Placing needs a floor ahead or under you (not mid-air).
 
+[spatial-sound]
+area: Audio
+title: 3D sound (s_spatial): muffled behind walls and doors, rooms ring
+change: Off by default. Heard from your head (third person too); traces ~15 times a second.
+change: A sound behind a wall or shut door glides quieter and duller; the room sizes a reverb.
+change: Idea from VisionJK's v_spatial (Blackwolf); SJK's own, no Steam Audio.
+test: Settings > Sound > 3D sound on. A player shooting behind a wall: duller, then clear in view.
+test: Close a door between you and a sound: muffled. Walk outside: little reverb; a hall rings.
+test: Third person: turning the camera does not change what is muffled. Off: sounds as before.
+note: Not heard in game yet. soundinfo / s_spatial 0 to compare.
+
 [join-stack-overflow]
 area: Gameplay
 title: Joining JoF public no longer crashes (main thread stack overflow)

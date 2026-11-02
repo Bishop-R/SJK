@@ -347,6 +347,12 @@ impl LocalPrediction {
         }
     }
 
+    /// The solids where the frame presents them (doors, lifts, other players' boxes),
+    /// for traces that are not movement (the room acoustics' occlusion, `s_spatial`).
+    pub(crate) fn presented_solids(&self) -> &[movers::Collider] {
+        &self.render_movers.colliders
+    }
+
     /// Predicted movement state, when prediction is active
     /// (`cg.predictedPlayerState`).
     pub(crate) fn predicted_state(&self) -> Option<&MovementState> {

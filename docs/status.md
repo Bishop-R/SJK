@@ -1,3 +1,15 @@
+## 3D sound (`s_spatial`)
+
+03/11/2026, `personal/spatial-sound`, based on `main` `3a209013`: an opt-in switch
+(off by default) for hearing from the player's head, occlusion behind walls and doors
+and a small room reverb, in SJK's own mixer after the idea of VisionJK's `v_spatial`
+(Blackwolf); see [3D sound](client.md#3d-sound). Verified on Windows 11: fmt, workspace
+build, tests and Clippy; with it off the mixer's output is bit-identical to before (unit
+test), mixing and the render thread's tick allocate nothing, and the mixer took about
+53 us a block on against 23 us off with every voice and loop busy (release, 2.9 ms
+budget). Not verified: heard in a game; the strengths (muffling, reverb level) are
+first guesses to tune by ear.
+
 ## Heimdall's time nudge kicks at low frame rates
 
 02/11/2026, `personal/heimdall-catchup`, based on `main` `3d9e8fe2`, Krieger's and

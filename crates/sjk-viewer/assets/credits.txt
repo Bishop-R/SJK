@@ -197,6 +197,7 @@ did: Sky cloud layers: a sky shader's scrolling stages drawn over its box (after
 did: tcGen vector stages: textures projected in world space, as in JKA
 did: Collection marks: worn, favourite, locked and New saber shaders, the lock held by the hub
 did: Toon models: cartoon-style banded shading with a bright rim, an option off by default
+did: 3D sound: sounds muffled behind walls and doors, rooms that ring (after VisionJK)
 link: https://github.com/Sol-Vulpes/SJK
 link: https://sol-vulpes.github.io/SJK/
 
@@ -476,6 +477,7 @@ github: Blackwolf1337
 role: Contributor: 1 merged pull request
 did: #333 JA+ dual jump attack: feet lift only over a player ahead, as the server does
 did: Inspiration: VisionJK's boombox, standing on the floor, gave SJK's boombox its place on the floor (boombox_place)
+did: VisionJK's 3D sound (v_spatial), the idea behind SJK's 3D sound (s_spatial)
 link: Blackwolf1337's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337
 
 == Art

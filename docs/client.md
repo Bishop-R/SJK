@@ -1680,7 +1680,55 @@ that frame, to the snapshot's player origin and view angles (`GameAudio::observe
 the audio thread mixes while the frame is built, so the blocks mixed in between panned
 sounds near the player differently from the others whenever they moved, and the saber's
 hum, a loop on the view, crackled (Toad's report). Unit test:
-`a_snapshot_leaves_the_listener_where_the_frame_put_it`; not yet heard in a game.
+`a_snapshot_leaves_the_listener_where_the_frame_put_it`; not yet heard in a game. With
+[3D sound](#3d-sound) on, the listener stands at the player's head instead, still with
+the camera's axes.
+
+## 3D sound
+
+`s_spatial` (Settings > Sound, 3D sound; off by default, archived; Sol's, 03/11/2026,
+after the idea of VisionJK's `v_spatial` by Blackwolf) gives the sounds of the level
+three things the 2003 mixer lacks, in SJK's own mixer (no Steam Audio, no library):
+
+- **Hearing from the head.** The listener is the player's predicted origin raised to
+  the camera's height, kept between crouching and standing eye height (12 to 36 units),
+  so in first person the eyes and in third person the head, not the camera circling it;
+  left and right stay the camera's. A camera more than 160 units from that point (a
+  spectator, the drone, the free camera) or no predicted player puts it back at the
+  camera, as VisionJK's `S_SpatialHearing` does.
+- **Occlusion.** About 15 times a second the render thread traces from that point to the
+  world sounds heard in the last 8 seconds (48 at most, 16 a tick, three point rays each:
+  straight, 24 units higher, 24 units to the side), against the map's solid brushes and
+  the doors and lifts where they are shown (`LocalPrediction::presented_solids`, each
+  tried only when the ray crosses its box). The share of rays blocked is the source's
+  occlusion, 0 to 1; a wall within 16 units of the sound is the one it is on (an impact)
+  and does not count, and sources past 2000 units are not traced. The mixer glides each
+  voice and loop toward it over about 50 ms and blends the sound with itself through a
+  one-pole lowpass at 700 Hz and 0.45 of the gain, so a fully occluded sound is quieter
+  and dull. The player's own, listener-relative and global sounds are never occluded.
+- **Reverb.** 32 rays round the hearing point (a Fibonacci sphere, 8 a tick, so a new
+  room every quarter second) measure the room: the share that meets a wall within 2048
+  units (not the sky) and their mean distance give a size (64 units a cupboard, 1024 a
+  hall) and a wet level (at most 0.6, less the more open), which a small Schroeder
+  reverb in the mixer (four combs and two allpasses an ear, Freeverb's lengths) glides
+  to over 0.4 s. Its input is a send (a fixed buffer of 4096 frames in the mixer)
+  that only voices and loops placed in the world and fading with distance feed, the
+  player's own placed sounds included; menu cues, the announcer, listener-relative and
+  global sounds and the music stay dry. Out of a map the room is dry.
+
+Only numbers cross to the audio thread, on the usual command queue
+(`AudioCommand::SpatialEffects`, `SourceOcclusion`, `Reverb`;
+[audio_spatial.rs](../crates/sjk-viewer/src/audio_spatial.rs), the mixer's side in
+[spatial_fx.rs](../crates/sjk-audio/src/spatial_fx.rs)). No behaviour is keyed to a
+sound's file name and no material is read. Every table is fixed: the tick, the mixer
+and the reverb allocate nothing (checked with `assert_no_alloc`). Off, nothing is
+traced or sent and the mixer takes its plain path, its output bit for bit what it was
+(`switched_off_the_mix_is_bit_identical_whatever_was_measured`). Measured on Windows
+11 in release (`spatial_mix_cost`, ignored test), a 128-frame block with 128 voices and
+32 loops busy took about 23 us off and 53 us on, against its 2.9 ms of playback. Unit
+tests: the hearing point, occlusion from rays and its glide, muffling, loops, the room
+from its rays, the reverb bounded and dying away, a larger room ringing longer. Not yet
+heard in a game.
 
 ## Sound sonar
 
