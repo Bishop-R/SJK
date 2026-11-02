@@ -110,6 +110,8 @@ pub(crate) struct GameAudio {
     /// The chat sound settings (`chat_sounds.rs`), read once a frame.
     pub(crate) chat_sounds: crate::chat_sounds::Options,
     pm_only_chat: bool,
+    /// Quiet mode (`chat/quiet.rs`): the sound adapter keeps its chat beeps to its rule.
+    quiet_chat: bool,
     deferred_starts: u64,
     maximum_deferred_start_ms: f64,
     /// `cg_footsteps`: whether the footstep event family is voiced.
@@ -282,6 +284,7 @@ impl GameAudio {
             last_server_time: None,
             chat_sounds: crate::chat_sounds::Options::default(),
             pm_only_chat: false,
+            quiet_chat: false,
             deferred_starts: 0,
             maximum_deferred_start_ms: 0.0,
             footsteps: true,

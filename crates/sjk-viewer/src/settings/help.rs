@@ -486,6 +486,10 @@ const HELP: &[(&str, &str)] = &[
         "Shows only server-marked private game chat for this map. Console history and SJK hub chat stay available.",
     ),
     (
+        crate::chat::quiet::CVAR,
+        "Hides all chat but your duel partner's and whispers, and their sounds, until the map changes. Also `quiet`.",
+    ),
+    (
         crate::audio::SKIN_SOUNDS_CVAR,
         "A blade skin's own ignition, swings and hum: off (normal saber sounds), over the normal ones, or instead of them.",
     ),

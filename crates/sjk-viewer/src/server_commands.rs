@@ -123,6 +123,9 @@ pub(crate) fn consume_messages(
 ) {
     chat.update_roster(session.game_state());
     chat.configure(console.as_deref());
+    // Quiet mode lets the private duel partner's chat through (`chat/quiet.rs`).
+    let snapshot = session.latest_snapshot();
+    chat.observe_duel(&snapshot.player, i64::from(snapshot.server_time));
     // Duel starts, read once the events are drained (they borrow the session).
     let mut duel_starts = Vec::new();
     // The server's copy of an SJK chat message waits for the message while the SJK chat
@@ -145,7 +148,15 @@ pub(crate) fn consume_messages(
             event.kind,
             sjk_client::ServerEventKind::Chat | sjk_client::ServerEventKind::TeamChat
         ) && chat.sent_by_muted(&text, event.sender);
-        if !blocked && let Some(console) = &mut console {
+        // Quiet mode keeps the line in the console but out of its alerts.
+        let quieted = matches!(
+            event.kind,
+            sjk_client::ServerEventKind::Chat | sjk_client::ServerEventKind::TeamChat
+        ) && chat.quiets(&text, event.sender, event.is_private);
+        if !blocked
+            && !quieted
+            && let Some(console) = &mut console
+        {
             console.notify_server_text(&event.kind, &event.text);
         }
         if event.kind == sjk_client::ServerEventKind::Print

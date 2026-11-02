@@ -231,6 +231,15 @@ impl Scoreboard {
             score: player.persistent[PERS_SCORE] as i32,
             ready: player.stats[STAT_CLIENTS_READY],
             intermission: player.movement_type() == PM_INTERMISSION,
+            // The player's own slot, not a followed player's.
+            quiet: if let Ok(own) = u16::try_from(session.game_state().client_num)
+                && own < 32
+                && options.is_some_and(|c| c.bool_cvar(crate::chat::quiet::CVAR) == Some(true))
+            {
+                1 << own
+            } else {
+                0
+            },
         };
         // Named when the kill was observed, shown while you are dead.
         let killer = (self.killer.is_some()

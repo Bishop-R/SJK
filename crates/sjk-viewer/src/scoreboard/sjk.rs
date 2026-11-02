@@ -33,6 +33,9 @@ use std::fmt::{self, Write as _};
 
 /// `GT_DUEL`, `GT_POWERDUEL`, `GT_TEAM`, `GT_SIEGE`, `GT_CTF`, `GT_CTY`.
 const DUEL: i32 = 3;
+/// The word after the name of a player in quiet mode (`chat/quiet.rs`), and its room.
+const QUIET_MARK: &str = "Quiet";
+const QUIET_WIDTH: f32 = 50.0;
 const POWER_DUEL: i32 = 4;
 const TEAM: i32 = 6;
 const SIEGE: i32 = 7;
@@ -779,6 +782,11 @@ impl Painter<'_> {
 
     fn is_local(&self, row: &ScoreRow) -> bool {
         u16::from(row.client_num) == self.header.local.client
+    }
+
+    /// Whether `row`'s player is in quiet mode (`chat/quiet.rs`).
+    fn is_quiet(&self, row: &ScoreRow) -> bool {
+        row.client_num < 32 && self.header.local.quiet & (1 << row.client_num) != 0
     }
 
     /// Whether `row`'s player is ready, at intermission.
@@ -1776,7 +1784,9 @@ impl Painter<'_> {
         let room = columns.name_end - columns.name;
         let side = name_size * 1.05;
         let ready = self.is_ready(row);
-        let ready_width = if ready { 60.0 } else { 0.0 };
+        let quiet_mark = self.is_quiet(row);
+        let ready_width =
+            if ready { 60.0 } else { 0.0 } + if quiet_mark { QUIET_WIDTH } else { 0.0 };
         // The JoF emblem first, on the name's left.
         let jof = jof_room(&row.name, name_size);
         let full_name = self.width(
@@ -1841,6 +1851,21 @@ impl Painter<'_> {
                 60.0,
                 14.0,
                 color::GOLD,
+                FontWeight::Regular,
+                TextAlign::Start,
+            );
+            after += 60.0;
+        }
+        // Quiet mode: a muted "Quiet" after the marks, as "Ready" stands.
+        if quiet_mark {
+            self.run(
+                TextFamily::Body,
+                format_args!("{QUIET_MARK}"),
+                after,
+                middle,
+                QUIET_WIDTH,
+                14.0,
+                color::MUTED,
                 FontWeight::Regular,
                 TextAlign::Start,
             );
@@ -2163,6 +2188,7 @@ mod tests {
                 score: 18,
                 ready: 0,
                 intermission: false,
+                quiet: 0,
             },
             killer: None,
             siege_winner: None,

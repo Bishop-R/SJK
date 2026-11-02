@@ -685,6 +685,12 @@ impl LegacySoundAdapter {
         self.local.pm_only = enabled;
     }
 
+    /// Quiet mode: chat beeps only for whispers, the server's own lines, the player's
+    /// own and their private duel partner's (`quiet_chat.rs`).
+    pub fn set_quiet_chat(&mut self, enabled: bool) {
+        self.local.quiet = enabled;
+    }
+
     /// EternalJK's `cg_fleshSparks` (0 to 7, default 7): JoF EJK's `EV_SABER_HIT` plays
     /// the special saber hit's sound (`eventParm` 16) only above 1, with its sparks
     /// (`cg_event.c`, `if (cg_fleshSparks.integer > 1) trap->S_StartSound(...)`); every

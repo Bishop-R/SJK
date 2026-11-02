@@ -170,6 +170,7 @@ impl Scoreboard {
             score,
             ready: 0,
             intermission: false,
+            quiet: 1 << YOU,
         };
         let limits = Limits {
             frags: 30,

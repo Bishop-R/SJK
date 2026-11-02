@@ -44,6 +44,8 @@ fn center_size(value: f32) -> f32 {
 /// Bounded presentation settings read from the archived cvars.
 pub(super) struct Options {
     pub(super) pm_only: bool,
+    /// Quiet mode ([`super::quiet::CVAR`]).
+    pub(super) quiet: bool,
     /// Milliseconds before a message expires.
     pub(super) lifetime: u64,
     /// Maximum retained conversation entries displayed together.
@@ -104,6 +106,9 @@ impl Options {
         Self {
             pm_only: console
                 .and_then(|c| c.bool_cvar("cg_pmonlychat"))
+                .unwrap_or(false),
+            quiet: console
+                .and_then(|c| c.bool_cvar(super::quiet::CVAR))
                 .unwrap_or(false),
             lifetime: integer("cg_chatbox", 10000).max(0) as u64,
             lines: integer("cg_chatboxlines", 5).clamp(1, MAX_VISIBLE as i64) as usize,
@@ -293,7 +298,7 @@ impl ChatOverlay {
     pub(crate) fn configure(&mut self, console: Option<&ViewerConsole>) {
         let options = Options::read(console);
         if self.options != options {
-            if self.options.pm_only != options.pm_only {
+            if self.options.pm_only != options.pm_only || self.options.quiet != options.quiet {
                 self.scroll = 0;
                 self.unread = 0;
             }

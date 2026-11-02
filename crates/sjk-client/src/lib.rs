@@ -70,6 +70,7 @@ mod jetpack_sounds;
 mod legacy_text;
 mod local_sounds;
 mod loop_sounds;
+mod quiet_chat;
 pub use jetpack_sounds::{
     LEGACY_JETPACK_HOVER_SOUNDS, LEGACY_JETPACK_SWITCH_SOUNDS, LegacyJetpackSounds,
 };
@@ -278,6 +279,9 @@ pub use presentation::{
 };
 pub use presentation::{LegacyWorldAdapter, legacy_predicted_equipment};
 pub use pure_checksums::{legacy_pure_checksum_command, legacy_server_is_pure};
+pub use quiet_chat::{
+    DuelPartner, LineSender, PARTNER_GRACE_MS, forged_tell, line_sender, quiet_passes,
+};
 pub use retail_assets::{RETAIL_ARCHIVES, RETAIL_DIRECTORY, is_retail_mount, retail_view};
 pub use saber_clash_flare::{
     LegacySaberClashFlare, LegacySaberClashSample, LegacySaberClashVisibility,

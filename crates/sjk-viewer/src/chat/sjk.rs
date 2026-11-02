@@ -46,6 +46,7 @@ impl ChatOverlay {
         } else {
             (body, Vec::new(), None)
         };
+        let loud = self.sjk_line_loud(&message.key_id, official.is_some());
         if self.lines.len() == HISTORY_LIMIT {
             self.lines.pop_front();
         }
@@ -83,8 +84,9 @@ impl ChatOverlay {
             encrypted: false,
             verified: false,
             recipient: None,
+            loud,
         });
-        if self.is_typing() && self.scroll > 0 {
+        if self.is_typing() && self.scroll > 0 && (loud || !self.options.quiet) {
             self.scroll = (self.scroll + 1).min(self.lines.len().saturating_sub(1));
             self.unread = (self.unread + 1).min(HISTORY_LIMIT);
         }

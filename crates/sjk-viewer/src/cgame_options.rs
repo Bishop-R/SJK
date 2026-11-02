@@ -21,6 +21,12 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         CvarFlags::NONE,
         "Show only private game-server chat for this map; SJK hub chat is independent",
     ))?;
+    cvars.register(CvarDefinition::new(
+        crate::chat::quiet::CVAR,
+        false,
+        CvarFlags::NONE,
+        "Quiet mode: hide public, team, SJK and admin chat but your duel partner's and whispers, until the map changes",
+    ))?;
     for (name, value, help) in [
         (
             "cg_chatBox",

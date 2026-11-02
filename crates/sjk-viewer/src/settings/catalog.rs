@@ -845,6 +845,11 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Quiet mode",
+        cvar: crate::chat::quiet::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Chat text size",
         cvar: "cg_chatBoxFontSize",
         kind: ValueKind::Float {

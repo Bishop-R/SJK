@@ -151,25 +151,7 @@ impl super::ChatOverlay {
     /// then `: ` (or the team's and a whisper's brackets). `None` when no player or
     /// more than one (two players wearing one name) fits.
     pub(super) fn line_sender(&self, display: &str) -> Option<sjk_client::ChatTarget> {
-        let mut found = None;
-        for target in
-            (0..crate::chat_mutes::SLOTS as u16).filter_map(|slot| self.roster.target(Some(slot)))
-        {
-            let Some(name) = self
-                .roster
-                .display_name(target)
-                .filter(|name| !name.is_empty())
-            else {
-                continue;
-            };
-            if sjk_client::chat_body(display, name).0.len() < display.len() {
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(target);
-            }
-        }
-        found
+        sjk_client::line_sender(display, None, &self.roster).target()
     }
 }
 

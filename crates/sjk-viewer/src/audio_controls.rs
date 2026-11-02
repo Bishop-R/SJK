@@ -140,11 +140,15 @@ impl GameAudio {
         self.kill_sounds = console
             .and_then(|c| c.integer_cvar("cg_killsounds"))
             .unwrap_or(2);
+        self.quiet_chat = console
+            .and_then(|c| c.bool_cvar(crate::chat::quiet::CVAR))
+            .unwrap_or(false);
         self.pm_only_chat = console
             .and_then(|c| c.bool_cvar("cg_pmonlychat"))
             .unwrap_or(false);
         if let Some(adapter) = &mut self.legacy {
             adapter.set_pm_only_chat(self.pm_only_chat);
+            adapter.set_quiet_chat(self.quiet_chat);
             adapter.set_chat_sound_mode(
                 console
                     .and_then(|c| c.integer_cvar("cg_chatsounds"))

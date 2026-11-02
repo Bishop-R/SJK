@@ -58,6 +58,10 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
         "pmonly",
         "Toggle private-only game chat for this map: pmonly [on|off]",
     ),
+    (
+        crate::chat::quiet::COMMAND,
+        "Toggle quiet mode until the map changes (only your duel partner and whispers): quiet [on|off]",
+    ),
     ("messagemode", "Compose global chat"),
     ("messagemode2", "Compose team chat"),
     (
@@ -1026,6 +1030,12 @@ impl crate::GpuState {
             crate::chat_sounds::PREVIEW_COMMAND => return crate::chat_sounds::command(args),
             "pmonly" => {
                 return crate::chat::pm_only::command(
+                    self.console.as_mut().ok_or("Console unavailable")?,
+                    args,
+                );
+            }
+            crate::chat::quiet::COMMAND => {
+                return crate::chat::quiet::command(
                     self.console.as_mut().ok_or("Console unavailable")?,
                     args,
                 );
