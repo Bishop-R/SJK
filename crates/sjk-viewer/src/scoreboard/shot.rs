@@ -371,6 +371,8 @@ pub(super) fn append(gpu: &mut crate::GpuState, viewport: [f32; 2]) {
         match_over: shot.local.intermission,
         duel: shot.duel,
         compact: super::style::compact(gpu.console.as_ref()),
+        ids: super::style::client_ids(gpu.console.as_ref()),
+        deaths_rank: super::style::deaths_rank(gpu.console.as_ref()),
         fps: super::style::fps(gpu.console.as_ref()).then_some(240),
     };
     let measure = match gpu.game_fonts.sjk_metrics() {
@@ -471,6 +473,8 @@ mod tests {
             match_over: shot.local.intermission,
             duel: shot.duel,
             compact,
+            ids: true,
+            deaths_rank: false,
             fps: Some(240),
         }
     }
@@ -553,7 +557,7 @@ mod tests {
 
     /// Measured in the UI's own families at 1080 lines, the compact board
     /// hugs its names: a free-for-all of 8 or of 32 is centred and under
-    /// half the full board's 1144 pixels, a team game is narrower than it
+    /// half the full board's 1144 pixels, a team game no wider than it
     /// (`--nocapture` prints them all).
     #[test]
     fn compact_widths_in_the_ui_families() {
@@ -621,7 +625,10 @@ mod tests {
             );
             assert!((full_right - full_left - 1144.0).abs() < 0.5, "{name}");
             if game == Match::Capture {
-                assert!(right - left < 1144.0, "{name}: {left} {right}");
+                // Never wider than the full board; with client numbers (`cg_scoreboardIDs`)
+                // capture the flag's two lists of 6 fill it, their names a little
+                // narrower (they stood at 1142 before the numbers).
+                assert!(right - left <= 1144.0 + 0.5, "{name}: {left} {right}");
                 assert!(left >= 680.0 - 0.5, "{name}: {left}");
             } else {
                 assert!(right - left < 560.0, "{name}: {left} {right}");

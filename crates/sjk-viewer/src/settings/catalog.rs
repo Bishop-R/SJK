@@ -531,7 +531,17 @@ pub(super) const HUD_OPTIONS: &[Setting] = &[
     },
     Setting {
         label: "Scoreboard client IDs",
-        cvar: "cg_showClientIDs",
+        cvar: crate::scoreboard::style::IDS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "SJK scoreboard IDs",
+        cvar: crate::scoreboard::style::SJK_IDS_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Rank by score - deaths",
+        cvar: crate::scoreboard::style::DEATHS_RANK_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {

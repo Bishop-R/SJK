@@ -205,7 +205,7 @@ impl Scoreboard {
         for row in &mut self.rows {
             row.deaths = self.deaths.count(row.client_num, row.reported_deaths);
         }
-        self.mark_away(afk::enabled(options));
+        self.mark_away(afk::enabled(options), style::deaths_rank(options));
         live_flags::apply(
             &mut self.rows,
             session.latest_snapshot(),
@@ -266,6 +266,8 @@ impl Scoreboard {
                     ..duelists(game)
                 },
                 compact: style::compact(options),
+                ids: style::client_ids(options),
+                deaths_rank: style::deaths_rank(options),
                 fps: fps.filter(|_| style::fps(options)),
             };
             // Measured in the families that will draw the text.
@@ -339,8 +341,10 @@ impl Scoreboard {
     }
 
     /// Mark who is away and move them below the others of their list, in the
-    /// server's order again once back; with `enabled` off, nobody is.
-    fn mark_away(&mut self, enabled: bool) {
+    /// server's order again once back; with `enabled` off, nobody is. With
+    /// `deaths_rank` (`cg_scoreboardDeathsRank`) the others go by score minus deaths
+    /// ([`style::rank_value`]), fewer deaths first on a tie, then the server's order.
+    fn mark_away(&mut self, enabled: bool, deaths_rank: bool) {
         for row in &mut self.rows {
             row.away = if !enabled || row.bot || !row.has_score {
                 None
@@ -348,8 +352,22 @@ impl Scoreboard {
                 self.afk.away(row.client_num).or(row.tagged.then_some(0))
             };
         }
-        self.rows
-            .sort_unstable_by_key(|row| (row.away.is_some(), row.order));
+        self.rows.sort_unstable_by_key(|row| {
+            // Rows without a count, or still joining (no score row yet, whatever the
+            // local counter holds), follow the counted ones.
+            let ranked = deaths_rank && row.has_score && row.deaths.is_some();
+            (
+                row.away.is_some(),
+                !ranked,
+                if ranked {
+                    -style::rank_value(row.score, row.deaths, true)
+                } else {
+                    0
+                },
+                if ranked { row.deaths.unwrap_or(0) } else { 0 },
+                row.order,
+            )
+        });
     }
 
     fn refresh(&mut self, session: &ClientSession) {
@@ -959,5 +977,63 @@ mod tests {
         for text in ["", "^1Padawan", "PING", "SCORE / DEATHS", "2fast"] {
             assert_eq!(retail_font(text), RetailFont::Medium);
         }
+    }
+
+    fn ranked_row(client: u8, score: i32, deaths: Option<i32>) -> ScoreRow {
+        ScoreRow {
+            client_num: client,
+            name: format!("Player{client}"),
+            team: 0,
+            score,
+            reported_deaths: deaths,
+            deaths,
+            ping: 50,
+            time: 5,
+            has_score: true,
+            bot: false,
+            record: None,
+            powerups: 0,
+            defends: 0,
+            assists: 0,
+            captures: 0,
+            identity: None,
+            order: client,
+            tagged: false,
+            away: None,
+        }
+    }
+
+    fn clients(board: &Scoreboard) -> Vec<u8> {
+        board.rows.iter().map(|row| row.client_num).collect()
+    }
+
+    /// `cg_scoreboardDeathsRank`: score minus deaths, fewer deaths on a tie, rows
+    /// without a count after; off, the server's order.
+    #[test]
+    fn rows_rank_by_score_minus_deaths_when_asked() {
+        let mut board = Scoreboard::new();
+        board.rows = vec![
+            ranked_row(0, 10, Some(8)), // 2
+            ranked_row(1, 8, Some(1)),  // 7
+            ranked_row(2, 9, Some(2)),  // 7, more deaths
+            ranked_row(3, 12, None),    // no count
+            ranked_row(4, 3, Some(0)),  // 3
+        ];
+        board.mark_away(false, false);
+        assert_eq!(clients(&board), [0, 1, 2, 3, 4]);
+        board.mark_away(false, true);
+        assert_eq!(clients(&board), [1, 2, 4, 0, 3]);
+        board.mark_away(false, false);
+        assert_eq!(
+            clients(&board),
+            [0, 1, 2, 3, 4],
+            "back to the server's order"
+        );
+        // Still joining: no score row, though the local counter has its deaths.
+        let mut joining = ranked_row(5, 0, Some(5));
+        joining.has_score = false;
+        board.rows.insert(2, joining);
+        board.mark_away(false, true);
+        assert_eq!(clients(&board), [1, 2, 4, 0, 3, 5], "the joining row last");
     }
 }

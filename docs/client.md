@@ -3294,14 +3294,22 @@ the menus are the SJK UI. A look chosen after that stays. The classic board
 - Columns are Name, Score, Ping, Time and, with `cg_showClientIDs` (on by
   default), the client ID; CTF shows Score, C, A, D, Ping and Time, and duels with
   a frag limit show wins/losses. Score shows score/deaths when `cg_scoreDeaths`
-  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, the
-  default 1 uses a JA+/jaPRO server's appended value, 2 falls back to the
-  session-local counter when the server sends none, and 3 always uses the local
-  counter. As in EJK, duels and CTF never show deaths, and the local counter
+  provides deaths. With JoF EJK's `cg_scoreDeaths` modes, 0 hides them, 1 uses a
+  JA+/jaPRO server's appended value only (the default, as EJK), 2 uses that value and
+  falls back to the session-local counter when the server sends none, so kills/deaths
+  show on every server, and 3 always uses the local counter. The local counter knows
+  only the deaths seen since you joined. As in EJK, duels and CTF never show deaths, and the local counter
   starts again for everyone on `map_restart` or a new level (a new
   `CS_LEVEL_START_TIME`), and for one player when they change team or leave
   (`scoreboard/deaths.rs`). Bots show `BOT` for their ping; clients still connecting show
   `-`, and connected clients the scores do not list yet show `N/A`.
+- **Rank by score - deaths** (`cg_scoreboardDeathsRank`, archived, off; Settings >
+  HUD > Scoreboard, both looks; #ideas recap of 29/10/2026): where the board shows
+  deaths, players are listed by their score minus their deaths, fewer deaths first on
+  a tie, then the server's order; rows without a count or still joining follow, and
+  away players stay below the others. The SJK board numbers its rows in that order, one
+  number each. Off, the server's order and places as before, ties sharing a place. Neither EternalJK nor JoF EJK has it
+  ([style.rs](../crates/sjk-viewer/src/scoreboard/style.rs) `rank_value`).
 - Team games list the leading team first over a translucent team band, then the
   spectators; free-for-all lists the players, then the spectators. Your row is
   highlighted in your rank's colour (1st blue, 2nd red, 3rd yellow, else grey) and

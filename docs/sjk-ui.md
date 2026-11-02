@@ -1252,7 +1252,8 @@ and out as the classic board does, settling into place as it opens.
   `cg_scoreboardFps`), the time left in a timed match ("12:12 left", else "3:12
   played") and your place,
   the screen's one memorable thing, in gold ("3rd", "of 14" after it, "of 14,
-  tied" on a tie; "Spectating" when you watch). Team games say "Your team leads
+  tied" on a tie, the server's place; with `cg_scoreboardDeathsRank` the place the #
+  column gives your row, never tied; "Spectating" when you watch). Team games say "Your team leads
   by 2", "trails by", "Tied at 5" (or which team leads, for a spectator). Siege,
   which scores no team, says nothing there, and its team heads carry no score
   (the zeros meant nothing); once a round is over "Red team won" or "Blue team
@@ -1276,8 +1277,14 @@ and out as the classic board does, settling into place as it opens.
   pixels of a 1080-line window), and end at 1824. A compact board is narrower
   and centred (below).
 - **Rows:** under muted column labels and a thin holo rule, one row each,
-  52 tall at most, with a hairline under it: the place (Rajdhani; ties share
-  it), the name with its colours (Exo 2), SJK's emblem right after it for a
+  52 tall at most, with a hairline under it: the place (Rajdhani; labelled "#";
+  ties share it, 1, 2, 2, 4, as the server ranks them; with `cg_scoreboardDeathsRank` one
+  number a row in the listed order, ties too, as JoF EJK lists its rows, away and joining
+  rows taking none), with `cg_scoreboardIDs` (archived, off by default as stock JKA's
+  scoreboard shows none; Settings > HUD > Scoreboard, "SJK scoreboard IDs") the
+  client number as a small tag on a faint plate in a slot of its own just
+  before the name, labelled "ID" (40 frame pixels, 26 in compact rows; gold on your
+  row), the name with its colours (Exo 2), SJK's emblem right after it for a
   player the hub knows (gold when vouched for, as elsewhere), at intermission a
   gold "Ready", then the score (as `score/deaths` when `cg_scoreDeaths` provides
   deaths), the minutes played, and the ping as the browser's signal bars and the number.
