@@ -663,6 +663,7 @@ impl SettingsMenu {
                 | ValueKind::AssetBrowser
                 | ValueKind::ContentCard
                 | ValueKind::HudEdit
+                | ValueKind::Run
                 | ValueKind::SoundPreview
                 | ValueKind::GameplayFps
                 | ValueKind::Quality => {
@@ -895,6 +896,7 @@ impl SettingsMenu {
             }
             ValueKind::ContentCard => "ENTER to choose and download",
             ValueKind::HudEdit => "ENTER to drag the HUD's elements over the game",
+            ValueKind::Run => "ENTER to do it now",
             ValueKind::SoundPreview => "ENTER or a click to hear the sound chosen above",
         });
         if self
@@ -1061,6 +1063,7 @@ pub(super) fn row_default(console: &ViewerConsole, setting: &Setting) -> RowDefa
             | ValueKind::AssetBrowser
             | ValueKind::ContentCard
             | ValueKind::HudEdit
+            | ValueKind::Run
             | ValueKind::SoundPreview
     ) {
         return RowDefault::default();

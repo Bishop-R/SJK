@@ -68,6 +68,14 @@ impl std::fmt::Display for HubError {
 
 impl std::error::Error for HubError {}
 
+/// What `GET /v1/presence` answered ([`Hub::presence_with_blocks`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PresenceRead {
+    pub players: Vec<Presence>,
+    pub blocks: Vec<crate::MapBlock>,
+    /// The hub's map edits stamp, which grows with every change to any map's edits.
+    pub map_edits: Option<i64>,
+}
 /// What the client asks of a hub (`PROTOCOL.md`, "Endpoints").
 pub trait Hub: Send {
     /// Register the identity's key, or fetch its profile if it is known, telling
@@ -724,13 +732,14 @@ pub trait Hub: Send {
     fn release(&mut self, identity: &Identity, server: &str) -> Result<(), HubError>;
     /// The live claims on `server`.
     fn presence(&mut self, server: &str) -> Result<Vec<Presence>, HubError>;
-    /// The live claims on `server` and the players staff blocked there for everyone
-    /// (`PROTOCOL.md`, "Map blocks"); hubs before map blocks give none.
-    fn presence_with_blocks(
-        &mut self,
-        server: &str,
-    ) -> Result<(Vec<Presence>, Vec<crate::MapBlock>), HubError> {
-        self.presence(server).map(|players| (players, Vec::new()))
+    /// The live claims on `server`, the players staff blocked there for everyone
+    /// (`PROTOCOL.md`, "Map blocks"; hubs before map blocks give none) and the hub's map
+    /// edits stamp (`PROTOCOL.md`, "Map edits"; `None` from hubs before it).
+    fn presence_with_blocks(&mut self, server: &str) -> Result<PresenceRead, HubError> {
+        self.presence(server).map(|players| PresenceRead {
+            players,
+            ..PresenceRead::default()
+        })
     }
     /// Send a world note signed by the identity; the hub answers with its number.
     fn note(&mut self, _identity: &Identity, _note: &WorldNote) -> Result<i64, HubError> {
@@ -2052,16 +2061,17 @@ impl Hub for HttpHub {
         parse(answer["players"].clone())
     }
 
-    fn presence_with_blocks(
-        &mut self,
-        server: &str,
-    ) -> Result<(Vec<Presence>, Vec<crate::MapBlock>), HubError> {
+    fn presence_with_blocks(&mut self, server: &str) -> Result<PresenceRead, HubError> {
         let query = encode_server(server);
         let answer = self.send(None, "GET", &format!("/v1/presence?server={query}"), None)?;
         let players = parse(answer["players"].clone())?;
         // A hub from before map blocks leaves them out; a malformed list is none.
         let blocks = serde_json::from_value(answer["blocks"].clone()).unwrap_or_default();
-        Ok((players, blocks))
+        Ok(PresenceRead {
+            players,
+            blocks,
+            map_edits: answer["map_edits"].as_i64(),
+        })
     }
 
     fn set_models(&mut self, identity: &Identity, models: &[String]) -> Result<u64, HubError> {

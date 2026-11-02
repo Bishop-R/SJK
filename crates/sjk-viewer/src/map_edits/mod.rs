@@ -33,6 +33,10 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// `cg_mapEdits`: draw SJK's map edits (on by default).
 pub(crate) const CVAR: &str = "cg_mapEdits";
+/// The command that asks the hub for the map edits now, for any player.
+pub(crate) const SYNC_COMMAND: &str = "mapedits_sync";
+pub(crate) const SYNC_HELP: &str =
+    "Ask the SJK hub for the latest map edits now (they also come by themselves)";
 /// The folder of the documents, in the SJK config folder.
 pub(crate) const FOLDER: &str = "map_edits";
 /// The class picks give a placed model, so they can tell it from the map's entities.
@@ -274,6 +278,25 @@ impl GpuState {
             .as_ref()
             .filter(|session| !session.is_local())
             .map(|session| session.server().to_string())
+    }
+
+    /// `mapedits_sync`: ask the hub for its map edits now; the map's edits change when
+    /// newer ones arrive (the log says what the look did).
+    pub(crate) fn map_edits_sync_command(&mut self) -> Result<Vec<String>, String> {
+        if self
+            .console
+            .as_ref()
+            .is_some_and(|console| !console.map_edits_on())
+        {
+            return Err(format!(
+                "SJK map edits are off (Settings > Game, {CVAR} 1 turns them on)"
+            ));
+        }
+        if !crate::player_identity::hub_on() {
+            return Err("Map edits come through the SJK hub, which is off on this PC".into());
+        }
+        crate::player_identity::refresh_map_edits();
+        Ok(vec!["Asking the SJK hub for the latest map edits".into()])
     }
 
     /// Once a frame: find the map's document, then apply what changed.

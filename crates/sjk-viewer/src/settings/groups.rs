@@ -398,6 +398,7 @@ impl Group {
                 crate::duel_visibility::CORPSES_CVAR,
                 crate::duel_visibility::PICKUPS_CVAR,
                 crate::map_edits::CVAR,
+                crate::map_edits::SYNC_COMMAND,
                 crate::remap_blocked_maps::SERVER_CVAR,
                 "cg_remaps",
                 crate::hax::TRAP_CVAR,

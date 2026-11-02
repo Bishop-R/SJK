@@ -76,6 +76,8 @@ pub(super) enum ValueKind {
     /// Open the HUD edit mode over the game (`hud_edit`, [`crate::hud_edit`]); the
     /// row's cvar is the command.
     HudEdit,
+    /// Run a console command at once (not a cvar): the row's cvar is the command.
+    Run,
     /// `cl_gameplayFps`: Left/Right step through the presets (125, 142, 250,
     /// 333); Enter opens the card that explains it and takes any value
     /// ([`crate::gameplay_fps`]).
@@ -1319,6 +1321,11 @@ pub(super) const GAME: &[Setting] = &[
         label: "SJK map edits",
         cvar: crate::map_edits::CVAR,
         kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Sync map edits",
+        cvar: crate::map_edits::SYNC_COMMAND,
+        kind: ValueKind::Run,
     },
     Setting {
         label: "Server remaps",
