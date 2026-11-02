@@ -526,7 +526,11 @@ A list (a choice of more than three values, the display mode) does not change
 on a click or Enter: they open a dropdown under the value, a rounded list over a
 soft shadow with the value in use in gold and marked with a dot, and nothing
 changes until a choice is applied with Enter or a click. Up and Down move in it;
-Escape, Backspace or a click elsewhere close it unchanged. Left and Right still
+Escape, Backspace or a click elsewhere close it unchanged. A list of more than
+eight choices (a PC's installed fonts run to hundreds) shows eight at a time with
+a thumb on its edge: the wheel scrolls it, Page Up, Page Down, Home and End jump,
+and the highlight stays in view; only the shown choices take click tokens, so a
+long list never reaches other controls' tokens. Left and Right still
 step the value directly. The rows the dropdown covers leave their values out
 while it is open, since text draws over every shape.
 

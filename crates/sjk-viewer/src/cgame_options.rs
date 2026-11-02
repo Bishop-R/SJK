@@ -191,6 +191,18 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         CvarFlags::ARCHIVE,
         "RGBA bytes; black uses default",
     ))?;
+    for (name, help) in [
+        (
+            crate::text::system_font::CHAT_CVAR,
+            "Chat box font: the name of a font family installed on this PC (Arial, Segoe UI...); empty uses SJK's own",
+        ),
+        (
+            crate::text::system_font::CONSOLE_CVAR,
+            "Console font: the name of a font family installed on this PC (Consolas...); empty uses SJK's own, JetBrains Mono",
+        ),
+    ] {
+        cvars.register(CvarDefinition::new(name, "", CvarFlags::ARCHIVE, help))?;
+    }
     Ok(())
 }
 

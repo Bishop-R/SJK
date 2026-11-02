@@ -47,16 +47,19 @@ impl SettingsMenu {
         let Some(event) = self.ui.pointer(event) else {
             return SettingsResult::None;
         };
-        // An open dropdown takes the pointer: a choice applies, a click
-        // anywhere else closes it with nothing changed.
+        // An open dropdown takes the pointer: a choice applies, the wheel
+        // scrolls a long list, a click anywhere else closes it with nothing
+        // changed.
         if let Some(dropdown) = &mut self.dropdown {
             let base = super::classic_view::DROPDOWN_BASE;
             let pick = event
                 .token
                 .and_then(|token| token.checked_sub(base))
-                .map(usize::from)
-                .filter(|index| *index < dropdown.picks.len());
+                .and_then(|offset| dropdown.shown_pick(usize::from(offset)));
             match (event.kind, pick) {
+                (UiEventKind::Wheel, _) => {
+                    dropdown.scroll_by(event.delta.map_or(0, |delta| -delta.y.signum() as i32));
+                }
                 (UiEventKind::HoverEnter | UiEventKind::Hover, Some(index)) => {
                     dropdown.highlighted = index;
                 }
