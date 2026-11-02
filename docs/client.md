@@ -4424,7 +4424,8 @@ the server already publishes to every client (name with its colour codes, model 
 head icon, saber hilts with their blade colours, the hat and cape worn, bot skill; not
 the duel wins and losses), the saber shader they wear (a live swatch, as the Collection
 draws it, and its name; only when it draws on their blade on this PC: worn by their
-look, its pack loaded) and, when the hub knows the player, their profile picture in
+look, its pack loaded; a second saber's or a staff's other half's own shader, when it
+is not the first's, on a row of its own named "(2nd blade)" or "(other half)") and, when the hub knows the player, their profile picture in
 place of the head icon (the icon then sits small on its lower left corner), SJK's
 emblem, their hub name, a gold VERIFIED, a teal SJK TEAM pill for staff, a gem of the
 rarest holocron tier they hold with its name and the medallions of the medals the SJK

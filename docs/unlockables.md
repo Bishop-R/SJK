@@ -674,7 +674,9 @@ What the renderer reads, on `GpuState::looks`:
 The player card ([client.md](client.md#player-card)) names the shader a player wears,
 with its live swatch, by the same rule: the looks' skin for another slot, the own gated
 skin for the local player's, and only when its pack is loaded, so the card never names
-a shader their blade does not show here (10/10/2026).
+a shader their blade does not show here (10/10/2026). It names the second saber's (or a
+staff's other half's) shader too, on a row of its own, when the player holds one and it
+is not the first's (`second_skin(client)`, the local player's `own().second`; #224).
 
 ### Blade skins
 

@@ -21,6 +21,16 @@ pub(crate) fn loaded_sample(generation: u64) -> LoadedSkins {
     LoadedSkins::of(vec![skin], generation)
 }
 
+/// [`loaded_sample`] with the same look loaded under a second id, the Frost, for two
+/// sabers wearing different skins (not the Sun, whose sun extras want its own look).
+pub(crate) fn loaded_pair(generation: u64) -> LoadedSkins {
+    let skins = ["saber_tidal", "saber_frost"].map(|id| {
+        let def = crate::blade_skin_file::parse(id, SAMPLE).unwrap();
+        LoadedSkin::new(id, def, &VirtualFileSystem::new()).unwrap()
+    });
+    LoadedSkins::of(skins.into(), generation)
+}
+
 fn sample_color() -> SkinColor {
     loaded_sample(1).color_of("saber_tidal").unwrap()
 }
