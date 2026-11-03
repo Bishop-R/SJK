@@ -90,6 +90,7 @@ struct Sinks<'a> {
     muzzle_effects: &'a sjk_client::LegacyMuzzleEffects,
     /// Vehicle volleys to play at their muzzles, and the guns' `muzzleFX`.
     vehicle_fires: &'a mut crate::vehicle_fire::Pending,
+    vehicle_flames: &'a mut crate::vehicle_burning::Flames,
     missile_effects: &'a sjk_client::LegacyMissileEffects,
     particles: &'a mut Vec<Particle>,
     effect_aux: &'a mut effect_aux::Runtime,
@@ -335,6 +336,7 @@ pub(crate) fn submit(
         presentation_time,
         muzzle_effects: &gpu.muzzle_effects,
         vehicle_fires: &mut gpu.vehicle_fires,
+        vehicle_flames: &mut gpu.vehicle_flames,
         missile_effects: &gpu.missile_effects,
         particles: &mut gpu.particles,
         effect_aux: &mut gpu.effect_aux,
@@ -587,6 +589,30 @@ fn submit_actor(
                 &fire,
                 |muzzle| muzzles[muzzle].map(|at| crate::vehicle_fire::world_socket(at, &placed)),
                 visual_now,
+            );
+        }
+    }
+    // `CG_VehicleEffects`: a destroyed vehicle burns until it blows up.
+    if let Some(index) = mesh
+        && let Some(kind) = sinks.actor_meshes[index].preview.vehicle
+    {
+        let burning = crate::vehicle_burning::burns(kind, state.map_or(0, |s| s.e_flags()));
+        let number = u16::try_from(entity.id.get().saturating_sub(1)).unwrap_or(u16::MAX);
+        if sinks.vehicle_flames.due(number, burning, visual_now) {
+            let seed = entity.id.get() as u32 | 0x6000_0000;
+            let fire = sinks.vehicle_fire();
+            crate::effect_runtime::spawn_effect(
+                fire.particles,
+                fire.auxiliary,
+                fire.effects,
+                fire.vfs,
+                crate::vehicle_burning::EFFECT,
+                Vec3::from_array(transform.translation),
+                visual_now,
+                seed,
+                0,
+                fire.audio,
+                crate::combat_effects::rotation_from_direction([0.0, 0.0, 1.0]),
             );
         }
     }

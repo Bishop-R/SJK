@@ -8,8 +8,13 @@
 //! server's `CS_LIGHT_STYLES` (`world_light_styles.rs`).
 use sjk_bsp::{Bsp, WHITE_STYLES};
 
-/// Fold `bsp`'s light styles into its lightmaps and vertex colours.
+/// Fold `bsp`'s light styles into its lightmaps and vertex colours; under
+/// `r_vertexLight 1` every surface is vertex lit first (`crate::vertex_light`).
 pub(crate) fn compose(bsp: &mut Bsp) {
+    if crate::vertex_light::enabled() {
+        bsp.light_by_vertex();
+        crate::log::progress(format_args!("r_vertexLight 1: world lit by vertex colours"));
+    }
     let Some(layers) = bsp.compose_light_styles(&WHITE_STYLES) else {
         return;
     };

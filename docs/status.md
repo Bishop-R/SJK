@@ -24,6 +24,30 @@ compile paths, server profile memory, ragdoll scale, dual and thrown hums, the d
 handback), fmt, clippy, workspace tests. Not verified: in a game, on JoF, on a JA+
 server whose `getinfo` is lost, with headphones plugged in.
 
+## Vertex-lit surfaces and `r_vertexLight`
+
+03/11/2026, `personal/world-bugs-1103`, based on `main` `fca8e772` (Sol's hub report #176,
+oot: "vertex color mode not working appropriately"). SJK had no `r_vertexLight`, and its
+shaders on `LIGHTMAP_BY_VERTEX` surfaces (oot: 9 765 of 23 795) drew their `$lightmap`
+stage with the grey fallback lightmap instead of the vertex colours. They now follow
+rd-vanilla `FinishShader` ([rendering.md](rendering.md#vertex-lighting-r_vertexlight)).
+`r_vertexLight 1`, read at map load, lights every surface by vertex and applies
+`vertexremapshader`. Dynamic lights stay on, unlike rd-vanilla. Verified: unit tests, fmt,
+clippy, off-screen spawn shots of oot with `r_vertexLight` 0 and 1. Not verified: in a
+game, against EJK on oot, or under real-time lighting.
+
+## Vehicle impacts and burning wrecks
+
+03/11/2026, `personal/world-bugs-1103`, based on `main` `fca8e772` (Kushina's report). A
+vehicle weapon's shot now plays its `.vwp` `impactFX` where it hits instead of the carrier
+weapon's impact (`CG_VehicleWeaponImpact`): the AT-ST laser, sent as `WP_ROCKET_LAUNCHER`
+because it has a width, burst like a rocket. A destroyed vehicle (`EF_DEAD`) plays
+`ships/dest_burning` at its origin every 50 ms until it blows up, as the dead branch of
+`CG_VehicleEffects` does, animals excepted ([client.md](client.md#vehicle-gunfire)). The
+AT-ST camera jump on stopping was fixed on 23/10 (`36523a14`). Not done: a damaged
+fighter's surface smoke (`dmgFX`, `injureFX`) and vehicle trails and exhausts. Verified:
+unit tests, fmt, clippy. Not verified: in a game, or that JoF/JA+ servers tag vehicle shots.
+
 ## Box hunt: own teleports only, caps from 09:00, `japlus.guntelewall`
 
 03/11/2026, `personal/box-hunt-1103` from `main` `d3881f31`, with hub branch

@@ -2108,6 +2108,25 @@ sound is now as loud as stock). Kushina's report (21/10/2026): vehicle fire was 
 the projectile's flight loop and impacts being all that was heard. JoF EJK skips
 these flashes while the viewer is in a private duel; stock does not, nor does SJK.
 
+A vehicle weapon's shot that hits plays the `.vwp` `impactFX` alone, in place of the
+impact of the hand weapon it is carried as (`CG_VehicleWeaponImpact`, called by
+`EV_MISSILE_HIT`, `EV_MISSILE_MISS` and `EV_MISSILE_MISS_METAL`): a missile flagged
+`EF_JETPACK_ACTIVE` names its vehicle weapon in `otherEntityNum2`
+([impact_events.rs](../crates/sjk-client/src/impact_events.rs),
+[impact_spawn.rs](../crates/sjk-viewer/src/impact_spawn.rs)). The game sends any shot
+with a `width` or `height` as `WP_ROCKET_LAUNCHER`, so before 03/11/2026 the AT-ST's
+red laser (`atst_laser`, 8 by 8) burst in a rocket's explosion instead of
+`atst/wall_impact` (Kushina's report). A weapon without `impactFX` keeps the carrier's.
+
+A destroyed vehicle (`EF_DEAD`, until it blows up: the AT-ST's `explosionDelay` is 2.45
+s) burns: `effects/ships/dest_burning.efx` at its origin every 50 ms, as the dead branch
+of `CG_VehicleEffects` plays it, animals excepted
+([vehicle_burning.rs](../crates/sjk-viewer/src/vehicle_burning.rs)). A vehicle still
+running shows no damage in stock but a fighter's: its damaged surfaces (`brokenLimbs`)
+smoke with the `.veh` file's `injureFX` and `dmgFX` at `*nosedamage`, `*exhaust1`,
+`*r_wingdamage` and `*l_wingdamage`, which SJK does not draw yet, nor the trails and
+exhausts (`trailFX`, `exhaustFX`, `turboFX`) of the same function.
+
 ## Electrified players' crackle
 
 A player whose `ps.electrifyTime` (`emplacedOwner` on other players) is ahead of the

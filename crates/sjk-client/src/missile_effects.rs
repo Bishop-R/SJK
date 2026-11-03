@@ -218,6 +218,18 @@ impl LegacyMissileEffects {
         self.vehicles.as_ref()?.weapon(index)
     }
 
+    /// `CG_VehicleWeaponImpact` (`cg_weapons.c`): the `impactFX` a vehicle weapon's
+    /// shot plays where it hits (an impact event's `vehicle_weapon`), `None` when
+    /// it has none and the carrier weapon's own impact plays.
+    pub fn vehicle_impact_effect(&self, vehicle_weapon: u16) -> Option<&str> {
+        if vehicle_weapon == 0 {
+            return None;
+        }
+        self.vehicle_weapon(usize::from(vehicle_weapon))?
+            .impact_effect
+            .as_deref()
+    }
+
     /// The `muzzleFX` that fires from muzzle `muzzle` (from 0) of the vehicle whose
     /// model is `CS_MODELS` slot `model_index` (`CG_VehMuzzleFireFX`).
     pub fn vehicle_muzzle_effect(&self, model_index: usize, muzzle: usize) -> Option<&str> {

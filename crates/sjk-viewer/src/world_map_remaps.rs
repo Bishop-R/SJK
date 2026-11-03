@@ -55,7 +55,7 @@ impl MapRemaps {
         };
         let fields = world.fields().iter().map(|(k, v)| (k.as_str(), v.as_str()));
         let mut worldspawn = BTreeMap::new();
-        for (old, new) in worldspawn_remaps(fields) {
+        for (old, new) in worldspawn_remaps(fields, crate::vertex_light::enabled()) {
             match checked(vfs, shaders, old, new) {
                 Ok((old, new)) => {
                     worldspawn.insert(old, new);
@@ -213,9 +213,10 @@ pub(crate) fn checked(
 /// keys with the case-sensitive prefix `remapshader` and an `old;new` value,
 /// split at the first `;`. Like C, the scan stops at an empty key or value, at
 /// one starting with `}`, or at a remap value without `;`. `vertexremapshader`
-/// keys apply only under `r_vertexLight`, which SJK does not have.
+/// keys apply only under `r_vertexLight` (`vertex_light`, [`crate::vertex_light`]).
 pub(crate) fn worldspawn_remaps<'a>(
     fields: impl IntoIterator<Item = (&'a str, &'a str)>,
+    vertex_light: bool,
 ) -> Vec<(&'a str, &'a str)> {
     let mut remaps = Vec::new();
     for (key, value) in fields {
@@ -232,7 +233,7 @@ pub(crate) fn worldspawn_remaps<'a>(
         let Some(remap) = value.split_once(';') else {
             break;
         };
-        if !vertex {
+        if !vertex || vertex_light {
             remaps.push(remap);
         }
     }
@@ -268,10 +269,20 @@ mod tests {
             ("remapshader3", "textures/a;textures/a"),
         ];
         assert_eq!(
-            worldspawn_remaps(fields),
+            worldspawn_remaps(fields, false),
             [
                 ("textures/a", "textures/b"),
                 ("textures/c", "textures/d;e"),
+                ("textures/a", "textures/a"),
+            ]
+        );
+        // `r_vertexLight 1` (`R_LoadEntities`): vertex remaps apply in their place.
+        assert_eq!(
+            worldspawn_remaps(fields, true),
+            [
+                ("textures/a", "textures/b"),
+                ("textures/c", "textures/d;e"),
+                ("textures/v", "textures/w"),
                 ("textures/a", "textures/a"),
             ]
         );
@@ -289,7 +300,7 @@ mod tests {
         ] {
             let fields = [("remapshader", "textures/a;textures/b"), stop, after];
             assert_eq!(
-                worldspawn_remaps(fields),
+                worldspawn_remaps(fields, false),
                 [("textures/a", "textures/b")],
                 "{stop:?}"
             );

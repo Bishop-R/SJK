@@ -105,6 +105,7 @@ mod effect_flash;
 mod effect_geometry;
 mod effect_geometry_gpu;
 mod vehicle_assets;
+mod vehicle_burning;
 mod vehicle_fire;
 mod vehicle_pose;
 mod vfs_lifetime;
@@ -129,6 +130,7 @@ mod frame_pacing;
 mod frame_queue;
 mod frame_split;
 mod lightmap_styles;
+mod vertex_light;
 
 mod charge_flash;
 mod e2e_whisper_card;
@@ -621,6 +623,8 @@ struct GpuState {
     muzzle_effects: sjk_client::LegacyMuzzleEffects,
     /// Vehicle volleys waiting for their vehicle to be posed (`vehicle_fire.rs`).
     vehicle_fires: vehicle_fire::Pending,
+    /// Destroyed vehicles' flames' debounce.
+    vehicle_flames: vehicle_burning::Flames,
     force_overlays: sjk_client::LegacyForceOverlayTracker,
     /// `EV_BODYFADE` per body (`body_fade.rs`).
     body_fades: Box<sjk_client::LegacyBodyFadeTracker>,
@@ -1613,6 +1617,7 @@ impl GpuState {
             effect_aux: effect_aux::Runtime::default(),
             muzzle_effects: sjk_client::LegacyMuzzleEffects::new(),
             vehicle_fires: Default::default(),
+            vehicle_flames: Default::default(),
             force_overlays: sjk_client::LegacyForceOverlayTracker::default(),
             body_fades: Box::default(),
             demp2_shells: Default::default(),

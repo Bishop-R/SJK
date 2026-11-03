@@ -77,6 +77,7 @@ impl VehicleMissiles {
             [
                 weapon.shot_effect.as_deref(),
                 weapon.muzzle_effect.as_deref(),
+                weapon.impact_effect.as_deref(),
             ]
             .into_iter()
             .flatten()
@@ -140,6 +141,7 @@ mod tests {
 	name	laser
 	muzzleFX	ships/laser_flash
 	shotFX	ships/laser_shot
+	impactFX	atst/wall_impact
 }
 turbo
 {
@@ -167,5 +169,13 @@ turbo
         // Loaded with the map, so their sounds are registered.
         let names: Vec<_> = missiles.effect_names().collect();
         assert!(names.contains(&"ships/laser_flash") && names.contains(&"ships/turbo_flash"));
+        assert!(names.contains(&"atst/wall_impact"));
+        // The laser names its impact; the turbo has none.
+        let impacts: Vec<_> = missiles
+            .weapons()
+            .map(|w| (w.shot_effect.as_deref(), w.impact_effect.as_deref()))
+            .collect();
+        assert!(impacts.contains(&(Some("ships/laser_shot"), Some("atst/wall_impact"))));
+        assert!(impacts.contains(&(None, None)));
     }
 }

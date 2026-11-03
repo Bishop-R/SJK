@@ -58,6 +58,27 @@ title: Sound follows the Windows default device
 change: Every 1.5 s the default device is checked; on a change the mixer moves to it.
 test: Play with speakers, plug headphones in: sound moves within 2 s, music goes on.
 test: Unplug them: sound back on the speakers; log says "audio output moved".
+
+[vertex-light-1103]
+area: Rendering & effects
+title: Vertex-lit surfaces keep their light; r_vertexLight 1 (hub #176)
+change: Surfaces a map lit by vertex draw their vertex colours, not a flat grey lightmap.
+change: r_vertexLight 1 lights the whole world by vertex colours, as the original game.
+test: On oot, the water and vertex-lit walls show their light, not flat grey (compare EJK).
+test: r_vertexLight 1, then reload the map: world lit by vertex colours, log says so.
+test: r_vertexLight 0, then reload the map: lightmaps are back.
+note: Read at map load only; change it, then load the map again.
+
+[vehicle-impacts-burning]
+area: Rendering & effects
+title: Vehicles: shots burst with their own impact; destroyed vehicles burn
+change: A vehicle shot plays its .vwp impactFX where it hits (AT-ST laser: atst/wall_impact).
+change: A destroyed vehicle burns (ships/dest_burning) until it explodes; animals do not.
+test: Drive an AT-ST, fire the red laser at a wall: small red burst, no rocket explosion.
+test: AT-ST alt fire (rockets) still explodes as before.
+test: Destroy an AT-ST or a swoop: flames on it until it blows up.
+note: Kushina's report. Damaged fighters' surface smoke is still not drawn.
+
 [box-hunt-1103]
 area: Gameplay
 title: Box hunt: only your own teleports cheat; caps from 09:00; japlus.guntelewall

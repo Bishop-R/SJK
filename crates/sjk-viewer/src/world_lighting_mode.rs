@@ -136,6 +136,7 @@ impl Settings {
             CvarFlags::ARCHIVE,
             "Dynamic-glow halo around emission-mapped texels (needs r_DynamicGlow 1); live",
         ))?;
+        crate::vertex_light::bind(cvars)?;
         Self::from_registered(cvars)
     }
 

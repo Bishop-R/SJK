@@ -12,9 +12,12 @@ use std::sync::Arc;
 /// A vehicle's `type` key, which decides how much of its angles the model root takes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum VehicleKind {
-    /// Animals, fliers and untyped vehicles: upright, like any other non-humanoid.
+    /// Fliers and untyped vehicles: upright, like any other non-humanoid.
     #[default]
     Upright,
+    /// `VH_ANIMAL` (the tauntaun): upright too, and it gives off no vehicle effects
+    /// (`CG_VehicleEffects`).
+    Animal,
     Speeder,
     Fighter,
     Walker,
@@ -59,6 +62,7 @@ pub(crate) fn look(vfs: &VirtualFileSystem, name: &str) -> Option<VehicleLook> {
             kind::SPEEDER => VehicleKind::Speeder,
             kind::FIGHTER => VehicleKind::Fighter,
             kind::WALKER => VehicleKind::Walker,
+            kind::ANIMAL => VehicleKind::Animal,
             _ => VehicleKind::Upright,
         },
         camera: crate::camera::VehicleProfile::from_vehicle(info),

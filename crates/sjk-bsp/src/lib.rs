@@ -333,6 +333,17 @@ impl Bsp {
         }
     }
 
+    /// Light every surface by its vertex colours instead of its lightmap, as rd-vanilla
+    /// does under `r_vertexLight 1` (`ShaderForShaderNum`, `tr_bsp.cpp`): each surface
+    /// takes `LIGHTMAP_BY_VERTEX` (-3) in every slot and its vertex styles. Call before
+    /// [`Self::compose_light_styles`], which then sums the vertex styles.
+    pub fn light_by_vertex(&mut self) {
+        for surface in self.render.surfaces.iter_mut() {
+            surface.lightmaps = [-3; 4];
+            surface.lightmap_styles = surface.vertex_styles;
+        }
+    }
+
     /// Fold every surface's further light styles into its lightmap and vertex colours,
     /// lit by `colors` ([`light_styles`]): a styled surface is pointed at a block of its
     /// own on pages added after the file's, which stay as they were. The blocks and the
