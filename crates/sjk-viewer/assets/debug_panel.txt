@@ -123,6 +123,17 @@ test: Player card and SJK chat sender cards show the worn cover; unknown ids fal
 test: Holocron odds: Banner bonus row only on a hub with banners on, 0 otherwise.
 note: Hub banner drops stay off until SJK_HUB_BANNER_MIN_CLIENT is set (hub shared #6).
 
+[pr-batch-1103]
+area: Rendering
+title: PRs 03/11: light styles, NPC split skins, Empower glow off
+change: Slash #339: switchable/flickering lights' baked light drawn and following the server.
+change: Slash #336: NPC skins like head_a3|torso_a3| worn instead of grey.
+change: Slash #338: cg_empowerEffect 3 hides the Empower body glow.
+test: devmap jofshuttle, SJK preset: ship cabin lit, younglings in their skins, not grey.
+test: A map with flickering lights: they flicker; a switched light goes off and on.
+test: cg_empowerEffect 3 vs an empowered player: no body glow; plain Push still blurs.
+note: r_dayNight 1 ignores light styles; misc_bsp keeps them full.
+
 [pr-batch-1102c]
 area: Gameplay
 title: PRs 02/11 c: vehicle HP per HUD style, Lugormod v3 prediction

@@ -748,7 +748,7 @@ merged into SJK
 - #306 long game-chat messages sent whole, as up to four messages split at a word; at the
   merge a draft refused past four pieces stays in the composer.
 
-Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 90 pull requests merged
+Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 93 pull requests merged
 into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash)):
 
 - #114 Tab completes the cfg file argument of `exec`, `execq`, `writeconfig` and `write`
@@ -914,6 +914,11 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
 - #303 chat and console fonts installed on the PC (`cg_chatFont`, `con_font`), after Saturn's
   idea.
 - #318 each HUD style shows the piloted vehicle's HP in its own look.
+- #336 NPCs whose appended skin names only `head|torso|` (JoF Shuttle's alien younglings)
+  wear it instead of drawing grey, as `CG_HandleAppendedSkin` reads it.
+- #338 `cg_empowerEffect 3` hides the Empower body glow locally; ordinary Push keeps its blur.
+- #339 light styles: switchable and flickering lights' baked light drawn and following
+  `CS_LIGHT_STYLES` (the JoF Shuttle ship was black).
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,

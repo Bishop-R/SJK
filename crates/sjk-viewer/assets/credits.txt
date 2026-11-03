@@ -370,7 +370,7 @@ link: Lukas's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+
 
 [Slash]
 github: JoFSlash
-role: Contributor: 90 merged pull requests
+role: Contributor: 93 merged pull requests
 did: #114 Tab completes cfg file names after exec and writeconfig
 did: #113 CTF team saber colours, an option
 did: #153 The SJK scoreboard tells who won the Siege round or team match
@@ -463,6 +463,9 @@ did: #301 Sound sonar: arcs toward the sounds you hear
 did: #302 Quiet mode: only the duel opponent and whispers in chat
 did: #303 Chat and console fonts from the PC
 did: #318 Each HUD style shows the vehicle's HP its own way
+did: #336 NPCs with head|torso| skins wear them instead of grey
+did: #338 Empower glow can be hidden (cg_empowerEffect 3)
+did: #339 Switchable and flickering map lights drawn (light styles)
 link: Slash's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash
 
 [Milamber]
