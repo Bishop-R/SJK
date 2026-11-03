@@ -2096,7 +2096,7 @@ impl GpuState {
         // The game HUD draws the vehicle HUD from `swoopvehiclehud`'s pictures, as
         // stock does; SJK's vector strip stands in for it with the other looks.
         let stock_vehicle =
-            hud_visibility.hud && hud_visibility.vehicle && self.menu_hud.draws_vehicle();
+            hud_visibility.elements && hud_visibility.vehicle && self.menu_hud.draws_vehicle();
         if stock_vehicle {
             hud_visibility.vehicle = false;
         }
@@ -2464,6 +2464,7 @@ impl GpuState {
             .as_ref()
             .is_some_and(console::ViewerConsole::is_open);
         let chat_visible = !console_open
+            && !hud::toggle::hides(self.console.as_ref(), hud::toggle::Part::Chat)
             && scoreboard::chat_visible(
                 information_visible,
                 self.chat.wants_history(self.console.as_ref()),

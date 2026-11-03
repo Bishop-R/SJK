@@ -556,6 +556,7 @@ did: Found encrypted whispers ending with a backslash going out unencrypted
 did: The player card on the inspect key only, never from a look (Key only)
 did: Drew the Gonk, EZ and Geyon tags
 did: Toys say when they are switched on or off
+did: Choose what the HUD switch hides: elements, crosshair, names, chat
 
 == Made with
 

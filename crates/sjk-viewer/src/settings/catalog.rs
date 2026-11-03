@@ -585,6 +585,26 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "HUD off: elements",
+        cvar: crate::hud::toggle::Part::Elements.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "HUD off: crosshair",
+        cvar: crate::hud::toggle::Part::Crosshair.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "HUD off: names",
+        cvar: crate::hud::toggle::Part::Names.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "HUD off: chat",
+        cvar: crate::hud::toggle::Part::Chat.cvar(),
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "HUD scale",
         cvar: "cg_hudScale",
         kind: ValueKind::Float {

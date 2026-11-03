@@ -24,6 +24,16 @@
 
 # ---- Console & chat ----
 
+[hud-switch-parts]
+area: HUD
+title: Choose what the HUD switch (cg_drawHud 0) hides
+change: Settings > HUD: "HUD off: elements / crosshair / names / chat" under the HUD row.
+change: Defaults keep the old switch (all but the chat hide); cg_draw2D 0 still hides all.
+test: Defaults: HUD off hides health, ammo, crosshair, nameplates; the chat stays.
+test: Untick "HUD off: crosshair": HUD off keeps the crosshair alone over the map.
+test: Tick "HUD off: chat": HUD off hides the chat box too; HUD on brings it back.
+test: Untick "HUD off: names": nameplates and team logos stay with the HUD off.
+
 [hax-trap-collection]
 area: Menus & settings
 title: Hax trap switches moved to Collection > Toys > Hax

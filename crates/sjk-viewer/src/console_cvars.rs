@@ -1464,6 +1464,30 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
         CvarDefinition::new("cg_drawHud", true, archive, "Display the in-game HUD"),
         CvarDefinition::new("cg_draw2D", true, archive, "Display 2D game overlays"),
         CvarDefinition::new(
+            crate::hud::toggle::Part::Elements.cvar(),
+            crate::hud::toggle::Part::Elements.hidden_by_default(),
+            archive,
+            "cg_drawHud 0 hides the HUD's elements (health, ammo, timers, kill feed)",
+        ),
+        CvarDefinition::new(
+            crate::hud::toggle::Part::Crosshair.cvar(),
+            crate::hud::toggle::Part::Crosshair.hidden_by_default(),
+            archive,
+            "cg_drawHud 0 hides the crosshair and the name under it",
+        ),
+        CvarDefinition::new(
+            crate::hud::toggle::Part::Names.cvar(),
+            crate::hud::toggle::Part::Names.hidden_by_default(),
+            archive,
+            "cg_drawHud 0 hides nameplates, names over players and team logos",
+        ),
+        CvarDefinition::new(
+            crate::hud::toggle::Part::Chat.cvar(),
+            crate::hud::toggle::Part::Chat.hidden_by_default(),
+            archive,
+            "cg_drawHud 0 hides the chat box",
+        ),
+        CvarDefinition::new(
             "cg_simpleItems",
             false,
             archive,

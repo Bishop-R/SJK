@@ -2619,6 +2619,7 @@ fn radial_hud(shots: &mut Snapshot) {
     use crate::hud::{HudLook, HudOverlay, HudVisibility};
     let visibility = HudVisibility {
         hud: true,
+        elements: true,
         status: true,
         vehicle: true,
         weapon: true,

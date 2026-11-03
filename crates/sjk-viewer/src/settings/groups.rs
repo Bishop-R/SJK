@@ -500,6 +500,10 @@ impl Group {
             ],
             Self::Hud => &[
                 "cg_drawHud",
+                crate::hud::toggle::ELEMENTS_CVAR,
+                crate::hud::toggle::CROSSHAIR_CVAR,
+                crate::hud::toggle::NAMES_CVAR,
+                crate::hud::toggle::CHAT_CVAR,
                 crate::menu_hud::STYLE_CVAR,
                 crate::menu_hud::FILES_CVAR,
                 "cg_hudScale",

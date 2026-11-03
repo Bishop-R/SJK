@@ -517,7 +517,7 @@ pub(crate) fn readout(gpu: &GpuState, time: i32) -> Option<Readout> {
             .unwrap_or(fallback)
     };
     if !(enabled("cg_draw2D", true)
-        && enabled("cg_drawHud", true)
+        && !crate::hud::toggle::hides(console, crate::hud::toggle::Part::Elements)
         && enabled("cg_drawStatus", true))
     {
         return None;

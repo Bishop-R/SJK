@@ -614,7 +614,23 @@ const HELP: &[(&str, &str)] = &[
     // HUD
     (
         "cg_drawHud",
-        "Shows the HUD; off hides it, for screenshots and recordings.",
+        "Shows the HUD; off hides it, for screenshots and recordings. The four rows under it choose what off hides.",
+    ),
+    (
+        crate::hud::toggle::Part::Elements.cvar(),
+        "With the HUD off: health, shield, Force, ammo, timers, the kill feed and the rest of the HUD hide. Off: they stay.",
+    ),
+    (
+        crate::hud::toggle::Part::Crosshair.cvar(),
+        "With the HUD off: the crosshair and the name under it hide. Off: they stay.",
+    ),
+    (
+        crate::hud::toggle::Part::Names.cvar(),
+        "With the HUD off: nameplates, names over players and team logos hide. Off: they stay.",
+    ),
+    (
+        crate::hud::toggle::Part::Chat.cvar(),
+        "With the HUD off: the chat box hides too. Off (the default): the chat stays.",
     ),
     ("cg_hudScale", "Size of the HUD: higher is larger."),
     (

@@ -32,6 +32,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Choose what the HUD switch hides: under HUD in Settings > HUD, four switches say whether `cg_drawHud 0` hides the HUD's elements, the crosshair, names over players and the chat; by default it hides what it always did and the chat stays _(Sol, after Blep's idea)_
 - The Hax trap's switches (`cl_haxTrap`, `cl_haxAway`) moved from Settings > Gameplay to the Hax's card in Collection > Toys; a Settings search for them still finds them _(Sol, after Lex's idea)_
 - Report a bug from the main menu: the SJK page has it now, so a problem met outside a match can be sent too (its report says "menu" for the map) _(Sol, after Lex's idea)_
 - Box hunt: map teleporters and an admin teleporting or bringing you no longer count as cheating; only your own teleports (`amtele`, `japlus.goto`, `japlus.guntele` and the like), your own `noclip` and `fakenoclip` do _(Sol, after belyash's and Sanji's reports)_

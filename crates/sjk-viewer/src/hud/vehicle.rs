@@ -751,6 +751,7 @@ mod tests {
         riding.hull = 60;
         let visibility = HudVisibility {
             hud: true,
+            elements: true,
             status: true,
             vehicle: true,
             weapon: true,

@@ -3524,6 +3524,25 @@ the layout as bundled ([hud.rs](../crates/sjk-viewer/src/hud.rs), `RadialPlaceme
 which moves each widget of `RADIAL_STATUS` by its side: an arc's from its sweep, the
 rest from their offset).
 
+### What the HUD switch hides
+
+`cg_drawHud 0` (Settings > HUD > HUD, the quick wheel's HUD on/off, a
+`toggle cg_drawHud` bind) hides the parts of the screen whose switch is on (Blep's idea,
+03/11/2026; [hud/toggle.rs](../crates/sjk-viewer/src/hud/toggle.rs)), each a row under
+HUD in Settings > HUD:
+
+| Cvar | Default | Settings | Hides |
+| --- | --- | --- | --- |
+| `cg_hudHideElements` | 1 | HUD off: elements | health, shield, Force, ammo, weapon and item rows, timers, vote and warmup lines, the kill feed, the lagometer, the game-data HUD and the rest of the layout |
+| `cg_hudHideCrosshair` | 1 | HUD off: crosshair | the crosshair and the name under it |
+| `cg_hudHideNames` | 1 | HUD off: names | nameplates, names over players, team logos and outlines |
+| `cg_hudHideChat` | 0 | HUD off: chat | the chat box |
+
+The defaults are what `cg_drawHud 0` always hid, so nothing changes until a player
+ticks otherwise; with all four off, the HUD switch hides nothing. `cg_draw2D 0` still
+hides everything, and the scoreboard, menus, intermission and the quick wheel hide the
+HUD as before. Unit tests cover the rule and the defaults; not checked in a running game.
+
 ### Moving HUD elements
 
 The HUD edit mode moves the HUD's elements with the mouse (Lex's idea, #ideas

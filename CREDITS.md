@@ -1015,7 +1015,9 @@ hid the blades' details: Slash built it as No glow on sabers (#294, 30/10/2026).
 Blep, a player, asked for the player card to come only from the `inspect` key, not from
 looking at a player: Sol built it as Key only, `cg_playerCard 2` (29/10/2026). Blep
 also asked for every toy to say when it is switched on or off: Creyon built it (#289,
-30/10/2026), each toy's name and ON in green or OFF in red.
+30/10/2026), each toy's name and ON in green or OFF in red. Blep asked to choose what
+the HUD switch hides as well: Sol built the four HUD off rows of Settings > HUD
+(03/11/2026).
 
 Atrosex, a player, asked for the Forge's Break down to mark the saber shader the player
 wears, and its last copy's card to say plainly that it is worn; Kushina asked for favourite
