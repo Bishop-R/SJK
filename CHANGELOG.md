@@ -30,10 +30,19 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
-## Unreleased
+## 2026.1103.2 (Alpha) | 03/11/2026
+
+Clan chats for JoF and S, holocrons earned by playing, tag copies to break down or craft, loadouts, fishing and many fixes.
+
+> Clan chats: Verified JoF and S players get their clan's chat beside SJK chat, across maps and servers.
+> Holocrons: Real play earns them, and after a quiet day the next day's first ones come twice as fast.
+> Tag copies: Break duplicate tags into kyber shards, trade them, or craft two into a tag you lack.
+> Loadouts: Save the look you wear in one of five slots and wear it again in one click.
+> Fishing: Get a rod out with `toy_fishing`, fill your fish log and earn five new achievements.
+> Your sounds: Mute one player with `mutesounds`, mute sounds by name, and hear your hits with `cg_hitsounds`.
 
 - Holocron catch-up: after a day you played little, the next day's first holocrons (up to 4) come twice as fast; the Holocrons tab says how many are left ("catch-up x2"). They count toward the day's 8 _(Sol, after Rollembones' idea)_
-- Holocrons now count real play, not just being there: moving, attacking, hitting, being hit, kills and deaths. moving around counts as much as fighting, standing still not at all; the Holocrons tab says when you are not earning _(Sol, after Rollembones' idea)_
+- Holocrons now count real play, not just being there: moving, attacking, hitting, being hit, kills and deaths. Moving around counts as much as fighting, standing still not at all; the Holocrons tab says when you are not earning _(Sol, after Rollembones' idea)_
 - Tag copies: a duplicate tag breaks down into kyber shards (more for Holo and Solar copies), trades like a duplicate shader, or two duplicates of one tier and finish craft into a tag of that tier you lack, in that finish (Collection > Tags, once the hub offers it). You always keep one copy of every tag _(Sol, after Blep's idea)_
 - Mute one player's sounds: `mutesounds <player>` silences their voice, steps, saber, Force, emotes and toys until the map changes, their chat and look unchanged (`unmutesounds` lifts it); with Ignore mutes sounds (`cl_ignoreMutesSounds`, Settings > Chat, off by default) a JA+ or jaPRO `ignore` does it too _(Sol, after akr's and Neffie's ideas)_
 - Muted sounds (`s_muteSounds`, Settings > Sound): words such as `ysalamiri hacking`, and no sound whose file name holds one plays, items' and power-ups' loops included _(Sol, after akr's and Neffie's ideas)_

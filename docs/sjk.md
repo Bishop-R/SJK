@@ -283,7 +283,8 @@ mistake is fixed by a new commit, and a bad release by the next release
 2. **Changelog.** In [CHANGELOG.md](../CHANGELOG.md) rename `## Unreleased` to
    `## <version> | <dd/mm/yyyy>`, the version `YYYY.MMDD.N` ([Version](#version)), and
    write its recap, three to six `> Heading: sentence` lines in player words
-   ([Changelog](#changelog)). Leave a new empty `## Unreleased` above it.
+   ([Changelog](#changelog)). Do not leave an empty `## Unreleased` above it: the
+   test refuses a section with no change; the next merge adds it back.
 3. **Check.** `cargo test -p sjk-viewer --bin sjk changelog_data` must pass (it checks the
    credits, the dates and the recap).
 4. **Commit and tag.** Commit as `Release <version>`, push `main`, then tag that
