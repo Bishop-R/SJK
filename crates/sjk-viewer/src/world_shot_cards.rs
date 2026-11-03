@@ -347,6 +347,8 @@ fn open_binder(size: [u32; 2]) -> Option<GpuState> {
         resets_at: None,
         server_time: 1_791_900_000,
         can_open: true,
+        catchup: None,
+        activity: None,
         read_at: std::time::Instant::now(),
     });
     if let Some(console) = gpu.console.as_mut() {

@@ -27,6 +27,8 @@ pub(crate) fn observe(
         *slot = obituaries.feed().newest(offset);
     }
     let events: Vec<sjk_client::ObituaryEvent> = events.into_iter().flatten().collect();
+    // The play signals the next holocron claim carries (`holocrons/signals.rs`).
+    crate::holocrons::signals::snapshot(&snapshot.player, session.game_state().client_num, &events);
     let seen = achievements::tracker::Seen {
         snapshot,
         game_state: session.game_state(),

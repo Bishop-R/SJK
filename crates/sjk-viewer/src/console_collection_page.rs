@@ -209,6 +209,8 @@ impl ViewerConsole {
                 self.set_cvar(crate::tags::CVAR, &id);
                 self.set_cvar(crate::tags::FINISH_CVAR, finish);
             }
+            PanelAction::ShatterTag(copy) => crate::player_identity::shatter_tag(copy),
+            PanelAction::CraftTags(copies) => crate::player_identity::craft_tags(copies),
             PanelAction::Hub(tab) => {
                 // A tab of another page: the Holocrons page.
                 let back = self.collection_panel.back();

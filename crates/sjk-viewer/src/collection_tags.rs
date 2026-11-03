@@ -9,6 +9,11 @@
 //! follow the tags under their own heading ([`crate::tags::tag_cards`]), and the card
 //! offers the finishes, Normal, Holo and Solar: one the player holds a copy in can be
 //! chosen, and `cg_tagFinish` keeps it. A tile shows the Holo and Solar copies held.
+//!
+//! Since 03/11/2026 (Blep's idea, `crate::tag_copies`), on a hub that says `tag_copies`,
+//! the card of a dropped tag held twice or more offers Break down (one copy of the finish
+//! shown into kyber shards) and Craft (two spare copies of its tier and finish for a tag
+//! not held yet), each on a second press, with the hub's answer under them.
 
 use super::view::LEFT_X;
 use super::*;
@@ -42,6 +47,84 @@ const _: () = assert!(crate::tags::CATALOGUE.len() < MAX_ENTRIES);
 /// The headings of the wall's two parts.
 const TAGS_HEAD: &str = "Tags";
 const CARDS_HEAD: &str = "Credits cards";
+
+/// A tag copies button of the card.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Tool {
+    Break,
+    Craft,
+}
+
+/// A button pressed once, waiting for its second press: for this tag and finish.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct Confirm {
+    tool: Tool,
+    id: String,
+    finish: &'static str,
+}
+
+/// What the card's tag copies buttons do for the entry and finish shown, as the last
+/// frame worked out (`None`: the button is not offered).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct Tools {
+    /// The hub takes tag copies requests and the player may act.
+    pub(super) on: bool,
+    /// The copy Break down gives and the shards it brings.
+    pub(super) shatter: Option<(sjk_identity::TagCopy, u64)>,
+    /// The two copies Craft gives, when a craft could bring a new tag.
+    pub(super) craft: Option<[sjk_identity::TagCopy; 2]>,
+    /// Why Craft is not offered though the tag takes part.
+    pub(super) craft_why: Option<&'static str>,
+    /// The last tag copies answer, in words, and whether it worked.
+    pub(super) said: Option<(String, bool)>,
+}
+
+impl Tools {
+    /// The tools for tag `tag` in `finish`, from the snapshot.
+    fn of(
+        tag: &crate::tags::Tag,
+        finish: &'static str,
+        unlocks: Option<&[sjk_identity::Unlock]>,
+        snapshot: Option<&sjk_identity::Snapshot>,
+    ) -> Self {
+        let mut tools = Self {
+            said: snapshot
+                .and_then(|snapshot| snapshot.tag_trade.as_ref())
+                .map(|outcome| (crate::tag_copies::outcome_words(outcome), outcome.done())),
+            ..Self::default()
+        };
+        let (Some(unlocks), Some(snapshot)) = (unlocks, snapshot) else {
+            return tools;
+        };
+        let economy = snapshot.economy.as_ref();
+        if !crate::tag_copies::on(economy)
+            || !crate::economy::may_act(snapshot)
+            || !crate::tag_copies::takes_part(tag)
+        {
+            return tools;
+        }
+        tools.on = true;
+        let held = Held::of_parts(tag.id, Some(unlocks), None);
+        if crate::tag_copies::spare(held, finish) > 0 {
+            let shards = economy
+                .and_then(|economy| economy.tags.as_ref())
+                .and_then(|tables| crate::tag_copies::shatter_yield(tables, tag, finish))
+                .unwrap_or(0);
+            tools.shatter = Some((sjk_identity::TagCopy::new(tag.id, finish), shards));
+        }
+        match crate::tag_copies::craft_inputs(unlocks, tag, finish) {
+            Some(_) if !crate::tag_copies::something_new(unlocks, tag, finish) => {
+                tools.craft_why = Some("You hold every tag of this tier in this finish.");
+            }
+            Some(inputs) => tools.craft = Some(inputs),
+            None if held.copies >= 2 => {
+                tools.craft_why = Some("Craft needs two spare copies of this tier in this finish.");
+            }
+            None => {}
+        }
+        tools
+    }
+}
 
 /// One thing the wall lists: a tag of the catalogue, or a card the hub lets be a tag.
 #[derive(Clone, Debug, PartialEq)]
@@ -233,6 +316,34 @@ impl Panel {
         }
     }
 
+    /// Break down or Craft on the card: the first press asks, the second sends.
+    pub(super) fn press_tag_tool(&mut self, tool: Tool) -> PanelAction {
+        let Some((entry, held)) = self.tag_chosen() else {
+            return PanelAction::None;
+        };
+        let id = entry.id().to_owned();
+        let finish = self.tag_finish_shown(held).id;
+        let wanted = Confirm { tool, id, finish };
+        let action = match tool {
+            Tool::Break => self
+                .tag_tools
+                .shatter
+                .as_ref()
+                .map(|(copy, _)| PanelAction::ShatterTag(copy.clone())),
+            Tool::Craft => self.tag_tools.craft.clone().map(PanelAction::CraftTags),
+        };
+        let Some(action) = action else {
+            return PanelAction::None;
+        };
+        if self.tag_confirm.as_ref() == Some(&wanted) {
+            self.tag_confirm = None;
+            action
+        } else {
+            self.tag_confirm = Some(wanted);
+            PanelAction::None
+        }
+    }
+
     /// The wheel over the Tags tab: the wall a line up or down.
     pub(super) fn scroll_tags(&mut self, up: bool) {
         let last = last_first(&self.tag_lines);
@@ -369,7 +480,98 @@ impl Panel {
         let held = self.tag_held[self.tag];
         let entry = self.tag_entries[self.tag].clone();
         let in_use_here = (entry.id() == in_use).then_some(in_use_finish);
+        let finish = self.tag_finish_shown(held).id;
+        self.tag_tools = match &entry {
+            Entry::Tag(tag) => Tools::of(tag, finish, unlocks, inputs.snapshot),
+            Entry::Card(_) => Tools::default(),
+        };
+        // A press waits only for the tag and finish it was for.
+        if self
+            .tag_confirm
+            .as_ref()
+            .is_some_and(|confirm| confirm.id != entry.id() || confirm.finish != finish)
+        {
+            self.tag_confirm = None;
+        }
         self.tag_card(frame, &entry, held, in_use_here);
+    }
+
+    /// The card's tag copies row at `y` (03/11/2026): Break down and Craft, the second
+    /// press asked for, and the hub's last answer or why Craft waits.
+    fn tag_tools_row(&mut self, frame: &Frame, x: f32, y: f32, width: f32) {
+        let s = frame.s;
+        let tools = self.tag_tools.clone();
+        if !tools.on {
+            return;
+        }
+        let confirm = self.tag_confirm.as_ref().map(|confirm| confirm.tool);
+        let button = (width - 12.0) * 0.5;
+        let break_label = match (&tools.shatter, confirm) {
+            (Some((_, shards)), Some(Tool::Break)) => format!("Again: +{shards} shards"),
+            (Some((_, shards)), _) => format!("Break down  +{shards}"),
+            (None, _) => "Break down".to_owned(),
+        };
+        kit::button(
+            &mut self.ui,
+            frame,
+            [x, y, button, 40.0],
+            &break_label,
+            false,
+            tools.shatter.is_some(),
+            confirm == Some(Tool::Break),
+            TAG_BREAK_TOKEN,
+        );
+        let craft_label = if confirm == Some(Tool::Craft) {
+            "Again to craft"
+        } else {
+            "Craft: 2 for 1 new"
+        };
+        kit::button(
+            &mut self.ui,
+            frame,
+            [x + button + 12.0, y, button, 40.0],
+            craft_label,
+            false,
+            tools.craft.is_some(),
+            confirm == Some(Tool::Craft),
+            TAG_CRAFT_TOKEN,
+        );
+        let (words, colour) = match (confirm, &tools.craft, &tools.said) {
+            (Some(Tool::Craft), Some(copies), _) => (
+                format!(
+                    "Gives {} and {}: a tag of this tier you lack, in this finish.",
+                    crate::tag_copies::copy_name(&copies[0]),
+                    crate::tag_copies::copy_name(&copies[1])
+                ),
+                color::GOLD_BRIGHT,
+            ),
+            (Some(Tool::Break), _, _) => (
+                "One copy goes; you keep at least one of every tag.".to_owned(),
+                color::GOLD_BRIGHT,
+            ),
+            (_, _, Some((said, true))) => (said.clone(), color::TEXT),
+            (_, _, Some((said, false))) => (said.clone(), color::alpha(color::GOLD, 0.9)),
+            _ => match tools.craft_why {
+                Some(why) => (why.to_owned(), color::QUIET),
+                None if tools.shatter.is_none() => (
+                    "Duplicates break down into kyber shards or craft into a new tag.".to_owned(),
+                    color::QUIET,
+                ),
+                None => (String::new(), color::QUIET),
+            },
+        };
+        if !words.is_empty() {
+            text(
+                &mut self.ui,
+                TextFamily::Body,
+                format_args!("{words}"),
+                frame.rect(x, y + 46.0, width, 22.0),
+                14.5 * s,
+                colour,
+                FontWeight::Regular,
+                TextAlign::Start,
+            );
+        }
     }
 
     /// A heading of the wall at `y`, with a rule after it.
@@ -709,6 +911,7 @@ impl Panel {
             );
             y += 30.0;
         }
+        self.tag_tools_row(frame, x, y + 4.0, width);
         let in_use_here = in_use == Some(finish.id);
         let label = if in_use_here {
             "In use"

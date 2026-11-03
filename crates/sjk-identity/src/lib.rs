@@ -56,8 +56,8 @@ pub use report::{
 };
 pub use service::{
     ClaimOutcome, HolocronProgress, HubFactory, Location, ModelCheck, OpenOutcome, ReportOutcome,
-    RevealOutcome, Service, Settings, ShopState, Snapshot, Status, Trade, TradeOutcome,
-    TradesClock,
+    RevealOutcome, Service, Settings, ShopState, Snapshot, Status, TagOutcome, TagTrade, Trade,
+    TradeOutcome, TradesClock,
 };
 pub use staff::{ChatBanRow, OpenedText, StaffAnswer, StaffQuery, StaffRequest, StaffState};
 pub use trades::{
@@ -66,13 +66,14 @@ pub use trades::{
 };
 pub use vitals::{Sharing, VitalsTable};
 pub use wire::{
-    Achievement, Bought, BuyAnswer, CardStack, ChatMessage, CraftAnswer, Crafted, DropEvent,
-    DropMark, EconomyTables, Emote, Feed, FindEvent, FindMark, HOLOCRONS_LISTED, Holocron,
-    HolocronBought, HolocronBuyAnswer, HolocronCounts, HolocronState, KyberPity, KyberTables,
-    KyberTier, Look, LookEvent, LootTier, MARKS_ABILITY, MEDAL_RANK_MAX, MEDAL_RANK_MIN, MapBlock,
-    Mark, MarksAnswer, Medal, OPEN_MAX, Offer, OpenAnswer, Opened, OpenedCard, OpenedUnlock,
-    People, Person, Ping, PlacedTag, Presence, Profile, RelayBatch, RevealAnswer, Revealed,
-    SealedWhisper, SharedVitals, ShatterAllAnswer, ShatterAnswer, Shattered, ShatteredCopies,
-    ShopDay, Tick, ToyEvent, Trust, Unlock, UnlockMarks, Vitals, WornName, names_match,
-    normal_form,
+    Achievement, ActivityState, Bought, BuyAnswer, CardStack, Catchup, ChatMessage, CraftAnswer,
+    Crafted, DropEvent, DropMark, EconomyTables, Emote, Feed, FindEvent, FindMark,
+    HOLOCRONS_LISTED, Holocron, HolocronBought, HolocronBuyAnswer, HolocronCounts, HolocronState,
+    KyberPity, KyberTables, KyberTier, Look, LookEvent, LootTier, MARKS_ABILITY, MEDAL_RANK_MAX,
+    MEDAL_RANK_MIN, MapBlock, Mark, MarksAnswer, Medal, OPEN_MAX, Offer, OpenAnswer, Opened,
+    OpenedCard, OpenedUnlock, People, Person, Ping, PlacedTag, PlaySignals, Presence, Profile,
+    RelayBatch, RevealAnswer, Revealed, SealedWhisper, SharedVitals, ShatterAllAnswer,
+    ShatterAnswer, Shattered, ShatteredCopies, ShopDay, TAG_COPIES_ABILITY, TagCopy,
+    TagCraftAnswer, TagCrafted, TagShatterAnswer, TagShattered, TagTables, Tick, ToyEvent, Trust,
+    Unlock, UnlockMarks, Vitals, WornName, names_match, normal_form,
 };

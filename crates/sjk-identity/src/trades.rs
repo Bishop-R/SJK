@@ -35,7 +35,8 @@ pub struct TradeEvent {
 /// One item on a side of a trade.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct TradeItem {
-    /// `holocron` or `shader`.
+    /// `holocron`, `shader` or (since 03/11/2026, hubs whose economy says
+    /// [`crate::wire::TAG_COPIES_ABILITY`]) `tag`.
     #[serde(default)]
     pub kind: String,
     /// The holocron's id, for a holocron.
@@ -53,12 +54,32 @@ pub struct TradeItem {
     /// What it brings on average, in kyber shards.
     #[serde(default)]
     pub value: i64,
+    /// A tag copy's finish (`normal`, `holo`, `solar`); `None` for other items and a
+    /// Normal copy a hub left it out of.
+    #[serde(default)]
+    pub finish: Option<String>,
 }
 
 impl TradeItem {
     /// Whether it is a holocron.
     pub fn is_holocron(&self) -> bool {
         self.kind == "holocron"
+    }
+
+    /// Whether it is a tag copy.
+    pub fn is_tag(&self) -> bool {
+        self.kind == "tag"
+    }
+
+    /// The tag copy it is, for a tag.
+    pub fn tag_copy(&self) -> Option<crate::wire::TagCopy> {
+        if !self.is_tag() {
+            return None;
+        }
+        Some(crate::wire::TagCopy::new(
+            self.id.as_deref()?,
+            self.finish.as_deref().unwrap_or("normal"),
+        ))
     }
 }
 
@@ -89,9 +110,14 @@ impl TradeSide {
     pub fn shaders(&self) -> Vec<String> {
         self.items
             .iter()
-            .filter(|item| !item.is_holocron())
+            .filter(|item| !item.is_holocron() && !item.is_tag())
             .filter_map(|item| item.id.clone())
             .collect()
+    }
+
+    /// The tag copies it offers.
+    pub fn tags(&self) -> Vec<crate::wire::TagCopy> {
+        self.items.iter().filter_map(TradeItem::tag_copy).collect()
     }
 }
 
@@ -305,6 +331,12 @@ pub struct TradeRules {
     /// What a duplicate of each shader tier is worth, lowest tier first.
     #[serde(default)]
     pub shader_value: Vec<i64>,
+    /// Whether tag copies trade (since 03/11/2026); hubs before leave it out.
+    #[serde(default)]
+    pub tags: bool,
+    /// What a tag copy is worth: its break-down yield (since 03/11/2026).
+    #[serde(default)]
+    pub tag_value: Option<crate::wire::TagTables>,
 }
 
 /// The hub's answer to `GET /v1/trades`.
@@ -364,6 +396,9 @@ pub enum TradeStep {
         holocrons: Vec<u64>,
         /// Shader unlock ids.
         shaders: Vec<String>,
+        /// Tag copies (since 03/11/2026; left out of the body when empty, so older hubs
+        /// read the same offer).
+        tags: Vec<crate::wire::TagCopy>,
     },
     /// Ready (or not) for the offers as of revision `rev`.
     Ready {
@@ -387,10 +422,17 @@ impl TradeStep {
             Self::Accept => ("accept", json!({})),
             Self::Decline => ("decline", json!({})),
             Self::Cancel => ("cancel", json!({})),
-            Self::Offer { holocrons, shaders } => (
-                "offer",
-                json!({ "holocrons": holocrons, "shaders": shaders }),
-            ),
+            Self::Offer {
+                holocrons,
+                shaders,
+                tags,
+            } => {
+                let mut body = json!({ "holocrons": holocrons, "shaders": shaders });
+                if !tags.is_empty() {
+                    body["tags"] = json!(tags);
+                }
+                ("offer", body)
+            }
             Self::Ready { rev, ready } => ("ready", json!({ "rev": rev, "ready": ready })),
             Self::Confirm { rev } => ("confirm", json!({ "rev": rev })),
         }
@@ -596,6 +638,14 @@ mod tests {
         assert!(trade.is_open() && trade.is_live() && !trade.asker);
         assert_eq!(trade.mine.holocrons(), [7]);
         assert_eq!(trade.theirs.shaders(), ["saber_haze"]);
+        assert!(trade.theirs.tags().is_empty());
+        let side: TradeSide = serde_json::from_str(
+            r#"{"items":[{"kind":"tag","id":"tag_gonk","name":"Gonk tag","tier":"uncommon",
+            "finish":"holo","value":25},{"kind":"shader","id":"saber_haze","tier":"rare"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(side.shaders(), ["saber_haze"]);
+        assert_eq!(side.tags(), [crate::wire::TagCopy::new("tag_gonk", "holo")]);
         assert_eq!(trade.expires, Some(420));
         assert_eq!(answer.rules.holocron_value["rare"], 8);
         assert_eq!(answer.today.holocrons_given, 1);
@@ -617,12 +667,25 @@ mod tests {
         let (action, body) = TradeStep::Offer {
             holocrons: vec![7],
             shaders: vec!["saber_haze".to_owned()],
+            tags: Vec::new(),
         }
         .call();
         assert_eq!(action, "offer");
         assert_eq!(
             body,
             serde_json::json!({"holocrons":[7],"shaders":["saber_haze"]})
+        );
+        // Tag copies go only when there are some, so older hubs read the same body.
+        let (_, body) = TradeStep::Offer {
+            holocrons: Vec::new(),
+            shaders: Vec::new(),
+            tags: vec![crate::wire::TagCopy::new("tag_gonk", "holo")],
+        }
+        .call();
+        assert_eq!(
+            body,
+            serde_json::json!({"holocrons":[],"shaders":[],
+                "tags":[{"id":"tag_gonk","finish":"holo"}]})
         );
         assert_eq!(
             TradeStep::Ready {

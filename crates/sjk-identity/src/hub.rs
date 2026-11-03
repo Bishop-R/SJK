@@ -458,6 +458,20 @@ pub trait Hub: Send {
         name: &str,
         active: bool,
     ) -> Result<(), HubError>;
+    /// [`Hub::claim`] with what the player did since the last accepted claim (`play`,
+    /// 03/11/2026: the hub counts the time by real play), sent only with `active`. A hub
+    /// client that does not send signals claims without them.
+    fn claim_with(
+        &mut self,
+        identity: &Identity,
+        server: &str,
+        slot: u8,
+        name: &str,
+        active: bool,
+        _play: Option<&crate::wire::PlaySignals>,
+    ) -> Result<(), HubError> {
+        self.claim(identity, server, slot, name, active)
+    }
     /// How far the identity's key is from its next holocron (`GET /v1/holocrons`).
     fn holocrons(&mut self, _identity: &Identity) -> Result<HolocronState, HubError> {
         Err(HubError::Protocol(
@@ -522,6 +536,30 @@ pub trait Hub: Send {
     ) -> Result<crate::wire::CraftAnswer, HubError> {
         Err(HubError::Protocol(
             "this hub client does not craft shaders".to_owned(),
+        ))
+    }
+
+    /// Break one copy of a tag down into kyber shards (`POST /v1/tags/shatter`,
+    /// 03/11/2026, hubs whose economy says `tag_copies`).
+    fn shatter_tag(
+        &mut self,
+        _identity: &Identity,
+        _copy: &crate::wire::TagCopy,
+    ) -> Result<crate::wire::TagShatterAnswer, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not break tags down".to_owned(),
+        ))
+    }
+
+    /// Give two tag copies of one tier and finish for a tag not held yet (`POST
+    /// /v1/tags/craft`, 03/11/2026).
+    fn craft_tags(
+        &mut self,
+        _identity: &Identity,
+        _copies: &[crate::wire::TagCopy; 2],
+    ) -> Result<crate::wire::TagCraftAnswer, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not craft tags".to_owned(),
         ))
     }
 
@@ -1299,10 +1337,25 @@ fn look_body(server: &str, look: &Look) -> Value {
 
 /// `POST /v1/claim`'s body. `active` is sent only when true: the field is optional and
 /// absent means false, so a hub from before holocrons never sees an unknown field.
+#[cfg(test)]
 fn claim_body(server: &str, slot: u8, name: &str, active: bool) -> Value {
+    claim_body_with(server, slot, name, active, None)
+}
+
+/// [`claim_body`] with the play signals (`"play"`, 03/11/2026), only beside `active`.
+fn claim_body_with(
+    server: &str,
+    slot: u8,
+    name: &str,
+    active: bool,
+    play: Option<&crate::wire::PlaySignals>,
+) -> Value {
     let mut body = json!({"server": server, "slot": slot, "name": name});
     if active {
         body["active"] = json!(true);
+        if let Some(play) = play {
+            body["play"] = json!(play);
+        }
     }
     body
 }
@@ -1718,7 +1771,19 @@ impl Hub for HttpHub {
         name: &str,
         active: bool,
     ) -> Result<(), HubError> {
-        let body = claim_body(server, slot, name, active);
+        self.claim_with(identity, server, slot, name, active, None)
+    }
+
+    fn claim_with(
+        &mut self,
+        identity: &Identity,
+        server: &str,
+        slot: u8,
+        name: &str,
+        active: bool,
+        play: Option<&crate::wire::PlaySignals>,
+    ) -> Result<(), HubError> {
+        let body = claim_body_with(server, slot, name, active, play);
         self.send(Some(identity), "POST", "/v1/claim", Some(body))
             .map(|_| ())
     }
@@ -1773,6 +1838,32 @@ impl Hub for HttpHub {
             "POST",
             "/v1/unlocks/craft",
             Some(json!({ "id": id })),
+        )?)
+    }
+
+    fn shatter_tag(
+        &mut self,
+        identity: &Identity,
+        copy: &crate::wire::TagCopy,
+    ) -> Result<crate::wire::TagShatterAnswer, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/tags/shatter",
+            Some(json!(copy)),
+        )?)
+    }
+
+    fn craft_tags(
+        &mut self,
+        identity: &Identity,
+        copies: &[crate::wire::TagCopy; 2],
+    ) -> Result<crate::wire::TagCraftAnswer, HubError> {
+        parse(self.send(
+            Some(identity),
+            "POST",
+            "/v1/tags/craft",
+            Some(json!({ "copies": copies })),
         )?)
     }
 
@@ -2876,6 +2967,23 @@ mod tests {
         assert_eq!(
             claim_body("1.2.3.4:29070", 3, "Sol", true),
             json!({"server": "1.2.3.4:29070", "slot": 3, "name": "Sol", "active": true})
+        );
+        let play = crate::wire::PlaySignals {
+            moved: 900,
+            attacks: 3,
+            hits: 2,
+            ..Default::default()
+        };
+        assert_eq!(
+            claim_body_with("1.2.3.4:29070", 3, "Sol", true, Some(&play)),
+            json!({"server": "1.2.3.4:29070", "slot": 3, "name": "Sol", "active": true,
+                "play": {"moved": 900, "attacks": 3, "hits": 2, "hurt": 0, "kills": 0,
+                    "deaths": 0}})
+        );
+        assert_eq!(
+            claim_body_with("1.2.3.4:29070", 3, "Sol", false, Some(&play)),
+            json!({"server": "1.2.3.4:29070", "slot": 3, "name": "Sol"}),
+            "signals go only with an active claim"
         );
     }
 

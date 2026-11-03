@@ -231,6 +231,7 @@ mod siege_sabers;
 #[cfg(feature = "mod-jof")]
 mod sith_cloud;
 mod surface_tables;
+mod tag_copies;
 mod tag_icons;
 mod tag_render;
 mod tags;

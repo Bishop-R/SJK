@@ -105,6 +105,8 @@ pub(crate) struct Data {
     pub(crate) recent: Vec<Recent>,
     /// "Next holocron in about 20 minutes of play", empty when the hub did not say.
     pub(crate) next: String,
+    /// The catch-up and the pace of earning ([`holocrons::pace_text`]), empty for none.
+    pub(crate) pace: String,
     /// Holocrons found by play today (the hub's day, from 09:00 in Paris) and the most a
     /// day brings.
     pub(crate) today: Option<(u32, u32)>,
@@ -144,6 +146,7 @@ impl Data {
             counts: None,
             recent: Vec::new(),
             next: String::new(),
+            pace: String::new(),
             today: None,
             fraction: None,
             sealed: Default::default(),
@@ -227,11 +230,15 @@ impl Data {
                     holocrons::next_text(progress, lifts_in)
                 })
                 .unwrap_or_default(),
+            pace: progress
+                .as_ref()
+                .map(holocrons::pace_text)
+                .unwrap_or_default(),
             today: progress.map(|progress| (progress.today, progress.daily_cap)),
             fraction: progress
-                .filter(|progress| progress.every_secs > 0)
+                .filter(|progress| progress.next_every() > 0)
                 .map(|progress| {
-                    (progress.progress_secs as f32 / progress.every_secs as f32).clamp(0.0, 1.0)
+                    (progress.progress_secs as f32 / progress.next_every() as f32).clamp(0.0, 1.0)
                 }),
             sealed,
             crystals: Some(crystals),
@@ -963,6 +970,7 @@ mod tests {
             kyber: None,
             shop: None,
             trade: None,
+            tag_trade: None,
             marks: None,
             marks_revision: 0,
             mark_refusal: None,
@@ -1076,6 +1084,8 @@ mod tests {
             resets_at: None,
             server_time: 0,
             can_open: false,
+            catchup: None,
+            activity: None,
             read_at: Instant::now(),
         });
         let data = Data::of(true, &snapshot);
@@ -1106,6 +1116,8 @@ mod tests {
             resets_at: None,
             server_time: 0,
             can_open: true,
+            catchup: None,
+            activity: None,
             read_at: Instant::now(),
         });
         snapshot.min_client = Some("2026.1022.1".into());

@@ -163,6 +163,26 @@ fn own_items(
                 })
             }),
     );
+    // Tag copies (03/11/2026, a hub that trades them): each finish with a spare copy,
+    // the player keeping one copy of every tag.
+    if rules.tags {
+        let tables = rules.tag_value.as_ref();
+        for tag in crate::tags::CATALOGUE
+            .iter()
+            .filter(|tag| crate::tag_copies::takes_part(tag))
+        {
+            let held = crate::tags::Held::of_parts(tag.id, Some(&me.unlocks), None);
+            for finish in &crate::cards::FINISHES {
+                if crate::tag_copies::spare(held, finish.id) == 0 {
+                    continue;
+                }
+                let value = tables
+                    .and_then(|tables| crate::tag_copies::shatter_yield(tables, tag, finish.id))
+                    .map_or(0, |value| i64::try_from(value).unwrap_or(i64::MAX));
+                items.push(Item::tag(tag.id, finish.id, None, value));
+            }
+        }
+    }
     items.retain(|item| !offered.iter().any(|offered| offered.what == item.what));
     // Those that may go in first, the favourites first, most worth first; then those
     // that wait.

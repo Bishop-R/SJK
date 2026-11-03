@@ -518,6 +518,7 @@ did: Chat sounds by kind: private messages heard with public chat off
 [Rollembones]
 role: Ideas for SJK
 did: Emotes kept while typing in the chat
+did: Holocron catch-up after a short day, and holocrons that count real play
 
 [Sanjisan]
 role: Ideas for SJK
@@ -570,6 +571,7 @@ did: Found encrypted whispers ending with a backslash going out unencrypted
 did: The player card on the inspect key only, never from a look (Key only)
 did: Drew the Gonk, EZ and Geyon tags
 did: Toys say when they are switched on or off
+did: Tag copies: break duplicates down, trade them, craft two into a new tag
 
 == Made with
 

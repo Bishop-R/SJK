@@ -481,6 +481,207 @@ pub struct HolocronState {
     /// keep none (their economy does not say [`MARKS_ABILITY`]).
     #[serde(default)]
     pub marks: Option<UnlockMarks>,
+    /// Today's catch-up (03/11/2026, Rollembones' idea; the hub's `PROTOCOL.md`,
+    /// "Holocrons", Catch-up): after a short day the first holocrons of the next come
+    /// twice as fast. `None` from hubs before.
+    #[serde(default)]
+    pub catchup: Option<Catchup>,
+    /// How the hub judged the key's last claims' play (03/11/2026; "Holocrons", Play
+    /// signals). `None` from hubs before.
+    #[serde(default)]
+    pub activity: Option<ActivityState>,
+}
+
+impl HolocronState {
+    /// The active seconds the next holocron needs: the catch-up's interval while some
+    /// catch-up drops are left today, else [`Self::every_secs`].
+    pub fn next_every(&self) -> u64 {
+        match &self.catchup {
+            Some(catchup) if catchup.left > 0 && catchup.every_secs > 0 => catchup.every_secs,
+            _ => self.every_secs,
+        }
+    }
+}
+
+/// Today's holocron catch-up as the hub counts it: `pool` drops the previous day left
+/// short of the cap (at most `max`), `left` of them still to come today at `every_secs`
+/// of active play each. Catch-up drops count toward the daily cap.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct Catchup {
+    /// Today's pool.
+    #[serde(default)]
+    pub pool: u32,
+    /// How many are left today.
+    #[serde(default)]
+    pub left: u32,
+    /// The active seconds a catch-up holocron needs.
+    #[serde(default)]
+    pub every_secs: u64,
+    /// The largest pool a day can bring.
+    #[serde(default)]
+    pub max: u32,
+}
+
+/// How the hub judges play from the claims' signals ([`PlaySignals`]).
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct ActivityState {
+    /// The percent of time the key's last active claim earned: 100 at full pace, the
+    /// peaceful share without a fight lately, 0 idle. `None` until the hub saw signals.
+    #[serde(default)]
+    pub pace: Option<u32>,
+    /// When the key last fought (hit, was hit, killed or died), unix seconds; 0 never.
+    #[serde(default)]
+    pub last_combat: i64,
+    /// How long a fight keeps the pace full, in seconds.
+    #[serde(default)]
+    pub combat_window: i64,
+    /// The percent a peaceful claim earns (moving, no fight within the window).
+    #[serde(default)]
+    pub peaceful: u32,
+    /// The distance a claim's moves must add up to, in game units, to count as moving.
+    #[serde(default)]
+    pub move_min: u64,
+}
+
+/// What the player did since the last accepted claim, sent with an active claim
+/// (`"play"`, 03/11/2026): the hub counts the time toward holocrons by them, not by
+/// presence alone.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct PlaySignals {
+    /// Horizontal distance travelled, game units.
+    pub moved: u64,
+    /// Attack and alt attack presses.
+    pub attacks: u64,
+    /// Hits on foes (the game's hit counter).
+    pub hits: u64,
+    /// Times another player hurt the player.
+    pub hurt: u64,
+    /// Kills of other players.
+    pub kills: u64,
+    /// Deaths at another player's hand.
+    pub deaths: u64,
+}
+
+impl PlaySignals {
+    /// `other` added to these, saturating.
+    pub fn add(&mut self, other: &Self) {
+        self.moved = self.moved.saturating_add(other.moved);
+        self.attacks = self.attacks.saturating_add(other.attacks);
+        self.hits = self.hits.saturating_add(other.hits);
+        self.hurt = self.hurt.saturating_add(other.hurt);
+        self.kills = self.kills.saturating_add(other.kills);
+        self.deaths = self.deaths.saturating_add(other.deaths);
+    }
+
+    /// Whether any fight shows: a hit, a hurt, a kill or a death.
+    pub fn combat(&self) -> bool {
+        self.hits > 0 || self.hurt > 0 || self.kills > 0 || self.deaths > 0
+    }
+}
+
+/// The economy's ability that says the hub breaks down, crafts and trades tag copies
+/// (03/11/2026, Blep's idea).
+pub const TAG_COPIES_ABILITY: &str = "tag_copies";
+
+/// One copy of a tag in a finish (`normal`, `holo`, `solar`), as the tag requests name it.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct TagCopy {
+    /// The tag's id.
+    pub id: String,
+    /// Its finish.
+    #[serde(default = "normal_finish")]
+    pub finish: String,
+}
+
+impl TagCopy {
+    /// A copy of tag `id` in `finish`.
+    pub fn new(id: &str, finish: &str) -> Self {
+        Self {
+            id: id.to_owned(),
+            finish: finish.to_owned(),
+        }
+    }
+}
+
+fn normal_finish() -> String {
+    "normal".to_owned()
+}
+
+/// What breaking a tag copy gives: `shatter` by tag tier, common to mythical, times the
+/// copy's finish's multiplier (`finish`, by finish id).
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+pub struct TagTables {
+    /// Shards by tier.
+    #[serde(default)]
+    pub shatter: Vec<u64>,
+    /// Multipliers by finish id.
+    #[serde(default)]
+    pub finish: std::collections::BTreeMap<String, u64>,
+}
+
+impl TagTables {
+    /// The shards a copy of tier index `tier` in `finish` breaks into, if the tables say.
+    pub fn yield_of(&self, tier: usize, finish: &str) -> Option<u64> {
+        let base = *self.shatter.get(tier)?;
+        let times = self.finish.get(finish).copied().unwrap_or(1);
+        Some(base.saturating_mul(times))
+    }
+}
+
+/// A tag copy the hub broke down (`POST /v1/tags/shatter`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TagShattered {
+    /// The tag's id.
+    pub id: String,
+    /// The copy's finish.
+    #[serde(default = "normal_finish")]
+    pub finish: String,
+    /// How many copies of the tag the person holds now.
+    #[serde(default)]
+    pub count: u32,
+    /// The shards it gave.
+    #[serde(default)]
+    pub shards: u64,
+    /// The person's shards after.
+    #[serde(default)]
+    pub balance: u64,
+}
+
+/// The hub's answer to `POST /v1/tags/shatter`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TagShatterAnswer {
+    /// What it gave.
+    pub shattered: TagShattered,
+    /// The person's profile after.
+    pub profile: Profile,
+}
+
+/// A tag the hub crafted from two copies (`POST /v1/tags/craft`).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TagCrafted {
+    /// The new tag's id.
+    pub id: String,
+    /// Its name.
+    #[serde(default)]
+    pub name: String,
+    /// Its tier.
+    #[serde(default)]
+    pub tier: String,
+    /// Its finish, the copies' own.
+    #[serde(default = "normal_finish")]
+    pub finish: String,
+    /// The two copies given for it.
+    #[serde(default)]
+    pub gave: Vec<TagCopy>,
+}
+
+/// The hub's answer to `POST /v1/tags/craft`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct TagCraftAnswer {
+    /// What was made.
+    pub crafted: TagCrafted,
+    /// The person's profile after.
+    pub profile: Profile,
 }
 
 /// The economy's ability that says the hub keeps collection marks ([`UnlockMarks`]).
@@ -626,6 +827,10 @@ pub struct EconomyTables {
     /// before.
     #[serde(default)]
     pub abilities: Vec<String>,
+    /// What breaking a tag copy gives (03/11/2026, with [`TAG_COPIES_ABILITY`]); `None`
+    /// from hubs before.
+    #[serde(default)]
+    pub tags: Option<TagTables>,
 }
 
 impl EconomyTables {
@@ -2014,8 +2219,40 @@ mod tests {
                 economy: None,
                 kyber: None,
                 marks: None,
+                catchup: None,
+                activity: None,
             }
         );
+        // Since 03/11/2026: the catch-up and how the last claims' play was judged.
+        let caught: HolocronState = serde_json::from_str(
+            r#"{"progress_secs":600,"every_secs":1800,
+                "catchup":{"pool":4,"left":3,"every_secs":900,"max":4},
+                "activity":{"pace":50,"last_combat":0,"combat_window":600,"peaceful":50,
+                    "move_min":200},
+                "economy":{"abilities":["tag_copies"],
+                    "tags":{"shatter":[2,5,12,30,75],"finish":{"normal":1,"holo":5,"solar":25}}}}"#,
+        )
+        .unwrap();
+        assert_eq!(caught.next_every(), 900);
+        assert_eq!(caught.activity.unwrap().pace, Some(50));
+        let economy = caught.economy.unwrap();
+        assert!(economy.can(TAG_COPIES_ABILITY));
+        assert_eq!(economy.tags.unwrap().yield_of(1, "holo"), Some(25));
+        let spent: HolocronState = serde_json::from_str(
+            r#"{"progress_secs":0,"every_secs":1800,"catchup":{"pool":4,"left":0,"every_secs":900},
+                "activity":{"pace":null}}"#,
+        )
+        .unwrap();
+        assert_eq!(spent.next_every(), 1_800);
+        assert_eq!(spent.activity.unwrap().pace, None);
+        let answer: TagCraftAnswer = serde_json::from_str(
+            r#"{"crafted":{"id":"tag_kyber","name":"Kyber tag","tier":"uncommon","finish":"holo",
+                "gave":[{"id":"tag_gonk","finish":"holo"},{"id":"tag_gonk"}]},
+                "profile":{"key_id":"0123456789abcdef","key":"k","name":"Sol","bio":"",
+                    "verified":false,"created":1}}"#,
+        )
+        .unwrap();
+        assert_eq!(answer.crafted.gave[1], TagCopy::new("tag_gonk", "normal"));
         // Since 29/10/2026 the hub says when its caps' day ends (09:00 in Paris).
         let day: HolocronState = serde_json::from_str(
             r#"{"progress_secs":0,"every_secs":1800,"today":8,"daily_cap":8,

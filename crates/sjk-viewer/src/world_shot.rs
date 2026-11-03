@@ -1354,6 +1354,7 @@ Found the fog bug, ask me about it!"
             kyber: None,
             shop: None,
             trade: None,
+            tag_trade: None,
             marks: None,
             marks_revision: 0,
             mark_refusal: None,

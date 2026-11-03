@@ -280,6 +280,32 @@ the person's own count) and where crystals come from.
   faster counts only real elapsed time. At 1800 seconds the hub drops a holocron and keeps
   the rest. Progress persists in the hub's database across sessions. A hub started with
   `--holocron-every <secs>` drops sooner, for tests; the caps stay.
+- **Play signals** (03/11/2026, Rollembones' idea, Sol: "better activity checkers (not
+  chat)"): an active claim also carries `"play"`, what the player did since the hub last
+  accepted a claim: `moved` (the horizontal distance their own origin travelled while
+  alive in their own view, a step over 512 units in one snapshot left out as a teleport
+  or respawn), `attacks` (attack and alt attack presses in the commands sent), `hits`
+  (rises of the game's hit counter, `PERS_HITS`), `hurt` (snapshots whose health or
+  armour fell while the last attacker, `PERS_ATTACKER`, is another client: falls and
+  self damage are not counted), `kills` and `deaths` (obituaries against or by another
+  client). The counts are kept only while the claim says `active`, sent with the next
+  one and cleared once the hub accepted it (a failed claim keeps them for the next).
+  [holocrons/signals.rs](../crates/sjk-viewer/src/holocrons/signals.rs) reads them from
+  each live snapshot and command, with atomics and no allocation. The hub decides the
+  pace: full while the claim shows moves or a fight and a fight came in the last 10
+  minutes, half ("peaceful") while moving without a fight in that time, none standing
+  still, none for counts no one could make in that time (the hub's `PROTOCOL.md`). The
+  Holocrons tab says when the last claim earned less than full pace ("Half pace: no
+  fight in the last 10 minutes. Fight, get hit or duel for full pace", "Not earning:
+  move around or fight to earn holocrons"), from `activity` in `GET /v1/holocrons`.
+- **Catch-up** (03/11/2026, Rollembones' idea, Sol: "x2 faster the next day"): when the
+  previous day's drops by play fell short of the cap, the hub gives the day a catch-up
+  pool, the shortfall, at most 4 (`catchup` in `GET /v1/holocrons`: `pool`, `left`,
+  `every_secs`, `max`). While some are left a holocron needs half the play (15 minutes);
+  catch-up drops count toward the day's 8, so a day never brings more. The Holocrons tab
+  says "Next holocron in about N minutes of play (catch-up x2)" and "Catch-up x2: 3 more
+  holocrons at double speed today" under the bar; its bar fills toward the shorter wait.
+  Hubs before leave `catchup` and `activity` out and the tab shows neither.
 - The tier is rolled by the hub from a system random source.
 - Caps, all the hub's, per day: at most 8 drops per key (staff gifts excluded); at most 1
   mythical per key (another becomes legendary); at most 16 per address across all keys.

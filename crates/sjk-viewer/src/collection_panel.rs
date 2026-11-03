@@ -208,6 +208,9 @@ const TAG_BASE: u16 = 8_100;
 const TAG_CHOOSE_TOKEN: u16 = 8_099;
 /// The Tags tab's finish chips, Normal, Holo and Solar (31/10/2026).
 const TAG_FINISH_BASE: u16 = 8_090;
+/// The Tags tab card's Break down and Craft buttons (tag copies, 03/11/2026).
+const TAG_BREAK_TOKEN: u16 = 8_096;
+const TAG_CRAFT_TOKEN: u16 = 8_097;
 const OPTION_TOKENS: usize =
     crate::blade_skin_file::extras::MAX_OPTIONS + crate::blade_extras::MAX_EXTRAS;
 /// The Shaders tab's rows: the stock blade, then every blade skin, the rarest first
@@ -407,6 +410,10 @@ pub(crate) enum PanelAction {
     /// Set `cg_tag` to this tag's id: the one `toy_tag` sticks.
     /// Pick a tag (or a card) for `toy_tag`, in a finish (`cg_tag`, `cg_tagFinish`).
     ChooseTag(String, &'static str),
+    /// Break one tag copy down into kyber shards (a hub whose economy says `tag_copies`).
+    ShatterTag(sjk_identity::TagCopy),
+    /// Give two tag copies of one tier and finish for a tag not held yet.
+    CraftTags([sjk_identity::TagCopy; 2]),
     /// Ask the hub to equip an owned banner, empty to unequip.
     Banner(&'static str),
     /// Show a tab another page draws: the Holocrons page.
@@ -661,6 +668,10 @@ pub(crate) struct Panel {
     tag_finish: usize,
     tag_finish_for: Option<String>,
     tag_in_use: Option<String>,
+    /// The tag copies tools as the last frame offered them, and the button pressed once
+    /// that waits for its second press (03/11/2026).
+    tag_tools: tags::Tools,
+    tag_confirm: Option<tags::Confirm>,
     /// The player was in the cardboard box, as the last frame's inputs said.
     box_on: bool,
     /// Order 66 was on, as the last frame's inputs said.
@@ -860,6 +871,8 @@ impl Panel {
             tag_follow: false,
             tag_finish: 0,
             tag_finish_for: None,
+            tag_tools: tags::Tools::default(),
+            tag_confirm: None,
             tag_in_use: None,
             box_on: false,
             order66_on: false,
@@ -2045,6 +2058,12 @@ impl Panel {
             }
             if token == TAG_CHOOSE_TOKEN {
                 return self.choose_tag();
+            }
+            if token == TAG_BREAK_TOKEN {
+                return self.press_tag_tool(tags::Tool::Break);
+            }
+            if token == TAG_CRAFT_TOKEN {
+                return self.press_tag_tool(tags::Tool::Craft);
             }
             if let Some(page) = token
                 .checked_sub(ACHIEVEMENT_PAGE_BASE)

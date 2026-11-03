@@ -24,6 +24,24 @@
 
 # ---- Console & chat ----
 
+[holocron-catchup-signals]
+area: Gameplay
+title: Holocron catch-up x2 and play signals (needs the hub's economy-ideas branch)
+change: Claims carry play: moves, attacks, hits, hurts, kills, deaths since the last claim.
+change: Holocrons tab: "(catch-up x2)" after a short day, and a line when pace is not full.
+test: Play an FFA with bots on a remote server, fight: tab shows no pace warning.
+test: Stand still 2 minutes, reopen the tab after a claim: "Not earning" line.
+test: Day after a short day: next holocron in about 15 min, "Catch-up x2: N more".
+note: Only against a hub that sends catchup/activity; older hubs show nothing new.
+[tag-copies]
+area: Menus & settings
+title: Tag copies: break down, craft two into a new tag, trade (hub tag_copies)
+change: Collection > Tags card: Break down +N and Craft (2 for 1 new), each on a second press.
+change: Trade window lists spare tag copies with their finish beside duplicate shaders.
+test: Hold 2+ copies of a dropped tag: Break down twice: shards rise, one copy left.
+test: Two spare Uncommon copies: Craft twice: a new Uncommon tag in that finish.
+test: Trade: a spare tag shows among your items; offered, the other side sees it.
+note: Hidden unless the hub's economy lists tag_copies.
 [sound-mutes]
 area: Audio
 title: Mute one player's sounds (mutesounds), ignore ties, sounds muted by name
