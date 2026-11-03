@@ -613,6 +613,7 @@ impl SettingsMenu {
             current,
             DROPDOWN_BASE,
             scroll,
+            super::classic_view::DROPDOWN_BAR_TOKEN,
         );
     }
 

@@ -882,6 +882,11 @@ impl PlayerMenu {
         self.creator.scroll(lines);
     }
 
+    /// The first line of the grid shown.
+    pub(super) fn creator_first_line(&self) -> usize {
+        self.creator.first_line
+    }
+
     /// The tile the cursor is on.
     pub(super) fn creator_cursor(&self) -> usize {
         self.creator.cursor

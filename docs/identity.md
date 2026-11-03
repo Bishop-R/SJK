@@ -198,8 +198,8 @@ it is replaced, the player turns the setting off (an empty list, which deletes i
 operator removes the identity. Anyone may ask the hub whether the player in a server's
 slot has a given model.
 
-A bug report (Escape, SJK, Report a bug) is sent only when the player presses Enter
-on it: its text, the map, the client build, the game server's address and the in-game
+A bug report (Escape, SJK, Report a bug) is sent only when the player presses Send (or
+Ctrl+Enter; Enter in its box starts a new line, which the hub stores as a space): its text, the map, the client build, the game server's address and the in-game
 name the player wears, signed with the player's key. The hub keeps it until the operator removes it.
 
 A crash report ([Crash reports](#crash-reports)) is sent at the start after SJK

@@ -20,6 +20,7 @@ pub(crate) mod retail_font;
 pub(crate) mod sdf;
 pub(crate) mod style;
 pub(crate) mod system_font;
+pub(crate) mod vertex_buffer;
 pub(crate) mod wide;
 pub(crate) mod wide_texture;
 pub(crate) use bounded::append_bounded;
@@ -32,7 +33,11 @@ use fontdue::{Font, FontSettings, Metrics};
 use image::{GrayImage, Luma};
 use std::error::Error;
 
-pub(crate) const MAX_TEXT_VERTICES: usize = 32_768;
+/// Vertices one text batch (a font's layer, the Inter HUD text) holds in a frame. Its
+/// GPU buffer starts smaller and grows to it ([`vertex_buffer`]): the chat outline
+/// draws nine quads a letter, so the old 32 768 cap (606 outlined letters) dropped
+/// whole chat lines (hub #211).
+pub(crate) const MAX_TEXT_VERTICES: usize = 196_608;
 const GLYPH_COUNT: usize = 256;
 const ATLAS_WIDTH: u32 = 4_096;
 /// Glyph gutter; must stay >= 2 px at the deepest mip level so minified

@@ -48,6 +48,19 @@ pub(crate) const SHOW_CVAR: &str = "cg_toyTags";
 pub(crate) const ICON: &str = "gfx/sjk/toy_tag.png";
 /// How far the crosshair reaches for a wall, in units.
 pub(crate) const REACH: f32 = 128.0;
+
+/// How far a tag's trace from `start` goes: [`REACH`] past the player's `eye`. In third
+/// person without the dynamic crosshair (`cg_dynamicCrosshair 0`) the trace starts at the
+/// camera, some 80 units behind the player, and 128 from there seldom reached a wall
+/// (Kushina: tags did not work from her bind or the wheel). At most [`CAMERA_SLACK`] is
+/// added, so a camera flown away (free camera, drone) does not tag from afar.
+pub(crate) fn reach_from(start: glam::Vec3, eye: Option<glam::Vec3>) -> f32 {
+    REACH + eye.map_or(0.0, |eye| start.distance(eye).min(CAMERA_SLACK))
+}
+
+/// The most a camera behind the player adds to [`REACH`]: past the longest third-person
+/// range players use.
+const CAMERA_SLACK: f32 = 256.0;
 /// Half a tag's width, in units: a tag is a bit less than a player is tall.
 pub(crate) const RADIUS: f32 = 28.0;
 /// Shortest time between two tags stuck.
@@ -406,6 +419,23 @@ pub(crate) fn decal(tag: &sjk_identity::PlacedTag) -> Option<crate::decal_marks:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// From the eye (first person, the dynamic crosshair) the reach is 128; from a
+    /// third-person camera 80 behind, 208.
+    #[test]
+    fn the_reach_counts_from_the_eye() {
+        let eye = glam::Vec3::new(0.0, 0.0, 64.0);
+        assert_eq!(reach_from(eye, Some(eye)), REACH);
+        assert_eq!(
+            reach_from(eye - glam::Vec3::X * 80.0, Some(eye)),
+            REACH + 80.0
+        );
+        assert_eq!(reach_from(eye, None), REACH);
+        assert_eq!(
+            reach_from(eye - glam::Vec3::X * 4_000.0, Some(eye)),
+            REACH + CAMERA_SLACK
+        );
+    }
 
     #[test]
     fn ids_are_unique_tag_words_and_three_are_free() {

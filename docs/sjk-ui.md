@@ -57,7 +57,13 @@ Principles:
    screen; ember is only for leaving. Holo blue draws lines, never text that
    matters.
 4. **Words, not capitals.** Navigation and labels are in sentence case.
-5. **Keyboard first, pointer equal.** Every screen works with the arrows, Enter
+5. **Keyboard first, pointer equal.** A scrollbar drawn with `MenuCanvas::scrollbar` (or
+   registered with `scrollbar_area`, as Settings' lists are) is taken and dragged
+   as well as wheeled (Foshin, 03/11/2026): its grip is at least 16 pixels wide, a
+   press on the thumb keeps the point it took, one on the track brings the thumb
+   there, and the screen passes its pointer events to `MenuCanvas::scrollbar_drag`
+   first (the Profile screen's model grid and hilt lists, Settings' open lists).
+   Every screen works with the arrows, Enter
    and Escape alone; hovering chooses, a click acts.
 6. **One brand.** The colours and type are SJK's site's
    (`site/assets/style.css`), so the site, the release notes and the client
@@ -1088,7 +1094,10 @@ as Settings is, on the main page's 16:9 frame. The camera keeps touring behind i
   A row: a gold dot for a favourite, the name in its colours (faded when
   nobody but bots plays), a gold padlock when it needs a password, the game type with
   the mod as a small tag (JA+, JAPRO, Mod; none for base), the map without
-  `mp/`, players over capacity, four signal bars lit by the ping (four to 60 ms,
+  `mp/`, players over capacity (the places a player without the private password
+  can take: a server whose `getinfo` counts its `sv_privateClients` slots, which
+  stock's does not, shows them off once the row is chosen and its `getstatus` names
+  both; Kushina's and Blep's 30/32 servers that said full), four signal bars lit by the ping (four to 60 ms,
   three to 110, two to 180, one to 400) and the ping. The chosen row has the
   band and gold bar; favourites sort first. An empty list says why (the search,
   no favourite answered, the master server being asked, nothing answered, or
@@ -2143,8 +2152,9 @@ menus ([identity.md](identity.md#bug-reports)).
   keyboard or the pointer and the text would not pass.
 - **Foot:** Cancel and Send (gold, dimmed until the text would pass the hub's
   rules; Enter or a click then says why).
-- **Keys:** under the card, bottom right: Enter send, Ctrl V paste (while the
-  field has the keyboard), Tab next, Esc cancel.
+- **Keys:** under the card, bottom right: with the field's keyboard Ctrl Enter
+  send, Enter new line, Ctrl V paste; on a button Enter send (or cancel); Tab next,
+  Esc cancel.
 
 After Send a report keeps its card; the other looks close and show the outcome
 as a centre print, as the card does when it was closed first:
@@ -2162,7 +2172,9 @@ A note closes on Send in every look, since its screenshot is taken of the next
 frame; its outcome stays a centre print and a console line.
 
 Keys: Tab and Shift+Tab move between the field, Send and Cancel (and a note's
-Clear model, last); Enter sends (on Cancel, cancels; on Clear model, clears it); Space acts on a button and types in the field; Escape
+Clear model, last); Ctrl+Enter sends from anywhere; in the field Enter starts a new
+line (Groark, hub #227: a report went off mid-sentence; the hub stores the line breaks as
+spaces), on Send it sends (on Cancel, cancels; on Clear model, clears it); Space acts on a button and types in the field; Escape
 cancels. In the field the text has an insertion point: Left and Right move it
 (with Ctrl by words), Up and Down by wrapped lines (from the first line to the
 start, from the last to the end), Home and End to the ends of the line (with Ctrl

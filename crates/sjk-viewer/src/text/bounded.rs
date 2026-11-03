@@ -288,6 +288,33 @@ mod tests {
         );
     }
 
+    /// Hub #211 (Creo): outlined, a letter is nine quads instead of two, and a chat
+    /// full of long lines ran past the old 32 768-vertex batch, which left the last
+    /// lines out whole. A thousand outlined letters (a busy chat and its composer) fit.
+    #[test]
+    fn a_full_outlined_chat_fits_one_batch() {
+        let font = test_font();
+        let rect = Rect::new(0.0, 0.0, 100_000.0, 20.0);
+        let mut vertices = Vec::new();
+        append_bounded(
+            &mut vertices,
+            &font,
+            &"^1a".repeat(1_000),
+            [0.0, 0.0],
+            rect,
+            rect,
+            1.0,
+            [640.0, 480.0],
+            TextFace::Regular,
+            [1.0; 4],
+            0.0,
+            TextOverflow::Clip,
+            CodePalette::DarkOutlined,
+        );
+        assert_eq!(vertices.len(), 1_000 * 9 * 6);
+        assert!(vertices.len() > 32_768 && vertices.len() <= MAX_TEXT_VERTICES);
+    }
+
     #[test]
     fn the_outline_setting_picks_the_palette() {
         assert_eq!(CodePalette::nameplate(0), CodePalette::Game);

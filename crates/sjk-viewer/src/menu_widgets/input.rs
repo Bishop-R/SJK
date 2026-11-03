@@ -61,6 +61,55 @@ impl MenuCanvas {
         }
     }
 
+    /// A press on a scrollbar drawn with [`Self::scrollbar`] and the drag that follows:
+    /// its token and the first row the pointer asks it to show, until the button is
+    /// let go. A press on the thumb keeps the point it took; one on the track brings
+    /// the thumb's middle there. Every other event is `None`, so a screen passes all
+    /// of them here first and handles the rest as before (the wheel included).
+    pub(crate) fn scrollbar_drag(&mut self, event: &CanvasEvent) -> Option<(MenuToken, usize)> {
+        let position = event.position;
+        match event.kind {
+            UiEventKind::Press => {
+                // A press elsewhere lets go of a bar whose release never came.
+                self.grabbed = None;
+                let (token, point) = (event.token?, position?);
+                let bar = self
+                    .scrollbars
+                    .iter()
+                    .flatten()
+                    .find(|bar| bar.token == token && bar.grip.contains(point))?;
+                let (top, height) = bar.thumb();
+                let hold = if (top..top + height).contains(&point.y) {
+                    point.y - top
+                } else {
+                    height * 0.5
+                };
+                let first = bar.first_at(point.y - hold);
+                self.grabbed = Some((token, hold, first));
+                Some((token, first))
+            }
+            UiEventKind::Drag => {
+                let (token, hold, _) = self.grabbed?;
+                let point = position?;
+                let bar = self
+                    .scrollbars
+                    .iter()
+                    .flatten()
+                    .find(|bar| bar.token == token)?;
+                let first = bar.first_at(point.y - hold);
+                self.grabbed = Some((token, hold, first));
+                Some((token, first))
+            }
+            // Letting go keeps where the drag left it, and is not a click on what lies
+            // under the pointer.
+            UiEventKind::Release | UiEventKind::Click | UiEventKind::Activate => {
+                let (token, _, first) = self.grabbed.take()?;
+                Some((token, first))
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn scroll_region(&mut self, token: MenuToken, rect: Rect) {
         self.interactive(token, rect, false, true);
     }

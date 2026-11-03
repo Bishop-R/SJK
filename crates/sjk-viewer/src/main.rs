@@ -420,7 +420,8 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use text::{MAX_TEXT_VERTICES, TextVertex, UiFont, append_text};
+use text::vertex_buffer::TextVertexBuffer;
+use text::{TextVertex, UiFont, append_text};
 use ui_renderer::ShapeRenderer;
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
@@ -703,8 +704,8 @@ struct GpuState {
     /// Where this frame's HUD program can draw (`hud_runtime::HudScissors`).
     hud_scissors: hud_runtime::HudScissors,
     hud_bind_group: wgpu::BindGroup,
-    text_vertex_buffer: wgpu::Buffer,
-    classic_text_vertex_buffer: wgpu::Buffer,
+    text_vertex_buffer: TextVertexBuffer,
+    classic_text_vertex_buffer: TextVertexBuffer,
     text_bind_group: wgpu::BindGroup,
     /// The Inter atlas `text_bind_group` binds, kept to bind it again with the wide atlas.
     text_atlas: wgpu::TextureView,
@@ -883,6 +884,9 @@ struct GpuState {
     client_menu: Option<menu::ClientMenu>,
     join_task: Option<connection::JoinTask>,
     last_connect_address: Option<String>,
+    /// The `password` the last join sent, to join again when it changes while that
+    /// join is still trying or has just failed ([`Self::rejoin_on_new_password`]).
+    join_password: String,
     game_data: PathBuf,
     connect_timeline: Option<log::ConnectTimeline>,
     load_event_gap: log::EventGap,
@@ -1450,18 +1454,9 @@ impl GpuState {
         let text_pipeline = create_text_pipeline("SJK text pipeline", "fragment_main");
         let sdf_text_pipeline =
             create_text_pipeline("SJK distance-field text pipeline", "fragment_sdf");
-        let text_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SJK dynamic text vertices"),
-            size: (MAX_TEXT_VERTICES * std::mem::size_of::<TextVertex>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let classic_text_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SJK dynamic classic HUD text vertices"),
-            size: (MAX_TEXT_VERTICES * std::mem::size_of::<TextVertex>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let text_vertex_buffer = TextVertexBuffer::new(device, "SJK dynamic text vertices");
+        let classic_text_vertex_buffer =
+            TextVertexBuffer::new(device, "SJK dynamic classic HUD text vertices");
         let entity_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SJK dynamic entity instances"),
             size: (particle_types::INSTANCE_CAPACITY * std::mem::size_of::<EntityInstance>())
@@ -1689,7 +1684,7 @@ impl GpuState {
             ui_font,
             classic_hud_font,
             game_fonts,
-            text_vertices: Vec::with_capacity(MAX_TEXT_VERTICES),
+            text_vertices: Vec::with_capacity(text::vertex_buffer::INITIAL_VERTICES),
             classic_text_vertices: Vec::with_capacity(4_096),
             hud,
             scoreboard: scoreboard::Scoreboard::new(),
@@ -1806,6 +1801,7 @@ impl GpuState {
             client_menu,
             join_task: None,
             last_connect_address: None,
+            join_password: String::new(),
             game_data,
             connect_timeline,
             load_event_gap: log::EventGap::default(),
@@ -2727,24 +2723,15 @@ impl GpuState {
             .prepare_layers(&self.queue, layers.into_iter().flatten(), viewport);
         // Wide glyphs this frame asked for first draw next frame.
         self.update_wide_text();
-        let text_vertex_count = u32::try_from(self.text_vertices.len()).unwrap_or(0);
-        if !self.text_vertices.is_empty() {
-            self.queue.write_buffer(
-                &self.text_vertex_buffer,
-                0,
-                bytemuck::cast_slice(&self.text_vertices),
-            );
-        }
-        self.game_fonts.upload(&self.queue);
-        let classic_text_vertex_count =
-            u32::try_from(self.classic_text_vertices.len()).unwrap_or(0);
-        if !self.classic_text_vertices.is_empty() {
-            self.queue.write_buffer(
-                &self.classic_text_vertex_buffer,
-                0,
-                bytemuck::cast_slice(&self.classic_text_vertices),
-            );
-        }
+        let text_vertex_count =
+            self.text_vertex_buffer
+                .write(&self.device, &self.queue, &self.text_vertices);
+        self.game_fonts.upload(&self.device, &self.queue);
+        let classic_text_vertex_count = self.classic_text_vertex_buffer.write(
+            &self.device,
+            &self.queue,
+            &self.classic_text_vertices,
+        );
 
         timing.mark(Phase::Pose);
         {

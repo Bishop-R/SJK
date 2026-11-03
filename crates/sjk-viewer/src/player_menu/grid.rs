@@ -29,6 +29,21 @@ impl PlayerMenu {
         self.grid_scroll = target.min(self.grid_max_scroll);
     }
 
+    /// Show row `first` at the top of the list whose scrollbar is `token`, as a drag
+    /// of it asks: the model grid, or a hilt list of the SJK Saber page.
+    pub(super) fn scrollbar_to(&mut self, token: u16, first: usize) {
+        if token == GRID_SCROLL_TOKEN {
+            let current = if self.is_sjk() {
+                self.creator_first_line()
+            } else {
+                self.grid_scroll
+            };
+            self.scroll_grid(first as i32 - current as i32);
+        } else if self.is_sjk() {
+            self.sjk_scrollbar_to(token, first);
+        }
+    }
+
     /// Tiles per row of the grid on show.
     fn grid_columns(&self) -> usize {
         if self.classic_style {

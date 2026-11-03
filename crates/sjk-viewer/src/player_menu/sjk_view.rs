@@ -406,6 +406,14 @@ impl PlayerMenu {
         target.append(&self.canvas, viewport);
     }
 
+    /// A hilt list's scrollbar dragged to show line `first` at its top (the list
+    /// keeps it within bounds when drawn).
+    pub(super) fn sjk_scrollbar_to(&mut self, token: u16, first: usize) {
+        if let Some(list) = token.checked_sub(HILT_SCROLL).filter(|list| *list < 2) {
+            self.sjk_hilts[usize::from(list)].first = first;
+        }
+    }
+
     /// The SJK UI's own pointer targets, before the screen's shared ones:
     /// - a level cell chooses its power's row when hovered and, clicked, sets
     ///   the power to that level (its own level steps it down one, as

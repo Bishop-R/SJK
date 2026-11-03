@@ -51,6 +51,12 @@ impl SettingsMenu {
         // scrolls a long list, a click anywhere else closes it with nothing
         // changed.
         if let Some(dropdown) = &mut self.dropdown {
+            // Its thumb taken and dragged (hub #227: a long list, such as the away
+            // emotes, only scrolled with the wheel).
+            if let Some((_, first)) = self.ui.scrollbar_drag(&event) {
+                dropdown.scroll_to(first);
+                return SettingsResult::None;
+            }
             let base = super::classic_view::DROPDOWN_BASE;
             let pick = event
                 .token

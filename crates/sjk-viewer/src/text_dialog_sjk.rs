@@ -703,8 +703,15 @@ struct Button {
 /// The keys of what has the keyboard, right-aligned under the card.
 fn keys(ui: &mut MenuCanvas, frame: &Frame, view: &View<'_>) {
     let s = frame.s;
-    let mut keys: [Option<(&[&str], &str)>; 4] = [None; 4];
+    let mut keys: [Option<(&[&str], &str)>; 5] = [None; 5];
     match (view.phase, view.focus) {
+        (Phase::Writing, Focus::Field) => {
+            keys[0] = Some((&["Ctrl", "Enter"][..], "send"));
+            keys[1] = Some((&["Enter"][..], "new line"));
+            keys[2] = Some((&["Ctrl", "V"][..], "paste"));
+            keys[3] = Some((&["Tab"][..], "next"));
+            keys[4] = Some((&["Esc"][..], "cancel"));
+        }
         (Phase::Writing, focus) => {
             keys[0] = Some((
                 &["Enter"][..],
@@ -714,13 +721,10 @@ fn keys(ui: &mut MenuCanvas, frame: &Frame, view: &View<'_>) {
                     "send"
                 },
             ));
-            if focus == Focus::Field {
-                keys[1] = Some((&["Ctrl", "V"][..], "paste"));
-            }
-            keys[2] = Some((&["Tab"][..], "next"));
-            keys[3] = Some((&["Esc"][..], "cancel"));
+            keys[3] = Some((&["Tab"][..], "next"));
+            keys[4] = Some((&["Esc"][..], "cancel"));
         }
-        (Phase::Sending, _) => keys[3] = Some((&["Esc"][..], "close")),
+        (Phase::Sending, _) => keys[4] = Some((&["Esc"][..], "close")),
         (Phase::Sent(_), _) => keys[0] = Some((&["Enter"][..], "done")),
         (Phase::Failed(_), focus) => {
             keys[0] = Some((
@@ -731,8 +735,8 @@ fn keys(ui: &mut MenuCanvas, frame: &Frame, view: &View<'_>) {
                     "close"
                 },
             ));
-            keys[2] = Some((&["Tab"][..], "next"));
-            keys[3] = Some((&["Esc"][..], "close"));
+            keys[3] = Some((&["Tab"][..], "next"));
+            keys[4] = Some((&["Esc"][..], "close"));
         }
     }
     let gap = 30.0 * s;
@@ -804,6 +808,14 @@ mod tests {
                 .into(),
             model: Some("models/map_objects/taspir/lamp2_double_with_a_much_longer_name_than_usual.md3".into()),
         }
+    }
+
+    /// Ctrl+Enter: send from the box.
+    fn ctrl_enter(dialog: &mut TextDialog) -> Action {
+        dialog.set_control(true);
+        let action = dialog.key(KeyCode::Enter, None);
+        dialog.set_control(false);
+        action
     }
 
     fn typed(dialog: &mut TextDialog, text: &str) {
@@ -957,11 +969,11 @@ mod tests {
     fn a_report_waits_for_its_answer_on_the_card() {
         let mut dialog = sjk(Kind::Report);
         typed(&mut dialog, "short");
-        assert_eq!(dialog.key(KeyCode::Enter, None), Action::None);
+        assert_eq!(ctrl_enter(&mut dialog), Action::None);
         assert!(!dialog.message.is_empty(), "refused, and says why");
         typed(&mut dialog, " door on ffa3");
         assert_eq!(
-            dialog.key(KeyCode::Enter, None),
+            ctrl_enter(&mut dialog),
             Action::Send(Kind::Report, "short door on ffa3".into())
         );
         assert!(dialog.is_open() && dialog.sending(Report::Bug));
@@ -986,14 +998,14 @@ mod tests {
         );
         assert_eq!(dialog.text, "short door on ffa3");
         // Sent: Enter closes.
-        dialog.key(KeyCode::Enter, None);
+        ctrl_enter(&mut dialog);
         assert!(dialog.answer(Report::Bug, Ok("report #12".into())));
         assert_eq!(dialog.key(KeyCode::Enter, None), Action::Cancel);
         assert!(!dialog.is_open() && dialog.phase == Phase::Writing);
         // Escape closes while sending; the answer then has no card.
         dialog.open(player());
         typed(&mut dialog, "Speed hacking all match");
-        assert!(matches!(dialog.key(KeyCode::Enter, None), Action::Send(..)));
+        assert!(matches!(ctrl_enter(&mut dialog), Action::Send(..)));
         assert!(dialog.sending(Report::Player));
         assert_eq!(dialog.key(KeyCode::Escape, None), Action::Cancel);
         assert!(!dialog.answer(Report::Player, Ok("player report #3".into())));
@@ -1005,7 +1017,7 @@ mod tests {
         let mut dialog = sjk(note());
         typed(&mut dialog, "too shiny");
         assert!(matches!(
-            dialog.key(KeyCode::Enter, None),
+            ctrl_enter(&mut dialog),
             Action::Send(Kind::Note { .. }, _)
         ));
         assert!(!dialog.is_open());
@@ -1019,11 +1031,11 @@ mod tests {
         dialog.set_look(Look::Classic, crate::menu::art::ArtSet::default());
         dialog.open(Kind::Report);
         typed(&mut dialog, "The door flickers on ffa3");
-        assert!(matches!(dialog.key(KeyCode::Enter, None), Action::Send(..)));
+        assert!(matches!(ctrl_enter(&mut dialog), Action::Send(..)));
         assert!(!dialog.is_open() && !dialog.sending(Report::Bug));
         let mut dialog = sjk(Kind::Report);
         typed(&mut dialog, "The door flickers on ffa3");
-        dialog.key(KeyCode::Enter, None);
+        ctrl_enter(&mut dialog);
         dialog.set_look(Look::Classic, crate::menu::art::ArtSet::default());
         assert!(!dialog.is_open());
     }

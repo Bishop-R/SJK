@@ -24,6 +24,20 @@
 
 # ---- Console & chat ----
 
+[ui-bugs-1103]
+area: Menus & settings
+title: Reports 03/11: chat outline, full servers, report box, scrollbars, password, tags
+change: Chat outline no longer drops whole lines; Enter adds a line in report/note boxes.
+change: Scrollbars drag (Profile grid, hilt lists, Settings lists); password rejoins.
+change: Browser: chosen row drops private slots from capacity; tags reach from your eye.
+test: cg_chatBoxOutline 1, a busy chat (long lines, many players): every message shows.
+test: Report a bug: Enter starts a line, Ctrl+Enter sends; Tab to Send, Enter sends.
+test: Profile > Character: drag the grid's scrollbar; Saber: drag a hilt list's bar.
+test: Settings, a long list (chat colours, away emote): drag its thumb to both ends.
+test: connect to a locked local server, then password <pw> in the console: it joins.
+test: Third person, cg_dynamicCrosshair 0, toy_tag near a wall: the tag goes up.
+note: Browser private slots: only checkable on a server with sv_privateClients set.
+
 [tag-spray-surfaces]
 area: Gameplay
 title: Tags: spray can sound, no glitches on glass, grates, flags or curved walls

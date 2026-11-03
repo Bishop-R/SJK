@@ -36,6 +36,12 @@ impl PlayerMenu {
         let Some(event) = self.canvas.pointer(event) else {
             return PlayerMenuResult::None;
         };
+        // A scrollbar taken and dragged (Foshin: the Character grid's only scrolled
+        // with the wheel).
+        if let Some((token, first)) = self.canvas.scrollbar_drag(&event) {
+            self.scrollbar_to(token, first);
+            return PlayerMenuResult::None;
+        }
         let Some(token) = event.token else {
             return PlayerMenuResult::None;
         };

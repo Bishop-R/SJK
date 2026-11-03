@@ -582,6 +582,8 @@ impl ClientMenu {
             ],
             players,
             bots: 0,
+            max_clients: None,
+            private_slots: 0,
         });
         self.open_browser();
     }
@@ -2024,6 +2026,8 @@ mod tests {
             facts: Vec::new(),
             players,
             bots: 0,
+            max_clients: None,
+            private_slots: 0,
         });
         let shown = |menu: &mut ClientMenu| {
             menu.build_sjk_browser([1920.0, 1080.0]);
