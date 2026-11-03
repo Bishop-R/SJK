@@ -345,6 +345,8 @@ mod small_card_notice;
 mod snapshot_presentation;
 mod sound_mutes;
 mod sound_sonar;
+#[cfg(test)]
+mod startup_stack;
 mod static_models;
 mod stock_blades;
 mod support_links;
@@ -374,8 +376,6 @@ mod world_materials;
 mod world_notes;
 mod world_ping;
 mod world_ping_frame;
-#[cfg(test)]
-mod startup_stack;
 #[cfg(test)]
 mod world_shot;
 mod world_stage;
