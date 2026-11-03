@@ -460,9 +460,13 @@ fn clip(world: &DecalSurfaces, bsp: &Bsp, projection: &MarkProjection, scratch: 
     );
     let surfaces = bsp.render().surfaces();
     'surfaces: for &surface_index in &scratch.surfaces {
+        // Tags also go on models the compiler merged into the world (a panel flush with
+        // a brush wall left the tag cut at the seam); marks keep the reference's
+        // `r_marksOnTriangleMeshes 0`.
         let curved = match surfaces[surface_index].kind {
             SurfaceKind::Planar => false,
             SurfaceKind::Patch => true,
+            SurfaceKind::TriangleSoup if tags => true,
             _ => continue,
         };
         for triangle in world.triangles(surface_index) {

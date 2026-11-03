@@ -5744,7 +5744,10 @@ force fields, grates, leaves, or sorted after the opaque), decals laid over a wa
 (`polygonOffset`: the wall under takes the tag once instead of twice) and sky or fog. It
 also projects with buffers of its own, 512 fragments over at most 128 surfaces (an impact
 mark keeps the reference's 128 over 64), so a curved patch or a face cut in many triangles
-no longer cuts the picture short (it was 48). Since 31/10/2026 (Sol: tags were blurry in
+no longer cuts the picture short (it was 48). Two seams on one flat wall no longer cut a
+tag in half either: tags (not marks) go on models the compiler merged into the world, with
+the curves' facing test, and a flat face stored without a normal (no lightmap) is judged by
+its vertices' normal instead of being skipped (`sjk-bsp` `mark_surfaces`, marks too). Since 31/10/2026 (Sol: tags were blurry in
 the game) tags are drawn by a pass of their own
 ([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs), [rendering.md](rendering.md#tags)),
 each picture at its full size (a tag enlarged to 512 pixels, a card's sticker 1024), not as

@@ -7,7 +7,9 @@ in-game report to go by, two causes fixed
 sky's, so it hung on glass, water and force fields, showed over a grate's holes, stayed
 still on waving flags and water while they moved (fighting their depth), and went twice on
 a wall with a `polygonOffset` poster; and a tag kept at most 48 fragments, so a curved
-patch or a face cut in many triangles lost part of the picture. Tags now keep off such
+patch or a face cut in many triangles lost part of the picture. Then (Sol: a surface "half
+cut" on the same plane) a tag across a seam lost the half on a model merged into the world
+or on a face stored without a normal; both now take it. Tags now keep off such
 surfaces (`decal_marks::tag_unfit`, impact marks unchanged) and project with buffers of
 their own (512 fragments, 128 surfaces); `toy_tag` aimed at such a surface alone refuses
 ("A tag does not hold on that surface"). The spray (`sound/sjk/tags/spray.wav`,
