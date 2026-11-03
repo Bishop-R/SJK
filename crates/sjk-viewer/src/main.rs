@@ -375,6 +375,8 @@ mod world_notes;
 mod world_ping;
 mod world_ping_frame;
 #[cfg(test)]
+mod startup_stack;
+#[cfg(test)]
 mod world_shot;
 mod world_stage;
 
