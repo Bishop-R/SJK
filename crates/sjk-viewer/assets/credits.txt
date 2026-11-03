@@ -370,7 +370,7 @@ link: Lukas's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+
 
 [Slash]
 github: JoFSlash
-role: Contributor: 93 merged pull requests
+role: Contributor: 94 merged pull requests
 did: #114 Tab completes cfg file names after exec and writeconfig
 did: #113 CTF team saber colours, an option
 did: #153 The SJK scoreboard tells who won the Siege round or team match
@@ -466,6 +466,7 @@ did: #318 Each HUD style shows the vehicle's HP its own way
 did: #336 NPCs with head|torso| skins wear them instead of grey
 did: #338 Empower glow can be hidden (cg_empowerEffect 3)
 did: #339 Switchable and flickering map lights drawn (light styles)
+did: #278 The Fishing toy: rod, bucket, 12 fish, Echoes on the line
 link: Slash's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash
 
 [Milamber]
@@ -500,6 +501,7 @@ did: Plugin options as Settings switches, in place of typing a cp_pluginDisable 
 did: JoF EJK's saber hit sparks, mouse 4/5 repeat and lagometer modes 2 and 3 for players coming from EJK
 did: The Banana peel toy: drop peels that players who have it on slip on, cartoon style
 did: Prediction as in 2026.1028.1, a Settings choice for players who preferred it
+did: Reported the JoF Shuttle ship drawn black and its younglings grey
 
 [Atrosex]
 role: Ideas for SJK
@@ -520,6 +522,7 @@ did: Emotes kept while typing in the chat
 [Sanjisan]
 role: Ideas for SJK
 did: Click a name in the chat to whisper them
+did: The Fishing toy: a rod, fish anywhere and Echoes on the line
 
 [Nib]
 role: Ideas for SJK
@@ -532,6 +535,7 @@ did: No glow on sabers: the dynamic glow without the blades, so their details sh
 [Dante]
 role: Ideas for SJK
 did: Quick wheel custom commands remembered in the command list
+did: The Empower glow hidden with a setting
 
 == Testing
 

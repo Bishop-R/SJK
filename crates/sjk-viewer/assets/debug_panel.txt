@@ -123,6 +123,16 @@ test: Player card and SJK chat sender cards show the worn cover; unknown ids fal
 test: Holocron odds: Banner bonus row only on a hub with banners on, 0 otherwise.
 note: Hub banner drops stay off until SJK_HUB_BANNER_MIN_CLIENT is set (hub shared #6).
 
+[fishing-278]
+area: Gameplay
+title: Slash #278: Fishing toy (rod, bucket, 12 fish, Echoes on the line)
+change: toy_fishing: rod in hand, float on water or a small pond, bites every 20-60 s.
+change: Only holocrons play drops come up as Echoes (not bought, gifted, traded, earned).
+test: toy_fishing on duel6: pond, float dips, +use within 1 s lands a fish in the bucket.
+test: Move or take damage: the rod goes away. Another SJK player sees rod and bucket.
+test: debug_holocron while fishing: card at once, no Echo on the line, no Echo Angler count.
+note: Achievements need hub-shared #9 imported and deployed before they record online.
+
 [pr-batch-1103]
 area: Rendering & effects
 title: PRs 03/11: light styles, NPC split skins, Empower glow off

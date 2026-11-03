@@ -35,6 +35,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Hide the Empower glow: Settings "Empower glow" (`cg_empowerEffect`) 3 turns off the body glow of empowered players; ordinary Push still shows _(Slash, PR #338, after Dante's idea)_
 - Maps lit by switchable or flickering lights, such as the JoF Shuttle trial mission ship, the JoF missions and Memorial Grounds, show that light instead of drawing it dark, and follow the server as a light is switched off or on (SJK and Vanilla graphics presets) _(Slash, PR #339, after Kushina's report)_
 - NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash, PR #336)_
+- Fishing toy: `toy_fishing` (the quick wheel's Toys page, Collection > Toys) gets a rod out. Stand still and press Use when the float dips to land fish and junk for your fish log; each of the 12 fish looks different, and your last catch waits in the bucket; where there is no water, a small pond appears. An Echo dropped to you while you fish comes up on the line. Five new achievements: First Bite, Angler, Every Fish in the Pond, Echo Angler and a hidden one _(Slash, PR #278, after Sanji's idea)_
 
 ## 2026.1103.1 (Alpha) | 03/11/2026
 
@@ -180,7 +181,6 @@ Nameplate styles, a day that follows your clock, toy achievements and many fixes
 - Mystery boxes: when the opener takes what came out, everyone else sees it go and the lid close at once, instead of it floating on for 10 seconds _(Sol)_
 - Tags: two new ones, Gonk (Uncommon) and Geyon (Rare), and the EZ tag has its real picture, all three drawn by Blep and picked from the Discord's #tag-proposals _(Sol, art by Blep)_
 - A prompt by the crosshair shows what Use does at a mystery box, with the key you bound to Use: Open mystery box and its price, Take it, or why you cannot yet (your turn in a few seconds, not enough credits), instead of a message in the middle of the screen _(Sol)_
-- Fishing toy: `toy_fishing` (the quick wheel's Toys page, Collection > Toys) gets a rod out. Stand still and press Use when the float dips to land fish and junk for your fish log; each of the 12 fish looks different, and your last catch waits in the bucket; where there is no water, a small pond appears. An Echo dropped to you while you fish comes up on the line. Five new achievements: First Bite, Angler, Every Fish in the Pond, Echo Angler and a hidden one _(Slash, PR #278, after Sanji's idea)_
 
 ## 2026.1030.2 (Alpha) | 30/10/2026
 

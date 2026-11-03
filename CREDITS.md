@@ -748,7 +748,7 @@ merged into SJK
 - #306 long game-chat messages sent whole, as up to four messages split at a word; at the
   merge a draft refused past four pieces stays in the composer.
 
-Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 93 pull requests merged
+Slash ([JoFSlash](https://github.com/JoFSlash)), contributor, has 94 pull requests merged
 into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3AJoFSlash)):
 
 - #114 Tab completes the cfg file argument of `exec`, `execq`, `writeconfig` and `write`
@@ -919,6 +919,9 @@ into SJK ([all of them](https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author
 - #338 `cg_empowerEffect 3` hides the Empower body glow locally; ordinary Push keeps its blur.
 - #339 light styles: switchable and flickering lights' baked light drawn and following
   `CS_LIGHT_STYLES` (the JoF Shuttle ship was black).
+- #278 the Fishing toy (after Sanjisan's idea): a rod, a bucket with the last catch,
+  12 fish, junk and a pond where there is no water; a holocron play drops while fishing
+  comes up on the line as an Echo; five achievements.
 
 His Peek work in #199 (closed 24/10/2026, not merged) shaped the Drone toy: a player is
 asked before being peeked, told who watches, and can end it. His #206 (closed 25/10/2026,
