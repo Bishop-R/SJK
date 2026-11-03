@@ -195,7 +195,9 @@ one (4:3, 5:4) scales the frame down to its width.
     [Collection](#collection), since 10/10/2026), Settings (the settings screen),
     SJK, Quit.
   - Play: Join a server (the browser), Create a game, Back.
-  - SJK: What's new (the changelog), Update, Credits, Back (the Profile screen is
+  - SJK: What's new (the changelog), Update, Credits, Report a bug (the
+    [report card](#report-a-bug-and-its-dialogs) over the menu, since 03/11/2026, Lex's
+    idea), Back (the Profile screen is
     the main page's Profile, and its profile card). The arc holds six entries (a
     seventh curls back into the ring); the identity's key is in Settings, Network.
   - Quit: Quit to desktop (ember when chosen), Stay. It opens on Stay.
@@ -1732,7 +1734,11 @@ for the run.
   players are seen with, a second, smaller switch, "See others' holocrons", "See others'
   boxes", "See others fall limp", "See others' drones", "See and hear others' boomboxes",
   "See monitors" or "See banana peels" (29/10/2026): off, theirs are hidden on this PC
-  ([client.md](client.md#illuminate), the toys' table). The keys line says
+  ([client.md](client.md#illuminate), the toys' table). The Hax's card has its trap's
+  two switches there instead (since 03/11/2026, Lex's idea; they were in Settings >
+  Gameplay): "Trap: a hacker blows up with you" (`cl_haxTrap`) and "Trap while away"
+  (`cl_haxAway`); a Settings search for them (hax, trap) lists them under "Collection >
+  Toys > Hax", where they still switch. The keys line says
   "Enter: light" or "Enter: put out", "Enter: hide" or "Enter: come out", "Enter: turn
   on" or "Enter: turn off", "Enter: play" or "Enter: put away", and "K: bind a key" (while a key waits: "Esc: cancel", "Backspace: clear the
   key"). Hovering Order 66's row shows how to turn it on and that `order66` executes it;
@@ -2117,7 +2123,8 @@ editor's own canvas, a layer under the in-game menu's. World shot: `duel6_ghost_
 [text_dialog_sjk.rs](../crates/sjk-viewer/src/text_dialog_sjk.rs) draws the
 text dialog as the SJK UI's pop-up card (Sol's request, 08/10/2026). One dialog
 serves three things, and all three take this look with the SJK UI's menus:
-Report a bug (the in-game menu's row of icons), a player report's few words
+Report a bug (the in-game menu's row of icons, and the main page's SJK page, where the
+report names the map `menu` and no server), a player report's few words
 (Players, a player, a reason) and a world note (`worldnote` twice,
 [client.md](client.md#player-card)). The classic+ look stays with the classic
 menus ([identity.md](identity.md#bug-reports)).

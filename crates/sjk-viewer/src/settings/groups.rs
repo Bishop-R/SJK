@@ -402,8 +402,6 @@ impl Group {
                 crate::map_edits::SYNC_COMMAND,
                 crate::remap_blocked_maps::SERVER_CVAR,
                 "cg_remaps",
-                crate::hax::TRAP_CVAR,
-                crate::hax::AWAY_CVAR,
                 crate::monitor::SHOW_CVAR,
                 crate::banana::SHOW_CVAR,
                 crate::toy_sight::ILLUMINATE,
@@ -700,7 +698,7 @@ impl Group {
                 ("assetbrowser", "Asset packs"),
                 ("cg_simpleItems", "Items and models"),
                 ("cg_saberTrail", "Effects"),
-                (crate::hax::TRAP_CVAR, "Toys"),
+                (crate::monitor::SHOW_CVAR, "Toys"),
                 (crate::camera::STYLE_CVAR, "Camera and prediction"),
                 (JAPLUS_PLUGIN_ROW, "JA+ plugin options"),
                 (JAPRO_PLUGIN_ROW, "jaPRO plugin options"),
@@ -736,7 +734,7 @@ impl Group {
             Self::Advanced(Advanced::Gameplay) => &[
                 ("cg_simpleItems", "Items and models"),
                 ("cg_saberTrail", "Effects"),
-                (crate::hax::TRAP_CVAR, "Toys"),
+                (crate::monitor::SHOW_CVAR, "Toys"),
                 (crate::camera::STYLE_CVAR, "Camera and prediction"),
             ],
             Self::Advanced(Advanced::Interface) => &[

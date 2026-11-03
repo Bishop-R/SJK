@@ -1687,6 +1687,8 @@ mod tests {
             RENDER_LIGHTING,
             RENDER_SHADOWS,
             RENDER_WEATHER,
+            // Rows only a search shows (they live on the Collection's Hax card).
+            HAX_TOY,
         ]
         .into_iter()
         .flatten();

@@ -312,6 +312,7 @@ impl ClientMenu {
             }
             home::Action::Open(destination) => self.open_main_destination(destination, console),
             home::Action::Quit => MenuAction::Quit,
+            home::Action::ReportBug => MenuAction::ReportBug,
             home::Action::Support(link) => {
                 crate::support_links::open(link);
                 MenuAction::None

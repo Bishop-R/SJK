@@ -537,6 +537,11 @@ role: Ideas for SJK
 did: Quick wheel custom commands remembered in the command list
 did: The Empower glow hidden with a setting
 
+[Lex]
+role: Ideas for SJK
+did: Report a bug from the main menu, not only in a match
+did: The Hax trap's switches on the Hax's card in the Collection
+
 == Testing
 
 [Glen]

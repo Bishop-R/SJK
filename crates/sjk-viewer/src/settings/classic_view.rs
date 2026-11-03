@@ -930,7 +930,8 @@ pub(super) fn group_icon(name: &str) -> Option<&'static str> {
         "audio" | "sound" => "sound",
         "hud" => "hud",
         "controls" | "mouse" => "mouse_joystick",
-        "game" | "game options" | "gameplay" => "game_options",
+        // The Hax trap's switches, which live on the Collection's Hax card.
+        "game" | "game options" | "gameplay" | "collection > toys > hax" => "game_options",
         "chat" => "text",
         "mods" => "options",
         "quick wheel" => crate::quick_wheel::catalog::WHEEL_ICON,

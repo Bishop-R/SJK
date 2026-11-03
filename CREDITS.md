@@ -1004,6 +1004,11 @@ Dante, a player, asked for the quick wheel's custom commands to be remembered in
 command list once made, and for duels won in each saber style to count as achievements:
 Slash built the first (#293, 30/10/2026), Sol the style masters (29/10/2026).
 
+Lex, a player, asked for Report a bug on the main menu, not only in a match: Sol built it
+as the SJK page's Report a bug (03/11/2026). Lex also asked for the Hax trap's switches to
+sit with the Hax in the Collection rather than in Settings: Sol moved them to its card
+(03/11/2026).
+
 g0dchris, a player, asked for the dynamic glow on everything but the sabers, whose glow
 hid the blades' details: Slash built it as No glow on sabers (#294, 30/10/2026).
 

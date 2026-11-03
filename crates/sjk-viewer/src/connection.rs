@@ -115,6 +115,7 @@ impl crate::GpuState {
             }
             crate::menu::MenuAction::HostGame(settings) => self.start_local_game(settings),
             crate::menu::MenuAction::Quit => self.quit_requested = true,
+            crate::menu::MenuAction::ReportBug => self.open_bug_report_from_menu(),
             crate::menu::MenuAction::ReturnToGameMenu => {
                 self.game_menu = true;
                 self.game_menu_page = crate::ingame_menu::Page::Main;

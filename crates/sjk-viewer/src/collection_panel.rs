@@ -69,7 +69,7 @@ mod toys;
 mod view;
 
 pub(crate) use spin::SaberTurn;
-pub(crate) use toys::{COMMANDS as TOY_COMMANDS, unseen as toys_unseen};
+pub(crate) use toys::{COMMANDS as TOY_COMMANDS, options_on as toy_options, unseen as toys_unseen};
 pub(crate) use view::{MODEL_AREA, SABER_AREA, row_labels};
 
 /// The things' tokens: the medals, the achievements, the shaders' rows, the shader's
@@ -100,6 +100,10 @@ const TOY_TOKEN: u16 = 1_310;
 const TOY_SWITCH_TOKEN: u16 = 1_311;
 /// The chosen toy's card's second switch: other players' toy seen or not.
 const TOY_SIGHT_TOKEN: u16 = 1_305;
+/// The chosen toy's card's own switches after it (the Hax's trap), one token each.
+const TOY_OPTION_TOKEN: u16 = 1_390;
+/// Most own switches a toy's card holds.
+const TOY_OPTION_TOKENS: usize = 4;
 /// The cardboard box's niche on Toys (Illuminate's is [`TOY_TOKEN`]).
 const BOX_TOKEN: u16 = 1_314;
 /// Order 66's niche on Toys.
@@ -444,6 +448,12 @@ pub(crate) enum PanelAction {
         cvar: &'static str,
         seen: bool,
     },
+    /// One of the chosen toy's own switches on its card (the Hax's trap) on (`true`) or
+    /// off: set its `cvar`.
+    ToyOption {
+        cvar: &'static str,
+        on: bool,
+    },
     /// Bind `key` (its console name) to a toy's `command`, in place of the first key it
     /// had, as the key-binding editor does.
     Bind {
@@ -596,6 +606,9 @@ pub(crate) struct Inputs<'a> {
     /// The toys whose other players' are hidden on this PC, as bits in the Toys tab's
     /// order (each one's "See" switch off, [`crate::toy_sight`]).
     pub(crate) toys_unseen: u16,
+    /// The toys' own switches on their cards that are on, as bits in the order of
+    /// [`toys::options_on`] (the Hax's trap, then its trap while away).
+    pub(crate) toy_options: u16,
     /// `cg_tag`: the tag `toy_tag` sticks.
     pub(crate) tag: &'a str,
     /// `cg_tagFinish`: the finish it sticks it in, when held.
@@ -686,6 +699,8 @@ pub(crate) struct Panel {
     /// The toys (bits by the Toys tab's order) whose other players' are hidden here, as
     /// the last frame's inputs said.
     toys_unseen: u16,
+    /// The toys' own switches that are on, as the last frame's inputs said.
+    toy_options: u16,
     /// The tile chosen on Cards (in the list the filter shows), how many tiles the last
     /// frame's list held, and the first line of them shown (the grid scrolls a line at a
     /// time).
@@ -873,6 +888,7 @@ impl Panel {
             fishing_on: false,
             share_on: false,
             toys_unseen: 0,
+            toy_options: 0,
             card: 0,
             cards_shown: 0,
             card_first: 0,
@@ -1095,6 +1111,17 @@ impl Panel {
         PanelAction::ToySight {
             cvar,
             seen: self.toys_unseen & 1 << self.toy != 0,
+        }
+    }
+
+    /// The chosen toy's own switch `index` on its card, the other way round.
+    fn toy_option(&self, index: usize) -> PanelAction {
+        let Some((cvar, bit)) = toys::option(self.toy, index) else {
+            return PanelAction::None;
+        };
+        PanelAction::ToyOption {
+            cvar,
+            on: self.toy_options & 1 << bit == 0,
         }
     }
 
@@ -2145,6 +2172,12 @@ impl Panel {
             GRID_VIEW_TOKEN => self.set_grid(true),
             WEAR_TOKEN | TOY_SWITCH_TOKEN | SHARE_TOKEN => self.activate(illuminate),
             TOY_SIGHT_TOKEN => self.toy_sight(),
+            token
+                if (TOY_OPTION_TOKEN..TOY_OPTION_TOKEN + TOY_OPTION_TOKENS as u16)
+                    .contains(&token) =>
+            {
+                self.toy_option(usize::from(token - TOY_OPTION_TOKEN))
+            }
             TARGET_FIRST_TOKEN => self.set_target(false),
             TARGET_SECOND_TOKEN => self.set_target(true),
             BOTH_TOKEN => self.toggle_both(),
@@ -2399,6 +2432,7 @@ mod tests {
             nameplate_style: crate::hud::nameplate::Style::Holo,
             toy_keys: &[],
             toys_unseen: 0,
+            toy_options: 0,
             tag: "",
             tag_finish: "",
         }
@@ -2917,6 +2951,25 @@ mod tests {
         // The Hax acts only on players who have it on: its card has no "See" switch.
         redraw(&mut panel, &shown);
         assert!(panel.ui.rect_for(TOY_SIGHT_TOKEN).is_none());
+        // Its card holds its trap's two switches (moved from Settings > Gameplay).
+        assert_eq!(
+            click(&mut panel, TOY_OPTION_TOKEN),
+            PanelAction::ToyOption {
+                cvar: crate::hax::TRAP_CVAR,
+                on: true,
+            }
+        );
+        shown.toy_options = toys::options_on(|cvar| cvar == crate::hax::AWAY_CVAR);
+        redraw(&mut panel, &shown);
+        assert_eq!(
+            click(&mut panel, TOY_OPTION_TOKEN + 1),
+            PanelAction::ToyOption {
+                cvar: crate::hax::AWAY_CVAR,
+                on: false,
+            }
+        );
+        assert!(panel.ui.rect_for(TOY_OPTION_TOKEN + 2).is_none());
+        shown.toy_options = 0;
         // The Monitor's hides the monitors, and shows them again.
         let _ = click(&mut panel, MONITOR_TOKEN);
         redraw(&mut panel, &shown);

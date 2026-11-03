@@ -186,6 +186,7 @@ pub(crate) fn row_labels(
         nameplate_style: crate::hud::nameplate::Style::Holo,
         toy_keys: &[],
         toys_unseen: 0,
+        toy_options: 0,
         tag: "",
         tag_finish: "",
     };
@@ -309,6 +310,7 @@ impl Panel {
         self.fishing_on = inputs.fishing;
         self.share_on = inputs.share;
         self.toys_unseen = inputs.toys_unseen;
+        self.toy_options = inputs.toy_options;
         let seconds = self.epoch.elapsed().as_secs_f32();
         #[cfg(test)]
         let seconds = self.shot_seconds.unwrap_or(seconds);

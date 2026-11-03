@@ -124,6 +124,8 @@ pub(crate) enum Action {
     /// The update line's button: install the release waiting, open its page, or
     /// restart into the installed one (`update::click_notice`).
     Update,
+    /// Open Report a bug, the SJK team's report card (`crate::bug_report`).
+    ReportBug,
     /// Exit to the desktop.
     Quit,
 }
@@ -167,7 +169,7 @@ const MAIN: [Entry; 6] = [
     ),
     entry(
         "SJK",
-        "What's new, updates and credits",
+        "What's new, updates, credits and bug reports",
         Step::Page(Page::Sjk),
     ),
     entry("Quit", "Leave SJK", Step::Page(Page::Quit)),
@@ -185,7 +187,7 @@ const PLAY: [Entry; 3] = [
     ),
     entry("Back", "", Step::Back),
 ];
-const SJK: [Entry; 4] = [
+const SJK: [Entry; 5] = [
     entry(
         "What's new",
         "Every release and who made it",
@@ -200,6 +202,11 @@ const SJK: [Entry; 4] = [
         "Credits",
         "The people who make SJK",
         open(MainDestination::Credits),
+    ),
+    entry(
+        "Report a bug",
+        "Tell the SJK team what went wrong",
+        Step::Act(Action::ReportBug),
     ),
     entry("Back", "", Step::Back),
 ];

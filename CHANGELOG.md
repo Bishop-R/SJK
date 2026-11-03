@@ -32,6 +32,8 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- The Hax trap's switches (`cl_haxTrap`, `cl_haxAway`) moved from Settings > Gameplay to the Hax's card in Collection > Toys; a Settings search for them still finds them _(Sol, after Lex's idea)_
+- Report a bug from the main menu: the SJK page has it now, so a problem met outside a match can be sent too (its report says "menu" for the map) _(Sol, after Lex's idea)_
 - Box hunt: map teleporters and an admin teleporting or bringing you no longer count as cheating; only your own teleports (`amtele`, `japlus.goto`, `japlus.guntele` and the like), your own `noclip` and `fakenoclip` do _(Sol, after belyash's and Sanji's reports)_
 - Box hunt: the 5 free rolls a hunter can win a day and the mark's 3 bounties a day now count from 09:00 Paris time, as holocrons do, instead of the last 24 hours; a box that blows up hands its price to a hunter in play rather than one who just left _(Sol, after Nib's and Rollembones' reports)_
 - `japlus.guntelewall <distance>` (JA+ admin): teleports you that far the way you look, through walls, floors and ceilings, as `japlus.guntele` did before it learned to stop at walls; works from the quick wheel with its distance _(Sol, after Nib's report)_

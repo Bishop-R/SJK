@@ -5139,8 +5139,8 @@ the archived `cl_toyHax`, as Order 66 in `cl_toyOrder66`). Switching it says "Ha
   [toy event](hub-chat.md#toy-events) the hacked player sends (`hacked_<until>`, the game
   server time the steering ends; `freed` when they break free sooner), which may come a
   second or two late. Nothing is drawn round a player blocked here.
-- **The trap:** with **Hax trap** on (Settings > Game options > Toys, `cl_haxTrap`, off
-  by default), a hack that completes on the player springs a trap instead of handing
+- **The trap:** with **Hax trap** on (the Hax's card in Collection > Toys since 03/11/2026,
+  Settings > Game options > Toys before; `cl_haxTrap`, off by default), a hack that completes on the player springs a trap instead of handing
   over control (Sol's idea, 23/10/2026): both read "IT'S A TRAP!" with Order 66's beep
   each second, and two seconds later both clients send `kill` and both players blow up
   as in [Order 66](#order-66) (the explosion, then the pieces, or confetti with

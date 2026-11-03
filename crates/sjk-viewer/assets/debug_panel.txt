@@ -24,6 +24,24 @@
 
 # ---- Console & chat ----
 
+[hax-trap-collection]
+area: Menus & settings
+title: Hax trap switches moved to Collection > Toys > Hax
+change: The Hax's card has "Trap: a hacker blows up with you" and "Trap while away".
+change: Settings > Gameplay no longer lists them; a search for hax or trap finds them there.
+test: Collection > Toys > Hax: both switches show and follow cl_haxTrap / cl_haxAway.
+test: Settings: search "trap": the rows show under "Collection > Toys > Hax" and switch.
+test: Settings > Gameplay > Toys starts at Show monitors.
+
+[menu-report-bug]
+area: Menus & settings
+title: Report a bug from the main menu (SJK page)
+change: The SJK UI main page's SJK page has Report a bug; it opens the report card over the menu.
+change: A report sent from there names the map "menu" and no server.
+test: Main menu > SJK > Report a bug: the card opens; type a report and Send.
+test: The hub's report shows map "menu" and an empty server.
+test: In a match, Escape > Report a bug still sends the real map and server.
+
 [box-hunt-1103]
 area: Gameplay
 title: Box hunt: only your own teleports cheat; caps from 09:00; japlus.guntelewall

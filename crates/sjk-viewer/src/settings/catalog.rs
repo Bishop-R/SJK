@@ -1047,6 +1047,25 @@ pub(super) const CONTROLS: &[Setting] = &[
         kind: ValueKind::Choice(&["0", "1", "2"]),
     },
 ];
+/// The Hax toy's trap switches, which live on the Collection's Toys tab (the Hax's
+/// card) since 03/11/2026 (Lex's idea): no category shows them, and a search finds them
+/// under [`HAX_PLACE`], where they still switch.
+pub(super) const HAX_TOY: &[Setting] = &[
+    Setting {
+        label: "Hax trap",
+        cvar: crate::hax::TRAP_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Hax trap while away",
+        cvar: crate::hax::AWAY_CVAR,
+        kind: ValueKind::Bool,
+    },
+];
+
+/// Where [`HAX_TOY`]'s switches are, as a search's heading names it.
+pub(super) const HAX_PLACE: &str = "Collection > Toys > Hax";
+
 pub(super) const GAME: &[Setting] = &[
     Setting {
         label: "Asset browser",
@@ -1133,16 +1152,6 @@ pub(super) const GAME: &[Setting] = &[
     Setting {
         label: "Blade Lab designs",
         cvar: crate::blade_lab_designs::CVAR,
-        kind: ValueKind::Bool,
-    },
-    Setting {
-        label: "Hax trap",
-        cvar: crate::hax::TRAP_CVAR,
-        kind: ValueKind::Bool,
-    },
-    Setting {
-        label: "Hax trap while away",
-        cvar: crate::hax::AWAY_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {

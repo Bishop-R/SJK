@@ -141,6 +141,9 @@ impl ViewerConsole {
             PanelAction::ToySight { cvar, seen } => {
                 self.set_cvar(cvar, if seen { "1" } else { "0" });
             }
+            PanelAction::ToyOption { cvar, on } => {
+                self.set_cvar(cvar, if on { "1" } else { "0" });
+            }
             PanelAction::ShaderView(grid) => {
                 self.set_cvar(
                     super::collection_panel::SHADER_VIEW_CVAR,
@@ -437,6 +440,8 @@ impl ViewerConsole {
         };
         let toys_unseen =
             super::collection_panel::toys_unseen(|cvar| crate::toy_sight::seen(Some(self), cvar));
+        let toy_options =
+            super::collection_panel::toy_options(|cvar| self.bool_cvar(cvar) == Some(true));
         let options = self
             .text_cvar(crate::saber_skin_options::CVAR)
             .unwrap_or_default()
@@ -503,6 +508,7 @@ impl ViewerConsole {
                 nameplate_style,
                 toy_keys: &toy_keys,
                 toys_unseen,
+                toy_options,
                 tag: &tag,
                 tag_finish: &tag_finish,
             };
@@ -538,6 +544,7 @@ impl ViewerConsole {
             nameplate_style,
             toy_keys: &toy_keys,
             toys_unseen,
+            toy_options,
             tag: &tag,
             tag_finish: &tag_finish,
         };

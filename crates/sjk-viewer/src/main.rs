@@ -667,6 +667,9 @@ struct GpuState {
     unlock_toast: unlock_toast::UnlockToast,
     /// A bug report is on its way to the hub (`bug_report`).
     bug_report_waiting: bool,
+    /// The report card open now was opened from the main menu (its SJK page): the
+    /// report says "menu" for the map and names no server.
+    bug_report_from_menu: bool,
     /// The outcome last shown, so the next one is told apart.
     bug_report_serial: u64,
     entity_lighting: entity_lighting::EntityLighting,
@@ -1648,6 +1651,7 @@ impl GpuState {
             holocron_popup: holocron_popup::HolocronPopup::default(),
             unlock_toast: unlock_toast::UnlockToast::default(),
             bug_report_waiting: false,
+            bug_report_from_menu: false,
             bug_report_serial: 0,
             entity_lighting,
             menu_stage: menu_stage::MenuStage::default(),

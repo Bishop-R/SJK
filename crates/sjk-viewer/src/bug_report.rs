@@ -1,7 +1,9 @@
 //! Bug reports for the SJK team: the Report a bug button under the game menu (or Escape,
-//! SJK, Report a bug) opens the text dialog (`text_dialog`); Send hands the text to the
-//! hub (`cl_hubUrl`) through the identity service, signed with the player's key, with the
-//! map, the build and the server.
+//! SJK, Report a bug), and the main menu's SJK page's Report a bug, open the text dialog
+//! (`text_dialog`); Send hands the text to the hub (`cl_hubUrl`) through the identity
+//! service, signed with the player's key, with the map, the build and the server. From
+//! the main menu the map is [`MENU_MAP`] and the server empty: the map behind the menu
+//! is only its backdrop.
 //!
 //! The text keeps to the hub's rules as it is typed (letters, digits, spaces and
 //! [`sjk_identity::report::PUNCTUATION`], at most 600 characters) and is checked again here
@@ -17,14 +19,37 @@ use std::time::Instant;
 /// Why a report cannot go while the identity service has not started.
 pub(crate) const IDENTITY_OFF: &str = "the SJK identity is off (cl_identity 1 turns it on)";
 
+/// The map a report sent from the main menu names.
+pub(crate) const MENU_MAP: &str = "menu";
+
+/// The map and server a report names: [`MENU_MAP`] and none from the main menu, else
+/// the `map` played and the `server` joined.
+fn place(from_menu: bool, map: String, server: String) -> (String, String) {
+    if from_menu {
+        (MENU_MAP.to_owned(), String::new())
+    } else {
+        (map, server)
+    }
+}
+
 impl crate::GpuState {
     /// Report a bug: close the game menu and open the report dialog.
     pub(crate) fn open_bug_report(&mut self) {
+        self.bug_report_from_menu = false;
         self.game_menu = false;
         self.game_menu_page = crate::ingame_menu::Page::Main;
         self.game_menu_row = 0;
         self.gameplay_input.release_keys();
         self.text_dialog.open(crate::text_dialog::Kind::Report);
+        self.sync_cursor_policy();
+    }
+
+    /// The main menu's Report a bug (its SJK page): open the report dialog over the
+    /// menu, the report naming no map or server.
+    pub(crate) fn open_bug_report_from_menu(&mut self) {
+        self.gameplay_input.release_keys();
+        self.text_dialog.open(crate::text_dialog::Kind::Report);
+        self.bug_report_from_menu = true;
         self.sync_cursor_policy();
     }
 
@@ -62,6 +87,7 @@ impl crate::GpuState {
                     .filter(|session| !session.is_local())
                     .map(|session| session.server().to_string())
                     .unwrap_or_default();
+                let (map, server) = place(self.bug_report_from_menu, map, server);
                 let report = sjk_identity::BugReport {
                     text,
                     map,
@@ -115,5 +141,18 @@ impl crate::GpuState {
             self.chat
                 .receive(ServerEventKind::CenterPrint, message, None, Instant::now());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_report_from_the_main_menu_names_the_menu_and_no_server() {
+        let from_menu = place(true, "mp/duel6".to_owned(), "1.2.3.4:29070".to_owned());
+        assert_eq!(from_menu, (MENU_MAP.to_owned(), String::new()));
+        let in_game = place(false, "mp/ffa3".to_owned(), "1.2.3.4:29070".to_owned());
+        assert_eq!(in_game, ("mp/ffa3".to_owned(), "1.2.3.4:29070".to_owned()));
     }
 }
