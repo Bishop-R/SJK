@@ -2920,6 +2920,10 @@ main thread boxed: through the worker's channel, `WorldInstallPoll::Ready`,
 was a stack copy, and the main thread's nested frames (`window_event` 3.1 MB,
 `Destination::poll`, `WorldInstallTask::poll` and the channel's `try_recv` about
 1.9 MB each) overflowed its 8 MiB while joining JoF's public server (02/11/2026).
+Building the menu's first world on the main thread came within 2 MiB of the same
+8 MiB with a clean profile and overflowed it with JoF content loaded (03/11/2026),
+so the client reserves 64 MiB for its main thread on Windows and macOS
+([`build.rs`](../crates/sjk-viewer/build.rs)).
 
 Losing window focus releases held gameplay controls and discards gameplay actions
 already queued for that frame. Synthetic key events on refocus cannot re-press a
