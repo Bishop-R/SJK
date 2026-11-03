@@ -220,7 +220,7 @@ pub(crate) fn update(
             plates_hidden,
             |logo| gpu.hud.icons.team_logo(logo),
         );
-        let mark = gpu.box_hunt_outlined();
+        let hunt_red = gpu.box_hunt_outlined();
         gpu.hud.team_outline.update(
             snapshot,
             session.game_state(),
@@ -228,7 +228,7 @@ pub(crate) fn update(
             i64::from(presentation_time),
             camera,
             plates_hidden,
-            mark,
+            hunt_red,
         );
         let logo_tops = gpu.hud.team_logo.tops();
         gpu.hud.identification.set_logo_tops(logo_tops);
@@ -466,7 +466,7 @@ pub(crate) fn update(
             i64::from(presentation_time),
             camera,
             plates_hidden,
-            None,
+            0,
         );
         let logo_tops = gpu.hud.team_logo.tops();
         gpu.hud.identification.set_logo_tops(logo_tops);

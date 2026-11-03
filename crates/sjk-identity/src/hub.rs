@@ -602,6 +602,20 @@ pub trait Hub: Send {
         ))
     }
 
+    /// The player is out of the box hunt's chase on `server` (`POST /v1/box-hunt/out`):
+    /// killed by the mark, caught cheating (a teleport, noclip), or as the mark typing in
+    /// the chat too long; whether the hub counted it.
+    fn box_hunt_out(
+        &mut self,
+        _identity: &Identity,
+        _server: &str,
+        _out: crate::mystery_box::HuntOut,
+    ) -> Result<bool, HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not report the box hunt's chase".to_owned(),
+        ))
+    }
+
     /// SJK's creator: place a mystery box (`POST /v1/creator/mystery-box`); answers its id.
     fn place_mystery_box(
         &mut self,
@@ -1888,6 +1902,26 @@ impl Hub for HttpHub {
             "/v1/box-hunt/killed",
             Some(json!({ "server": server, "by": by })),
         )?;
+        Ok(answer
+            .get("counted")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
+    }
+
+    fn box_hunt_out(
+        &mut self,
+        identity: &Identity,
+        server: &str,
+        out: crate::mystery_box::HuntOut,
+    ) -> Result<bool, HubError> {
+        let body = match out {
+            crate::mystery_box::HuntOut::Dead { by } => {
+                json!({ "server": server, "why": "dead", "by": by })
+            }
+            crate::mystery_box::HuntOut::Cheat => json!({ "server": server, "why": "cheat" }),
+            crate::mystery_box::HuntOut::Chat => json!({ "server": server, "why": "chat" }),
+        };
+        let answer = self.send(Some(identity), "POST", "/v1/box-hunt/out", Some(body))?;
         Ok(answer
             .get("counted")
             .and_then(Value::as_bool)

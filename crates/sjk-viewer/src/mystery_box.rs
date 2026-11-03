@@ -9,6 +9,7 @@
 //! box is drawn by SJK clients only and has no collision.
 
 mod hunt;
+mod hunt_watch;
 pub(crate) mod label;
 
 use crate::GpuState;

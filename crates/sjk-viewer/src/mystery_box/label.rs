@@ -337,13 +337,26 @@ fn screen_direction(camera: crate::hud::identification::Camera, point: Vec3) -> 
     [x / length, y / length]
 }
 
-/// What the box hunt's card says: a caption, then the mark's name, or that the player is
-/// the mark.
-fn card_words(card: &Card) -> (&'static str, String) {
+/// What the box hunt's card says: a caption (with the hunters still in the chase, when
+/// the hub says, or that the player is out of it), then the mark's name, or that the
+/// player is the mark.
+fn card_words(card: &Card) -> (String, String) {
+    let left = card
+        .hunters
+        .map(|(alive, all)| format!(" \u{b7} {alive} OF {all} HUNTERS LEFT"))
+        .unwrap_or_default();
     if card.own {
-        ("BOX HUNT", "YOU ARE THE MARK".to_owned())
+        (format!("BOX HUNT{left}"), "YOU ARE THE MARK".to_owned())
+    } else if card.out {
+        (
+            "BOX HUNT \u{b7} YOU'RE OUT".to_owned(),
+            format!("{}^7", card.name),
+        )
     } else {
-        ("BOX HUNT \u{b7} THE MARK", format!("{}^7", card.name))
+        (
+            format!("BOX HUNT \u{b7} THE MARK{left}"),
+            format!("{}^7", card.name),
+        )
     }
 }
 
@@ -515,9 +528,26 @@ mod tests {
             name: "^1Ky^7le".to_owned(),
             own,
             since: Instant::now(),
+            hunters: None,
+            out: false,
         };
         let (caption, line) = card_words(&card(false));
         assert!(caption.ends_with("THE MARK"));
+        // The hunters left, and a player out of the chase.
+        let counted = Card {
+            hunters: Some((2, 3)),
+            ..card(false)
+        };
+        assert!(
+            card_words(&counted)
+                .0
+                .ends_with("THE MARK \u{b7} 2 OF 3 HUNTERS LEFT")
+        );
+        let out = Card {
+            out: true,
+            ..counted.clone()
+        };
+        assert!(card_words(&out).0.ends_with("YOU'RE OUT"));
         // The name's colours do not run past it.
         assert_eq!(line, "^1Ky^7le^7");
         assert_eq!(card_words(&card(true)).1, "YOU ARE THE MARK");

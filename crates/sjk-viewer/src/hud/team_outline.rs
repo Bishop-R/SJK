@@ -12,7 +12,8 @@
 //!
 //! The box hunt's mark (Sol's request, 29/10/2026) is ringed in the enemies' red for
 //! a hunter who sees them, in every game type and whatever `cg_teamOutline` says
-//! ([`crate::mystery_box`]).
+//! ([`crate::mystery_box`]); so are the hunters still after the mark, for the mark (Sol,
+//! 02/11/2026).
 use super::identification::{Camera, info_number};
 use crate::card_outline::Group;
 use glam::Vec3;
@@ -153,8 +154,9 @@ impl State {
     }
 
     /// Find this frame's outlined players: everyone on a side in view of the
-    /// rendered `camera`, and the box hunt's `mark` in red, unless `hidden` (menus, the
-    /// scoreboard, intermission).
+    /// rendered `camera`, and the box hunt's `red` ones (a bit a client slot: the mark,
+    /// or for the mark its hunters) in red, unless `hidden` (menus, the scoreboard,
+    /// intermission).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn update(
         &mut self,
@@ -164,12 +166,12 @@ impl State {
         now: i64,
         camera: Camera,
         hidden: bool,
-        mark: Option<u16>,
+        red: u32,
     ) {
         #[cfg(test)]
         if let Some(shot) = self.shot.take() {
             let input = (snapshot, &shot.game, shot.local_team, world, now);
-            self.collect(input, camera, hidden, mark);
+            self.collect(input, camera, hidden, red);
             self.shot = Some(shot);
             return;
         }
@@ -178,7 +180,7 @@ impl State {
             (snapshot, game, local_team, world, now),
             camera,
             hidden,
-            mark,
+            red,
         );
     }
 
@@ -194,13 +196,13 @@ impl State {
         ),
         camera: Camera,
         hidden: bool,
-        mark: Option<u16>,
+        red: u32,
     ) {
         self.clear();
         let mode = info_number(game.config_string(0), "g_gametype");
         let local = snapshot.player.client_num();
         let teams = self.enabled && side(mode, local_team, local_team).is_some();
-        if hidden || !(teams || mark.is_some()) {
+        if hidden || !(teams || red != 0) {
             return;
         }
         for entity in &snapshot.entities {
@@ -215,7 +217,7 @@ impl State {
                 continue;
             }
             let team = info_number(game.config_string(CS_PLAYERS + usize::from(number)), "t");
-            let group = if mark == Some(number) {
+            let group = if red & (1 << number) != 0 {
                 Some(Group::Enemy)
             } else {
                 side(mode, local_team, team).filter(|_| teams)
@@ -320,14 +322,26 @@ mod tests {
         let mut state = State::default();
         for enabled in [true, false] {
             state.enabled = enabled;
-            state.update(&snapshot, &game, &world, 1_000, camera, false, Some(3));
+            state.update(&snapshot, &game, &world, 1_000, camera, false, 1 << 3);
             assert_eq!(state.groups().group(3), Some(Group::Enemy), "{enabled}");
             assert_eq!(state.groups().group(4), None);
             assert_eq!(state.areas().len(), 1);
         }
-        state.update(&snapshot, &game, &world, 1_000, camera, true, Some(3));
+        // The mark sees every hunter after them.
+        state.update(
+            &snapshot,
+            &game,
+            &world,
+            1_000,
+            camera,
+            false,
+            1 << 3 | 1 << 4,
+        );
+        assert_eq!(state.groups().group(4), Some(Group::Enemy), "hunters");
+        assert_eq!(state.areas().len(), 2);
+        state.update(&snapshot, &game, &world, 1_000, camera, true, 1 << 3);
         assert_eq!(state.groups().group(3), None, "hidden");
-        state.update(&snapshot, &game, &world, 1_000, camera, false, None);
+        state.update(&snapshot, &game, &world, 1_000, camera, false, 0);
         assert_eq!(state.groups().group(3), None, "no mark");
     }
 

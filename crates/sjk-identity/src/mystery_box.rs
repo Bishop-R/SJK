@@ -172,6 +172,27 @@ pub struct HuntMark {
     /// does not say).
     #[serde(default)]
     pub left: Option<u64>,
+    /// The hunters after the mark (a hub before 01/11/2026 does not say).
+    #[serde(default)]
+    pub hunters: Option<u32>,
+    /// How many of them are still in the chase.
+    #[serde(default)]
+    pub alive: Option<u32>,
+}
+
+/// Why the player is out of the box hunt's chase (`POST /v1/box-hunt/out`, since
+/// 01/11/2026): each hunter has one life.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HuntOut {
+    /// Killed by the mark, on slot `by`.
+    Dead {
+        /// The mark's slot.
+        by: u8,
+    },
+    /// Teleported (not by a map teleporter or a spawn) or in noclip.
+    Cheat,
+    /// The mark typed in the chat too long (since 02/11/2026): it blows up.
+    Chat,
 }
 
 /// `POST /v1/box-hunt`: the hunt on a server as the player reads it.
@@ -186,6 +207,13 @@ pub struct HuntState {
     /// Free box openings won and not spent.
     #[serde(default)]
     pub free: u64,
+    /// Why the player is out of the current mark's chase (`dead`, `cheat`), none while
+    /// in it.
+    #[serde(default)]
+    pub out: Option<String>,
+    /// For the mark: the slots of the hunters still in the chase (since 02/11/2026).
+    #[serde(default)]
+    pub chasers: Vec<u8>,
     /// How long a mark lasts, in seconds.
     #[serde(default)]
     pub every: u64,
@@ -204,6 +232,38 @@ pub enum HuntEvent {
         /// Whether it won them a free opening.
         won: bool,
     },
+    /// The hunter on `slot` is out of the chase: killed by the mark, or `cheat`ing
+    /// (`out_<slot>_dead`, `out_<slot>_cheat`).
+    Out {
+        /// The hunter's slot.
+        slot: u8,
+        /// Caught teleporting or in noclip, not killed.
+        cheat: bool,
+    },
+    /// The mark on `slot` blew up, caught cheating or typing in the chat too long, and
+    /// the hunter on `to` (`None`: nobody else hunted there) was picked for a free mystery
+    /// box roll, which they `won` unless they held or won the most already
+    /// (`blown_<slot>_<cheat|chat>_<to>_<won>`, `to` 255 for nobody; since 02/11/2026).
+    Blown {
+        /// The mark's slot.
+        slot: u8,
+        /// Typing in the chat, not teleporting or in noclip.
+        chat: bool,
+        /// The slot of the hunter picked.
+        to: Option<u8>,
+        /// Whether it won them a free opening.
+        won: bool,
+    },
+    /// The mark on `slot` outlasted every hunter, `hunters` of them, and won `credits`
+    /// (`survived_<slot>_<credits>_<hunters>`; 0 credits past the day's wins).
+    Survived {
+        /// The mark's slot.
+        slot: u8,
+        /// The credits won.
+        credits: u64,
+        /// The hunters it counted.
+        hunters: u32,
+    },
     /// The box the player on `opener` opened blew up, and `credits` went to the hunter
     /// on `to` (`None`: nobody else hunted there, they were lost)
     /// (`laugh_<opener>_<to>_<credits>`, `to` 255 for nobody).
@@ -221,6 +281,49 @@ pub enum HuntEvent {
 pub fn parse_hunt_event(event: &str) -> Option<HuntEvent> {
     if let Some(slot) = event.strip_prefix("mark_") {
         return Some(HuntEvent::Mark(slot.parse().ok()?));
+    }
+    if let Some(rest) = event.strip_prefix("blown_") {
+        let mut parts = rest.split('_');
+        let slot = parts.next()?.parse().ok()?;
+        let chat = match parts.next()? {
+            "cheat" => false,
+            "chat" => true,
+            _ => return None,
+        };
+        let to: u8 = parts.next()?.parse().ok()?;
+        let won = match parts.next()? {
+            "1" => true,
+            "0" => false,
+            _ => return None,
+        };
+        return parts.next().is_none().then_some(HuntEvent::Blown {
+            slot,
+            chat,
+            to: (to != 255).then_some(to),
+            won,
+        });
+    }
+    if let Some(rest) = event.strip_prefix("out_") {
+        let (slot, why) = rest.split_once('_')?;
+        return Some(HuntEvent::Out {
+            slot: slot.parse().ok()?,
+            cheat: match why {
+                "dead" => false,
+                "cheat" => true,
+                _ => return None,
+            },
+        });
+    }
+    if let Some(rest) = event.strip_prefix("survived_") {
+        let mut parts = rest.split('_');
+        let slot = parts.next()?.parse().ok()?;
+        let credits = parts.next()?.parse().ok()?;
+        let hunters = parts.next()?.parse().ok()?;
+        return parts.next().is_none().then_some(HuntEvent::Survived {
+            slot,
+            credits,
+            hunters,
+        });
     }
     if let Some(rest) = event.strip_prefix("laugh_") {
         let mut parts = rest.split('_');
@@ -301,6 +404,58 @@ mod tests {
                 credits: 0
             })
         );
+        assert_eq!(
+            parse_hunt_event("out_5_dead"),
+            Some(HuntEvent::Out {
+                slot: 5,
+                cheat: false
+            })
+        );
+        assert_eq!(
+            parse_hunt_event("out_5_cheat"),
+            Some(HuntEvent::Out {
+                slot: 5,
+                cheat: true
+            })
+        );
+        assert_eq!(
+            parse_hunt_event("blown_1_cheat_4_1"),
+            Some(HuntEvent::Blown {
+                slot: 1,
+                chat: false,
+                to: Some(4),
+                won: true
+            })
+        );
+        assert_eq!(
+            parse_hunt_event("blown_1_chat_255_0"),
+            Some(HuntEvent::Blown {
+                slot: 1,
+                chat: true,
+                to: None,
+                won: false
+            })
+        );
+        assert_eq!(
+            parse_hunt_event("survived_1_300_3"),
+            Some(HuntEvent::Survived {
+                slot: 1,
+                credits: 300,
+                hunters: 3
+            })
+        );
+        for bad in [
+            "out_5_away",
+            "survived_1_300",
+            "survived_1_300_3_4",
+            "cheat_1",
+            "blown_1_away_4_1",
+            "blown_1_cheat_4",
+            "blown_1_cheat_4_300",
+            "blown_1_cheat_4_1_9",
+        ] {
+            assert_eq!(parse_hunt_event(bad), None, "{bad}");
+        }
         for bad in [
             "mark_",
             "mark_x",
