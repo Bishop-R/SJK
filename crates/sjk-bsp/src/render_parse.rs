@@ -47,6 +47,7 @@ pub(crate) fn parse_render_data(
         light_grid: light_grid.into_boxed_slice(),
         light_grid_array: light_grid_array.into_boxed_slice(),
         visibility,
+        light_style_layers: None,
     })
 }
 

@@ -204,6 +204,7 @@ impl Selection {
         ));
         let mut bsp = sjk_bsp::Bsp::parse(&asset.bytes)?;
         crate::external_lightmaps::load(vfs, path, &mut bsp);
+        crate::lightmap_styles::compose(&mut bsp);
         Ok(bsp)
     }
 }

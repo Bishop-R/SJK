@@ -18,6 +18,8 @@ mod indirect_draws;
 pub(crate) mod lamp_cache;
 #[path = "lamp_geometry.rs"]
 pub(crate) mod lamp_geometry;
+#[path = "world_light_styles.rs"]
+mod light_styles;
 #[path = "lighting_environment.rs"]
 mod lighting_environment;
 #[path = "world_lighting_mode.rs"]
@@ -369,6 +371,8 @@ pub(crate) struct Runtime {
     lighting_mode: std::cell::Cell<u32>,
     forge: Forge,
     remaps: remaps::State,
+    /// The lightmap pages light styles add to, lit as the server says.
+    light_styles: Option<light_styles::Live>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -555,6 +559,7 @@ fn finish_runtime(
         lighting_mode: std::cell::Cell::new(0),
         forge,
         remaps: Default::default(),
+        light_styles: None,
     };
     // One thread per key was measured twice as no faster on RADV (cold cache, 88
     // pipelines: 98 s sequential, 106 s parallel): the driver serialises. Sequential,

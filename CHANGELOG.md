@@ -32,7 +32,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
-- Hide the Empower glow: Settings "Empower glow" (`cg_empowerEffect`) 3 turns off the body glow of empowered players; ordinary Push still shows _(Slash, after Dante's idea)_
+- Hide the Empower glow: Settings "Empower glow" (`cg_empowerEffect`) 3 turns off the body glow of empowered players; ordinary Push still shows _(Slash, PR #338, after Dante's idea)_
+- Maps lit by switchable or flickering lights, such as the JoF Shuttle trial mission ship, the JoF missions and Memorial Grounds, show that light instead of drawing it dark, and follow the server as a light is switched off or on (SJK and Vanilla graphics presets) _(Slash, PR #339, after Kushina's report)_
+- NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash, PR #336)_
 
 ## 2026.1103.1 (Alpha) | 03/11/2026
 
@@ -63,7 +65,6 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Profile banners: collect profile covers (Jedi Archives, Binary Sunset, Sith Eclipse, Hyperspace and Living Nebula) shown on your Profile and player card; Collection > Banners previews and wears them, a plain cover being free for everyone, and once the hub turns them on a holocron opening may bring one on top of its usual prize _(Lumaya, PR #319)_
 - Long game-chat messages are sent completely as up to four messages, split at a word where possible, in All, Team, whispers (including Send unencrypted), admin and mod chat such as clan chat; their colour carries on, and a command pressed while the pieces wait is not lost _(Lukas, PR #306)_
 - Vehicle HUD: each HUD style shows the health of the vehicle you pilot its own way: Text only just the number, SJK radial a yellow arc under the crosshair, SJK classic a yellow bar, instead of the same speed, shield and ammo strip for all _(Slash, PR #318)_
-- NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash, PR #336)_
 - Lugormod v3 servers: your own movement is predicted as the server moves you: scaled players' size and eye height, standing up under low ceilings, the admin jetpack in FFA, rolls with the stun baton; other servers are unchanged (`cg_noPredict 1` still turns prediction off) _(Lumaya, PR #287)_
 - Boombox on the floor: `boombox_place` (Place key in Collection > Toys, the quick wheel or Key bindings) stands your boombox on the floor in front of you, facing the way you look, and the music plays from there, a little quieter behind it; press again to pick it back up. It goes when you turn the toy off, change map or leave, and See and hear others' boomboxes hides others' boxes and their music _(Sol, after VisionJK's boombox by Blackwolf)_
 - Box hunt: every hunter has one life. A hunter the mark kills is out of that hunt (the mark no longer shows for them, and killing it later wins nothing), and a player teleported other than by the map or a spawn (`amtele`, an admin's teleport) or flying in noclip is out at once for cheating; a mark caught cheating ends the hunt. When every hunter is out, the mark wins 100 credits per hunter, up to 3 times a day. The card at the top says how many hunters are left, or that you're out _(Sol)_

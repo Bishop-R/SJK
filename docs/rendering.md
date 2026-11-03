@@ -276,6 +276,52 @@ missing or does not decode leaves its surfaces on the unlit mid-grey lightmap. B
 27/10/2026 such a map was refused ("Surfaces record 0 references 50, outside 0..0"),
 as `baronshed_share` was.
 
+## Light styles
+
+q3map2 bakes every light with a `style` (switchable lights grouped by `targetname`,
+styles 32 and up, and the animated styles 1 to 31) into lightmaps of its own: a surface
+lists up to four styles, each with a page and coordinates. rd-vanilla draws a copy of the
+surface's `$lightmap` stage for each further style, on that style's page, coloured by the
+style and added (`FinishShader`, `tr_shader.cpp:2905-2955`; `CGEN_LIGHTMAPSTYLE`), and
+sums a vertex-lit surface's colours per style (`ComputeFinalVertexColor`,
+`tr_surface.cpp`). Style colours come from `CS_LIGHT_STYLES` (`CG_RunLightStyles`,
+`cg_light.c`): no pattern is white, `"a"` dark, `"z"` full, one letter per 50 ms. The
+game sets a switchable light's style when it spawns (`SP_light`, `g_misc.c`): on unless
+`START_OFF` (spawnflag 4), and its `use` toggles it.
+
+SJK's world draws one lightmap per surface and, until 02/11/2026, drew only style 0, so
+a map lit by switchable lights showed almost black: JoF Shuttle's walls had 6 of 255 in
+style 0 and about 165 in its `mainlights`, `left` and `right` styles (Kushina's report).
+68 of the 193 retail and JoF maps checked have styles (`kor1`, `kor2`, `t1_fatal`,
+`t3_bounty`, `t3_stamp`, `jofmemorial`, the JoF missions and others); the other 125 load
+byte for byte as before.
+
+Now `sjk-bsp` gives every styled surface a lightmap block of its own holding the sum, on
+pages added after the file's, and points the surface's first lightmap there
+([light_styles.rs](../crates/sjk-bsp/src/light_styles.rs)). q3map2 gives every style's
+block the size of the surface's own, so the vertices give the whole-texel offset from
+one to the other; surfaces of one q3map2 block share the new block, which has a
+one-texel border repeating its edge. The file's pages are never written: q3map2 shares
+one block between surfaces whose light is alike (often one black in style 0), and a sum
+written there lit unstyled surfaces sharing it too. A style whose block does not line up
+is left out (64 surface styles on `t3_bounty`, 3 on `t3_stamp`), and the load log says
+how many ([lightmap_styles.rs](../crates/sjk-viewer/src/lightmap_styles.rs)). The map
+loads with every style white; in a game the world composes a block again whenever a
+colour it uses changes and uploads its rectangle
+([world_light_styles.rs](../crates/sjk-viewer/src/world_light_styles.rs)).
+
+Checked 02/11/2026 over every map of the retail paks and the JoF content: the file's
+pages unchanged, no unstyled surface moved, and off-screen world shots of JoF Shuttle's
+cabin (baked lighting) went from almost black to lit, the parts without styles unchanged.
+
+Limits: this is baked lighting (`r_dayNight 0`, the SJK and Vanilla presets); real-time
+lighting replaces the lightmaps and shows no switchable light, as before. Vertex-lit
+surfaces keep the colours they loaded with (all styles on). SJK's server does not spawn
+`light` entities yet, so on its own servers every switchable light stays on, where a
+retail game starts `START_OFF` lights off. `misc_bsp` instances keep their styles at full
+strength. The light grid already reads styles as white
+([entity_lighting.rs](../crates/sjk-viewer/src/entity_lighting.rs)).
+
 ## Projected stage coordinates (`tcGen vector`)
 
 `tcGen vector ( sx sy sz ) ( tx ty tz )` gives a stage the vertex position dotted with
