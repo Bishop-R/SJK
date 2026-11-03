@@ -124,7 +124,7 @@ test: Holocron odds: Banner bonus row only on a hub with banners on, 0 otherwise
 note: Hub banner drops stay off until SJK_HUB_BANNER_MIN_CLIENT is set (hub shared #6).
 
 [pr-batch-1103]
-area: Rendering
+area: Rendering & effects
 title: PRs 03/11: light styles, NPC split skins, Empower glow off
 change: Slash #339: switchable/flickering lights' baked light drawn and following the server.
 change: Slash #336: NPC skins like head_a3|torso_a3| worn instead of grey.
