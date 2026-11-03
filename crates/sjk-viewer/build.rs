@@ -2,9 +2,13 @@
 //! (`scripts/build_version.rs`, shared with the dedicated server), and on
 //! Windows the main thread's stack and the program's icon and version strings.
 //!
-//! Windows reserves 1 MiB for a program's main thread where Linux reserves
-//! 8 MiB; the client overflows 1 MiB while loading a map, so Windows binaries
-//! are linked with the Linux size. `sjk.exe` carries SJK's icon
+//! The main thread builds the first world (the menu's map) and runs every frame;
+//! its frames are large (`window_event` alone about 3 MB). Windows reserves 1 MiB
+//! for it and macOS 8 MiB, which the world build alone came within 2 MiB of
+//! (03/11/2026: a profile with JoF content overflowed 8 MiB at the menu's map), so
+//! Windows and macOS binaries reserve 64 MiB, as the world-install worker does
+//! (`session_transition::WORLD_INSTALL_STACK_BYTES`). Reserved pages that are never
+//! touched cost nothing. Linux takes its main thread's stack from `ulimit -s`. `sjk.exe` carries SJK's icon
 //! (`assets/branding/sjk.ico`, which Explorer and shortcuts show) and names
 //! itself "SJK" in its version strings, which Task Manager shows. Other
 //! platforms have no executable icons.
@@ -17,7 +21,7 @@
 #[path = "../../scripts/build_version.rs"]
 mod build_version;
 
-const MAIN_STACK_BYTES: u32 = 8 * 1024 * 1024;
+const MAIN_STACK_BYTES: u32 = 64 * 1024 * 1024;
 /// SJK's icon set, relative to this crate.
 const ICON: &str = "../../assets/branding/sjk.ico";
 /// The fast-card hints' source, relative to this crate, and the symbols it exports.
@@ -33,7 +37,11 @@ fn main() {
     println!("cargo:rerun-if-changed=../../scripts/build_version.rs");
     println!("cargo:rerun-if-changed={GPU_HINTS}");
     let version = build_version::emit();
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os == "macos" {
+        println!("cargo:rustc-link-arg-bins=-Wl,-stack_size,{MAIN_STACK_BYTES:#x}");
+    }
+    if target_os != "windows" {
         return;
     }
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
