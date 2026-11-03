@@ -32,6 +32,8 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Clan chats: verified JoF and S players get their clan's chat beside SJK chat, through the SJK hub, across maps and servers; each can join the other's too (Settings > Chat, JoF clan chat, S clan chat), staff see both. Tab into them with the composer's JoF and S buttons or `messagemode7`/`messagemode8`; their lines are labelled JoF or S in their own colour _(Sol, after Lex's idea)_
+- Chat buttons can stay out of Tab: Team, SJK, JoF, S and Admin chat buttons take Not in Tab, keeping the button clickable while Tab skips it _(Sol)_
 - Fewer stutters when players join or NPCs appear: the hats and capes players wear and the models an effect needs load in the background, and new effects no longer rebuild every effect picture inside one frame (210 ms when JoF's NPCs spawned) _(Sol, after Lex's and Nib's reports)_
 - JA+ katas, kicks and `+button12` no longer turn into a plain hook after a join whose server info was lost: SJK asks again, remembers what each server runs and, if it still joined without its JA+ keys, joins again with them _(Sol, after Rollembones' report)_
 - Younglings, Jawas and other resized models keep their size as a ragdoll _(Sol, after Rollembones' report)_

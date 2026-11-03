@@ -784,6 +784,10 @@ enum Command {
     NoteImage(u64, Vec<u8>),
     /// An SJK chat message.
     Chat(String),
+    /// A message in a clan chat ([`crate::channels`]).
+    ClanChat(String, crate::HubChannel),
+    /// The clan chats the player joined, read with the chat.
+    SetClanChats(Vec<crate::HubChannel>),
     React {
         message: u64,
         emoji: String,
@@ -979,6 +983,8 @@ struct Worker {
     staff: Arc<Mutex<StaffState>>,
     /// Whether the SJK chat is on (`cl_sjkChat`).
     chat_on: bool,
+    /// The clan chats the player joined ([`crate::channels`]).
+    clan_chats: Vec<crate::HubChannel>,
     /// What the feed thread is told to read.
     feed: Arc<Mutex<FeedShared>>,
     /// What the chat shows; the worker writes the outcome of what it sends.
@@ -1314,6 +1320,7 @@ impl Worker {
             model_checks: Vec::new(),
             staff,
             chat_on: false,
+            clan_chats: Vec::new(),
             feed: Arc::default(),
             chat: Arc::default(),
             ping_outcome: Arc::default(),
@@ -1436,6 +1443,7 @@ impl Worker {
                 .as_ref()
                 .map(|location| location.server.to_string()),
             chat: self.chat_on,
+            channels: self.clan_chats.clone(),
             person: lock(&self.snapshot).key_id.clone(),
             generation: 0,
         };
@@ -1498,7 +1506,7 @@ impl Worker {
         chat.reaction = Some(outcome_of(serial, outcome));
     }
 
-    fn send_chat(&mut self, text: &str, now: Instant) {
+    fn send_chat(&mut self, text: &str, channel: crate::HubChannel, now: Instant) {
         let vouched = lock(&self.snapshot)
             .me
             .as_ref()
@@ -1534,7 +1542,7 @@ impl Worker {
             Ok(text) => match (self.hub.as_mut(), self.registered) {
                 (Some(hub), true) => {
                     let name = self.name.clone().unwrap_or_default();
-                    let sent = hub.chat(&self.identity, &text, &name);
+                    let sent = hub.chat(&self.identity, &text, &name, channel);
                     if sent.is_ok() {
                         self.chat_sent = Some(now);
                     }
@@ -1744,7 +1752,9 @@ impl Worker {
                     self.model_checks.push(question);
                 }
             }
-            Command::Chat(text) => self.send_chat(&text, now),
+            Command::Chat(text) => self.send_chat(&text, crate::HubChannel::Sjk, now),
+            Command::ClanChat(text, channel) => self.send_chat(&text, channel, now),
+            Command::SetClanChats(channels) => self.clan_chats = channels,
             Command::React {
                 message,
                 emoji,
@@ -4457,6 +4467,18 @@ impl Service {
         let _ = self.commands.send(Command::Chat(text));
     }
 
+    /// Send a message to a clan chat ([`crate::channels`]) through the identity worker,
+    /// under the SJK chat's rules; what became of it arrives in [`ChatState::outcome`].
+    pub fn clan_chat(&self, text: String, channel: crate::HubChannel) {
+        let _ = self.commands.send(Command::ClanChat(text, channel));
+    }
+
+    /// Read the clan chats `joined` with the chat (the ones the hub lists, the player
+    /// joined: [`crate::channels::joined`]).
+    pub fn set_clan_chats(&self, joined: Vec<crate::HubChannel>) {
+        let _ = self.commands.send(Command::SetClanChats(joined));
+    }
+
     /// Ban the player of `key_id` from the SJK chat for 24 hours ([`crate::ban`]); what
     /// became of it arrives in [`ChatState::ban`].
     pub fn chat_ban(&self, key_id: String) {
@@ -5307,8 +5329,18 @@ mod tests {
         fn note_image(&mut self, _: &Identity, id: i64, jpeg: &[u8]) -> Result<(), HubError> {
             Fake::record(self, format!("image {id} {} bytes", jpeg.len()))
         }
-        fn chat(&mut self, _: &Identity, text: &str, name: &str) -> Result<u64, HubError> {
-            Fake::record(self, format!("chat {text} as {name}")).map(|()| 12)
+        fn chat(
+            &mut self,
+            _: &Identity,
+            text: &str,
+            name: &str,
+            channel: crate::HubChannel,
+        ) -> Result<u64, HubError> {
+            match channel {
+                crate::HubChannel::Sjk => Fake::record(self, format!("chat {text} as {name}")),
+                channel => Fake::record(self, format!("chat {text} as {name} in {channel:?}")),
+            }
+            .map(|()| 12)
         }
         fn react(
             &mut self,
@@ -6600,6 +6632,26 @@ mod tests {
         worker.handle(Command::Chat("again".into()), t0 + Duration::from_secs(30));
         assert!(chat_outcome(&worker).sent);
         assert_eq!(fake.log().last().unwrap(), "chat again as ^2Sol");
+    }
+
+    #[test]
+    fn a_clan_chat_message_goes_to_its_channel_and_the_joined_ones_are_read() {
+        let fake = Fake::default();
+        let t0 = Instant::now();
+        let (mut worker, _) = worker(&fake, t0);
+        worker.handle(Command::Name("^2Sol".into()), t0);
+        worker.handle(Command::Configure(on("https://hub")), t0);
+        worker.tick(t0);
+        worker.handle(
+            Command::ClanChat("  gg  ".into(), crate::HubChannel::Sith),
+            t0,
+        );
+        assert_eq!(fake.log().last().unwrap(), "chat gg as ^2Sol in Sith");
+        assert!(chat_outcome(&worker).sent);
+        worker.handle(Command::SetChat(true), t0);
+        worker.handle(Command::SetClanChats(vec![crate::HubChannel::Jof]), t0);
+        worker.tick(t0);
+        assert_eq!(lock_feed(&worker.feed).channels, [crate::HubChannel::Jof]);
     }
 
     #[test]

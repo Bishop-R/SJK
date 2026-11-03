@@ -908,17 +908,27 @@ pub(super) const HUD: &[Setting] = &[
     Setting {
         label: "Team chat button",
         cvar: crate::chat::tabs::TEAM_CVAR,
-        kind: ValueKind::Bool,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
     },
     Setting {
         label: "SJK chat button",
         cvar: crate::chat::tabs::SJK_CVAR,
-        kind: ValueKind::Bool,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
+    },
+    Setting {
+        label: "JoF chat button",
+        cvar: crate::chat::tabs::JOF_CVAR,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
+    },
+    Setting {
+        label: "S chat button",
+        cvar: crate::chat::tabs::SITH_CVAR,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
     },
     Setting {
         label: "Admin chat button",
         cvar: crate::chat::tabs::ADMIN_CVAR,
-        kind: ValueKind::Bool,
+        kind: ValueKind::Choice(&["0", "1", "2"]),
     },
     Setting {
         label: "PM chat button",
@@ -1722,6 +1732,16 @@ pub(super) const NETWORK: &[Setting] = &[
         label: "Play chat video clips (Windows)",
         cvar: crate::chat_gifs::VIDEO_CVAR,
         kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "JoF clan chat",
+        cvar: crate::chat::tabs::JOF_JOIN_CVAR,
+        kind: ValueKind::Choice(&["-1", "0", "1"]),
+    },
+    Setting {
+        label: "S clan chat",
+        cvar: crate::chat::tabs::SITH_JOIN_CVAR,
+        kind: ValueKind::Choice(&["-1", "0", "1"]),
     },
     Setting {
         label: "Other clients' icons",

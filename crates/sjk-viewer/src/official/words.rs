@@ -137,6 +137,7 @@ mod tests {
             text: String::new(),
             holocron: None,
             official: Some(official),
+            channel: Default::default(),
         }
     }
 

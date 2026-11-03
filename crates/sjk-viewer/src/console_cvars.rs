@@ -1321,6 +1321,18 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Show the SJK chat, which every SJK player shares through the SJK hub, and read it (0 hides it and stops reading)",
         ),
         CvarDefinition::new(
+            crate::chat::tabs::JOF_JOIN_CVAR,
+            -1,
+            archive,
+            "Read JoF's clan chat (verified JoF and S players, staff): -1 when it is yours, 1 joined, 0 left",
+        ),
+        CvarDefinition::new(
+            crate::chat::tabs::SITH_JOIN_CVAR,
+            -1,
+            archive,
+            "Read the Sith clan's chat, S (verified JoF and S players, staff): -1 when it is yours, 1 joined, 0 left",
+        ),
+        CvarDefinition::new(
             crate::sjk_chat_frame::FEED_CVAR,
             true,
             archive,

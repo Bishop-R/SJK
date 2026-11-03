@@ -1,3 +1,18 @@
+## Clan chats (JoF and S) and chat tab options
+
+03/11/2026, `personal/clan-chats` from `main` `ac0e1c46` (Sol's spec from Lex's idea), with
+hub branch `clan-chats` (Sol-Vulpes/SJK-hub, `PROTOCOL.md` "Clan chats"): JoF's and the
+Sith clan's chats beside SJK chat, read and written by the players the hub lets in (their
+verified tick group, staff), joined from Settings > Chat, tabbed into from the composer
+([hub-chat.md](hub-chat.md#clan-chats)); every chat button may stay out of Tab (Not in
+Tab, [client.md](client.md)). The merged view while typing was already
+`cg_chatTabFilter 0`; its lines say their channel. Verified: unit tests (the hub's
+channel rules, per-channel history, feed filtering, refusals, reactions; the client's
+feed routing and backlog, the composer's row, Tab, sending, lines, colours, settings),
+fmt, clippy, workspace tests, the hub's tests. Not verified: in a game, against the live
+hub (the hub change is not deployed), with real JoF and S players. The docks and the SJK
+chat page still show SJK chat only.
+
 ## Joins, JA+ keys, ragdoll scale, skin hum, sound device (hub #236 #230 #222 #223 #233 #210)
 
 03/11/2026, `personal/gameplay-1103` from `main` `d1640233`. Read from the code and Sol's

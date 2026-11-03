@@ -24,6 +24,20 @@ pub(super) fn tint(channel: Channel, alpha: f32) -> Color {
         Channel::Sjk => Color::new(0.91, 0.72, 0.29, alpha),
         // jaPRO's `<Admin>` yellow, softened.
         Channel::Admin => Color::new(0.98, 0.88, 0.40, alpha),
+        Channel::Jof => clan_colour(sjk_identity::HubChannel::Jof, alpha),
+        Channel::Sith => clan_colour(sjk_identity::HubChannel::Sith, alpha),
+    }
+}
+
+/// A clan chat's colour (`docs/hub-chat.md`, "Clan chats"): its messages, label and
+/// button, as the SJK chat's gold is SJK's. JoF's light cyan (`#8FDDF5`) after its
+/// tick's, the Sith clan's rose red (`#FA8C9E`) after theirs, each far from the game's
+/// colour codes, the SJK gold and the encrypted whispers' pink (a test keeps them so).
+pub(crate) fn clan_colour(channel: sjk_identity::HubChannel, alpha: f32) -> Color {
+    match channel {
+        sjk_identity::HubChannel::Jof => Color::new(0.56, 0.867, 0.96, alpha),
+        sjk_identity::HubChannel::Sith => Color::new(0.98, 0.55, 0.62, alpha),
+        _ => crate::sjk_chat_look::gold(alpha),
     }
 }
 
@@ -270,7 +284,10 @@ impl ChatOverlay {
             // holocron tier's colour), or the game line's own codes over white.
             let colour = match &line.hub {
                 Some(hub) => hub.tier.map_or_else(
-                    || crate::sjk_chat_look::gold(alpha),
+                    || match line.channel.clan() {
+                        Some(clan) => clan_colour(clan, alpha),
+                        None => crate::sjk_chat_look::gold(alpha),
+                    },
                     |tier| tier.colour_alpha(alpha),
                 ),
                 None if line.encrypted => encrypted_pink(alpha),
@@ -366,7 +383,7 @@ fn line_marks<'a>(
                 _ if hub.official => "",
                 Some(_) => "",
                 None if hub.in_all => "ALL/SJK",
-                None => "SJK",
+                None => super::tabs::label(line.channel),
             },
             emoji: &hub.emoji,
             accent: hub.official,
@@ -416,7 +433,7 @@ fn line_marks<'a>(
             _ if line.encrypted => "ENCRYPTED",
             Channel::Team => "TEAM",
             Channel::Whisper => "WHISPER",
-            Channel::Global | Channel::Sjk | Channel::Admin => "",
+            Channel::Global | Channel::Sjk | Channel::Admin | Channel::Jof | Channel::Sith => "",
         },
         emoji: mark.map_or("", |mark| mark.emoji.as_str()),
         accent: false,
@@ -604,6 +621,33 @@ mod tests {
     use sjk_client::ServerEventKind;
     use sjk_ui::{Color, DrawCommand, Rect};
     use std::time::Instant;
+
+    #[test]
+    fn the_clan_colours_are_none_of_the_colour_codes_nor_the_sjk_gold() {
+        use crate::text::CodePalette;
+        let distance = |a: Color, b: [f32; 3]| {
+            ((a.r - b[0]).powi(2) + (a.g - b[1]).powi(2) + (a.b - b[2]).powi(2)).sqrt()
+        };
+        let gold = crate::sjk_chat_look::GOLD;
+        for clan in [
+            sjk_identity::HubChannel::Jof,
+            sjk_identity::HubChannel::Sith,
+        ] {
+            let colour = super::clan_colour(clan, 1.0);
+            for index in 0..=9 {
+                for palette in [CodePalette::Game, CodePalette::Legible] {
+                    let code = palette.colour(index);
+                    assert!(
+                        distance(colour, [code[0], code[1], code[2]]) > 0.25,
+                        "{clan:?} ^{index} {palette:?}"
+                    );
+                }
+            }
+            assert!(distance(colour, [gold.r, gold.g, gold.b]) > 0.3, "{clan:?}");
+            let pink = super::encrypted_pink(1.0);
+            assert!(distance(colour, [pink.r, pink.g, pink.b]) > 0.2, "{clan:?}");
+        }
+    }
 
     #[test]
     fn scoreboard_chat_keeps_the_full_font_scale() {

@@ -542,6 +542,7 @@ mod tests {
             text: "gg all".to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         };
         chat.sync_sjk(&state([message].into_iter().collect()), |_| false, now);
         chat.open(false);

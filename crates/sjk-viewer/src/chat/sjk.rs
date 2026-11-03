@@ -54,7 +54,7 @@ impl ChatOverlay {
             name,
             body,
             sender: None,
-            channel: Channel::Sjk,
+            channel: Channel::of_hub(message.channel),
             server_private: false,
             received_ms: self.millis(now),
             muted,
@@ -116,6 +116,7 @@ impl ChatOverlay {
                 find: None,
             }),
             official: None,
+            channel: Default::default(),
         };
         self.push_sjk(&message, false, now);
     }
@@ -155,6 +156,7 @@ impl ChatOverlay {
                 }),
             }),
             official: None,
+            channel: Default::default(),
         };
         self.push_sjk(&message, false, now);
     }
@@ -178,6 +180,7 @@ impl ChatOverlay {
             text: String::new(),
             holocron: None,
             official: Some(official),
+            channel: Default::default(),
         };
         self.push_sjk(&message, false, now);
     }
@@ -199,6 +202,7 @@ impl ChatOverlay {
         }
         self.sjk_feed_visible = visible;
         if !visible {
+            // The clan chats show only here, so they stay.
             self.lines.retain(|line| line.channel != Channel::Sjk);
         }
     }
@@ -259,7 +263,10 @@ impl ChatOverlay {
             return None;
         };
         let messages = &state.messages;
-        let newest = messages.back().map_or(0, |message| message.id);
+        let newest = messages
+            .back()
+            .map_or(0, |message| message.id)
+            .max(state.clan.back().map_or(0, |message| message.id));
         if self.sjk_epoch != Some(epoch) {
             self.sjk_epoch = Some(epoch);
             self.sjk_seen = Some(newest);
@@ -277,19 +284,28 @@ impl ChatOverlay {
             }
             Some(seen) => seen,
         };
-        // A shown message the chat should hold but does not was deleted by staff.
-        let lowest = if messages.len() >= KEPT {
-            messages.front().map_or(0, |message| message.id)
-        } else {
-            0
+        // A shown message the chat should hold but does not was deleted by staff (or
+        // its clan chat was left).
+        let lowest = |held: &std::collections::VecDeque<ChatMessage>| {
+            if held.len() >= KEPT {
+                held.front().map_or(0, |message| message.id)
+            } else {
+                0
+            }
         };
+        let (sjk_lowest, clan_lowest) = (lowest(messages), lowest(&state.clan));
         self.lines.retain(|line| match &line.hub {
-            Some(hub) if hub.id >= lowest && hub.id <= newest => {
+            Some(hub)
+                if line.channel == Channel::Sjk && hub.id >= sjk_lowest && hub.id <= newest =>
+            {
                 messages.iter().any(|message| message.id == hub.id)
+            }
+            Some(hub) if hub.id >= clan_lowest && hub.id <= newest => {
+                state.clan.iter().any(|message| message.id == hub.id)
             }
             _ => true,
         });
-        for message in messages.iter().filter(|message| message.id > seen) {
+        for message in merged(state).filter(|message| message.id > seen) {
             let muted = muted(&message.key_id);
             // A muted player's drops are not shown, rather than hidden behind a note;
             // a drop of a tier this client does not know is left out.
@@ -343,6 +359,18 @@ impl ChatOverlay {
     }
 }
 
+/// The SJK chat's messages and the clan chats' (`ChatState::clan`), in the feed's order:
+/// both are in it already, so they merge without sorting or allocating.
+pub(crate) fn merged(state: &ChatState) -> impl Iterator<Item = &ChatMessage> {
+    let mut sjk = state.messages.iter().peekable();
+    let mut clan = state.clan.iter().peekable();
+    std::iter::from_fn(move || match (sjk.peek(), clan.peek()) {
+        (Some(a), Some(b)) if b.id < a.id => clan.next(),
+        (Some(_), _) => sjk.next(),
+        (None, _) => clan.next(),
+    })
+}
+
 /// The shortest time between two of the SJK chat's sounds.
 pub(crate) const SOUND_GAP: std::time::Duration = std::time::Duration::from_secs(1);
 
@@ -378,10 +406,16 @@ pub(crate) fn console_lines<'a>(
         .filter(|message| message.id > after && !muted(&message.key_id))
         .filter_map(|message| {
             let shown = crate::sjk_chat_look::shown(message)?;
+            // A clan chat's line says which, in its own colour code.
+            let tag = match message.channel {
+                sjk_identity::HubChannel::Jof => "^5JoF",
+                sjk_identity::HubChannel::Sith => "^1S",
+                _ => "^3SJK",
+            };
             Some(if shown.name.is_empty() {
-                format!("* ^3SJK^7: {}", shown.text)
+                format!("* {tag}^7: {}", shown.text)
             } else {
-                format!("* ^3SJK^7 {}^7: {}", shown.name, shown.text)
+                format!("* {tag}^7 {}^7: {}", shown.name, shown.text)
             })
         })
         .collect()
@@ -411,6 +445,7 @@ mod tests {
             text: text.to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         }
     }
 
@@ -454,6 +489,42 @@ mod tests {
 
     fn bodies(chat: &ChatOverlay) -> Vec<&str> {
         chat.lines.iter().map(|line| line.body.as_str()).collect()
+    }
+
+    #[test]
+    fn clan_chat_messages_join_the_feed_labelled_and_in_order() {
+        let mut chat = ChatOverlay::new();
+        let now = Instant::now();
+        let mut state = hub(&[(1, "old")]);
+        state.clan.push_back(ChatMessage {
+            channel: sjk_identity::HubChannel::Jof,
+            ..message(2, "old clan")
+        });
+        // The backlog is marked, not replayed.
+        assert_eq!(chat.sync_sjk(&state, |_| false, now), None);
+        state.messages.push_back(message(4, "sjk news"));
+        state.clan.push_back(ChatMessage {
+            channel: sjk_identity::HubChannel::Sith,
+            ..message(3, "sith news")
+        });
+        assert_eq!(chat.sync_sjk(&state, |_| false, now), Some(2));
+        assert_eq!(bodies(&chat), ["sith news", "sjk news"]);
+        assert!(chat.lines[0].channel == Channel::Sith);
+        assert_eq!(super::super::tabs::label(chat.lines[0].channel), "S");
+        assert!(chat.lines[1].channel == Channel::Sjk);
+        // Console lines say which chat.
+        let console = console_lines(merged(&state), 2, |_| false);
+        assert!(console[0].starts_with("* ^1S^7 "), "{console:?}");
+        assert!(console[1].starts_with("* ^3SJK^7 "), "{console:?}");
+        // Hiding SJK chat in the game's feed leaves the clan chats there.
+        chat.set_sjk_feed_visible(false);
+        assert_eq!(bodies(&chat), ["sith news"]);
+        // Deleted by staff: the clan line leaves too.
+        state.clan.pop_back();
+        state.messages.push_back(message(5, "later"));
+        chat.set_sjk_feed_visible(true);
+        chat.sync_sjk(&state, |_| false, now);
+        assert_eq!(bodies(&chat), ["later"]);
     }
 
     #[test]

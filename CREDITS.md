@@ -1000,6 +1000,10 @@ built it as the pinned chat card's Whisper button (23/10/2026).
 Nib, a player, asked to choose the saber sounds apart from the saber shader (18/10/2026,
 and hub report #109): Sol built it as the Saber tab's Sounds row (23/10/2026).
 
+Lex, a player, asked for clan chats beside SJK chat: Sol built JoF's and the Sith clan's
+(S) chats through the SJK hub, for the players verified with those ticks and staff, with
+their own buttons in the chat composer (03/11/2026).
+
 Dante, a player, asked for the quick wheel's custom commands to be remembered in the
 command list once made, and for duels won in each saber style to count as achievements:
 Slash built the first (#293, 30/10/2026), Sol the style masters (29/10/2026).

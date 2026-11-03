@@ -1128,11 +1128,14 @@ mod tests {
             text: text.to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         }
     }
 
     pub(super) fn chat(count: u64) -> ChatState {
         ChatState {
+            clan: Default::default(),
+            channels: Vec::new(),
             reaction: None,
             own_key: None,
             messages: (1..=count)

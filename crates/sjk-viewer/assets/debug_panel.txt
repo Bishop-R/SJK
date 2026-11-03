@@ -24,6 +24,18 @@
 
 # ---- Console & chat ----
 
+[clan-chats]
+area: Console & chat
+title: Clan chats JoF and S beside SJK chat, and buttons out of Tab
+change: Verified JoF/S players and staff read the clan chats; Settings > Chat joins or leaves.
+change: Composer: JoF and S buttons, messagemode7/8; lines labelled JoF or S in their colour.
+change: Team/SJK/JoF/S/Admin buttons take Not in Tab (2): clickable, skipped by Tab.
+test: Needs the hub's clan-chats branch deployed first (old hubs list no clan chat).
+test: As a JoF-verified key: JoF button shows, a message there reaches another JoF player.
+test: An unverified key sees no JoF/S button and never gets their lines.
+test: cg_chatTabTeam 2: Team still clicks, Tab goes All > SJK > JoF.
+note: Not on the Esc docks or the SJK chat page: in-game chat only.
+
 [join-stutter-1103]
 area: Rendering & effects
 title: Joins and NPC spawns: hats, effect models and the effect atlas load in the background

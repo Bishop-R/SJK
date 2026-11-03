@@ -275,6 +275,7 @@ mod tests {
                     text: "and this one goes through the SJK chat".to_owned(),
                     holocron: None,
                     official: None,
+                    channel: Default::default(),
                 };
                 gpu.chat
                     .sync_sjk(&state(vec![message].into_iter().collect()), |_| false, now);

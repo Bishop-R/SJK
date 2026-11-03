@@ -84,6 +84,7 @@ fn duel6_jof_sjk_chat_feed() {
             text: text.to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         };
         let state = |messages: Vec<sjk_identity::ChatMessage>| sjk_identity::ChatState {
             messages: messages.into_iter().collect(),

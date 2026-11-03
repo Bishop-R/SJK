@@ -9,7 +9,16 @@
 //! Each button is also a tab, as in other games' chat windows (Dave, 29/10/2026): while
 //! the composer is on Team, SJK, Admin or a whisper, the feed shows only that channel's
 //! messages (whispers both ways, encrypted ones too), and All shows everything; the
-//! feed shows everything again once the composer closes. [`FILTER_CVAR`] turns it off.
+//! feed shows everything again once the composer closes. [`FILTER_CVAR`] turns it off:
+//! every chat stays in view, each line labelled with its channel, and the buttons only
+//! pick where the message goes.
+//!
+//! The clan chats (03/11/2026, Sol's decision from Lex's idea, `docs/hub-chat.md`
+//! "Clan chats"): JoF and S, hub chats like SJK, have a button each once the player
+//! joined them ([`JOF_JOIN_CVAR`], [`SITH_JOIN_CVAR`]; the hub says who may). Since then
+//! every switchable button but PM takes a third value, 2: shown, but left out of Tab's
+//! cycle ([`Shown`]), so a player keeps Team or Admin clickable without Tab stopping on
+//! it.
 use super::*;
 use crate::console::ViewerConsole;
 use crate::text::UiFont;
@@ -20,6 +29,19 @@ pub(crate) const TEAM_CVAR: &str = "cg_chatTabTeam";
 pub(crate) const SJK_CVAR: &str = "cg_chatTabSjk";
 /// Admin chat (`amsay`) in the composer's row, on servers that have it.
 pub(crate) const ADMIN_CVAR: &str = "cg_chatTabAdmin";
+/// JoF's clan chat in the composer's row, once joined.
+pub(crate) const JOF_CVAR: &str = "cg_chatTabJof";
+/// The Sith clan's chat (S) in the composer's row, once joined.
+pub(crate) const SITH_CVAR: &str = "cg_chatTabS";
+/// Whether the player reads JoF's clan chat: -1 (the default) when it is their home
+/// channel (a JoF player's, or staff's), 1 joined, 0 left. The hub decides who may.
+pub(crate) const JOF_JOIN_CVAR: &str = "cl_sjkChatJof";
+/// [`JOF_JOIN_CVAR`] for the Sith clan's chat (S).
+pub(crate) const SITH_JOIN_CVAR: &str = "cl_sjkChatS";
+/// The key command that opens the composer on JoF's clan chat.
+pub(crate) const JOF_COMMAND: &str = "messagemode7";
+/// The key command that opens the composer on the Sith clan's chat (S).
+pub(crate) const SITH_COMMAND: &str = "messagemode8";
 /// A PM button (a whisper to the last whisperer) in the composer's row.
 pub(crate) const PM_CVAR: &str = "cg_chatTabPm";
 /// The key command that opens the composer on Admin chat, beside `messagemode5` (SJK).
@@ -38,6 +60,8 @@ pub(super) fn label(channel: Channel) -> &'static str {
         Channel::Sjk => "SJK",
         Channel::Admin => "Admin",
         Channel::Whisper => "PM",
+        Channel::Jof => "JoF",
+        Channel::Sith => "S",
     }
 }
 
@@ -49,6 +73,8 @@ pub(super) fn token(channel: Channel) -> u16 {
         Channel::Sjk => interaction::SJK,
         Channel::Admin => interaction::ADMIN,
         Channel::Whisper => interaction::PM,
+        Channel::Jof => interaction::JOF,
+        Channel::Sith => interaction::SITH,
     }
 }
 
@@ -59,13 +85,76 @@ pub(super) const NO_PM: &str =
     "No one has whispered you yet: click a player's name to whisper them.";
 /// What the composer says when the Admin key is used on a server without admin chat.
 pub(super) const NO_ADMIN: &str = "This server has no admin chat (amsay is JA+ and jaPRO's).";
+/// What the composer says when a clan chat's key is used without that chat joined.
+pub(super) const NO_CLAN: &str =
+    "You have not joined that clan chat: Settings > Chat, for verified JoF and S players.";
+
+/// How a switchable channel's button is kept: its cvar's 0, 1 or 2.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Shown {
+    /// 0: not in the row, and Tab skips it (its key still opens it).
+    Off,
+    /// 1: in the row and in Tab's cycle.
+    On,
+    /// 2: in the row, but Tab skips it.
+    NotInTab,
+}
+
+impl Shown {
+    fn of(value: Option<i64>, default: Self) -> Self {
+        match value {
+            Some(0) => Self::Off,
+            Some(2) => Self::NotInTab,
+            Some(_) => Self::On,
+            None => default,
+        }
+    }
+
+    /// Its button is in the row.
+    pub(super) fn shown(self) -> bool {
+        self != Self::Off
+    }
+
+    /// Tab stops on it.
+    fn cycled(self) -> bool {
+        self == Self::On
+    }
+}
+
+/// The names [`Shown`]'s values have in Settings.
+const SHOWN_CHOICES: [(&str, &str); 3] = [("0", "Off"), ("1", "On"), ("2", "Not in Tab")];
+/// The names a clan chat's join setting's values have in Settings.
+const JOIN_CHOICES: [(&str, &str); 3] = [("-1", "Auto"), ("0", "Left"), ("1", "Joined")];
+
+/// The name Settings shows for `value` of one of this module's choice settings.
+pub(crate) fn choice_name(cvar: &str, value: &str) -> Option<&'static str> {
+    let choices: &[(&str, &str)] = if [TEAM_CVAR, SJK_CVAR, ADMIN_CVAR, JOF_CVAR, SITH_CVAR]
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(cvar))
+    {
+        &SHOWN_CHOICES
+    } else if [JOF_JOIN_CVAR, SITH_JOIN_CVAR]
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(cvar))
+    {
+        &JOIN_CHOICES
+    } else {
+        return None;
+    };
+    choices
+        .iter()
+        .find(|(choice, _)| *choice == value.trim())
+        .map(|(_, name)| *name)
+}
 
 /// Which of the switchable channels the player keeps in the row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Tabs {
-    pub(super) team: bool,
-    pub(super) sjk: bool,
-    pub(super) admin: bool,
+    pub(super) team: Shown,
+    pub(super) sjk: Shown,
+    pub(super) admin: Shown,
+    pub(super) jof: Shown,
+    pub(super) sith: Shown,
     pub(super) pm: bool,
     /// The composer's channel filters the feed ([`FILTER_CVAR`]).
     pub(super) filter: bool,
@@ -73,18 +162,49 @@ pub(super) struct Tabs {
 
 impl Tabs {
     pub(super) fn read(console: Option<&ViewerConsole>) -> Self {
-        let on = |name, default| {
-            console
-                .and_then(|console| console.integer_cvar(name))
-                .map_or(default, |value| value != 0)
-        };
+        let value = |name| console.and_then(|console| console.integer_cvar(name));
+        let on = |name, default| value(name).map_or(default, |value| value != 0);
         Self {
-            team: on(TEAM_CVAR, true),
-            sjk: on(SJK_CVAR, true),
-            admin: on(ADMIN_CVAR, true),
+            team: Shown::of(value(TEAM_CVAR), Shown::On),
+            sjk: Shown::of(value(SJK_CVAR), Shown::On),
+            admin: Shown::of(value(ADMIN_CVAR), Shown::On),
+            jof: Shown::of(value(JOF_CVAR), Shown::On),
+            sith: Shown::of(value(SITH_CVAR), Shown::On),
             pm: on(PM_CVAR, false),
             filter: on(FILTER_CVAR, true),
         }
+    }
+
+    /// How `channel`'s button is kept; All is always on, PM by its own switch.
+    fn of(self, channel: Channel) -> Shown {
+        match channel {
+            Channel::Global => Shown::On,
+            Channel::Team => self.team,
+            Channel::Sjk => self.sjk,
+            Channel::Admin => self.admin,
+            Channel::Jof => self.jof,
+            Channel::Sith => self.sith,
+            Channel::Whisper if self.pm => Shown::On,
+            Channel::Whisper => Shown::Off,
+        }
+    }
+}
+
+/// The player's choice for clan chat `channel` from its join cvar: joined, left, or
+/// `None` for the default (joined when it is their home channel).
+pub(crate) fn join_choice(
+    console: &ViewerConsole,
+    channel: sjk_identity::HubChannel,
+) -> Option<bool> {
+    let cvar = match channel {
+        sjk_identity::HubChannel::Jof => JOF_JOIN_CVAR,
+        sjk_identity::HubChannel::Sith => SITH_JOIN_CVAR,
+        _ => return None,
+    };
+    match console.integer_cvar(cvar) {
+        Some(0) => Some(false),
+        Some(1) => Some(true),
+        _ => None,
     }
 }
 
@@ -104,6 +224,18 @@ pub(super) fn is_admin_line(display: &str) -> bool {
         .trim_start()
         .starts_with("<Admin>(")
 }
+
+/// Every channel the row may hold, in its order: the hub's chats after Team, the server's
+/// admins and whispers last.
+const ROW: [Channel; 7] = [
+    Channel::Global,
+    Channel::Team,
+    Channel::Sjk,
+    Channel::Jof,
+    Channel::Sith,
+    Channel::Admin,
+    Channel::Whisper,
+];
 
 impl ChatOverlay {
     /// Whether the feed shows `line` now: the PM-only switch (`chat/pm_only.rs`), then
@@ -126,26 +258,49 @@ impl ChatOverlay {
 
     /// The channels the composer's row offers now, in order.
     pub(super) fn offered(&self) -> impl Iterator<Item = Channel> + '_ {
-        [
-            Channel::Global,
-            Channel::Team,
-            Channel::Sjk,
-            Channel::Admin,
-            Channel::Whisper,
-        ]
-        .into_iter()
-        .filter(|channel| self.offers(*channel))
+        ROW.into_iter().filter(|channel| self.offers(*channel))
     }
 
     /// Whether the row offers `channel`.
     pub(super) fn offers(&self, channel: Channel) -> bool {
-        let tabs = self.options.tabs;
+        self.options.tabs.of(channel).shown() && self.available(channel)
+    }
+
+    /// Whether `channel` can be used here, whatever its button: Admin on a server that
+    /// takes `amsay`, a clan chat once joined.
+    fn available(&self, channel: Channel) -> bool {
         match channel {
-            Channel::Global => true,
-            Channel::Team => tabs.team,
-            Channel::Sjk => tabs.sjk,
-            Channel::Admin => tabs.admin && self.admin_server,
-            Channel::Whisper => tabs.pm,
+            Channel::Admin => self.admin_server,
+            Channel::Jof => self.clans[0],
+            Channel::Sith => self.clans[1],
+            _ => true,
+        }
+    }
+
+    /// Say which clan chats the player reads now (`sjk_identity::channels::joined`),
+    /// JoF's then S's. Leaving the one the composer is on moves it to All.
+    pub(crate) fn set_clan_chats(&mut self, joined: [bool; 2]) {
+        self.clans = joined;
+        let left = self
+            .input
+            .as_ref()
+            .is_some_and(|input| input.channel.clan().is_some() && !self.available(input.channel));
+        if left && let Some(input) = self.input.as_mut() {
+            input.channel = Channel::Global;
+        }
+    }
+
+    /// Open the composer on clan chat `clan` for its key, whether or not its button is
+    /// in the row; without it joined, on All with a word why.
+    pub(crate) fn open_clan(&mut self, clan: sjk_identity::HubChannel) {
+        let channel = Channel::of_hub(clan);
+        self.open(false);
+        if self.available(channel) {
+            if let Some(input) = self.input.as_mut() {
+                input.channel = channel;
+            }
+        } else {
+            self.notice = NO_CLAN;
         }
     }
 
@@ -161,13 +316,14 @@ impl ChatOverlay {
         }
     }
 
-    /// The channel Tab moves to from `channel`: the next one in the row, then the last
-    /// whisperer (`chat/reply.rs`) when the row has no PM button, then All again. `None`
-    /// is the last whisperer.
+    /// The channel Tab moves to from `channel`: the next one in the row Tab stops on
+    /// ([`Shown`]), then the last whisperer (`chat/reply.rs`) when the row has no PM
+    /// button, then All again. `None` is the last whisperer.
     pub(super) fn next_channel(&self, channel: Channel) -> Option<Channel> {
         let mut row = self.offered().skip_while(|offered| *offered != channel);
         row.next();
-        for next in row {
+        let tabs = self.options.tabs;
+        for next in row.filter(|next| tabs.of(*next).cycled()) {
             match next {
                 // The PM button stands for the last whisperer, skipped when there is none.
                 Channel::Whisper if self.reply_target().is_ok() => return None,
@@ -259,8 +415,11 @@ impl ChatOverlay {
     /// The row as drawn: each offered channel with its left edge and its word's width,
     /// in 1080p pixels at the chat's scale, and where the row ends (the whisper's
     /// "To ..." and the SJK chat's red note start there).
-    pub(super) fn row_layout(&self, font: &UiFont) -> ([(Channel, f32, f32); 5], usize, f32) {
-        let mut row = [(Channel::Global, 0.0, 0.0); 5];
+    pub(super) fn row_layout(
+        &self,
+        font: &UiFont,
+    ) -> ([(Channel, f32, f32); ROW.len()], usize, f32) {
+        let mut row = [(Channel::Global, 0.0, 0.0); ROW.len()];
         let mut count = 0;
         let mut x = 0.0;
         for channel in self.offered() {
@@ -284,11 +443,14 @@ mod tests {
     use sjk_ui::{InputEvent, PointerButton};
 
     fn chat(team: bool, sjk: bool, admin: bool, server: bool) -> ChatOverlay {
+        let shown = |on| if on { Shown::On } else { Shown::Off };
         let mut chat = ChatOverlay::new();
         chat.options.tabs = Tabs {
-            team,
-            sjk,
-            admin,
+            team: shown(team),
+            sjk: shown(sjk),
+            admin: shown(admin),
+            jof: Shown::On,
+            sith: Shown::On,
             pm: false,
             filter: true,
         };
@@ -426,13 +588,87 @@ mod tests {
         assert_eq!(
             Tabs::read(None),
             Tabs {
-                team: true,
-                sjk: true,
-                admin: true,
+                team: Shown::On,
+                sjk: Shown::On,
+                admin: Shown::On,
+                jof: Shown::On,
+                sith: Shown::On,
                 pm: false,
                 filter: true
             }
         );
+    }
+
+    #[test]
+    fn clan_chats_are_offered_once_joined_and_tab_skips_what_it_should() {
+        let mut chat = chat(true, true, true, true);
+        assert!(!chat.offers(Channel::Jof), "not joined");
+        chat.set_clan_chats([true, true]);
+        assert_eq!(
+            chat.offered().collect::<Vec<_>>(),
+            [
+                Channel::Global,
+                Channel::Team,
+                Channel::Sjk,
+                Channel::Jof,
+                Channel::Sith,
+                Channel::Admin
+            ]
+        );
+        // Team and Admin kept as buttons, out of Tab's cycle.
+        chat.options.tabs.team = Shown::NotInTab;
+        chat.options.tabs.admin = Shown::NotInTab;
+        assert!(chat.offers(Channel::Team));
+        assert_eq!(chat.next_channel(Channel::Global), Some(Channel::Sjk));
+        assert_eq!(chat.next_channel(Channel::Sjk), Some(Channel::Jof));
+        assert_eq!(chat.next_channel(Channel::Sith), Some(Channel::Global));
+        // Clicked onto a button Tab skips, Tab goes on from there.
+        assert_eq!(chat.next_channel(Channel::Team), Some(Channel::Sjk));
+        // Leaving the chat the composer is on moves it to All.
+        chat.open(false);
+        chat.choose(Channel::Sith);
+        chat.set_clan_chats([true, false]);
+        assert_eq!(chat.input.as_ref().unwrap().channel, Channel::Global);
+        assert!(!chat.offers(Channel::Sith));
+        // Its key says why it does not open.
+        chat.open_clan(sjk_identity::HubChannel::Sith);
+        assert_eq!(chat.notice, NO_CLAN);
+        chat.open_clan(sjk_identity::HubChannel::Jof);
+        assert_eq!(chat.input.as_ref().unwrap().channel, Channel::Jof);
+    }
+
+    #[test]
+    fn a_clan_chat_message_goes_to_the_hub() {
+        let mut chat = chat(true, true, true, true);
+        chat.set_clan_chats([false, true]);
+        chat.open(false);
+        click(&mut chat, interaction::SITH);
+        assert_eq!(chat.input.as_ref().unwrap().channel, Channel::Sith);
+        chat.input.as_mut().unwrap().text = " for the clan ".to_owned();
+        assert!(matches!(
+            chat.submit(),
+            ChatInputResult::Clan(text, sjk_identity::HubChannel::Sith) if text == "for the clan"
+        ));
+        assert!(chat.input.is_none());
+    }
+
+    #[test]
+    fn the_clan_keys_are_bindable_controls() {
+        for command in [JOF_COMMAND, SITH_COMMAND] {
+            assert!(crate::input::GameplayInput::recognizes(command));
+        }
+        assert_eq!(choice_name(TEAM_CVAR, "2"), Some("Not in Tab"));
+        assert_eq!(choice_name(SITH_JOIN_CVAR, "-1"), Some("Auto"));
+        assert_eq!(choice_name("cg_drawChat", "1"), None);
+    }
+
+    #[test]
+    fn button_switches_read_off_on_and_not_in_tab() {
+        assert_eq!(Shown::of(Some(0), Shown::On), Shown::Off);
+        assert_eq!(Shown::of(Some(1), Shown::Off), Shown::On);
+        assert_eq!(Shown::of(Some(2), Shown::On), Shown::NotInTab);
+        assert_eq!(Shown::of(None, Shown::On), Shown::On);
+        assert!(Shown::NotInTab.shown() && !Shown::NotInTab.cycled());
     }
 
     #[test]

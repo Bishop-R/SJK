@@ -226,6 +226,9 @@ pub(crate) const ACTIONS: &[BindableAction] = &[
     action(Other, "SJK chat", "messagemode5", "i"),
     // SJK: admin chat (`amsay`, JA+ and jaPRO); no key by default.
     action(Other, "Admin chat", "messagemode6", ""),
+    // SJK: the clan chats through the SJK hub, for their verified players; no key.
+    action(Other, "JoF clan chat", "messagemode7", ""),
+    action(Other, "S clan chat", "messagemode8", ""),
     // SJK: the SJK chat page, big, in a game or not; the wheel of favourite GIFs.
     action(Other, "SJK chat page", "sjkchat", ""),
     action(Other, "GIF wheel (hold)", "+gifwheel", ""),

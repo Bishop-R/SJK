@@ -66,17 +66,27 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         (
             crate::chat::tabs::TEAM_CVAR,
             1,
-            "Team chat in the chat composer's row of channels; the team chat key still opens it",
+            "Team chat in the chat composer's row of channels (2: shown, but Tab skips it); the team chat key still opens it",
         ),
         (
             crate::chat::tabs::SJK_CVAR,
             1,
-            "SJK chat in the chat composer's row of channels",
+            "SJK chat in the chat composer's row of channels (2: shown, but Tab skips it)",
         ),
         (
             crate::chat::tabs::ADMIN_CVAR,
             1,
             "Admin chat (amsay, read by the server's admins) in the chat composer's row, on JA+ and jaPRO servers",
+        ),
+        (
+            crate::chat::tabs::JOF_CVAR,
+            1,
+            "JoF's clan chat in the chat composer's row once joined (cl_sjkChatJof); 2 keeps it out of Tab",
+        ),
+        (
+            crate::chat::tabs::SITH_CVAR,
+            1,
+            "The Sith clan's chat (S) in the chat composer's row once joined (cl_sjkChatS); 2 keeps it out of Tab",
         ),
         (
             crate::chat::tabs::FILTER_CVAR,

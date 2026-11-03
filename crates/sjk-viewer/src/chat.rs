@@ -58,6 +58,35 @@ enum Channel {
     Sjk,
     /// The server's admins, `amsay` (`chat/tabs.rs`): jaPRO's `<Admin>(name)` lines.
     Admin,
+    /// JoF's clan chat, through the SJK hub (`chat/sjk.rs`, `sjk_identity::channels`).
+    Jof,
+    /// The Sith clan's chat (`{{S}}`), through the SJK hub, shown as S.
+    Sith,
+}
+
+impl Channel {
+    /// The hub's clan chat this channel is, if it is one.
+    pub(crate) fn clan(self) -> Option<sjk_identity::HubChannel> {
+        match self {
+            Self::Jof => Some(sjk_identity::HubChannel::Jof),
+            Self::Sith => Some(sjk_identity::HubChannel::Sith),
+            _ => None,
+        }
+    }
+
+    /// The feed's channel for a hub message said in `channel`.
+    pub(super) fn of_hub(channel: sjk_identity::HubChannel) -> Self {
+        match channel {
+            sjk_identity::HubChannel::Jof => Self::Jof,
+            sjk_identity::HubChannel::Sith => Self::Sith,
+            _ => Self::Sjk,
+        }
+    }
+
+    /// Whether lines of this channel come from the SJK hub (SJK chat or a clan chat).
+    fn is_hub(self) -> bool {
+        matches!(self, Self::Sjk | Self::Jof | Self::Sith)
+    }
 }
 
 struct ChatLine {
@@ -210,6 +239,9 @@ pub(crate) struct ChatOverlay {
     last_channel: (Channel, Option<ChatTarget>),
     /// The server being played takes `amsay` (`chat/tabs.rs`).
     admin_server: bool,
+    /// The clan chats the player joined (`chat/tabs.rs`), JoF's then S's: their buttons
+    /// show only then.
+    clans: [bool; 2],
     /// Where the pointer last was over the chat, for hovers checked against this frame's
     /// layout ([`card`]): the canvas's hovered widget is the one under the pointer when it
     /// last moved, and a feed that changed under a still pointer (a tab chosen) would
@@ -323,6 +355,7 @@ impl ChatOverlay {
             last_whisperer: None,
             last_channel: (Channel::Global, None),
             admin_server: false,
+            clans: [false; 2],
             pointer_at: None,
             encrypted_slots: 0,
             safety_request: None,
@@ -857,6 +890,8 @@ pub(crate) enum ChatInputResult {
     Submit(String),
     /// A message for the SJK chat, to send through the hub.
     Sjk(String),
+    /// A message for a clan chat, to send through the hub.
+    Clan(String, sjk_identity::HubChannel),
 }
 
 #[cfg(test)]

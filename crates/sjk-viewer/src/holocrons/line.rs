@@ -171,6 +171,7 @@ mod tests {
                 find: None,
             }),
             official: None,
+            channel: Default::default(),
         }
     }
 

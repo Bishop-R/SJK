@@ -93,7 +93,8 @@ impl ChatOverlay {
             Channel::Whisper if recipient.is_none() => {}
             // A channel since taken out of the row (`chat/tabs.rs`), or Admin away from a
             // server that has it, opens on All.
-            Channel::Team | Channel::Sjk | Channel::Admin if !offered => {}
+            Channel::Team | Channel::Sjk | Channel::Admin | Channel::Jof | Channel::Sith
+                if !offered => {}
             channel => {
                 input.channel = channel;
                 input.recipient = recipient;

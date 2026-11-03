@@ -282,6 +282,7 @@ pub(super) fn choice_name(cvar: &str, value: &str) -> Option<&'static str> {
         .or_else(|| crate::away_emote::choice_name(cvar, value))
         .or_else(|| crate::chat_sounds::choice_name(cvar, value))
         .or_else(|| crate::text::system_font::choice_name(cvar, value))
+        .or_else(|| crate::chat::tabs::choice_name(cvar, value))
 }
 
 /// What the detail column says, in gold, while the SJK renderer is on and a
@@ -783,19 +784,35 @@ const HELP: &[(&str, &str)] = &[
     ),
     (
         crate::chat::tabs::FILTER_CVAR,
-        "On, a chat button shows only its own messages while you type; off, it only picks where you talk.",
+        "On, a chat button shows only its own messages while you type; off, every chat stays in view, labelled.",
     ),
     (
         crate::chat::tabs::TEAM_CVAR,
-        "Shows Team beside All when you type a message. Off, Tab skips it; the team chat key still opens team chat.",
+        "Shows Team beside All when you type. Not in Tab keeps the button but Tab skips it; the team key still opens it.",
     ),
     (
         crate::chat::tabs::SJK_CVAR,
-        "Shows SJK beside All when you type a message, for the SJK chat. Off, Tab skips it.",
+        "Shows SJK beside All when you type, for the SJK chat. Not in Tab keeps the button but Tab skips it.",
     ),
     (
         crate::chat::tabs::ADMIN_CVAR,
-        "Shows Admin beside All on JA+ and jaPRO servers: your message goes to the server's admins only (amsay).",
+        "Shows Admin on JA+ and jaPRO servers: only the server's admins read it (amsay). Not in Tab: Tab skips it.",
+    ),
+    (
+        crate::chat::tabs::JOF_CVAR,
+        "Shows JoF when you type, once you joined JoF's clan chat. Not in Tab keeps the button but Tab skips it.",
+    ),
+    (
+        crate::chat::tabs::SITH_CVAR,
+        "Shows S when you type, once you joined the Sith clan's chat. Not in Tab keeps the button but Tab skips it.",
+    ),
+    (
+        crate::chat::tabs::JOF_JOIN_CVAR,
+        "JoF's clan chat, for verified JoF and S players and staff. Auto joins it if it is yours; Joined or Left choose.",
+    ),
+    (
+        crate::chat::tabs::SITH_JOIN_CVAR,
+        "The Sith clan's chat (S), for verified S and JoF players and staff. Auto joins it if it is yours.",
     ),
     (
         crate::chat::tabs::PM_CVAR,
