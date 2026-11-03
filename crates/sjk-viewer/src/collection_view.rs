@@ -186,6 +186,7 @@ pub(crate) fn row_labels(
         nameplate_style: crate::hud::nameplate::Style::Holo,
         toy_keys: &[],
         toys_unseen: 0,
+        toy_options: 0,
         tag: "",
         tag_finish: "",
     };
@@ -309,6 +310,7 @@ impl Panel {
         self.fishing_on = inputs.fishing;
         self.share_on = inputs.share;
         self.toys_unseen = inputs.toys_unseen;
+        self.toy_options = inputs.toy_options;
         let seconds = self.epoch.elapsed().as_secs_f32();
         #[cfg(test)]
         let seconds = self.shot_seconds.unwrap_or(seconds);
@@ -344,6 +346,14 @@ impl Panel {
         if let Some(shards) = self.forge.data.shards.filter(|shards| *shards > 0) {
             labels[Tab::Forge.index()] = crate::cards::grouped(shards);
         }
+        // The Loadouts card covers the page: text draws over every shape, so the page is
+        // left out under it.
+        if self.loadouts.is_open() {
+            self.loadouts
+                .draw(&mut self.ui, &frame, viewport, &self.loadout_slots);
+            self.ui.finish(u16::MAX);
+            return;
+        }
         let asking = self.tab == Tab::Forge && self.forge.ask.is_some();
         let back = if self.hub {
             crate::profile_hub::back_words(self.back)
@@ -376,6 +386,24 @@ impl Panel {
                 self.forge(&frame, inputs, seconds, viewport);
             }
             _ => self.nameplates(&frame, inputs),
+        }
+        if self.offers_loadouts() {
+            // Under the tally, clear of each tab's lead line and card.
+            crate::menu::sjk::kit::button(
+                &mut self.ui,
+                &frame,
+                [
+                    RIGHT_X - 200.0,
+                    206.0,
+                    200.0,
+                    crate::menu::sjk::kit::CONTROL_HEIGHT,
+                ],
+                "Loadouts  (P)",
+                false,
+                true,
+                false,
+                super::loadouts::OPEN_TOKEN,
+            );
         }
         self.keys(&frame, inputs);
         self.hover_card(&frame, inputs);

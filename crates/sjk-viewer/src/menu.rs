@@ -113,6 +113,8 @@ pub(crate) enum MenuAction {
     HostGame(crate::connection::local_server::HostSettings),
     Quit,
     ReturnToGameMenu,
+    /// Open Report a bug over the main menu (the SJK UI's SJK page).
+    ReportBug,
 }
 
 /// Persistent menu selection, browser data, and high-level client phase.

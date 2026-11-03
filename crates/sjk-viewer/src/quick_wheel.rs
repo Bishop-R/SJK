@@ -27,6 +27,7 @@
 pub(crate) mod catalog;
 pub(crate) mod force_page;
 pub(crate) mod pages;
+pub(crate) mod pictures;
 pub(crate) mod ring;
 
 pub(crate) use catalog::ICONS;

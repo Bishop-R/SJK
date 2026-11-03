@@ -85,6 +85,7 @@ const SAMPLE_TIME_MS: u64 = 60_000;
 /// timer, lagometer or selection rows.
 const SAMPLE_VISIBILITY: HudVisibility = HudVisibility {
     hud: true,
+    elements: true,
     status: true,
     vehicle: false,
     weapon: true,

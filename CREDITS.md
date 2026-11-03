@@ -1004,11 +1004,19 @@ Sanjisan, a player, asked to whisper a player by clicking their name in the chat
 built it as the pinned chat card's Whisper button (23/10/2026).
 
 Nib, a player, asked to choose the saber sounds apart from the saber shader (18/10/2026,
-and hub report #109): Sol built it as the Saber tab's Sounds row (23/10/2026).
+and hub report #109): Sol built it as the Saber tab's Sounds row (23/10/2026). Nib also
+asked for pictures of the player's own on the quick wheel: Sol built Choose picture in
+the custom choice's form (03/11/2026).
 
 Dante, a player, asked for the quick wheel's custom commands to be remembered in the
 command list once made, and for duels won in each saber style to count as achievements:
 Slash built the first (#293, 30/10/2026), Sol the style masters (29/10/2026).
+
+Lex, a player, asked for Report a bug on the main menu, not only in a match: Sol built it
+as the SJK page's Report a bug (03/11/2026). Lex also asked for the Hax trap's switches to
+sit with the Hax in the Collection rather than in Settings: Sol moved them to its card
+(03/11/2026). Lex asked for cosmetic loadouts as well, a look saved under a name and worn
+again in one click: Sol built the Collection's Loadouts card (03/11/2026).
 
 g0dchris, a player, asked for the dynamic glow on everything but the sabers, whose glow
 hid the blades' details: Slash built it as No glow on sabers (#294, 30/10/2026).
@@ -1016,7 +1024,9 @@ hid the blades' details: Slash built it as No glow on sabers (#294, 30/10/2026).
 Blep, a player, asked for the player card to come only from the `inspect` key, not from
 looking at a player: Sol built it as Key only, `cg_playerCard 2` (29/10/2026). Blep
 also asked for every toy to say when it is switched on or off: Creyon built it (#289,
-30/10/2026), each toy's name and ON in green or OFF in red.
+30/10/2026), each toy's name and ON in green or OFF in red. Blep asked to choose what
+the HUD switch hides as well: Sol built the four HUD off rows of Settings > HUD
+(03/11/2026).
 
 Atrosex, a player, asked for the Forge's Break down to mark the saber shader the player
 wears, and its last copy's card to say plainly that it is worn; Kushina asked for favourite

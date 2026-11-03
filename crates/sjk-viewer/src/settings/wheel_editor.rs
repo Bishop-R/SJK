@@ -143,6 +143,9 @@ pub(super) const FORM_LABEL: u16 = 3300;
 pub(super) const FORM_COMMAND: u16 = 3301;
 pub(super) const FORM_SAVE: u16 = 3302;
 pub(super) const FORM_CANCEL: u16 = 3303;
+/// The custom choice's Choose picture and Remove (its own picture, Nib's idea).
+pub(super) const FORM_PICTURE: u16 = 3304;
+pub(super) const FORM_PICTURE_CLEAR: u16 = 3305;
 /// The top bar's way back (the settings form's back cap).
 pub(super) const BACK: u16 = 900;
 
@@ -172,6 +175,13 @@ pub(crate) struct WheelEditor {
     pub(super) default: bool,
     /// Whether the wheel plays its sounds ([`crate::quick_wheel::SOUNDS_CVAR`]).
     pub(super) sounds: bool,
+    /// The choices' own pictures, as last saved ([`crate::quick_wheel::pictures`]).
+    pub(super) pictures: crate::quick_wheel::pictures::Pictures,
+    /// The custom choice's form: its own picture (a file of the pictures' folder), the
+    /// system's file dialog while it is open, and why the last picture was refused.
+    pub(super) form_picture: Option<String>,
+    picture_pick: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
+    pub(super) picture_note: String,
     pub(super) ui: MenuCanvas,
 }
 
@@ -192,6 +202,10 @@ impl Default for WheelEditor {
             saved: Vec::new(),
             default: true,
             sounds: true,
+            pictures: Default::default(),
+            form_picture: None,
+            picture_pick: None,
+            picture_note: String::new(),
             ui: MenuCanvas::with_capacities(224, 64, 1024),
         }
     }
@@ -302,6 +316,7 @@ impl WheelEditor {
     pub(super) fn sync(&mut self, console: &ViewerConsole) {
         self.pages = console.wheel_pages.pages().to_vec();
         self.saved = console.wheel_pages.saved().to_vec();
+        self.pictures = console.wheel_pages.pictures.clone();
         self.default = console.wheel_pages.is_default();
         self.sounds = console
             .bool_cvar(crate::quick_wheel::SOUNDS_CVAR)
@@ -451,12 +466,86 @@ impl WheelEditor {
             _ => (String::new(), String::new()),
         };
         self.picker = None;
+        self.form_picture = self.pictures.get(&command).map(str::to_owned);
+        self.picture_note.clear();
+        crate::quick_wheel::pictures::set_preview(self.form_picture.as_deref());
         self.typing = Some(Typing::Custom {
             at,
             label,
             command,
             field: Field::Label,
         });
+    }
+
+    /// The form's Choose picture: the system's file dialog, on a worker thread (it blocks
+    /// until it closes); [`Self::poll_picture`] takes its answer.
+    pub(super) fn choose_picture(&mut self) {
+        if self.picture_pick.is_some() {
+            return;
+        }
+        let (outbox, inbox) = std::sync::mpsc::channel();
+        let spawned = std::thread::Builder::new()
+            .name("wheel picture dialog".to_owned())
+            .spawn(move || {
+                let _ = outbox.send(crate::file_dialog::pick_file(
+                    "Choose a picture for this wheel choice",
+                    "Pictures (PNG, JPEG)",
+                    &["png", "jpg", "jpeg"],
+                ));
+            });
+        match spawned {
+            Ok(_) => {
+                self.picture_pick = Some(inbox);
+                self.picture_note = "Choosing a picture...".to_owned();
+            }
+            Err(error) => self.picture_note = format!("No file dialog: {error}"),
+        }
+    }
+
+    /// The form's Remove: the choice keeps the stock picture.
+    pub(super) fn clear_picture(&mut self) {
+        self.form_picture = None;
+        self.picture_note.clear();
+        crate::quick_wheel::pictures::set_preview(None);
+    }
+
+    /// Once a frame: take the file dialog's answer, the picture fitted and kept in the
+    /// profile folder (or why it is refused).
+    pub(super) fn poll_picture(&mut self) {
+        let Some(inbox) = &self.picture_pick else {
+            return;
+        };
+        let picked = match inbox.try_recv() {
+            Ok(picked) => picked,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => None,
+        };
+        self.picture_pick = None;
+        self.picture_note.clear();
+        let Some(path) = picked else {
+            return;
+        };
+        let Some(directory) = self.pictures.directory().map(std::path::Path::to_path_buf) else {
+            self.picture_note = "No profile folder to keep it in".to_owned();
+            return;
+        };
+        let command = match &self.typing {
+            Some(Typing::Custom { command, .. }) => command.clone(),
+            _ => String::new(),
+        };
+        match crate::quick_wheel::pictures::import(&directory, &path) {
+            Ok(file) if !self.pictures.has_room_for(&command, &file) => {
+                self.picture_note = format!(
+                    "{} own pictures at most: remove one from another choice first",
+                    crate::quick_wheel::pictures::CELLS
+                );
+            }
+            Ok(file) => {
+                crate::quick_wheel::pictures::set_preview(Some(&file));
+                self.form_picture = Some(file);
+            }
+            Err(refused) => self.picture_note = refused.to_string(),
+        }
     }
 
     /// Move the catalogue's highlight to the line `direction` selectable lines
@@ -708,6 +797,7 @@ impl WheelEditor {
         };
         match key {
             KeyCode::Escape => self.typing = None,
+            KeyCode::F3 if matches!(typing, Typing::Custom { .. }) => self.choose_picture(),
             KeyCode::Enter | KeyCode::NumpadEnter => self.commit(console),
             KeyCode::Tab | KeyCode::ArrowUp | KeyCode::ArrowDown => {
                 if let Typing::Custom { field, .. } = typing {
@@ -771,6 +861,11 @@ impl WheelEditor {
                 }
                 // Remembered, so the catalogue offers it again for any page.
                 console.wheel_pages.remember(&label, &command);
+                console
+                    .wheel_pages
+                    .pictures
+                    .set(&command, self.form_picture.as_deref());
+                crate::quick_wheel::pictures::set_preview(None);
                 let set =
                     console
                         .wheel_pages
@@ -1073,6 +1168,8 @@ impl WheelEditor {
                     self.commit(console);
                 }
                 (Typing::Custom { .. }, Some(FORM_CANCEL)) => self.typing = None,
+                (Typing::Custom { .. }, Some(FORM_PICTURE)) => self.choose_picture(),
+                (Typing::Custom { .. }, Some(FORM_PICTURE_CLEAR)) => self.clear_picture(),
                 (Typing::Custom { .. }, _) => {}
                 (Typing::Page { page, .. }, Some(token)) if token == PAGE_BASE + *page as u16 => {}
                 (Typing::Page { .. }, _) => self.commit(console),

@@ -259,7 +259,9 @@ plays on); they are kept in `avatars/` in the settings folder.
 [bug_report.rs](../crates/sjk-viewer/src/bug_report.rs) and
 [report.rs](../crates/sjk-identity/src/report.rs). While the game menu is open, a Report a
 bug button sits centred at the bottom of the screen (also Escape, SJK, Report a bug); it
-closes the game menu and opens the text dialog
+closes the game menu and opens the text dialog (the SJK UI's main page has it too, on its
+SJK page since 03/11/2026, Lex's idea: that report names the map `menu` and no server,
+the map behind the menu being only its backdrop)
 ([text_dialog.rs](../crates/sjk-viewer/src/text_dialog.rs)): a panel in the middle of the
 screen with a text box, a character count, Send and Cancel (Escape cancels too). The text
 has an insertion point (Left, Right, Up, Down, Home, End, Backspace, Delete, Ctrl for

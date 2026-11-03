@@ -88,6 +88,10 @@ struct Toy {
     /// and its words ([`crate::toy_sight`]); none for a toy that only acts on players
     /// who have it on.
     sight: Option<(&'static str, &'static str)>,
+    /// The card's own switches under those, each an on/off cvar of the player's and its
+    /// words (the Hax's trap, moved here from Settings > Gameplay on 03/11/2026, Lex's
+    /// idea); at most [`super::TOY_OPTION_TOKENS`].
+    options: &'static [(&'static str, &'static str)],
     token: u16,
 }
 
@@ -103,6 +107,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_illuminate", "Your key")],
         switch: "Holocron lit",
         sight: Some((crate::toy_sight::ILLUMINATE, "See others' holocrons")),
+        options: &[],
         token: TOY_TOKEN,
     },
     Toy {
@@ -115,6 +120,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_box", "Your key")],
         switch: "In the box",
         sight: Some((crate::toy_sight::CARDBOARD_BOX, "See others' boxes")),
+        options: &[],
         token: BOX_TOKEN,
     },
     Toy {
@@ -127,6 +133,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_order66", "Join key"), ("order66", "Order key")],
         switch: "In the order",
         sight: None,
+        options: &[],
         token: ORDER_TOKEN,
     },
     Toy {
@@ -139,6 +146,10 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_hax", "Your key")],
         switch: "Hacker",
         sight: None,
+        options: &[
+            (crate::hax::TRAP_CVAR, "Trap: a hacker blows up with you"),
+            (crate::hax::AWAY_CVAR, "Trap while away"),
+        ],
         token: HAX_TOKEN,
     },
     Toy {
@@ -151,6 +162,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_ragdoll", "Your key")],
         switch: "Limp",
         sight: Some((crate::toy_sight::RAGDOLL, "See others fall limp")),
+        options: &[],
         token: RAGDOLL_TOKEN,
     },
     Toy {
@@ -163,6 +175,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_drone", "Your key")],
         switch: "Peek me",
         sight: Some((crate::toy_sight::DRONE, "See others' drones")),
+        options: &[],
         token: DRONE_TOKEN,
     },
     Toy {
@@ -180,6 +193,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         ],
         switch: "Play",
         sight: Some((crate::toy_sight::BOOMBOX, "See and hear others' boomboxes")),
+        options: &[],
         token: BOOMBOX_TOKEN,
     },
     Toy {
@@ -194,6 +208,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_monitor", "Your key"), ("+monitor_throw", "Throw key")],
         switch: "Hit me",
         sight: Some((crate::monitor::SHOW_CVAR, "See monitors")),
+        options: &[],
         token: MONITOR_TOKEN,
     },
     Toy {
@@ -206,6 +221,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[("toy_boxhunt", "Your key")],
         switch: "Hunt",
         sight: None,
+        options: &[],
         token: BOX_HUNT_TOKEN,
     },
     Toy {
@@ -223,6 +239,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         ],
         switch: "Slip on peels",
         sight: Some((crate::banana::SHOW_CVAR, "See banana peels")),
+        options: &[],
         token: BANANA_TOKEN,
     },
     Toy {
@@ -237,6 +254,7 @@ const TOYS: [Toy; TOY_COUNT] = [
         commands: &[(crate::fishing::COMMAND, "Your key")],
         switch: "Rod out",
         sight: None,
+        options: &[],
         token: FISHING_TOKEN,
     },
 ];
@@ -261,6 +279,23 @@ pub(super) fn command(toy: usize, slot: usize) -> Option<&'static str> {
 /// The cvar of toy `toy`'s "See" switch, if it has one.
 pub(super) fn sight_cvar(toy: usize) -> Option<&'static str> {
     TOYS.get(toy)?.sight.map(|(cvar, _)| cvar)
+}
+
+/// The toys' own card switches ([`Toy::options`]) that `on` says are on, as bits in the
+/// order of every toy's switches one after the other.
+pub(crate) fn options_on(on: impl Fn(&str) -> bool) -> u16 {
+    TOYS.iter()
+        .flat_map(|toy| toy.options)
+        .enumerate()
+        .filter(|(_, (cvar, _))| on(cvar))
+        .fold(0, |bits, (index, _)| bits | 1 << index)
+}
+
+/// Toy `toy`'s own switch `index`: its cvar and its bit in [`options_on`].
+pub(super) fn option(toy: usize, index: usize) -> Option<(&'static str, usize)> {
+    let before: usize = TOYS.get(..toy)?.iter().map(|toy| toy.options.len()).sum();
+    let (cvar, _) = TOYS.get(toy)?.options.get(index)?;
+    Some((cvar, before + index))
 }
 
 /// The toys whose other players' are hidden, as bits in the tab's order: those whose
@@ -572,6 +607,7 @@ impl Panel {
             + 18.0
             + 48.0
             + if toy.sight.is_some() { SIGHT_ROW } else { 0.0 }
+            + toy.options.len() as f32 * SIGHT_ROW
             + CARD_PAD
     }
 
@@ -791,8 +827,10 @@ impl Panel {
             frame.rect(left - 4.0, middle - 19.0, right - left + 8.0, 38.0),
         );
         // Other players' toy, seen or hidden on this PC.
+        let mut row = middle;
         if let Some((_, words)) = toy.sight {
             let middle = middle + SIGHT_ROW;
+            row = middle;
             let seen = inputs.toys_unseen & 1 << chosen == 0;
             text(
                 &mut self.ui,
@@ -807,6 +845,27 @@ impl Panel {
             let left = kit::switch(&mut self.ui, frame, right, middle, seen, false);
             self.ui.hit_region(
                 TOY_SIGHT_TOKEN,
+                frame.rect(left - 4.0, middle - 19.0, right - left + 8.0, 38.0),
+            );
+        }
+        // The toy's own switches (the Hax's trap).
+        for (index, (_, words)) in toy.options.iter().enumerate().take(TOY_OPTION_TOKENS) {
+            let middle = row + SIGHT_ROW * (index + 1) as f32;
+            let on =
+                option(chosen, index).is_some_and(|(_, bit)| inputs.toy_options & 1 << bit != 0);
+            text(
+                &mut self.ui,
+                TextFamily::Display,
+                format_args!("{words}"),
+                frame.rect(x, middle - 13.0, width - 140.0, 26.0),
+                18.0 * s,
+                color::MUTED,
+                FontWeight::Semibold,
+                TextAlign::Start,
+            );
+            let left = kit::switch(&mut self.ui, frame, right, middle, on, false);
+            self.ui.hit_region(
+                TOY_OPTION_TOKEN + index as u16,
                 frame.rect(left - 4.0, middle - 19.0, right - left + 8.0, 38.0),
             );
         }

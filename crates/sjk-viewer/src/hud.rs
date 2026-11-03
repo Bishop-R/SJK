@@ -39,6 +39,7 @@ pub(crate) mod team_logo;
 pub(crate) mod team_outline;
 mod text_values;
 pub(crate) mod tints;
+pub(crate) mod toggle;
 mod update;
 pub(crate) mod vehicle;
 pub(crate) mod vehicle_feed;
@@ -89,7 +90,13 @@ const RADIAL_LAYOUT: &str = include_str!("../assets/hud/radial.json");
 /// Independent visibility switches used by widget predicates and the HUD shader.
 #[derive(Clone, Copy)]
 pub(crate) struct HudVisibility {
+    /// Some of the HUD's layout draws: its elements, or the crosshair alone when the HUD
+    /// switch hides the rest ([`toggle`]).
     pub(crate) hud: bool,
+    /// The HUD's elements other than the crosshair (status, timers, vote, kill feed, the
+    /// layout's other widgets): off with `cg_draw2D 0`, or `cg_drawHud 0` while its
+    /// [`toggle::Part::Elements`] switch is on.
+    pub(crate) elements: bool,
     pub(crate) status: bool,
     /// The vehicle HUD, which `cg_drawStatus` governs too, but which stays when the
     /// vehicle takes the player's own status HUD (`hideRider`).
@@ -116,21 +123,25 @@ impl HudVisibility {
                 .and_then(|console| console.bool_cvar(name))
                 .unwrap_or(fallback)
         };
-        let hud = enabled("cg_drawHud", true) && enabled("cg_draw2D", true);
+        // `cg_drawHud 0` hides the parts its switches name (`toggle`); `cg_draw2D 0` all.
+        let draw_2d = enabled("cg_draw2D", true);
+        let elements = draw_2d && !toggle::hides(console, toggle::Part::Elements);
+        let aim = draw_2d && !toggle::hides(console, toggle::Part::Crosshair);
         Self {
-            hud,
-            status: hud && enabled("cg_drawStatus", true),
-            vehicle: hud && enabled("cg_drawStatus", true),
-            weapon: hud && enabled("cg_drawWeapon", true),
-            selection: hud,
-            crosshair: hud
+            hud: elements || aim,
+            elements,
+            status: elements && enabled("cg_drawStatus", true),
+            vehicle: elements && enabled("cg_drawStatus", true),
+            weapon: elements && enabled("cg_drawWeapon", true),
+            selection: elements,
+            crosshair: aim
                 && console
                     .and_then(|c| c.integer_cvar("cg_drawCrosshair"))
                     .unwrap_or(1)
                     != 0,
-            crosshair_names: hud && enabled("cg_drawCrosshairNames", true),
-            timer: hud && enabled("cg_drawTimer", true),
-            lagometer: hud && lagometer::mode(console) != 0,
+            crosshair_names: aim && enabled("cg_drawCrosshairNames", true),
+            timer: elements && enabled("cg_drawTimer", true),
+            lagometer: elements && lagometer::mode(console) != 0,
             ground_hud: false,
             menu_hud: false,
         }
@@ -139,6 +150,7 @@ impl HudVisibility {
     /// Intermission hides every HUD layer.
     pub(crate) const HIDDEN: Self = Self {
         hud: false,
+        elements: false,
         status: false,
         vehicle: false,
         weapon: false,
@@ -150,6 +162,17 @@ impl HudVisibility {
         ground_hud: false,
         menu_hud: false,
     };
+}
+
+/// Whether a layout widget is the crosshair or the name under it, which show by their
+/// own flags (`draw_crosshair`, `draw_crosshair_name`) while the HUD switch hides the
+/// other elements ([`toggle::Part::Crosshair`]).
+fn crosshair_widget(widget: &sjk_ui::HudWidget) -> bool {
+    matches!(
+        &widget.visibility,
+        sjk_ui::VisibilityCondition::Flag { binding }
+            if binding == "draw_crosshair" || binding == "draw_crosshair_name"
+    )
 }
 
 /// Allocation-free-per-frame widget state for the local player's HUD.
@@ -613,7 +636,10 @@ impl HudOverlay {
         };
         let mut visible = [false; WIDGET_LIMIT];
         for (index, widget) in document.widgets.iter().take(WIDGET_LIMIT).enumerate() {
-            visible[index] = visibility.hud
+            // The crosshair's widgets answer to their own flags; the others to the
+            // HUD's elements, which the HUD switch may hide without the crosshair.
+            visible[index] = (visibility.elements || crosshair_widget(widget))
+                && visibility.hud
                 && widget.visibility.evaluate(&data)
                 && self.family.visible(widget.binding.as_deref());
         }
@@ -705,7 +731,7 @@ impl HudOverlay {
                 self.monitor_marks,
             );
         }
-        if visibility.hud {
+        if visibility.elements {
             let [x, y] = self.targeting.center(viewport);
             sound_sonar::emit(
                 &mut self.draw_list,
@@ -760,7 +786,7 @@ impl HudOverlay {
                     .add(element, self.draw_list.bounds_from(start));
             }
         }
-        if visibility.hud {
+        if visibility.elements {
             use placement::Element;
             let start = self.draw_list.len();
             jetpack_fuel::emit(&mut self.draw_list, viewport, user_scale, self.jetpack_fuel);

@@ -112,12 +112,14 @@ impl HudDataSource for WidgetData<'_> {
                     && self.saber_style.is_some(),
             ),
             "draw_crosshair" => Some(self.visibility.crosshair),
-            "draw_vote" => Some(self.visibility.hud && (self.vote_active || self.team_vote_active)),
+            "draw_vote" => {
+                Some(self.visibility.elements && (self.vote_active || self.team_vote_active))
+            }
             "draw_crosshair_name" => Some(self.visibility.crosshair_names && self.crosshair_name),
             "draw_timer" => Some(self.visibility.timer && self.timer),
-            "draw_warmup" => Some(self.visibility.hud && self.warmup),
+            "draw_warmup" => Some(self.visibility.elements && self.warmup),
             "draw_lagometer" => Some(self.visibility.lagometer),
-            "draw_interrupted" => Some(self.visibility.hud && self.interrupted),
+            "draw_interrupted" => Some(self.visibility.elements && self.interrupted),
             "draw_vehicle" => Some(self.visibility.vehicle && self.vehicle_ratio.is_some()),
             _ => None,
         }

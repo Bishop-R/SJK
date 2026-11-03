@@ -195,7 +195,9 @@ one (4:3, 5:4) scales the frame down to its width.
     [Collection](#collection), since 10/10/2026), Settings (the settings screen),
     SJK, Quit.
   - Play: Join a server (the browser), Create a game, Back.
-  - SJK: What's new (the changelog), Update, Credits, Back (the Profile screen is
+  - SJK: What's new (the changelog), Update, Credits, Report a bug (the
+    [report card](#report-a-bug-and-its-dialogs) over the menu, since 03/11/2026, Lex's
+    idea), Back (the Profile screen is
     the main page's Profile, and its profile card). The arc holds six entries (a
     seventh curls back into the ring); the identity's key is in Settings, Network.
   - Quit: Quit to desktop (ember when chosen), Stay. It opens on Stay.
@@ -1061,7 +1063,12 @@ detail's columns:
   ("Change Rain", "Add to Weather") with Cancel, then the catalogue, 17 lines of
   40 under the groups' sub-headings, the highlighted line on the band, "On the
   page" in gold after actions the page has. A custom choice: its title, what a
-  command can be, the Name and Command fields, Cancel and Save (gold).
+  command can be, the Name and Command fields, then Picture (03/11/2026, Nib's idea):
+  the choice's picture at 52 (its own, or `{•}`), Choose picture (Change picture once
+  it has one; F3 too) and Remove, and a quiet line under them ("PNG or JPEG, 4 MB at
+  most; a copy is kept in your SJK folder", or in ember why a picture was refused),
+  then Cancel and Save (gold), which keeps the picture with the command
+  ([client.md](client.md#quick-wheels)).
 - **Keys:** bottom right, what has the keyboard's, and Tab for the next group.
 
 Outside the SJK UI the editor draws the same columns on its own over the
@@ -1732,7 +1739,11 @@ for the run.
   players are seen with, a second, smaller switch, "See others' holocrons", "See others'
   boxes", "See others fall limp", "See others' drones", "See and hear others' boomboxes",
   "See monitors" or "See banana peels" (29/10/2026): off, theirs are hidden on this PC
-  ([client.md](client.md#illuminate), the toys' table). The keys line says
+  ([client.md](client.md#illuminate), the toys' table). The Hax's card has its trap's
+  two switches there instead (since 03/11/2026, Lex's idea; they were in Settings >
+  Gameplay): "Trap: a hacker blows up with you" (`cl_haxTrap`) and "Trap while away"
+  (`cl_haxAway`); a Settings search for them (hax, trap) lists them under "Collection >
+  Toys > Hax", where they still switch. The keys line says
   "Enter: light" or "Enter: put out", "Enter: hide" or "Enter: come out", "Enter: turn
   on" or "Enter: turn off", "Enter: play" or "Enter: put away", and "K: bind a key" (while a key waits: "Esc: cancel", "Backspace: clear the
   key"). Hovering Order 66's row shows how to turn it on and that `order66` executes it;
@@ -1758,6 +1769,27 @@ for the run.
   nameplates and sharing your health, shield and Force
   ([client.md](client.md#sharing-and-estimates)). A quiet line under it says what on or
   off means (or, with the identity off, that sharing needs it).
+- **Loadouts** (03/11/2026, Lex's idea,
+  [collection_loadouts.rs](../crates/sjk-viewer/src/collection_loadouts.rs)): on Shaders,
+  Tags and Nameplates an outlined "Loadouts (P)" button under the tally (x 1624 to 1824,
+  y 206) opens a pop-up card (`kit::card`, x 440 to 1480, y 170 to 910, over the scrim;
+  the page is left out under it): "Loadouts" in gold, "Kept on this PC", the headline
+  "Save your look, wear it again in one click" and what a loadout keeps, then five slots,
+  a row of 86 each: the number, the name in gold while chosen (or "Empty slot") and a line
+  of what it keeps (hilts, shaders, tag), and Wear (gold), Save here, Rename and Empty.
+  Save here over a kept loadout and Empty ask for a second press (the ember line under the
+  rows says so); the line otherwise says what the last press did ("Wearing Duels").
+  Rename turns the name into a field (Enter keeps it, Escape cancels, Ctrl+A, Ctrl+C,
+  Ctrl+V and a held Backspace as in every field, at most 24 characters). Keys: Up and
+  Down (or 1 to 5) choose, Enter wears (saves into an empty slot), S saves here, R or F2
+  renames, Delete empties, Escape closes; under the card the keys line says so. A
+  loadout keeps `saber1`, `saber2`, `cp_sbRGB1`, `cp_sbRGB2`, `color1`, `color2` (the hat
+  and cape ride on them), `cg_saberSkin`, `cg_saberSkin2`, `cg_saberSkinOptions`,
+  `cg_nameplateStyle`, `cg_tag` and `cg_tagFinish`; Wear sets back those that differ, a
+  shader no longer held showing stock until held, as `saberskin` sets one. The slots are
+  `loadouts.json` in the profile folder, never sent to the hub. Unit tests (file round
+  trip, wear sets only what differs, second presses, rename field, the card's fit) and
+  world shot `world_shot::collection::duel6_sjk_loadouts`.
 - **Holocrons** ([holocrons_panel.rs](../crates/sjk-viewer/src/holocrons_panel.rs),
   [holocrons_panel_view.rs](../crates/sjk-viewer/src/holocrons_panel_view.rs),
   [holocrons.md](holocrons.md#the-holocrons-tab), 10/10/2026, Sol's holocron drops): a
@@ -2117,7 +2149,8 @@ editor's own canvas, a layer under the in-game menu's. World shot: `duel6_ghost_
 [text_dialog_sjk.rs](../crates/sjk-viewer/src/text_dialog_sjk.rs) draws the
 text dialog as the SJK UI's pop-up card (Sol's request, 08/10/2026). One dialog
 serves three things, and all three take this look with the SJK UI's menus:
-Report a bug (the in-game menu's row of icons), a player report's few words
+Report a bug (the in-game menu's row of icons, and the main page's SJK page, where the
+report names the map `menu` and no server), a player report's few words
 (Players, a player, a reason) and a world note (`worldnote` twice,
 [client.md](client.md#player-card)). The classic+ look stays with the classic
 menus ([identity.md](identity.md#bug-reports)).

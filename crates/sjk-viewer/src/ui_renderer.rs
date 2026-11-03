@@ -155,6 +155,15 @@ pub(crate) fn emote_icon(index: usize) -> sjk_ui::TextureId {
     sjk_ui::TextureId(icons::EMOTE_ICON_FIRST + index as u32)
 }
 
+/// Atlas cells reserved for the quick wheel's own pictures (`quick_wheel::pictures`).
+pub(crate) const CUSTOM_WHEEL_ICON_CELLS: usize = icons::CUSTOM_WHEEL_ICON_CELLS as usize;
+
+/// `TexturedQuad` texture naming own wheel picture cell `index` (`quick_wheel::pictures`).
+pub(crate) fn custom_wheel_icon(index: usize) -> sjk_ui::TextureId {
+    debug_assert!(index < CUSTOM_WHEEL_ICON_CELLS);
+    sjk_ui::TextureId(icons::CUSTOM_WHEEL_ICON_FIRST + index as u32)
+}
+
 /// Atlas cells reserved for the tags' pictures (`tag_icons`).
 pub(crate) const TAG_ICON_CELLS: usize = icons::TAG_ICON_CELLS as usize;
 

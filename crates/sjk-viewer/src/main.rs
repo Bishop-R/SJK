@@ -673,6 +673,9 @@ struct GpuState {
     unlock_toast: unlock_toast::UnlockToast,
     /// A bug report is on its way to the hub (`bug_report`).
     bug_report_waiting: bool,
+    /// The report card open now was opened from the main menu (its SJK page): the
+    /// report says "menu" for the map and names no server.
+    bug_report_from_menu: bool,
     /// The outcome last shown, so the next one is told apart.
     bug_report_serial: u64,
     entity_lighting: entity_lighting::EntityLighting,
@@ -1658,6 +1661,7 @@ impl GpuState {
             holocron_popup: holocron_popup::HolocronPopup::default(),
             unlock_toast: unlock_toast::UnlockToast::default(),
             bug_report_waiting: false,
+            bug_report_from_menu: false,
             bug_report_serial: 0,
             entity_lighting,
             menu_stage: menu_stage::MenuStage::default(),
@@ -2103,7 +2107,7 @@ impl GpuState {
         // The game HUD draws the vehicle HUD from `swoopvehiclehud`'s pictures, as
         // stock does; SJK's vector strip stands in for it with the other looks.
         let stock_vehicle =
-            hud_visibility.hud && hud_visibility.vehicle && self.menu_hud.draws_vehicle();
+            hud_visibility.elements && hud_visibility.vehicle && self.menu_hud.draws_vehicle();
         if stock_vehicle {
             hud_visibility.vehicle = false;
         }
@@ -2472,6 +2476,7 @@ impl GpuState {
             .as_ref()
             .is_some_and(console::ViewerConsole::is_open);
         let chat_visible = !console_open
+            && !hud::toggle::hides(self.console.as_ref(), hud::toggle::Part::Chat)
             && scoreboard::chat_visible(
                 information_visible,
                 self.chat.wants_history(self.console.as_ref()),

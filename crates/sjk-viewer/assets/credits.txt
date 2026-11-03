@@ -528,6 +528,7 @@ did: The Fishing toy: a rod, fish anywhere and Echoes on the line
 [Nib]
 role: Ideas for SJK
 did: Saber sounds of your choice, apart from your saber shader
+did: Pictures of your own for the quick wheel's custom choices
 
 [g0dchris]
 role: Ideas for SJK
@@ -541,6 +542,9 @@ did: The Empower glow hidden with a setting
 [Lex]
 role: Ideas for SJK
 did: Hit sounds (cg_hitsounds) heard without EJK's pack
+did: Report a bug from the main menu, not only in a match
+did: The Hax trap's switches on the Hax's card in the Collection
+did: Loadouts: a saved look worn again in one click
 
 [akr]
 role: Ideas for SJK
@@ -571,6 +575,7 @@ did: Found encrypted whispers ending with a backslash going out unencrypted
 did: The player card on the inspect key only, never from a look (Key only)
 did: Drew the Gonk, EZ and Geyon tags
 did: Toys say when they are switched on or off
+did: Choose what the HUD switch hides: elements, crosshair, names, chat
 
 == Made with
 

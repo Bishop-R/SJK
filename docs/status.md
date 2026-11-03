@@ -72,6 +72,22 @@ AT-ST camera jump on stopping was fixed on 23/10 (`36523a14`). Not done: a damag
 fighter's surface smoke (`dmgFX`, `injureFX`) and vehicle trails and exhausts. Verified:
 unit tests, fmt, clippy. Not verified: in a game, or that JoF/JA+ servers tag vehicle shots.
 
+## Menu ideas 03/11: report from the menu, loadouts, Hax trap, wheel pictures, HUD switch
+
+03/11/2026, `personal/menu-ideas-1103` from `main` `fca8e772`, Discord #ideas approved by
+Sol: Report a bug on the SJK UI main page's SJK page (Lex; the report names the map `menu`
+and no server, [identity.md](identity.md#bug-reports)); Loadouts on the Collection (Lex;
+five looks kept in `loadouts.json`, [sjk-ui.md](sjk-ui.md#collection)); the Hax trap's
+switches moved to the Hax's card in Collection > Toys, still found by a Settings search
+(Lex); a quick wheel custom choice's own PNG or JPEG picture (Nib; eight at most, the
+atlas's last free cells, [client.md](client.md#quick-wheels)); and what the HUD switch
+hides, four `cg_hudHide*` switches whose defaults are the old `cg_drawHud 0` (Blep,
+[client.md](client.md#what-the-hud-switch-hides)). No hub change. Verified: unit tests,
+fmt, clippy (no new warnings), world shots `duel6_sjk_loadouts` and
+`duel6_quick_wheel_settings` (looked at). Not verified: in a running game (a loadout worn
+in a match, a picture chosen through the real file dialog, the HUD parts hidden over a
+match, a report from the menu reaching the hub).
+
 ## Box hunt: own teleports only, caps from 09:00, `japlus.guntelewall`
 
 03/11/2026, `personal/box-hunt-1103` from `main` `d3881f31`, with hub branch

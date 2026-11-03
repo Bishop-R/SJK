@@ -20,7 +20,7 @@ fn searchable() -> &'static Searchable {
         let tab =
             |caption: &str| settings(TABS.iter().position(|tab| *tab == caption).unwrap_or(0));
         let advanced = |group| Group::Advanced(group).rows();
-        let sources: [(&'static str, &'static [Setting]); 16] = [
+        let sources: [(&'static str, &'static [Setting]); 17] = [
             ("Display", Group::Display.rows()),
             // The renderer and the Video rows Display leaves to Graphics.
             ("Graphics", tab("VIDEO")),
@@ -40,6 +40,8 @@ fn searchable() -> &'static Searchable {
             ("Network", Group::Network.rows()),
             // Its rows are the others' but for its own last one.
             ("First setup", Group::Quick.rows()),
+            // Switches moved to the Collection: found here, under where they are now.
+            (HAX_PLACE, HAX_TOY),
         ];
         let mut found = Searchable {
             rows: Vec::new(),
@@ -174,6 +176,24 @@ mod tests {
             assert_eq!(value_row(VALUE_BASE + row as u16), Some(row));
         }
         assert_eq!(value_row(VALUE_BASE - 1), None);
+    }
+
+    /// The Hax trap switches moved to the Collection's Toys tab: a search still finds
+    /// them, under where they are now, and they are in no category of their own.
+    #[test]
+    fn the_hax_trap_is_found_under_the_collection() {
+        for query in ["hax", "trap", crate::hax::TRAP_CVAR] {
+            let lines = super::lines(&query.to_ascii_lowercase());
+            assert!(
+                lines.contains(&super::super::Line::Heading(HAX_PLACE)),
+                "{query:?}: {lines:?}"
+            );
+        }
+        let rows = rows();
+        for cvar in [crate::hax::TRAP_CVAR, crate::hax::AWAY_CVAR] {
+            let row = rows.iter().position(|row| row.cvar == cvar).expect(cvar);
+            assert_eq!(super::group(row), Some(HAX_PLACE));
+        }
     }
 
     /// The weak-PC settings are found by their names, console names and what they do.

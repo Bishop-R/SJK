@@ -3577,6 +3577,25 @@ the layout as bundled ([hud.rs](../crates/sjk-viewer/src/hud.rs), `RadialPlaceme
 which moves each widget of `RADIAL_STATUS` by its side: an arc's from its sweep, the
 rest from their offset).
 
+### What the HUD switch hides
+
+`cg_drawHud 0` (Settings > HUD > HUD, the quick wheel's HUD on/off, a
+`toggle cg_drawHud` bind) hides the parts of the screen whose switch is on (Blep's idea,
+03/11/2026; [hud/toggle.rs](../crates/sjk-viewer/src/hud/toggle.rs)), each a row under
+HUD in Settings > HUD:
+
+| Cvar | Default | Settings | Hides |
+| --- | --- | --- | --- |
+| `cg_hudHideElements` | 1 | HUD off: elements | health, shield, Force, ammo, weapon and item rows, timers, vote and warmup lines, the kill feed, the lagometer, the game-data HUD and the rest of the layout |
+| `cg_hudHideCrosshair` | 1 | HUD off: crosshair | the crosshair and the name under it |
+| `cg_hudHideNames` | 1 | HUD off: names | nameplates, names over players, team logos and outlines |
+| `cg_hudHideChat` | 0 | HUD off: chat | the chat box |
+
+The defaults are what `cg_drawHud 0` always hid, so nothing changes until a player
+ticks otherwise; with all four off, the HUD switch hides nothing. `cg_draw2D 0` still
+hides everything, and the scoreboard, menus, intermission and the quick wheel hide the
+HUD as before. Unit tests cover the rule and the defaults; not checked in a running game.
+
 ### Moving HUD elements
 
 The HUD edit mode moves the HUD's elements with the mouse (Lex's idea, #ideas
@@ -5201,8 +5220,8 @@ the archived `cl_toyHax`, as Order 66 in `cl_toyOrder66`). Switching it says "Ha
   [toy event](hub-chat.md#toy-events) the hacked player sends (`hacked_<until>`, the game
   server time the steering ends; `freed` when they break free sooner), which may come a
   second or two late. Nothing is drawn round a player blocked here.
-- **The trap:** with **Hax trap** on (Settings > Game options > Toys, `cl_haxTrap`, off
-  by default), a hack that completes on the player springs a trap instead of handing
+- **The trap:** with **Hax trap** on (the Hax's card in Collection > Toys since 03/11/2026,
+  Settings > Game options > Toys before; `cl_haxTrap`, off by default), a hack that completes on the player springs a trap instead of handing
   over control (Sol's idea, 23/10/2026): both read "IT'S A TRAP!" with Order 66's beep
   each second, and two seconds later both clients send `kill` and both players blow up
   as in [Order 66](#order-66) (the explosion, then the pieces, or confetti with
@@ -6296,6 +6315,21 @@ A custom choice is a name (up to 24 characters) and any console command (up to
 200), several separated by `;`, run with all its arguments (`japlus.guntele 300`,
 `amtele 3`) as typing it would; the tests pin that it keeps them through the form,
 `wheel.json` and `wheel_commands.json`.
+
+A custom choice may show a picture of the player's own in place of `{•}` (Nib's idea,
+03/11/2026; [pictures.rs](../crates/sjk-viewer/src/quick_wheel/pictures.rs)): its form's
+Choose picture (or F3) opens the system's file dialog for a PNG or JPEG of at most 4 MB
+and 4096 pixels a side; the picture is fitted into a wheel icon (a 128-pixel square, its
+shape kept, on transparency) and kept as a small PNG in `wheel_icons/` in the profile
+folder, named by its content, so the original can move or be deleted. Remove gives the
+stock picture back. Which command shows which picture is kept in `wheel_icons.json`
+beside `wheel.json` (`{"version": 1, "icons": {"say gg": "<16 hex digits>.png"}}`, only
+names of that form taken); a choice is matched by its command, so the same command on
+two pages shows the same picture, and it takes precedence over an emote's own picture.
+Eight different pictures at most are in use at once, the room left in the UI atlas; the
+form refuses a ninth, saying so. A picture that no longer decodes is reported to the log
+and its choice shows `{•}`. Unit tests cover the checks, the fitting, the file and the
+limit; the dialog itself was not opened in a test.
 
 ### Settings
 

@@ -597,7 +597,7 @@ impl State {
             && self.show_flags
             && self.ctf
             && self.scores_shown()
-            && visibility.hud
+            && visibility.elements
             && visibility.status
     }
 
@@ -612,7 +612,7 @@ impl State {
         let [w, h] = viewport;
         // Under the status gate, as JoF's team scores in `CG_DrawHUD`: an open classic
         // board keeps the HUD but not these boxes over its header.
-        let scores = self.scores_shown() && visibility.hud && visibility.status;
+        let scores = self.scores_shown() && visibility.elements && visibility.status;
         let boxes = scores && self.boxes;
         if boxes {
             self.emit_boxes(list, w, h, icons);
