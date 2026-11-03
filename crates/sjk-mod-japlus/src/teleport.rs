@@ -60,6 +60,20 @@ pub(crate) fn gun_tele(
     Ok(tele(position, yaw + offset))
 }
 
+/// `japlus.guntelewall <distance> [yaw offset]`: `distance` along the view, pitch
+/// included, through whatever is in the way, as EternalJK's `teleGun` with a distance
+/// does and `japlus.guntele` did before it stopped at walls (hub report #232, which asked
+/// for both). Looking up or down goes through ceilings and floors; nothing is traced, so
+/// the player may land inside something solid.
+pub(crate) fn gun_tele_wall(args: &[String], me: Me) -> Result<String, String> {
+    let distance = args
+        .first()
+        .ok_or("japlus.guntelewall <distance> [yaw offset]")?;
+    let offset = args.get(1).map_or(0.0, |text| number(text));
+    let position = add(me.origin, forward(me.view_angles), number(distance));
+    Ok(tele(position, me.view_angles[1] + offset))
+}
+
 /// How far short of a wall a distance teleport stops: the server keeps whole
 /// units (`atoi`), which can move the player up to one unit towards it.
 pub(crate) const WALL_GAP: f32 = 2.0;
@@ -296,6 +310,18 @@ mod tests {
             gun_tele(&args("100"), me(), None, wall(1.0, false)).unwrap(),
             "amtele 99.999992 300.000000 24.000000 90.000000"
         );
+    }
+
+    /// Hub report #232: `guntelewall` goes the whole distance along the view, pitch
+    /// included and through what is in the way, as `guntele` did before #218.
+    #[test]
+    fn gun_tele_wall_goes_through_along_the_view() {
+        // 100 units at 30 degrees down: 86.6 ahead and 50 down, turned 45.
+        assert_eq!(
+            gun_tele_wall(&args("100 45"), me()).unwrap(),
+            "amtele 100.000000 286.602539 -26.000000 135.000000"
+        );
+        assert!(gun_tele_wall(&[], me()).is_err());
     }
 
     /// Hub report #218: a wall in the way stops the teleport short of it, a

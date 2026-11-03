@@ -164,6 +164,7 @@ impl ClientSession {
                 userinfo.guid.clone(),
                 Instant::now(),
             ),
+            sent_commands: Default::default(),
             command_pacer: reliable_pacing::ReliableCommandPacer::new(
                 reliable_pacing::DEFAULT_COMMAND_INTERVAL,
             ),

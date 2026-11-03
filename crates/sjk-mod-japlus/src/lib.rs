@@ -26,6 +26,10 @@ const COMMANDS: &[Command] = &[
         "Teleport to your crosshair, or a distance straight ahead, short of walls: japlus.guntele [distance] [yaw offset] (JA+ admin)",
     ),
     command(
+        "japlus.guntelewall",
+        "Teleport a distance the way you look, through walls, floors and ceilings: japlus.guntelewall <distance> [yaw offset] (JA+ admin)",
+    ),
+    command(
         "japlus.bring",
         "Bring a player in front of you: japlus.bring [id|name|gun] [distance] [yaw offset] (JA+ admin)",
     ),
@@ -174,6 +178,7 @@ impl ClientMod for JaPlus {
                     host.trace_player(from, to)
                 })?
             }
+            "japlus.guntelewall" => teleport::gun_tele_wall(args, me(host)?)?,
             "japlus.bring" => teleport::bring(args, host)?,
             "japlus.goto" => {
                 let (command, note) = teleport::go_to(args, host)?;

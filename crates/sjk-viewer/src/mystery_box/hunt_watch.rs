@@ -1,16 +1,19 @@
 //! The box hunt's cheat watch (Sol, 01/11/2026): a player in a chase, the mark or a
-//! hunter, who is teleported other than by the map or a spawn (JA+'s `amtele`, an admin's
-//! teleport, any server command that moves them) or flies in noclip is out of it at once.
-//! The hub sees neither, so the player's own client watches its own player state, as it
-//! tells the hub who killed the mark.
+//! hunter, who teleports themselves (JA+'s `amtele` and the `japlus.*` teleports that send
+//! it, `setviewpos`) or flies in noclip or fake noclip is out of it at once. The hub sees
+//! neither, so the player's own client watches its own player state, as it tells the hub
+//! who killed the mark.
 //!
-//! A teleport is the game's `EF_TELEPORT_BIT` flipping (`TeleportPlayer`, `ClientSpawn`)
-//! while the player stays alive. The map's own teleporters (`trigger_teleport`,
-//! `target_teleporter`) and spawns flip it too, and land the player on a point the map
-//! names: a landing within [`NEAR`] units of one of those is not a cheat.
+//! Only the player's own doing counts (hub reports #235, #237, 03/11/2026): the map's
+//! teleporters, a spawn and an admin moving the player (JA+'s `amtele <player> ...`, a
+//! bring) flip the same `EF_TELEPORT_BIT`, and a mark brought by an admin blew up. So a
+//! teleport is a cheat only when the bit flips within [`OWN_MOVE_WINDOW`] of a command of
+//! [`OWN_MOVES`] that this client sent ([`sjk_client::sent_commands`]), and noclip only
+//! after the player's own `noclip` on this map. Fake noclip (`fakenoclip`, the free
+//! camera) is this client's own flight, never the server's, so it always counts.
 
-use glam::Vec3;
 use sjk_protocol::PlayerState;
+use std::time::{Duration, Instant};
 
 /// `EF_DEAD`, `EF_TELEPORT_BIT` (`bg_public.h`).
 const EF_DEAD: u32 = 1 << 1;
@@ -24,38 +27,69 @@ const PM_SPECTATOR: u8 = 4;
 const PM_DEAD: u8 = 5;
 const PM_INTERMISSION: u8 = 7;
 const PM_SPINTERMISSION: u8 = 8;
-/// How far from a map's landing point a teleport may land and be the map's: a snapshot
-/// may come a frame or two after the teleport, which throws the player forward.
-const NEAR: f32 = 128.0;
+/// How long after the player's own teleport command the teleport may show: JA+'s
+/// `jp_starTrekTeleport 1` cloaks the player and beams them about two seconds later
+/// (`JP_STARTREK_DELAY`, `g_japlus_tele.c`), and the snapshot comes a ping after.
+const OWN_MOVE_WINDOW: Duration = Duration::from_secs(5);
 
-/// Where the map's own teleporters and spawns put a player.
-pub(super) fn landings(entities: &[sjk_entity::Entity]) -> Vec<Vec3> {
-    let targets: Vec<&str> = entities
+/// What a command of the player's own does to them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MoveKind {
+    /// Turns noclip on or off.
+    Noclip,
+    /// Teleports the player.
+    Teleport,
+    /// JA+'s `amtele`: teleports the player unless its first argument names another
+    /// player in a form that moves them.
+    Amtele,
+}
+
+/// A server command that moves the player who sends it.
+struct OwnMove {
+    /// The command's name, whatever the case.
+    name: &'static str,
+    kind: MoveKind,
+}
+
+/// The commands of the player's own that move them, one entry each, with its evidence (a
+/// new mod's teleport is one more entry).
+const OWN_MOVES: &[OwnMove] = &[
+    // Base JA cheat: `Cmd_Noclip_f` (codemp/game/g_cmds.c) toggles the sender's noclip.
+    OwnMove {
+        name: "noclip",
+        kind: MoveKind::Noclip,
+    },
+    // Base JA cheat: `Cmd_SetViewpos_f` (g_cmds.c) teleports the sender.
+    OwnMove {
+        name: "setviewpos",
+        kind: MoveKind::Teleport,
+    },
+    // JA+ `Cmd_amtele_f` (VisionJK g_japlus_tele.c); `japlus.goto`, `japlus.guntele`,
+    // `japlus.guntelewall` and the rest of crates/sjk-mod-japlus/src/teleport.rs send it.
+    OwnMove {
+        name: "amtele",
+        kind: MoveKind::Amtele,
+    },
+];
+
+/// What `command` (a released reliable command) does to the player on slot `own`.
+fn own_move(command: &[u8], own: u8) -> Option<MoveKind> {
+    let text = String::from_utf8_lossy(command);
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let name = words.first()?;
+    let kind = OWN_MOVES
         .iter()
-        .filter(|entity| {
-            entity.classname().is_some_and(|class| {
-                class.eq_ignore_ascii_case("trigger_teleport")
-                    || class.eq_ignore_ascii_case("target_teleporter")
-            })
-        })
-        .filter_map(|entity| entity.get("target"))
-        .collect();
-    let mut points: Vec<Vec3> = entities
-        .iter()
-        .filter(|entity| {
-            entity.get("targetname").is_some_and(|name| {
-                targets
-                    .iter()
-                    .any(|target| target.eq_ignore_ascii_case(name))
-            }) || entity
-                .classname()
-                .is_some_and(|class| class.eq_ignore_ascii_case("misc_teleporter_dest"))
-        })
-        .filter_map(|entity| entity.vector("origin").ok().flatten())
-        .map(Vec3::from_array)
-        .collect();
-    points.extend(crate::banana::spawn_points(entities));
-    points
+        .find(|entry| entry.name.eq_ignore_ascii_case(name))?
+        .kind;
+    if kind != MoveKind::Amtele {
+        return Some(kind);
+    }
+    // `amtele <player> <to player>` and `amtele <player> <x> <y> <z> <yaw>` move
+    // `<player>`; the other forms move the sender. A number names a slot; a name may be
+    // the player's own, so it counts.
+    let moves_other =
+        matches!(words.len(), 3 | 6) && words[1].parse::<u8>().is_ok_and(|slot| slot != own);
+    (!moves_other).then_some(MoveKind::Teleport)
 }
 
 /// What the watch reads of one snapshot of the player.
@@ -68,14 +102,15 @@ pub(super) struct Sample {
     /// Alive and in the game (not dead, spectating or at the intermission).
     pub(super) alive: bool,
     pub(super) noclip: bool,
+    /// This client flies on its own (`fakenoclip`, the free camera).
+    pub(super) fake_noclip: bool,
     /// `EF_TELEPORT_BIT`.
     pub(super) teleport: bool,
-    pub(super) origin: Vec3,
 }
 
 impl Sample {
     /// The sample of `player` (the snapshot at `time`), the player on slot `own`.
-    pub(super) fn of(player: &PlayerState, time: i32, own: u8) -> Self {
+    pub(super) fn of(player: &PlayerState, time: i32, own: u8, fake_noclip: bool) -> Self {
         let kind = player.movement_type();
         let flags = player.entity_flags();
         Self {
@@ -86,28 +121,60 @@ impl Sample {
                 && !player.is_spectator()
                 && ![PM_SPECTATOR, PM_DEAD, PM_INTERMISSION, PM_SPINTERMISSION].contains(&kind),
             noclip: kind == PM_NOCLIP,
+            fake_noclip,
             teleport: flags & EF_TELEPORT_BIT != 0,
-            origin: Vec3::from_array(player.origin()),
         }
     }
 }
 
-/// The player's last sample, to compare the next with.
+/// The player's last sample and own commands, to judge the next sample by.
 #[derive(Default)]
 pub(super) struct Watch {
     last: Option<Sample>,
+    /// The number of the newest sent command already read.
+    read: u64,
+    /// When the player last sent a command that teleports them.
+    teleported: Option<Instant>,
+    /// The player sent `noclip` on this map.
+    noclip: bool,
 }
 
 impl Watch {
-    /// Take `sample` (`landings`, the map's, [`landings`]): whether it shows the player
-    /// cheating since the last one.
-    pub(super) fn step(&mut self, sample: Sample, landings: &[Vec3]) -> bool {
+    /// Read the commands this client sent (`sent`, oldest first, numbered), the player on
+    /// `own`. A new connection numbers its commands from 1 again.
+    pub(super) fn read_commands<'a>(
+        &mut self,
+        sent: impl Iterator<Item = (u64, Instant, &'a [u8])> + Clone,
+        own: u8,
+    ) {
+        if sent
+            .clone()
+            .last()
+            .is_some_and(|(newest, ..)| newest < self.read)
+        {
+            self.read = 0;
+        }
+        for (number, at, command) in sent {
+            if number <= self.read {
+                continue;
+            }
+            self.read = number;
+            match own_move(command, own) {
+                Some(MoveKind::Noclip) => self.noclip = true,
+                Some(_) => self.teleported = Some(at),
+                None => {}
+            }
+        }
+    }
+
+    /// Take `sample`, read at `now`: whether it shows the player cheating since the last.
+    pub(super) fn step(&mut self, sample: Sample, now: Instant) -> bool {
         let last = self.last.replace(sample);
         if !sample.own || !sample.alive {
             self.last = None;
             return false;
         }
-        if sample.noclip {
+        if sample.fake_noclip || (sample.noclip && self.noclip) {
             return true;
         }
         let Some(last) = last.filter(|last| last.time < sample.time) else {
@@ -116,14 +183,17 @@ impl Watch {
         };
         last.alive
             && last.teleport != sample.teleport
-            && !landings
-                .iter()
-                .any(|point| point.distance(sample.origin) <= NEAR)
+            && self
+                .teleported
+                .is_some_and(|at| now.saturating_duration_since(at) <= OWN_MOVE_WINDOW)
     }
 
-    /// Forget the last sample (the map changed).
+    /// Forget the last sample and the player's noclip (the map changed); commands already
+    /// read stay read.
     pub(super) fn reset(&mut self) {
         self.last = None;
+        self.noclip = false;
+        self.teleported = None;
     }
 }
 
@@ -131,88 +201,134 @@ impl Watch {
 mod tests {
     use super::*;
 
-    fn sample(time: i32, teleport: bool, origin: Vec3) -> Sample {
+    fn sample(time: i32, teleport: bool) -> Sample {
         Sample {
             time,
             own: true,
             alive: true,
             noclip: false,
+            fake_noclip: false,
             teleport,
-            origin,
         }
     }
 
     #[test]
-    fn a_teleport_off_the_map_points_is_a_cheat() {
-        let landings = [Vec3::new(1000.0, 0.0, 0.0)];
+    fn a_teleport_of_the_map_or_an_admin_is_no_cheat() {
+        let now = Instant::now();
         let mut watch = Watch::default();
-        assert!(!watch.step(sample(100, false, Vec3::ZERO), &landings));
-        // Walking: nothing.
-        assert!(!watch.step(sample(150, false, Vec3::X * 300.0), &landings));
-        // A map teleporter's landing, thrown forward a little: not a cheat.
-        assert!(!watch.step(sample(200, true, Vec3::new(1060.0, 0.0, 30.0)), &landings));
-        // Teleported elsewhere: a cheat.
-        assert!(watch.step(sample(250, false, Vec3::new(-4000.0, 0.0, 0.0)), &landings));
+        assert!(!watch.step(sample(100, false), now));
+        // A map teleporter, or an admin's bring: the bit flips, no command of the own.
+        assert!(!watch.step(sample(200, true), now));
+        // The player's own chat, and their `amtele <player> ...` moving someone else.
+        watch.read_commands(
+            [
+                (1, now, b"say hi".as_slice()),
+                (2, now, b"amtele 3 4".as_slice()),
+                (3, now, b"amtele 5 1 2 3 90".as_slice()),
+            ]
+            .into_iter(),
+            4,
+        );
+        assert!(!watch.step(sample(300, false), now + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn the_players_own_teleport_is_a_cheat() {
+        let now = Instant::now();
+        let mut watch = Watch::default();
+        assert!(!watch.step(sample(100, false), now));
+        watch.read_commands([(1, now, b"amtele 10 20 30 90".as_slice())].into_iter(), 4);
+        // Sent but not shown yet: nothing.
+        assert!(!watch.step(sample(150, false), now));
+        // Beamed two seconds later (JA+'s Star Trek teleport): a cheat.
+        assert!(watch.step(sample(200, true), now + Duration::from_secs(2)));
+        // A map teleporter long after: no cheat.
+        assert!(!watch.step(sample(300, false), now + Duration::from_secs(30)));
+        // Read again, the same command does not count twice.
+        let later = now + Duration::from_secs(31);
+        watch.read_commands(
+            [(1, later, b"amtele 10 20 30 90".as_slice())].into_iter(),
+            4,
+        );
+        assert!(!watch.step(sample(400, true), later));
+        // A new connection numbers its commands from 1 again: read.
+        watch.read_commands(
+            [(1, later, b"amtele 10 20 30 90".as_slice())].into_iter(),
+            4,
+        );
+        assert!(!watch.step(sample(500, false), later), "nothing new yet");
+        let mut watch = Watch {
+            read: 7,
+            ..Watch::default()
+        };
+        assert!(!watch.step(sample(100, false), later));
+        watch.read_commands([(1, later, b"amtele".as_slice())].into_iter(), 4);
+        assert!(watch.step(sample(200, true), later));
+    }
+
+    #[test]
+    fn amtele_forms_that_move_the_sender() {
+        assert_eq!(own_move(b"amtele", 4), Some(MoveKind::Teleport));
+        assert_eq!(own_move(b"AMTELE 7", 4), Some(MoveKind::Teleport));
+        assert_eq!(own_move(b"amtele 1 2 3 90", 4), Some(MoveKind::Teleport));
+        assert_eq!(own_move(b"amtele 4 1 2 3 90", 4), Some(MoveKind::Teleport));
+        assert_eq!(
+            own_move(b"amtele Kyle 1 2 3 90", 4),
+            Some(MoveKind::Teleport)
+        );
+        assert_eq!(own_move(b"amtele 5 1 2 3 90", 4), None);
+        assert_eq!(own_move(b"amtele 5 4", 4), None);
+        assert_eq!(own_move(b"setviewpos 1 2 3 0", 4), Some(MoveKind::Teleport));
+        assert_eq!(own_move(b"noclip", 4), Some(MoveKind::Noclip));
+        assert_eq!(own_move(b"say amtele", 4), None);
+    }
+
+    #[test]
+    fn noclip_counts_when_the_player_asked_for_it() {
+        let now = Instant::now();
+        let flying = Sample {
+            noclip: true,
+            ..sample(100, false)
+        };
+        // An admin put the player in noclip: no cheat.
+        let mut watch = Watch::default();
+        assert!(!watch.step(flying, now));
+        watch.read_commands([(1, now, b"noclip".as_slice())].into_iter(), 4);
+        assert!(watch.step(
+            Sample {
+                time: 150,
+                ..flying
+            },
+            now
+        ));
+        // A new map forgets it.
+        watch.reset();
+        assert!(!watch.step(Sample { time: 50, ..flying }, now));
+        // Fake noclip is always the player's own.
+        let fake = Sample {
+            fake_noclip: true,
+            ..sample(60, false)
+        };
+        assert!(watch.step(fake, now));
     }
 
     #[test]
     fn a_spawn_after_death_or_spectating_is_no_cheat() {
+        let now = Instant::now();
         let mut watch = Watch::default();
-        assert!(!watch.step(sample(100, false, Vec3::ZERO), &[]));
+        watch.read_commands([(1, now, b"amtele".as_slice())].into_iter(), 4);
+        assert!(!watch.step(sample(100, false), now));
         let dead = Sample {
             alive: false,
-            ..sample(150, false, Vec3::ZERO)
+            ..sample(150, false)
         };
-        assert!(!watch.step(dead, &[]));
-        assert!(!watch.step(sample(200, true, Vec3::X * 5000.0), &[]));
-        // Someone followed, then the player's own view again.
+        assert!(!watch.step(dead, now));
+        assert!(!watch.step(sample(200, true), now));
         let followed = Sample {
             own: false,
-            ..sample(250, false, Vec3::ZERO)
+            ..sample(250, false)
         };
-        assert!(!watch.step(followed, &[]));
-        assert!(!watch.step(sample(300, false, Vec3::Y * 5000.0), &[]));
-    }
-
-    #[test]
-    fn noclip_is_a_cheat_and_a_new_map_starts_again() {
-        let mut watch = Watch::default();
-        let flying = Sample {
-            noclip: true,
-            ..sample(100, false, Vec3::ZERO)
-        };
-        assert!(watch.step(flying, &[]));
-        let mut watch = Watch::default();
-        assert!(!watch.step(sample(5000, false, Vec3::ZERO), &[]));
-        // The clock went back: a new map, whose spawn flips the bit.
-        assert!(!watch.step(sample(100, true, Vec3::X * 5000.0), &[]));
-    }
-
-    #[test]
-    fn the_map_names_its_teleport_landings_and_spawns() {
-        let lump = r#"{
-"classname" "trigger_teleport"
-"target" "pad"
-"model" "*1"
-}
-{
-"classname" "target_position"
-"targetname" "pad"
-"origin" "10 20 30"
-}
-{
-"classname" "target_position"
-"targetname" "elsewhere"
-"origin" "99 99 99"
-}
-{
-"classname" "info_player_deathmatch"
-"origin" "-5 0 0"
-}"#;
-        let entities = sjk_entity::parse_entity_lump(lump.as_bytes()).unwrap();
-        let points = landings(&entities);
-        assert!(points.contains(&Vec3::new(10.0, 20.0, 30.0)));
-        assert!(points.contains(&Vec3::new(-5.0, 0.0, 0.0)));
-        assert!(!points.contains(&Vec3::new(99.0, 99.0, 99.0)));
+        assert!(!watch.step(followed, now));
+        assert!(!watch.step(sample(300, true), now));
     }
 }

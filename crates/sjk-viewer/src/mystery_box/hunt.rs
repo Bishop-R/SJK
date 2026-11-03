@@ -7,7 +7,7 @@
 //! away (typing in the chat, in a menu, spectating, idle), so the hub never picks them
 //! and hands their mark on after a minute (Sol, 31/10/2026). Each hunter has one life
 //! (Sol, 01/11/2026): killed by the mark they are out of the chase, and a player caught
-//! teleporting or in noclip ([`super::hunt_watch`]) is out at once; this client tells
+//! teleporting themselves or in noclip ([`super::hunt_watch`]) is out at once; this client tells
 //! the hub both. Once every hunter is out, the mark wins credits. A mark caught cheating
 //! or typing in the chat [`CHAT_LIMIT`] blows up (Sol, 02/11/2026): the hub gives a
 //! hunter at random the free box roll a kill would have, everyone taking part sees the
@@ -68,11 +68,10 @@ pub(crate) struct Hunt {
     /// The player is out of the told mark's chase (killed by the mark, or caught
     /// cheating): the mark is no longer shown to them, and nothing more is told.
     out: Option<HuntOut>,
-    /// The player's own state, watched for teleports and noclip.
+    /// The player's own state and commands, watched for teleports and noclip.
     watch: super::hunt_watch::Watch,
-    /// The map the landings are of (its BSP's address), and where its teleporters and
-    /// spawns put a player.
-    landings: (usize, Vec<Vec3>),
+    /// The map watched (its BSP's address): a new one starts the watch again.
+    watched_map: usize,
     /// Since when the player, the mark, has been typing in the chat, and whether they
     /// were warned.
     typing: Option<(Instant, bool)>,
@@ -584,19 +583,22 @@ impl GpuState {
         let chased = hunt.mark().map(|mark| mark.slot).or(hunt.told);
         let in_chase = on && chased.is_some() && hunt.out.is_none();
         let map = std::sync::Arc::as_ptr(&self.bsp) as usize;
-        if hunt.landings.0 != map {
-            hunt.landings = (
-                map,
-                sjk_entity::parse_entity_lump(self.bsp.entities())
-                    .map(|entities| super::hunt_watch::landings(&entities))
-                    .unwrap_or_default(),
-            );
+        if hunt.watched_map != map {
+            hunt.watched_map = map;
             hunt.watch.reset();
         }
+        let fake_noclip = self.local_prediction.fake_noclip();
         let cheated = self.live_session.as_ref().is_some_and(|session| {
+            hunt.watch
+                .read_commands(session.sent_commands().iter(), own);
             let snapshot = session.latest_snapshot();
-            let sample = super::hunt_watch::Sample::of(&snapshot.player, snapshot.server_time, own);
-            hunt.watch.step(sample, &hunt.landings.1)
+            let sample = super::hunt_watch::Sample::of(
+                &snapshot.player,
+                snapshot.server_time,
+                own,
+                fake_noclip,
+            );
+            hunt.watch.step(sample, now)
         });
         // The mark typing in the chat too long blows up.
         let (chatted, warning) = hunt.watch_chat(marked && in_chase && self.chat.is_typing(), now);
