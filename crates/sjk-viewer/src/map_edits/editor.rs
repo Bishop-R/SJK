@@ -128,6 +128,10 @@ pub(crate) const COMMANDS: &[(&str, &str)] = &[
         "Map editor: open its panel (the world-note key does, on what you aim at)",
     ),
     (
+        "mapedit_web",
+        "Map editor: edit this map in your web browser (creator only for now; a page served on this PC only)",
+    ),
+    (
         "mapedit_hide",
         "Map editor: hide the selected prop or surface ('group' takes the whole compiled model), or remove a placed model",
     ),
@@ -184,6 +188,8 @@ pub(crate) fn is_command(name: &str) -> bool {
 struct Aim {
     target: EditTarget,
     hit: Vec3,
+    /// The view's forward when the selection was made: a placed model faces it.
+    forward: Vec3,
     summary: String,
 }
 
@@ -210,6 +216,9 @@ impl GpuState {
         }
         if name == "mapedit" {
             return self.map_edit_toggle(args);
+        }
+        if name == "mapedit_web" {
+            return self.map_edit_web();
         }
         if name == "mapedit_panel" {
             if !self.map_edits.editor.active {
@@ -311,6 +320,8 @@ impl GpuState {
         if !active {
             self.world_notes.cancel_selection();
             self.close_map_edit_panel();
+            // The browser editor stops with the editor.
+            self.map_edits.web = None;
             return Ok(vec!["Map editor off".into()]);
         }
         // Start from the hub's latest copies.
@@ -411,6 +422,7 @@ impl GpuState {
         Ok(Aim {
             target: selection.edit_target(),
             hit,
+            forward: selection.forward(),
             summary: selection.summary(),
         })
     }
@@ -539,10 +551,9 @@ impl GpuState {
         if !found {
             return Err(format!("{model} is not in the game data"));
         }
-        let yaw = self
-            .world_notes
-            .view()
-            .map_or(0.0, |(_, forward)| yaw_of(forward) + 180.0);
+        // Facing the view the selection was made from (the browser editor's when the
+        // page selected).
+        let yaw = yaw_of(aim.forward) + 180.0;
         self.world_notes.cancel_selection();
         let kind = Kind::Place {
             model: model.clone(),

@@ -262,6 +262,11 @@ impl Selection {
         }
     }
 
+    /// The view's forward direction when the selection was made.
+    pub(crate) fn forward(&self) -> Vec3 {
+        self.forward
+    }
+
     /// The point aimed at and its normal.
     pub(crate) fn aim(&self) -> (Vec3, Vec3) {
         let (hit, normal, _) = self.target();
@@ -1115,6 +1120,25 @@ impl Notes {
     ) -> Option<String> {
         let camera = self.camera?;
         let direction = screen_ray(&camera, self.viewport, point)?;
+        self.selection = self.select(scene, &camera, direction);
+        self.selection.as_ref().map(Selection::summary)
+    }
+
+    /// Select what the ray from `eye` along `direction` meets for a map edit, a view at
+    /// `eye` looking along `forward` (the browser editor's view: [`crate::map_edits`]'s
+    /// `web`), as [`Self::select_for_edit`] does under the crosshair.
+    pub(crate) fn select_for_edit_ray(
+        &mut self,
+        scene: Scene<'_>,
+        eye: Vec3,
+        forward: Vec3,
+        direction: Vec3,
+    ) -> Option<String> {
+        let camera = CameraUniform {
+            camera_position: eye.to_array(),
+            view_forward: forward.normalize_or_zero().to_array(),
+            ..bytemuck::Zeroable::zeroed()
+        };
         self.selection = self.select(scene, &camera, direction);
         self.selection.as_ref().map(Selection::summary)
     }

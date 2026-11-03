@@ -8465,3 +8465,17 @@ test: turn it on; black ^0 names on nameplates show a white outline, not a glow.
 test: Name outline Faint, Strong and Off: Off keeps the shadow only.
 test: chat with and without Chat text outline: dark letters white, the rest as before.
 note: if the line is too thick or strong, say so (ring copies are 85% opaque).
+
+[mapedit-web]
+area: Rendering & effects
+title: Map editor in the web browser (creator only for now)
+change: mapedit_web turns the editor on and opens the map in 3D in your browser (127.0.0.1).
+change: Clicks select or place through the game; every edit is the in-game editor's command.
+note: Only your creator key may use it; others get a refusal line. Not tried in game yet.
+test: On duel6, mapedit_web: the browser opens on the map, from where you look in game.
+test: Click a fern, Hide: it goes in the page and in the game; Ctrl+Z brings it back in both.
+test: Place: search tree, choose one, click the floor: a tree stands there in both; Turn, Up.
+test: Selected: click a wall, pick a shader picture, Remap: both draw the wall with it.
+test: Edits: Delete one; Publish asks first, then the answer shows under it and in game.
+test: Change map: the page loads the new map; mapedit off: the page says SJK is not answering.
+test: With a staff key that is not the creator: mapedit_web is refused.

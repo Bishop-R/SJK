@@ -253,6 +253,41 @@ fn placeable(path: &str) -> bool {
     lower.ends_with(".md3") && lower.starts_with("models/") && !lower.starts_with("models/players/")
 }
 
+/// Every model a map edit can place ([`placeable`]), sorted: the Place page's list, and
+/// the browser editor's.
+pub(super) fn placeable_models(vfs: &sjk_vfs::VirtualFileSystem) -> Vec<String> {
+    let mut models: Vec<String> = vfs
+        .paths()
+        .into_iter()
+        .map(|path| path.as_str().to_owned())
+        .filter(|path| placeable(path))
+        .collect();
+    models.sort();
+    models.dedup();
+    models
+}
+
+/// Every shader a remap may draw ([`listed_shader`]): defined ones and images, sorted.
+/// The Selected page's list, and the browser editor's.
+pub(super) fn remap_shaders(
+    vfs: &sjk_vfs::VirtualFileSystem,
+    catalog: &sjk_shader::ShaderCatalog,
+) -> Vec<String> {
+    let mut shaders: Vec<String> = catalog
+        .names()
+        .filter(|name| listed_shader(name))
+        .map(shader_stem)
+        .chain(
+            vfs.paths()
+                .into_iter()
+                .filter_map(|path| texture_shader(path.as_str())),
+        )
+        .collect();
+    shaders.sort();
+    shaders.dedup();
+    shaders
+}
+
 /// Whether `path` matches every word of `query` (lower case).
 fn matches(path: &str, query: &str) -> bool {
     let path = path.to_ascii_lowercase();
@@ -319,14 +354,7 @@ impl Panel {
             return;
         }
         self.models_from = from;
-        self.models = vfs
-            .paths()
-            .into_iter()
-            .map(|path| path.as_str().to_owned())
-            .filter(|path| placeable(path))
-            .collect();
-        self.models.sort();
-        self.models.dedup();
+        self.models = placeable_models(vfs);
         self.refilter();
     }
 
@@ -345,18 +373,7 @@ impl Panel {
             return;
         }
         self.shaders_from = from;
-        self.shaders = catalog
-            .names()
-            .filter(|name| listed_shader(name))
-            .map(shader_stem)
-            .chain(
-                vfs.paths()
-                    .into_iter()
-                    .filter_map(|path| texture_shader(path.as_str())),
-            )
-            .collect();
-        self.shaders.sort();
-        self.shaders.dedup();
+        self.shaders = remap_shaders(vfs, catalog);
         self.refilter_shaders();
     }
 

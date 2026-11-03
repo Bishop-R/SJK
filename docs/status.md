@@ -347,6 +347,19 @@ Limits: T1_Fatal in Experimental on DX12 stopped at the lamp light cache's page 
 (`SJK lamp cache pages` invalid), not a compile, so that case was checked on duel6. fmt,
 the sjk-viewer tests and Clippy.
 
+## Map editor in the web browser
+
+03/11/2026, `personal/mapedit-web`, based on `main` `566c944e` (Sol's request, Blackwolf's
+approval to reuse VisionJK's web admin page): `mapedit_web`, creator only for now
+([map-edits.md](map-edits.md#the-browser-editor-creator-only-for-now)). Verified on
+Windows 11: unit tests (HTTP parsing, Host/token/origin checks, game paths, edit
+requests, the page's bundling), an end-to-end test of the server on a socket with a fake
+game thread, and the page in headless Chrome
+(SwiftShader) on retail duel6 from the ignored test `serve_the_page_for_a_browser` (no
+script errors; the map, props, panel, and a fake state's hidden prop, placed copy, hidden
+surfaces and remap drawn). Not run with the game: the game-thread side (selection by ray,
+the commands, the state) is untested in a running client.
+
 ## Map editor made easier
 
 28/10/2026, `personal/map-editor-ux`, based on `main` `db63b4f5` (Sol's request: the

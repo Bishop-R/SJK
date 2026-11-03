@@ -483,6 +483,7 @@ role: Contributor: 1 merged pull request
 did: #333 JA+ dual jump attack: feet lift only over a player ahead, as the server does
 did: Inspiration: VisionJK's boombox, standing on the floor, gave SJK's boombox its place on the floor (boombox_place)
 did: VisionJK's 3D sound (v_spatial), the idea behind SJK's 3D sound (s_spatial)
+did: VisionJK's web admin page (GPL-2.0, with his approval) draws the map in SJK's browser map editor (mapedit_web)
 link: Blackwolf1337's pull requests | https://github.com/Sol-Vulpes/SJK/pulls?q=is%3Apr+author%3ABlackwolf1337
 
 == Art
@@ -591,6 +592,10 @@ github: JoFKypdurron
 role: JoF's launcher and its repository, which SJK's JoF content reads
 did: SJK reads the launcher's manifest and hosts and checks files as it does; it includes none of its code
 link: https://github.com/JoFKypdurron/jof-launcher
+
+[JKAdmin by Lixsl]
+role: The web admin panel VisionJK's page grew from
+did: By way of VisionJK, its map view is the base of the drawing in SJK's browser map editor (mapedit_web)
 
 [JoF HD Fonts & Icons and OCR-A]
 role: The game fonts SJK Menu, SJK Chat and SJK HUD
