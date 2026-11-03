@@ -302,6 +302,8 @@ pub(super) struct AudioOutput {
     pub(super) spatial: crate::audio::spatial::Tracker,
     /// The device the stream plays on and where its mixer comes back (`audio_device.rs`).
     follow: Option<device::Follow>,
+    /// Sounds muted by name (`s_muteSounds`), never started.
+    pub(super) muted: crate::audio::muted_sounds::MutedSounds,
 }
 
 enum DecodeJob {
@@ -472,6 +474,7 @@ impl AudioOutput {
             cache: std::cell::RefCell::new(Vec::new()),
             lengths: std::cell::RefCell::new(Vec::new()),
             follow: None,
+            muted: Default::default(),
         };
         Some((audio, source))
     }
@@ -499,6 +502,14 @@ impl AudioOutput {
     }
 
     pub(super) fn send(&mut self, command: AudioCommand) {
+        if let AudioCommand::Play(handle, ..)
+        | AudioCommand::PlayFrom(handle, ..)
+        | AudioCommand::PlayTrack(handle, ..)
+        | AudioCommand::SetLoop(handle, ..) = &command
+            && self.muted.mutes(handle.0)
+        {
+            return;
+        }
         if self.show
             && let AudioCommand::Play(handle, _) = &command
         {

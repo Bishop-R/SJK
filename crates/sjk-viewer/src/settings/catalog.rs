@@ -279,6 +279,11 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Choice(&["0", "1", "2", "3", "4", "5", "6"]),
     },
     Setting {
+        label: "Muted sounds",
+        cvar: crate::audio::muted_sounds::CVAR,
+        kind: ValueKind::Text,
+    },
+    Setting {
         label: "Sound sonar",
         cvar: crate::sound_sonar::CVAR,
         kind: ValueKind::Bool,
@@ -1756,6 +1761,11 @@ pub(super) const NETWORK: &[Setting] = &[
     Setting {
         label: "Follow SJK staff blocks",
         cvar: crate::map_blocks::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Ignore mutes sounds",
+        cvar: crate::sound_mutes::IGNORE_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {

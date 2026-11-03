@@ -53,6 +53,7 @@ mod holstered_staff;
 mod jof_force;
 #[path = "audio_music.rs"]
 pub(crate) mod music;
+pub(crate) mod muted_sounds;
 #[path = "audio_spatial.rs"]
 pub(crate) mod spatial;
 #[path = "audio_transitions.rs"]

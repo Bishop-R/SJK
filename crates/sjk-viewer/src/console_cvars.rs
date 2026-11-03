@@ -1387,6 +1387,18 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Whisper other SJK players end-to-end encrypted through the SJK hub: only the two of you can read it (0 sends every whisper through the game server)",
         ),
         CvarDefinition::new(
+            crate::sound_mutes::IGNORE_CVAR,
+            false,
+            archive,
+            "A JA+ or jaPRO ignore <player> you send also mutes that player's sounds until the map changes; ignore again hears them",
+        ),
+        CvarDefinition::new(
+            crate::audio::muted_sounds::CVAR,
+            "",
+            archive,
+            "Words: every sound whose file path holds one is never played (s_muteSounds \"ysalamiri hacking\")",
+        ),
+        CvarDefinition::new(
             crate::map_blocks::CVAR,
             true,
             archive,

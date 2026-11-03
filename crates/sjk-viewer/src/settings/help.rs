@@ -503,6 +503,10 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_footsteps", "Footstep sounds, yours and other players'."),
     (
+        crate::audio::muted_sounds::CVAR,
+        "Words, such as ysalamiri hacking: no sound whose file name holds one plays. mutesounds <player> mutes a player.",
+    ),
+    (
         "cg_hitsounds",
         "A sound each time you hit a player (another for a teammate), as in EJK. Saber: only changes saber hit sounds.",
     ),
@@ -1342,6 +1346,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::e2e_whispers::CVAR,
         "Whispers to SJK players go end-to-end encrypted through the SJK hub: only you two can read them. Off sends them through the server.",
+    ),
+    (
+        crate::sound_mutes::IGNORE_CVAR,
+        "A JA+ or jaPRO ignore <player> also mutes their sounds until the map changes; ignore again hears them.",
     ),
     (
         crate::map_blocks::CVAR,

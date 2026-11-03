@@ -32,6 +32,8 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Mute one player's sounds: `mutesounds <player>` silences their voice, steps, saber, Force, emotes and toys until the map changes, their chat and look unchanged (`unmutesounds` lifts it); with Ignore mutes sounds (`cl_ignoreMutesSounds`, Settings > Chat, off by default) a JA+ or jaPRO `ignore` does it too _(Sol, after akr's and Neffie's ideas)_
+- Muted sounds (`s_muteSounds`, Settings > Sound): words such as `ysalamiri hacking`, and no sound whose file name holds one plays, items' and power-ups' loops included _(Sol, after akr's and Neffie's ideas)_
 - Hit sounds (`cg_hitsounds`, Settings > Sound, off by default): a sound each time your attack hits a player, another for a teammate, as in EJK; without EJK's or jaPRO's pack SJK plays its own (a tick, a blip, two notes or a knock) instead of nothing _(Sol, after Lex's idea and JoF EJK)_
 - Green on shield hits (`cg_hitMarkerShield`, Settings > HUD, off by default): with the damage hitmarker on, a hit your shield took shows green instead of red _(Sol, after AngeloPapaya's idea)_
 - Kill feed anywhere: Move HUD elements (`hud_edit`) shows a sample kill to drag while none shows, and the feed may now go anywhere, its entries lining up on their left in the screen's left half _(Sol, after AngeloPapaya's idea)_

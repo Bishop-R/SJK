@@ -24,6 +24,16 @@
 
 # ---- Console & chat ----
 
+[sound-mutes]
+area: Audio
+title: Mute one player's sounds (mutesounds), ignore ties, sounds muted by name
+change: mutesounds <player> silences what they cause until the map changes; chat/look stay.
+change: cl_ignoreMutesSounds: a JA+/jaPRO ignore <player> also mutes their sounds (toggle).
+change: s_muteSounds "words": no sound whose file path holds one plays.
+test: mutesounds target on a bot: its steps, saber and voice are gone; its chat still shows.
+test: unmutesounds all: heard again. Change map: mutesounds lists nobody.
+test: Settings > Chat > Ignore mutes sounds on; on JA+ type ignore <name>: silent; again: back.
+test: s_muteSounds saberhum: hums gone at once; clear it: back.
 [hit-sounds-made]
 area: Audio
 title: Hit sounds (cg_hitsounds) without EJK's pack, and its Settings row

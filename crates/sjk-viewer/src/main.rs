@@ -341,6 +341,7 @@ mod sjk_packs;
 mod sky_stage;
 mod small_card_notice;
 mod snapshot_presentation;
+mod sound_mutes;
 mod sound_sonar;
 mod static_models;
 mod stock_blades;
@@ -733,6 +734,8 @@ struct GpuState {
     muted_players: muted_players::MutedPlayers,
     /// Players blocked until the map changes, by this player or by staff for everyone.
     map_blocks: map_blocks::MapBlocks,
+    /// Players whose sounds are muted until the map changes (`mutesounds`).
+    sound_mutes: sound_mutes::SoundMutes,
     game_menu: bool,
     in_game_menu: ingame_menu::InGameMenu,
     game_menu_page: GameMenuPage,
@@ -1693,6 +1696,7 @@ impl GpuState {
             chat: chat::ChatOverlay::with_emojis(emojis),
             muted_players: muted_players::MutedPlayers::default(),
             map_blocks: map_blocks::MapBlocks::default(),
+            sound_mutes: sound_mutes::SoundMutes::default(),
             game_menu,
             in_game_menu: ingame_menu::InGameMenu::new(),
             game_menu_page: if game_menu {

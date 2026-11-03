@@ -1029,6 +1029,11 @@ Lex, a player, asked for `cg_hitsounds`, a sound for each hit as EJK plays it: S
 the option but only EJK's and jaPRO's packs bring its sounds, so Sol made SJK's own for
 players without them (03/11/2026).
 
+akr and Neffie, players, asked to mute one player's sounds and more kinds of sounds,
+such as the ysalamiri's: Sol built `mutesounds` (with the servers' `ignore` muting them
+too, `cl_ignoreMutesSounds`) and Muted sounds, `s_muteSounds`, which silences any sound by
+a word of its file name (03/11/2026).
+
 AngeloPapaya, a player, asked for JoF EJK's low jump: Sol built it as the `lowjump` bind
 (03/11/2026), jump held for one user command, the shortest hop a tap makes. He asked
 to move with the console open: Sol built Move with console open (`cl_consoleMove`). He

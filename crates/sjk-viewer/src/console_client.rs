@@ -214,6 +214,11 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
         crate::toy_switch_words::HELP,
     ),
     (crate::block_command::COMMAND, crate::block_command::HELP),
+    (crate::sound_mutes::COMMAND, crate::sound_mutes::HELP),
+    (
+        crate::sound_mutes::UNMUTE_COMMAND,
+        crate::sound_mutes::UNMUTE_HELP,
+    ),
     (
         crate::block_command::UNBLOCK_COMMAND,
         crate::block_command::UNBLOCK_HELP,
@@ -1160,6 +1165,8 @@ impl crate::GpuState {
             crate::toy_switch_words::COMMAND => return Ok(crate::toy_switch_words::help_lines()),
             crate::block_command::COMMAND => return self.block_command(args),
             crate::block_command::UNBLOCK_COMMAND => return self.unblock_command(args),
+            crate::sound_mutes::COMMAND => return self.mute_sounds_command(args),
+            crate::sound_mutes::UNMUTE_COMMAND => return self.unmute_sounds_command(args),
             crate::medal_popup::rehearsal::COMMAND => return self.debug_medal_command(args),
             crate::holocrons::rehearsal::COMMAND => return self.debug_holocron_command(args),
             crate::cards::rehearsal::COMMAND => return self.debug_open_command(args),

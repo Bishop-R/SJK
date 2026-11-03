@@ -1762,6 +1762,18 @@ tests: the hearing point, occlusion from rays and its glide, muffling, loops, th
 from its rays, the reverb bounded and dying away, a larger room ringing longer. Not yet
 heard in a game.
 
+## Muted sounds
+
+`s_muteSounds` (Settings > Sound > Muted sounds, empty by default; akr's and Neffie's
+request, 03/11/2026) takes words, and no sound whose file path holds one of them plays,
+whatever plays it: an item's or power-up's loop (`ysalamiri`), the loops a server puts on
+players (`hacking`, `supp_healed`, `fry`), a map's machine, a mod's sound. Matching
+ignores case: `s_muteSounds "ysalamiri hacking"`. The test sits where the mixer is fed
+(`AudioOutput::send`): one bit per loaded sound, worked out again only when the words
+change or new sounds load, so a played sound costs one bit test
+([muted_sounds.rs](../crates/sjk-viewer/src/audio/muted_sounds.rs)). One player's sounds
+are muted with `mutesounds <player>` ([hub-chat.md](hub-chat.md#muting-a-players-sounds)).
+
 ## Sound sonar
 
 `cg_soundSonar` (Settings > Sound, Sound sonar; off by default; Dawson's idea for deaf

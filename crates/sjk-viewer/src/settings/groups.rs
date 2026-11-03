@@ -114,6 +114,7 @@ const CHAT_ROWS: &[&str] = &[
     crate::chat_gifs::search::KEY_CVAR,
     crate::e2e_whispers::CVAR,
     crate::map_blocks::CVAR,
+    crate::sound_mutes::IGNORE_CVAR,
 ];
 
 /// The first row of the JA+ plugin options, under their heading.

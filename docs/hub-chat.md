@@ -1030,6 +1030,35 @@ the server, an SJK player or not.
   map, Unblock all) above Block ([sender_card.rs](../crates/sjk-viewer/src/sender_card.rs),
   `MapBlockRow`).
 
+## Muting a player's sounds
+
+Since 03/11/2026 (akr's and Neffie's request) a player's sounds can be muted alone,
+without the rest of a block: `mutesounds <player>` (`target` for the one under the
+crosshair, a slot number or part of the name shown, as `block`) silences everything the
+player causes, exactly what a block silences (`audio_mute.rs`: their footsteps, voice,
+pain, taunts, weapon fire, saber swings, hum and hits, Force, a thrown saber, their
+emotes' and toys' sounds and the beep of their chat), while their chat, model and name
+stay as they are ([sound_mutes.rs](../crates/sjk-viewer/src/sound_mutes.rs)). It lasts
+until the map changes or they leave, with the bookkeeping of a block for this map (it
+follows them through renames); `mutesounds` alone lists them and
+`unmutesounds <player|all>` lifts it. Nothing is sent to the server or the hub.
+
+Settings > Chat > Ignore mutes sounds (`cl_ignoreMutesSounds`, off by default) ties it to
+the servers' own ignore: an `ignore <player>` the player types on a JA+ or jaPRO server
+(the server then hides that player's chat) also mutes their sounds, and `ignore` again,
+which the servers toggle, lifts it. The client reads the commands it released to the
+server (`sjk_client::sent_commands`), so the command still goes to the server unchanged;
+the first look after a start skips what was sent before. On a server without `ignore`
+the server answers that it does not know the command, and the sounds are muted all the
+same.
+
+What was there before: blocking (above) already silenced a player completely, but it also
+hides their chat and draws them as Kyle; Settings > Sound had volumes for effects, music,
+voices and emotes, toys' sounds by toy (Collection > Toys), chat sounds by kind,
+footsteps, jetpack, blade skin and holstered-staff sounds, but nothing for one player's
+sounds alone nor for a sound outside those groups, such as an item's or power-up's loop.
+The second gap is `s_muteSounds` ([client.md](client.md#muted-sounds)).
+
 ## Emotes in the client
 
 - `sjkemote <id>` plays an emote while on a server (named apart from the `emote`

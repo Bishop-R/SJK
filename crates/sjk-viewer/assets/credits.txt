@@ -541,6 +541,14 @@ did: The Empower glow hidden with a setting
 role: Ideas for SJK
 did: Hit sounds (cg_hitsounds) heard without EJK's pack
 
+[akr]
+role: Ideas for SJK
+did: Muting one player's sounds (mutesounds), ignore muting them too, sounds muted by name
+
+[Neffie]
+role: Ideas for SJK
+did: Muting one player's sounds (mutesounds), ignore muting them too, sounds muted by name
+
 [AngeloPapaya]
 role: Ideas for SJK
 did: Low jump: one press, the shortest hop a tap makes (lowjump)
