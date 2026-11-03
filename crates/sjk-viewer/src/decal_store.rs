@@ -49,7 +49,7 @@ const MAX_MARK_POLYS: usize = 256;
 const MARK_TOTAL_TIME: u32 = 10_000;
 const MARK_FADE_TIME: u32 = 1_000;
 /// Fragments one tag keeps at most (a tag over a corner or a patch is cut in several).
-const MAX_TAG_POLYS: usize = 48;
+const MAX_TAG_POLYS: usize = 512;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Ring {
@@ -145,6 +145,8 @@ pub(crate) struct DecalStore {
     tags_version: u64,
     dropped_requests: usize,
     scratch: DecalScratch,
+    /// Tags' buffers ([`DecalScratch::for_tags`]).
+    tag_scratch: DecalScratch,
     epoch: Instant,
     /// `cg_marks`; temporary marks bypass it.
     marks_enabled: bool,
@@ -163,6 +165,7 @@ impl Default for DecalStore {
             tags_version: 0,
             dropped_requests: 0,
             scratch: DecalScratch::default(),
+            tag_scratch: DecalScratch::for_tags(),
             epoch: Instant::now(),
             marks_enabled: true,
         }
@@ -324,7 +327,7 @@ impl DecalStore {
         for index in 0..self.tags.len() {
             let Self {
                 tags,
-                scratch,
+                tag_scratch: scratch,
                 tags_version,
                 ..
             } = self;

@@ -9,6 +9,20 @@
 #                               made it when that is not the piece's owner.
 
 = Sol
++ 03/11/2026 | - | Tags: keep off odd surfaces, larger budget, spray can sound
+- 882934d |  | Tags: keep off odd surfaces, larger budget, spray can sound
++ 03/11/2026 | - | Tags: no half tag across a seam of one flat wall
+- 44eea11 |  | Tags: no half tag across a seam of one flat wall
++ 03/11/2026 | - | Add opt-in 3D sound (s_spatial): head hearing, occlusion, room reverb
+- 39f4ddc |  | Add opt-in 3D sound (s_spatial): head hearing, occlusion, room reverb
++ 03/11/2026 | - | 3D sound: reverb from a send of world-placed sounds only
+- 75ef29e |  | 3D sound: reverb from a send of world-placed sounds only
++ 03/11/2026 | - | Boombox: stand it on the floor with boombox_place (after VisionJK)
+- f825405 |  | Boombox: stand it on the floor with boombox_place (after VisionJK)
++ 03/11/2026 | - | Map edits reach players within seconds; Sync map edits for anyone
+- 1472744 |  | Map edits reach players within seconds; Sync map edits for anyone
++ 02/11/2026 | - | Map editor: draw caulk and nodraw faces with a chosen shader
+- b47ee63 |  | Map editor: draw caulk and nodraw faces with a chosen shader
 + 02/11/2026 | - | JoF: one command a frame stamped now, as cl_cmdratecap (Heimdall kicks)
 - 211208b |  | JoF: one command a frame stamped now, as cl_cmdratecap (Heimdall kicks)
 + 02/11/2026 | - | Joins: box the built world so the main thread's stack holds

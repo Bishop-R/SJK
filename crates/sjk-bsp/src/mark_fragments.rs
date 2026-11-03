@@ -364,9 +364,18 @@ impl SurfaceGather<'_> {
                     let Some(first) = vertices.get(surface.vertices.start) else {
                         continue;
                     };
+                    // A face the compiler stored no normal for (no lightmap) has its
+                    // vertices' instead: else it failed the facing test and a mark
+                    // spanning it and a lit face of the same wall lost that half.
+                    let stored = surface.lightmap_vectors[2];
+                    let normal = if dot(stored, stored) > 0.25 {
+                        stored
+                    } else {
+                        normalize(first.normal)
+                    };
                     let plane = Plane {
-                        normal: surface.lightmap_vectors[2],
-                        distance: dot(first.position, surface.lightmap_vectors[2]),
+                        normal,
+                        distance: dot(first.position, normal),
                     };
                     box_on_plane_side(minimums, maximums, plane) == BoxSide::Both
                         && dot(plane.normal, self.projection.direction()) <= FACE_FACING_LIMIT

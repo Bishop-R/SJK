@@ -5785,7 +5785,14 @@ sees it there.
   quick wheel's Toys page) traces the crosshair 128 units into the world and sticks the
   chosen tag where it lands: upright on a wall, its top away from the player on a floor,
   56 units wide. One tag a player: a new one replaces the last, at most one every 10
-  seconds. `toy_tag clear` takes it off. A tag the player does not hold is refused.
+  seconds. `toy_tag clear` takes it off. A tag the player does not hold is refused, and
+  so is a spot no tag holds on (below): "A tag does not hold on that surface".
+- **The spray** (Sol's request, 03/11/2026): a tag going up plays a spray can, the ball
+  rattled three times then two hisses (`sound/sjk/tags/spray.wav`, synthesized by
+  [tag_sounds.py](../scripts/tag_sounds.py), bundled), heard where the tag lands. Another
+  player's is heard when their look changes to a new tag on this map, not when their look
+  arrives already carrying one (joining, coming back) nor while `cg_toyTags 0` hides them.
+  `s_toyTagSound 0` silences it.
 - **Others see it** through the player's look: the tag rides in it (`tag`, the tag's id,
   map, point, surface normal and turn, and its finish when not Normal), so players who come
   later see it too, and the hub refuses a tag the key does not hold, or not in that finish
@@ -5798,7 +5805,18 @@ sees it there.
 A tag is a lasting decal with a slot of its own per player
 ([decal_store.rs](../crates/sjk-viewer/src/decal_store.rs)): projected once when it
 changes (as impact marks are, over corners and patches), kept until it goes, never pushed
-out by impact marks, and kept with `cg_marks 0`. Since 31/10/2026 (Sol: tags were blurry in
+out by impact marks, and kept with `cg_marks 0`. Since 03/11/2026 (Sol: tags glitched on
+odd surfaces) a tag keeps off surfaces it cannot sit on as a flat picture
+([`tag_unfit`](../crates/sjk-viewer/src/decal_marks.rs)): moving ones (`deformVertexes`,
+flags, water waves), see-through ones (a first stage blended or `alphaFunc` cut: glass,
+force fields, grates, leaves, or sorted after the opaque), decals laid over a wall
+(`polygonOffset`: the wall under takes the tag once instead of twice) and sky or fog. It
+also projects with buffers of its own, 512 fragments over at most 128 surfaces (an impact
+mark keeps the reference's 128 over 64), so a curved patch or a face cut in many triangles
+no longer cuts the picture short (it was 48). Two seams on one flat wall no longer cut a
+tag in half either: tags (not marks) go on models the compiler merged into the world, with
+the curves' facing test, and a flat face stored without a normal (no lightmap) is judged by
+its vertices' normal instead of being skipped (`sjk-bsp` `mark_surfaces`, marks too). Since 31/10/2026 (Sol: tags were blurry in
 the game) tags are drawn by a pass of their own
 ([tag_render.rs](../crates/sjk-viewer/src/tag_render.rs), [rendering.md](rendering.md#tags)),
 each picture at its full size (a tag enlarged to 512 pixels, a card's sticker 1024), not as
@@ -5823,7 +5841,8 @@ toy's sounds, and a switch per toy silences that toy's sounds alone, the player'
 and everyone else's (`s_toyBoxSound`, `s_toyOrder66Sound`, `s_toyHaxSound`,
 `s_toyRagdollSound`, `s_toyDroneSound`, `s_toyBoomboxSound`, `s_toyMonitorSound`,
 `s_toyMysteryBoxSound` (the [mystery boxes](mystery-boxes.md)), `s_toyBananaSound` (the
-[Banana peel](#banana-peel), 29/10/2026), `s_toyMasterSound` (the toys [the Toy
+[Banana peel](#banana-peel), 29/10/2026), `s_toyTagSound` (the [Tag](#tag)'s spray,
+03/11/2026), `s_toyMasterSound` (the toys [the Toy
 Master](toy-master.md) hides, 30/10/2026), all
 on by default,
 archived). The toy still

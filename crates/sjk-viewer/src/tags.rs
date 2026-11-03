@@ -291,9 +291,22 @@ pub(crate) fn up_for(normal: Vec3, forward: Vec3) -> Vec3 {
     }
 }
 
+/// The spray can's sound when a tag goes up (`scripts/tag_sounds.py`).
+pub(crate) const SPRAY_SOUND: &str = "sound/sjk/tags/spray.wav";
+
 /// The player's own tag and when the last one went up.
 #[derive(Default)]
 pub(crate) struct Tags {
+    /// Where a tag went up this frame: the spray is heard there.
+    pub(crate) sprays: Vec<Vec3>,
+    /// Each other player's tag as last seen, `None` before their look was known: a
+    /// player whose look arrives with a tag is not heard spraying it.
+    pub(crate) seen: Vec<Option<Option<sjk_identity::PlacedTag>>>,
+    /// The audio generation the spray was registered with.
+    pub(crate) sound_registered: Option<u64>,
+    /// Sprays played so far: each takes the next of a few sources, so two at once do not
+    /// cut each other.
+    pub(crate) sprays_played: u32,
     /// The tag stuck, with the server it is on.
     own: Option<(std::net::SocketAddr, sjk_identity::PlacedTag)>,
     last: Option<Instant>,
@@ -363,10 +376,16 @@ impl Tags {
 pub(crate) fn mount(vfs: &mut sjk_vfs::VirtualFileSystem) -> Result<(), sjk_vfs::VfsError> {
     vfs.mount_memory(
         "SJK Tag",
-        [(
-            ICON,
-            include_bytes!("../assets/tags/toy_tag.png").as_slice(),
-        )],
+        [
+            (
+                ICON,
+                include_bytes!("../assets/tags/toy_tag.png").as_slice(),
+            ),
+            (
+                SPRAY_SOUND,
+                include_bytes!("../assets/tags/spray.wav").as_slice(),
+            ),
+        ],
     )?;
     Ok(())
 }

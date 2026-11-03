@@ -23,6 +23,11 @@ const MAX_DECAL_POINTS: usize = 384;
 const MAX_DECAL_FRAGMENTS: usize = 128;
 /// Surface list capacity handed to `R_BoxSurfaces_r` (`tr_marks.cpp:313`).
 const MAX_MARK_SURFACES: usize = 64;
+/// A tag's budget: it lasts and is wider than a mark, so a curved patch or a face cut
+/// into many triangles must not run it out and leave the picture cut short.
+const MAX_TAG_POINTS: usize = 4_096;
+const MAX_TAG_FRAGMENTS: usize = 512;
+const MAX_TAG_SURFACES: usize = 128;
 /// `MAX_VERTS_ON_DECAL_POLY` (`tr_decals.cpp:26`).
 pub(crate) const MAX_VERTICES_ON_DECAL: usize = 10;
 /// Decals project 20 units into the surface (`tr_decals.cpp:198`).
@@ -61,14 +66,51 @@ pub(crate) struct DecalSurfaces {
     ranges: Vec<Range<u32>>,
     /// Surfaces a map edit hides ([`crate::map_edits`]): no marks, no picks.
     hidden: Vec<bool>,
+    /// Surfaces a tag is not put on ([`tag_unfit`]): moving, see-through, cut out or
+    /// laid over another surface.
+    no_tags: Vec<bool>,
+}
+
+/// Whether a tag stays off a surface drawn with `shader`: the tag is a flat picture fixed
+/// on the world, so on a surface that moves (`deformVertexes`), is seen through (glass,
+/// water, force fields, a blended first stage), has holes cut out (`alphaFunc` grates,
+/// leaves), is a decal on another surface (`polygonOffset`, whose wall under it takes
+/// the tag) or is sky or fog it hung in the air, fought the surface's depth or showed
+/// twice.
+pub(crate) fn tag_unfit(shader: &sjk_shader::ShaderDefinition) -> bool {
+    use sjk_shader::Deform;
+    let moves = shader
+        .deforms
+        .iter()
+        .any(|deform| !matches!(deform, Deform::Normals { .. } | Deform::Text(_)));
+    let first = shader
+        .stages
+        .iter()
+        .find(|stage| stage.surface_sprites.is_none());
+    let see_through = first.is_none_or(|stage| {
+        stage.blend != sjk_shader::StageBlend::Replace || stage.alpha_function.is_some()
+    });
+    // Q3's `SS_OPAQUE` is 3: anything sorted after is blended.
+    let sorted_late = shader.sort.is_some_and(|sort| sort > 3.0);
+    moves
+        || see_through
+        || sorted_late
+        || shader.polygon_offset
+        || shader.sky.is_some()
+        || shader.fog.is_some()
 }
 
 impl DecalSurfaces {
     /// Capture the world batches. Only draws that belong to the world model
     /// take part (`R_BoxSurfaces_r` walks `tr.world->nodes`, so marks never
     /// land on inline models).
-    pub(crate) fn from_flattened(scene: &FlattenedScene, bsp: &Bsp) -> Self {
+    pub(crate) fn from_flattened(
+        scene: &FlattenedScene,
+        bsp: &Bsp,
+        shaders: &sjk_shader::ShaderCatalog,
+    ) -> Self {
         let mut ranges = vec![0..0; bsp.render().surfaces().len()];
+        let mut no_tags = vec![false; ranges.len()];
         for draw in &scene.draws {
             let Some(surface_index) = draw.surface_index else {
                 continue;
@@ -78,6 +120,11 @@ impl DecalSurfaces {
             }
             if ranges[surface_index].is_empty() {
                 ranges[surface_index] = draw.indices.clone();
+                no_tags[surface_index] = scene
+                    .materials
+                    .get(draw.material)
+                    .and_then(|material| shaders.get(&material.shader))
+                    .is_some_and(tag_unfit);
             }
         }
         Self {
@@ -89,6 +136,7 @@ impl DecalSurfaces {
             normals: scene.vertices.iter().map(|vertex| vertex.normal).collect(),
             indices: scene.indices.clone(),
             hidden: vec![false; ranges.len()],
+            no_tags,
             ranges,
         }
     }
@@ -266,14 +314,32 @@ pub(crate) struct RayHit {
 /// Fixed-capacity buffers reused by every projection.
 pub(crate) struct DecalScratch {
     surfaces: Vec<usize>,
+    max_surfaces: usize,
     fragments: MarkFragments,
+    /// Tags' buffers: their surfaces are filtered further ([`tag_unfit`]).
+    tags: bool,
 }
 
 impl Default for DecalScratch {
     fn default() -> Self {
         Self {
             surfaces: Vec::with_capacity(MAX_MARK_SURFACES),
+            max_surfaces: MAX_MARK_SURFACES,
             fragments: MarkFragments::with_capacity(MAX_DECAL_POINTS, MAX_DECAL_FRAGMENTS),
+            tags: false,
+        }
+    }
+}
+
+impl DecalScratch {
+    /// The buffers tags project with: larger, and keeping off surfaces a tag does not
+    /// sit well on ([`tag_unfit`]).
+    pub(crate) fn for_tags() -> Self {
+        Self {
+            surfaces: Vec::with_capacity(MAX_TAG_SURFACES),
+            max_surfaces: MAX_TAG_SURFACES,
+            fragments: MarkFragments::with_capacity(MAX_TAG_POINTS, MAX_TAG_FRAGMENTS),
+            tags: true,
         }
     }
 }
@@ -380,21 +446,27 @@ fn clip(world: &DecalSurfaces, bsp: &Bsp, projection: &MarkProjection, scratch: 
     scratch.surfaces.clear();
     scratch.fragments.clear();
     let shaders = bsp.shaders();
+    let tags = scratch.tags;
     bsp.mark_surfaces(
         projection,
-        MAX_MARK_SURFACES,
+        scratch.max_surfaces,
         &mut scratch.surfaces,
-        |_, surface| {
+        |index, surface| {
             let shader = &shaders[surface.shader];
             shader.surface_flags & (SURF_NOIMPACT | SURF_NOMARKS) == 0
                 && shader.content_flags & CONTENTS_FOG == 0
+                && !(tags && world.no_tags.get(index).copied().unwrap_or(false))
         },
     );
     let surfaces = bsp.render().surfaces();
     'surfaces: for &surface_index in &scratch.surfaces {
+        // Tags also go on models the compiler merged into the world (a panel flush with
+        // a brush wall left the tag cut at the seam); marks keep the reference's
+        // `r_marksOnTriangleMeshes 0`.
         let curved = match surfaces[surface_index].kind {
             SurfaceKind::Planar => false,
             SurfaceKind::Patch => true,
+            SurfaceKind::TriangleSoup if tags => true,
             _ => continue,
         };
         for triangle in world.triangles(surface_index) {
@@ -433,4 +505,32 @@ fn perpendicular_vector(source: Vec3) -> Vec3 {
     let mut seed = Vec3::ZERO;
     seed[smallest] = 1.0;
     (seed - source * seed.dot(source)).normalize_or(Vec3::Y)
+}
+
+#[cfg(test)]
+mod tag_surface_tests {
+    use super::tag_unfit;
+
+    fn unfit(script: &str) -> bool {
+        let shaders = sjk_shader::parse_shader_script(script.as_bytes(), "shaders/test.shader")
+            .expect("parse");
+        tag_unfit(&shaders[0])
+    }
+
+    #[test]
+    fn tags_keep_off_moving_see_through_cut_out_and_laid_over_surfaces() {
+        let wall = "textures/a/wall\n{\n{\nmap $lightmap\n}\n{\nmap textures/a/wall\nblendFunc GL_DST_COLOR GL_ZERO\n}\n}\n";
+        assert!(!unfit(wall), "a plain lightmapped wall takes tags");
+        let shiny = "textures/a/shiny\n{\n{\nmap textures/a/shiny\n}\n{\nmap textures/env\ntcGen environment\nblendFunc GL_ONE GL_ONE\n}\n}\n";
+        assert!(!unfit(shiny), "an opaque wall with a shine on top too");
+        let glass = "textures/a/glass\n{\nsurfaceparm trans\n{\nmap textures/a/glass\nblendFunc GL_ONE GL_ONE\n}\n}\n";
+        assert!(unfit(glass), "glass");
+        let grate =
+            "textures/a/grate\n{\n{\nmap textures/a/grate\nalphaFunc GE128\ndepthWrite\n}\n}\n";
+        assert!(unfit(grate), "a grate");
+        let flag = "textures/a/flag\n{\ndeformVertexes wave 30 sin 0 3 0 0.2\n{\nmap textures/a/flag\n}\n}\n";
+        assert!(unfit(flag), "a waving flag");
+        let poster = "textures/a/poster\n{\npolygonOffset\n{\nmap textures/a/poster\n}\n}\n";
+        assert!(unfit(poster), "a decal laid on a wall");
+    }
 }

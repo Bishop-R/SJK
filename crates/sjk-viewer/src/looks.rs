@@ -433,6 +433,17 @@ impl Looks {
         self.claimed.get(client)?.as_ref()?.tag.as_ref()
     }
 
+    /// [`Self::tag`], told apart from a look not known yet (`None`): `Some(None)` when
+    /// the player's look is known and has no tag.
+    pub(crate) fn tag_known(&self, client: usize) -> Option<Option<&sjk_identity::PlacedTag>> {
+        let matched = client < SLOTS && self.matched & (1 << client) != 0;
+        if !matched || self.own_slot.map(usize::from) == Some(client) {
+            return None;
+        }
+        self.shown(client)?;
+        Some(self.claimed.get(client)?.as_ref()?.tag.as_ref())
+    }
+
     /// What the player in `client` is drawn wearing: nothing while they are muted on
     /// this PC, which never mutes the local player's own slot.
     fn shown(&self, client: usize) -> Option<&Worn> {

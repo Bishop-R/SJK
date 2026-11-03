@@ -24,6 +24,17 @@
 
 # ---- Console & chat ----
 
+[tag-spray-surfaces]
+area: Gameplay
+title: Tags: spray can sound, no glitches on glass, grates, flags or curved walls
+change: A tag going up plays a spray can (shake, then two hisses), yours and others' near you.
+change: Tags keep off moving, see-through, cut-out and decal surfaces; curves no longer cut them.
+test: toy_tag on a wall: the spray plays; another SJK player tagging near you: you hear theirs.
+test: Aim at glass or a grate alone: "A tag does not hold on that surface"; nothing goes up.
+test: Tag a curved arch or pillar and a wall with a poster: the whole picture shows, no flicker.
+test: Settings > Sound > Toys, Tag spray sound off: tags go up silently.
+test: Tag across a seam of one flat wall (brush next to a model panel): the whole tag shows.
+
 [boombox-place]
 area: Gameplay
 title: Boombox on the floor (boombox_place, after VisionJK)

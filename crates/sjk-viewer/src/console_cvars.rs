@@ -627,6 +627,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Play Banana peel sounds (SJK)",
         ),
         CvarDefinition::new(
+            crate::toy_sounds::Toy::Tag.cvar(),
+            true,
+            archive,
+            "Play the Tag toy's spray sound (SJK)",
+        ),
+        CvarDefinition::new(
             crate::toy_sounds::Toy::PropGun.cvar(),
             true,
             archive,

@@ -564,6 +564,10 @@ const HELP: &[(&str, &str)] = &[
         "Off: Banana peel sounds are not played on this PC, yours or other players'. The toy still works and is still seen.",
     ),
     (
+        crate::toy_sounds::Toy::Tag.cvar(),
+        "Off: tags go up without the spray can's sound on this PC, yours and other players'.",
+    ),
+    (
         crate::toy_sounds::Toy::Master.cvar(),
         "Off: the toys the Toy Master hides on maps play their shows in silence on this PC.",
     ),
