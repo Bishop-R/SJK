@@ -1,3 +1,23 @@
+## Holocron catch-up, play signals, tag copies (client side)
+
+03/11/2026, `personal/economy-ideas` from `main` `69a3d6a0`, built with the hub's
+`economy-ideas` branch (its `PROTOCOL.md` "Holocrons" Catch-up and Play signals, "Tag
+copies"). Rollembones' ideas: every active claim carries `play`, what the player did since
+the hub last accepted a claim ([holocrons/signals.rs](../crates/sjk-viewer/src/holocrons/signals.rs):
+horizontal distance moved, attack presses, `PERS_HITS` rises, hurts by another client,
+kills and deaths from obituaries), counted only while the claim says `active`; the
+Holocrons tab shows the catch-up ("(catch-up x2)", how many left today) and a line when the
+hub's pace for the last claim was not full ([holocrons.md](holocrons.md#earning)). Blep's
+idea: tag copies on Collection > Tags (Break down, Craft two into a tag of that tier the
+player lacks, each on a second press) and in the trade window
+([client.md](client.md#tag), [tag_copies.rs](../crates/sjk-viewer/src/tag_copies.rs)), all
+shown only when the hub's economy lists `tag_copies`. Verified: unit tests (claim bodies,
+wire parsing, the signal watch on made-up snapshots and obituaries, the attack edges, the
+catch-up wait and the lines, tag copy spares, yields, craft inputs, outcome words), fmt,
+clippy, workspace tests. Not verified: against a running hub, in a game (whether the
+signals' counts match what a real duel or FFA gives, the new buttons and line on screen
+at every window shape); no world shot was made.
+
 ## #ideas 03/11: low jump, console movement, kill feed, shield hits, hit sounds, sound mutes
 
 03/11/2026, `personal/hud-ideas-1103` from `main` `566c944e`, read from the code and JoF

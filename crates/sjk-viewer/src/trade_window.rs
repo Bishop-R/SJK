@@ -93,11 +93,16 @@ pub(crate) struct Item {
 pub(crate) enum What {
     Holocron(u64),
     Shader(String),
+    /// A tag copy: the tag's id and the copy's finish (03/11/2026).
+    Tag(String, String),
 }
 
 impl Item {
     /// An item of a side, as the hub sent it.
     pub(crate) fn from_wire(item: &sjk_identity::TradeItem) -> Self {
+        if let Some(copy) = item.tag_copy() {
+            return Self::tag(&copy.id, &copy.finish, item.name.as_deref(), item.value);
+        }
         match (item.holocron, &item.id) {
             (Some(id), _) => Self::holocron(id, &item.tier, item.value),
             (None, Some(id)) => Self::shader(id, item.name.as_deref(), item.value),
@@ -138,6 +143,35 @@ impl Item {
             tier: found.map_or_else(String::new, |skin| skin.tier.label().to_owned()),
             holocron_slot: None,
             colour: found.map_or(color::HOLO, |skin| skin.tier.colour()),
+            value,
+            locked_for: None,
+            favourite: false,
+            locked: false,
+            new: false,
+            worn: false,
+        }
+    }
+
+    /// A copy of tag `id` in `finish` (its name `named` when this client does not know
+    /// it), worth `value`.
+    pub(crate) fn tag(id: &str, finish: &str, named: Option<&str>, value: i64) -> Self {
+        let found = crate::tags::get(id);
+        let finish_name = crate::cards::Finish::from_id(finish)
+            .filter(|finish| finish.index > 0)
+            .map(|finish| finish.name);
+        let name = found
+            .map(|tag| tag.name.to_owned())
+            .or_else(|| named.map(str::to_owned))
+            .unwrap_or_else(|| id.to_owned());
+        Self {
+            what: What::Tag(id.to_owned(), finish.to_owned()),
+            name: match finish_name {
+                Some(finish) => format!("{finish} {name}"),
+                None => name,
+            },
+            tier: found.map_or_else(String::new, |tag| tag.tier.label().to_owned()),
+            holocron_slot: None,
+            colour: found.map_or(color::HOLO, |tag| tag.tier.colour()),
             value,
             locked_for: None,
             favourite: false,
@@ -240,7 +274,7 @@ impl Room {
                         .and_then(|slot| self.tiers.get(slot))
                         .is_none_or(|left| *left > 0)
             }
-            What::Shader(_) => self.duplicates > 0,
+            What::Shader(_) | What::Tag(..) => self.duplicates > 0,
         }
     }
 
@@ -299,7 +333,7 @@ impl View {
 
     /// The side with one item more or one fewer: the step that offers it.
     fn offer_with(&self, add: Option<&Item>, remove: Option<usize>) -> TradeStep {
-        let (mut holocrons, mut shaders) = (Vec::new(), Vec::new());
+        let (mut holocrons, mut shaders, mut tags) = (Vec::new(), Vec::new(), Vec::new());
         for (index, item) in self.mine.iter().chain(add).enumerate() {
             if Some(index) == remove {
                 continue;
@@ -307,9 +341,14 @@ impl View {
             match &item.what {
                 What::Holocron(id) => holocrons.push(*id),
                 What::Shader(id) => shaders.push(id.clone()),
+                What::Tag(id, finish) => tags.push(sjk_identity::TagCopy::new(id, finish)),
             }
         }
-        TradeStep::Offer { holocrons, shaders }
+        TradeStep::Offer {
+            holocrons,
+            shaders,
+            tags,
+        }
     }
 }
 
@@ -1259,9 +1298,10 @@ fn gift_question(ui: &mut MenuCanvas, frame: &Frame, view: &View, top: f32, bott
     let names: Vec<String> = view
         .mine
         .iter()
-        .map(|item| match item.holocron_slot {
-            Some(_) => crate::terms::say_owned(format!("a {} Holocron", item.tier)),
-            None => format!("a {} blade", item.name),
+        .map(|item| match (&item.what, item.holocron_slot) {
+            (_, Some(_)) => crate::terms::say_owned(format!("a {} Holocron", item.tier)),
+            (What::Tag(..), None) => format!("a {}", item.name),
+            (_, None) => format!("a {} blade", item.name),
         })
         .collect();
     let gives = match names.len() {
@@ -1423,6 +1463,30 @@ fn tile(
                 1.0,
                 crate::holocrons::gem::ROWS,
             );
+        }
+        None if matches!(item.what, What::Tag(..)) => {
+            // A tag: its picture when loaded, else a square in the tier's colour.
+            let id = match &item.what {
+                What::Tag(id, _) => id.as_str(),
+                _ => "",
+            };
+            let rect = frame.rect(cx - 22.0, cy - 22.0, 44.0, 44.0);
+            match crate::tag_icons::texture(id) {
+                Some(texture) => {
+                    let _ = ui.draw_list_mut().push(DrawCommand::TexturedQuad {
+                        rect,
+                        texture,
+                        color: Color::new(1.0, 1.0, 1.0, 1.0),
+                    });
+                }
+                None => {
+                    let _ = ui.draw_list_mut().push(DrawCommand::RoundedRect {
+                        rect,
+                        radius: 8.0 * s,
+                        color: color::alpha(item.colour, 0.45),
+                    });
+                }
+            }
         }
         None => {
             // A blade: a bright core in a glow of the tier's colour.
@@ -2237,6 +2301,7 @@ pub(crate) mod tests {
                 TradeStep::Offer {
                     holocrons: vec![7],
                     shaders: vec!["saber_haze".to_owned()],
+                    tags: vec![],
                 }
             ))
         );
@@ -2248,6 +2313,7 @@ pub(crate) mod tests {
                 TradeStep::Offer {
                     holocrons: vec![],
                     shaders: vec![],
+                    tags: vec![],
                 }
             ))
         );

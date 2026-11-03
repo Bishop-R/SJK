@@ -30,6 +30,7 @@ pub(crate) mod icons;
 pub(crate) mod line;
 pub(crate) mod rehearsal;
 pub(crate) mod seen;
+pub(crate) mod signals;
 pub(crate) mod stage;
 
 use sjk_identity::{Holocron, HolocronCounts, HolocronProgress};
@@ -373,11 +374,50 @@ pub(crate) fn next_text(progress: &HolocronProgress, lifts_in: Option<u64>) -> S
         };
     }
     let minutes = progress.remaining_secs().div_ceil(60).max(1);
-    if minutes == 1 {
-        "Next holocron in about 1 minute of play".to_owned()
+    // While catch-up drops are left today, the next comes twice as fast (03/11/2026).
+    let catchup = if progress.catchup_left() > 0 {
+        " (catch-up x2)"
     } else {
-        format!("Next holocron in about {minutes} minutes of play")
+        ""
+    };
+    if minutes == 1 {
+        format!("Next holocron in about 1 minute of play{catchup}")
+    } else {
+        format!("Next holocron in about {minutes} minutes of play{catchup}")
     }
+}
+
+/// What the hub says of the player's earning, in a line (03/11/2026, Rollembones' idea;
+/// `docs/holocrons.md`, "Earning"): the catch-up left today, and the pace the last claims
+/// earned at when it is not full. Empty when there is nothing to say, and from hubs
+/// before.
+pub(crate) fn pace_text(progress: &HolocronProgress) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let left = progress.catchup_left();
+    if left > 0 && !progress.capped() {
+        parts.push(if left == 1 {
+            "Catch-up x2: 1 more holocron at double speed today".to_owned()
+        } else {
+            format!("Catch-up x2: {left} more holocrons at double speed today")
+        });
+    }
+    if let Some(activity) = progress.activity {
+        let minutes = (activity.combat_window / 60).max(1);
+        match activity.pace {
+            Some(0) => parts.push("Not earning: move around or fight to earn holocrons".to_owned()),
+            Some(pace) if pace < 100 => parts.push(format!(
+                "{} pace: no fight in the last {minutes} minutes. Fight, get hit or duel for \
+                 full pace",
+                if pace == 50 {
+                    "Half".to_owned()
+                } else {
+                    format!("{pace}%")
+                }
+            )),
+            _ => {}
+        }
+    }
+    parts.join(". ")
 }
 
 #[cfg(test)]
@@ -559,6 +599,8 @@ mod tests {
             resets_at: None,
             server_time: 0,
             can_open: true,
+            catchup: None,
+            activity: None,
             read_at: std::time::Instant::now(),
         }
     }
@@ -616,6 +658,8 @@ mod tests {
         let capped = HolocronProgress {
             server_time: 1_793_250_000,
             resets_at: Some(1_793_260_800),
+            catchup: None,
+            activity: None,
             read_at: now,
             ..progress(1_800, 8)
         };
@@ -641,5 +685,70 @@ mod tests {
         );
         let open = HolocronProgress { today: 3, ..capped };
         assert_eq!(cap_lifts_in(&open, now), None, "not capped");
+    }
+
+    /// While catch-up drops are left, the next holocron needs the catch-up's interval and
+    /// the line says so; the pace line tells half and no pace.
+    #[test]
+    fn catch_up_halves_the_wait_and_the_pace_is_told() {
+        let catchup = sjk_identity::Catchup {
+            pool: 4,
+            left: 3,
+            every_secs: 900,
+            max: 4,
+        };
+        let fast = HolocronProgress {
+            catchup: Some(catchup),
+            ..progress(600, 1)
+        };
+        assert_eq!(fast.remaining_secs(), 300);
+        assert_eq!(
+            next_text(&fast, None),
+            "Next holocron in about 5 minutes of play (catch-up x2)"
+        );
+        assert_eq!(
+            pace_text(&fast),
+            "Catch-up x2: 3 more holocrons at double speed today"
+        );
+        let spent = HolocronProgress {
+            catchup: Some(sjk_identity::Catchup { left: 0, ..catchup }),
+            ..progress(600, 5)
+        };
+        assert_eq!(spent.remaining_secs(), 1_200);
+        assert_eq!(pace_text(&spent), "");
+        let activity = sjk_identity::ActivityState {
+            pace: Some(50),
+            last_combat: 0,
+            combat_window: 600,
+            peaceful: 50,
+            move_min: 200,
+        };
+        let half = HolocronProgress {
+            activity: Some(activity),
+            ..progress(600, 1)
+        };
+        assert_eq!(
+            pace_text(&half),
+            "Half pace: no fight in the last 10 minutes. Fight, get hit or duel for full pace"
+        );
+        let idle = HolocronProgress {
+            activity: Some(sjk_identity::ActivityState {
+                pace: Some(0),
+                ..activity
+            }),
+            ..progress(600, 1)
+        };
+        assert_eq!(
+            pace_text(&idle),
+            "Not earning: move around or fight to earn holocrons"
+        );
+        let full = HolocronProgress {
+            activity: Some(sjk_identity::ActivityState {
+                pace: Some(100),
+                ..activity
+            }),
+            ..progress(600, 1)
+        };
+        assert_eq!(pace_text(&full), "");
     }
 }

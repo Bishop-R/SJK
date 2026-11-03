@@ -998,7 +998,13 @@ Turin, a player, asked for private messages to be heard with the public chat sou
 Sol built chat sounds by kind, each with its own sound (23/10/2026).
 
 Rollembones, a player, asked for emotes to stay on while typing: Sol built it as
-Typing keeps emote in Settings > Sound > Emotes (23/10/2026).
+Typing keeps emote in Settings > Sound > Emotes (23/10/2026). Rollembones also asked for
+holocrons missed one day to come faster the next, and for activity checks that are not
+chat: Sol built the holocron catch-up (a short day's missing drops, up to 4, at twice
+the speed the next day) and the play signals the hub counts time by (03/11/2026).
+
+Blep, a player, asked for duplicate tags to be broken down, traded and crafted two into
+one: Sol built tag copies (03/11/2026).
 
 Sanjisan, a player, asked to whisper a player by clicking their name in the chat: Sol
 built it as the pinned chat card's Whisper button (23/10/2026).

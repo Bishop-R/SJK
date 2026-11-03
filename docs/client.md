@@ -5889,6 +5889,18 @@ sees it there.
   (Normal needs any copy; a free tag is only Normal). Both need a hub whose profiles list
   `tag_cards` (the card kinds it lets be tags); an older hub refuses them, so the client
   offers neither there and Collection > Tags lists no cards.
+- **Tag copies** (Blep's idea, 03/11/2026, with a hub whose economy says `tag_copies`):
+  the card of a dropped tag held twice or more offers Break down (one copy of the finish
+  shown into kyber shards: the hub's `economy.tags`, by tier times the finish, more for
+  Holo and Solar) and Craft (two spare copies of one tier and finish, this tag's first,
+  for a tag of that tier the player holds none of, or none in that finish, in that
+  finish), each on a second press; the player always keeps one copy of every tag, and the
+  free tags never take part. Craft is greyed with the reason when every tag of the tier
+  is held in that finish or two spare copies are lacking. The hub's answer reads under the
+  buttons ("Holo Gonk tag broken down: +25 kyber shards.", "Crafted: Kyber tag. It is
+  yours."). Spare copies trade too: the trade window lists them with their finish beside
+  the duplicate shaders, counted as duplicates in the day's limits
+  ([tag_copies.rs](../crates/sjk-viewer/src/tag_copies.rs)).
 - **Choosing:** Collection > Tags shows every tag, then the credits cards under their own
   heading, the ones the player lacks dimmed and the Holo and Solar copies held as badges;
   the wall scrolls (the wheel, the arrows keeping the choice in view). The card on the right

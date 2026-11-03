@@ -356,6 +356,9 @@ pub struct Snapshot {
     /// What became of the last shatter, craft or purchase ([`Service::shatter`],
     /// [`Service::craft`], [`Service::buy`]).
     pub trade: Option<TradeOutcome>,
+    /// What became of the last tag break-down or tag craft ([`Service::shatter_tag`],
+    /// [`Service::craft_tags`], 03/11/2026).
+    pub tag_trade: Option<TagOutcome>,
     /// The player's collection marks (favourite and locked saber shaders, 29/10/2026), as
     /// the hub last sent them with the progress or answered a change, a change asked with
     /// [`Service::set_mark`] shown at once; `None` before, or from a hub that keeps none
@@ -564,6 +567,37 @@ impl TradeOutcome {
     }
 }
 
+/// A tag copies request ([`Service::shatter_tag`], [`Service::craft_tags`]).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TagTrade {
+    /// One copy broken down into kyber shards.
+    Shatter(crate::wire::TagCopy),
+    /// Two copies given for a tag not held yet.
+    Craft([crate::wire::TagCopy; 2]),
+}
+
+/// What became of a tag copies request.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TagOutcome {
+    /// Counts the requests, so a reader can tell a new outcome from the last one.
+    pub serial: u64,
+    /// What was asked.
+    pub trade: TagTrade,
+    /// The shards a break-down gave; 0 for a craft and when it failed.
+    pub shards: u64,
+    /// The tag a craft made; `None` for a break-down and when it failed.
+    pub crafted: Option<crate::wire::TagCrafted>,
+    /// Why it failed; empty when it worked.
+    pub message: String,
+}
+
+impl TagOutcome {
+    /// Whether the hub did it.
+    pub fn done(&self) -> bool {
+        self.message.is_empty()
+    }
+}
+
 /// What became of a reveal of sealed cards.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevealOutcome {
@@ -603,6 +637,10 @@ pub struct HolocronProgress {
     pub server_time: i64,
     /// Whether the person may open holocrons now (only staff while opening is tested).
     pub can_open: bool,
+    /// Today's catch-up (03/11/2026); `None` from hubs before.
+    pub catchup: Option<crate::wire::Catchup>,
+    /// How the hub judged the last claims' play (03/11/2026); `None` from hubs before.
+    pub activity: Option<crate::wire::ActivityState>,
     /// When this client read it.
     pub read_at: Instant,
 }
@@ -617,15 +655,31 @@ impl HolocronProgress {
             resets_at: state.resets_at,
             server_time: state.server_time,
             can_open: state.can_open,
+            catchup: state.catchup,
+            activity: state.activity,
             read_at,
         }
     }
 
+    /// The active seconds the next holocron needs: the catch-up's interval while catch-up
+    /// drops are left today (twice as fast), else `every_secs`.
+    pub fn next_every(&self) -> u64 {
+        match self.catchup {
+            Some(catchup) if catchup.left > 0 && catchup.every_secs > 0 => catchup.every_secs,
+            _ => self.every_secs,
+        }
+    }
+
+    /// The catch-up drops left today (0 without one, and from hubs before).
+    pub fn catchup_left(&self) -> u32 {
+        self.catchup.map_or(0, |catchup| catchup.left)
+    }
+
     /// Seconds of active play left to the next holocron as read: the hub's
-    /// `every_secs - progress_secs`. It does not count down on its own; the player
-    /// may be playing or not.
+    /// [`Self::next_every`] less `progress_secs`. It does not count down on its own; the
+    /// player may be playing or not.
     pub fn remaining_secs(&self) -> u64 {
-        self.every_secs.saturating_sub(self.progress_secs)
+        self.next_every().saturating_sub(self.progress_secs)
     }
 
     /// Whether the day's cap is reached, so no holocron drops until the next day begins.
@@ -695,6 +749,7 @@ impl Snapshot {
             kyber: None,
             shop: None,
             trade: None,
+            tag_trade: None,
             marks: None,
             marks_revision: 0,
             mark_refusal: None,
@@ -878,6 +933,12 @@ enum Command {
     Crashes(Option<PathBuf>),
     /// Whether the player is actively playing (`Service::set_active`).
     Active(bool),
+    /// What the player did lately, for the next active claim (`Service::add_play`).
+    Play(crate::wire::PlaySignals),
+    /// Break one tag copy down.
+    ShatterTag(crate::wire::TagCopy),
+    /// Give two tag copies for a new tag.
+    CraftTags([crate::wire::TagCopy; 2]),
     /// The feed relayed a holocron drop of the player's own key.
     OwnDrop,
     /// The viewer wants fresh holocron progress.
@@ -1055,6 +1116,9 @@ struct Worker {
     assets_backoff: Duration,
     /// Whether the player is actively playing: sent with every claim.
     active: bool,
+    /// What the player did since the last accepted claim (03/11/2026), sent with an
+    /// active claim and cleared once the hub accepted one.
+    play: crate::wire::PlaySignals,
     /// When the progress toward the next holocron is next read, and when it may next
     /// be read early.
     due_holocrons: Instant,
@@ -1178,6 +1242,31 @@ fn trade_refusal(error: &HubError) -> String {
             if why.starts_with("status 404") || why.starts_with("status 405") =>
         {
             "This SJK hub has no shop yet."
+        }
+        other => return other.to_string(),
+    };
+    words.to_owned()
+}
+
+/// Why the hub refused a tag copies request, in the player's words.
+fn tag_refusal(error: &HubError) -> String {
+    let words = match error {
+        HubError::Rejected { code, message, .. } => match code.as_str() {
+            "not_a_duplicate" => "You keep one copy of every tag: only duplicates go.",
+            "not_held" => "You hold no copy of that tag in that finish any more.",
+            "not_a_tag" => "That is not a tag that can be broken down or crafted.",
+            "bad_finish" => "That finish is not one the hub knows.",
+            "finishes_differ" => "Both copies must be of the same finish.",
+            "tiers_differ" => "Both copies must be of the same tier.",
+            "nothing_new" => "You already have every tag of that tier in that finish.",
+            "opening_staff_only" => "Shards and the shop open with holocrons: soon.",
+            "client_update_required" => return update_notice(message),
+            _ => return message.clone(),
+        },
+        HubError::Protocol(why)
+            if why.starts_with("status 404") || why.starts_with("status 405") =>
+        {
+            "This SJK hub cannot break down or craft tags yet."
         }
         other => return other.to_string(),
     };
@@ -1354,6 +1443,7 @@ impl Worker {
             due_assets: now,
             assets_backoff: ASSETS_RETRY_MIN,
             active: false,
+            play: crate::wire::PlaySignals::default(),
             due_holocrons: now,
             holocrons_soon_after: now,
             due_trades: now,
@@ -1862,6 +1952,9 @@ impl Worker {
                 }
             }
             Command::Active(active) => self.active = active,
+            Command::Play(play) => self.play.add(&play),
+            Command::ShatterTag(copy) => self.tag_trade(TagTrade::Shatter(copy)),
+            Command::CraftTags(copies) => self.tag_trade(TagTrade::Craft(copies)),
             Command::OwnDrop => self.own_drop(now),
             Command::RefreshHolocrons => self.holocrons_soon(now),
             Command::MenuOpened => self.menu_opened(now),
@@ -2212,6 +2305,48 @@ impl Worker {
         if reread {
             self.read_shop(Instant::now());
         }
+    }
+
+    /// Ask the hub for a tag copies request; what became of it goes to
+    /// [`Snapshot::tag_trade`] and the profile after it to the snapshot.
+    fn tag_trade(&mut self, trade: TagTrade) {
+        type Done = (u64, Option<crate::wire::TagCrafted>, Profile);
+        let outcome: Result<Done, HubError> = match (self.hub.as_mut(), self.registered) {
+            (Some(hub), true) => match &trade {
+                TagTrade::Shatter(copy) => hub
+                    .shatter_tag(&self.identity, copy)
+                    .map(|answer| (answer.shattered.shards, None, answer.profile)),
+                TagTrade::Craft(copies) => hub
+                    .craft_tags(&self.identity, copies)
+                    .map(|answer| (0, Some(answer.crafted), answer.profile)),
+            },
+            _ => Err(self.not_connected()),
+        };
+        self.update(|snapshot| {
+            let serial = snapshot
+                .tag_trade
+                .as_ref()
+                .map_or(1, |last| last.serial + 1);
+            snapshot.tag_trade = Some(match outcome {
+                Ok((shards, crafted, profile)) => {
+                    snapshot.set_me(profile);
+                    TagOutcome {
+                        serial,
+                        trade,
+                        shards,
+                        crafted,
+                        message: String::new(),
+                    }
+                }
+                Err(error) => TagOutcome {
+                    serial,
+                    trade,
+                    shards: 0,
+                    crafted: None,
+                    message: tag_refusal(&error),
+                },
+            });
+        });
     }
 
     /// Set or clear `mark` on shader `id` at the hub (the snapshot shows the change
@@ -3611,14 +3746,20 @@ impl Worker {
         if let Some(location) = self.location.clone() {
             let server = location.server.to_string();
             if now >= self.due_claim {
-                match hub.claim(
+                match hub.claim_with(
                     &self.identity,
                     &server,
                     location.slot,
                     &location.name,
                     self.active,
+                    Some(&self.play),
                 ) {
                     Ok(()) => {
+                        // What was sent is counted: the next claim starts afresh. An
+                        // inactive claim sent nothing, so what it held waits.
+                        if self.active {
+                            self.play = crate::wire::PlaySignals::default();
+                        }
                         self.claimed = Some(server.clone());
                         self.due_claim = now + CLAIM_EVERY;
                         // Renewing the same claim keeps its look; another server,
@@ -4154,6 +4295,25 @@ impl Service {
     /// "Holocrons"). Defaults to false, which earns nothing.
     pub fn set_active(&self, active: bool) {
         let _ = self.commands.send(Command::Active(active));
+    }
+
+    /// Add what the player did lately (moves, attacks, hits, hurts, kills, deaths while
+    /// actively playing) to what the next active claim says (`"play"`, 03/11/2026): the
+    /// hub counts the time toward holocrons by real play, not by presence.
+    pub fn add_play(&self, play: crate::wire::PlaySignals) {
+        let _ = self.commands.send(Command::Play(play));
+    }
+
+    /// Break one tag copy down into kyber shards (hubs whose economy says `tag_copies`):
+    /// what came of it arrives in [`Snapshot::tag_trade`], and the profile after it.
+    pub fn shatter_tag(&self, copy: crate::wire::TagCopy) {
+        let _ = self.commands.send(Command::ShatterTag(copy));
+    }
+
+    /// Give two tag copies of one tier and finish for a tag not held yet (hubs whose
+    /// economy says `tag_copies`): what came of it arrives in [`Snapshot::tag_trade`].
+    pub fn craft_tags(&self, copies: [crate::wire::TagCopy; 2]) {
+        let _ = self.commands.send(Command::CraftTags(copies));
     }
 
     /// Ask for fresh holocron progress ([`Snapshot::holocrons`]); read at most once
@@ -5682,6 +5842,8 @@ mod tests {
             economy: None,
             kyber: None,
             marks: None,
+            catchup: None,
+            activity: None,
         }
     }
 

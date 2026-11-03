@@ -45,6 +45,7 @@ pub(super) fn holdings() -> Data {
             recent(0, "07/10/2026 20:02", None),
         ],
         next: "Next holocron in about 20 minutes of play".to_owned(),
+        pace: String::new(),
         today: Some((3, 8)),
         fraction: Some(1.0 / 3.0),
         every: Some(1_800),

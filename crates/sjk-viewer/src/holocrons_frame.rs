@@ -15,7 +15,13 @@ impl GpuState {
     /// input in the last two minutes.
     pub(crate) fn update_holocron_activity(&mut self) {
         let active = self.actively_playing(Instant::now());
+        crate::holocrons::signals::set_counting(active);
         let _ = player_identity::set_active(active);
+        // What the player did meanwhile goes with the next active claim.
+        let play = crate::holocrons::signals::take();
+        if play != sjk_identity::PlaySignals::default() {
+            player_identity::add_play(play);
+        }
     }
 
     /// Whether the player is actively playing at `now`, as [`Play::active`] says.

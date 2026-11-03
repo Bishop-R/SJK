@@ -742,6 +742,19 @@ impl Panel {
                 TextAlign::End,
             );
         }
+        if !self.data.pace.is_empty() {
+            // The catch-up and the pace, small under the bar (03/11/2026).
+            text(
+                &mut self.ui,
+                TextFamily::Body,
+                format_args!("{}", crate::terms::say(&self.data.pace)),
+                frame.rect(RIGHT_X, BAR_Y + 9.0, RIGHT_WIDTH - 140.0, 15.0),
+                13.0 * s,
+                color::GOLD_BRIGHT,
+                FontWeight::Regular,
+                TextAlign::Start,
+            );
+        }
         if let Some(fraction) = self.data.fraction {
             let list = self.ui.draw_list_mut();
             let _ = list.push(DrawCommand::RoundedRect {
@@ -1179,6 +1192,7 @@ mod tests {
                 },
             ],
             next: "Next holocron in about 20 minutes of play".into(),
+            pace: String::new(),
             today: Some((3, 8)),
             fraction: Some(1.0 / 3.0),
             ..Data::nothing(State::Known)

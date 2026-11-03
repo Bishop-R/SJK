@@ -1189,6 +1189,28 @@ pub(crate) fn refresh_holocrons() {
     }
 }
 
+/// Hand the service what the player did lately (`holocrons/signals.rs`), for the next
+/// active claim; dropped while the service has not started.
+pub(crate) fn add_play(play: sjk_identity::PlaySignals) {
+    if let Some(service) = lock().service.as_ref() {
+        service.add_play(play);
+    }
+}
+
+/// Break one tag copy down into kyber shards (hubs whose economy says `tag_copies`).
+pub(crate) fn shatter_tag(copy: sjk_identity::TagCopy) {
+    if let Some(service) = lock().service.as_ref() {
+        service.shatter_tag(copy);
+    }
+}
+
+/// Give two tag copies of one tier and finish for a tag not held yet.
+pub(crate) fn craft_tags(copies: [sjk_identity::TagCopy; 2]) {
+    if let Some(service) = lock().service.as_ref() {
+        service.craft_tags(copies);
+    }
+}
+
 /// Tell the service whether the player is actively playing, when that is not what it
 /// was last told; false when the service has not started.
 pub(crate) fn set_active(active: bool) -> bool {
