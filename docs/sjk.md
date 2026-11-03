@@ -263,10 +263,36 @@ as the visit's source, so the dashboard shows which platform brings visitors. Th
 update the script, replace the vendored file with GoatCounter's current
 `public/count.js`.
 
-Release tags exist only on SJK and are created on Sol's request. The release
+Release tags exist only on SJK. They are cut by Sol or, since 03/11/2026, by the
+maintainers Sol gave write access to SJK (Slash and Milamber), who may also review
+pull requests and merge or push to `main`. The release
 title carries the stage, "Sol JK 2026.1005.1 (Alpha)" (`STAGE` in the workflow).
 Alphas are not marked as pre-releases, so the site's download link
 (`releases/latest`) finds them; their name and notes say "Alpha" instead.
+
+Changes to `main` and to release tags only add: GitHub rulesets refuse a force-push
+or deletion of `main` and a deletion or move of any `sjk-v*` tag, for everyone. A
+mistake is fixed by a new commit, and a bad release by the next release
+(`.N + 1`), never by rewriting.
+
+### Cutting a release
+
+1. **Hub first.** If `main` holds merges whose notes say "needs hub ... deployed
+   first", check with Sol that the hub is deployed before tagging; only Sol deploys
+   the hub.
+2. **Changelog.** In [CHANGELOG.md](../CHANGELOG.md) rename `## Unreleased` to
+   `## <version> | <dd/mm/yyyy>`, the version `YYYY.MMDD.N` ([Version](#version)), and
+   write its recap, three to six `> Heading: sentence` lines in player words
+   ([Changelog](#changelog)). Leave a new empty `## Unreleased` above it.
+3. **Check.** `cargo test -p sjk-viewer --bin sjk changelog_data` must pass (it checks the
+   credits, the dates and the recap).
+4. **Commit and tag.** Commit as `Release <version>`, push `main`, then tag that
+   commit and push the tag: `git tag sjk-v<version>` and
+   `git push origin sjk-v<version>`. The [SJK release](../.github/workflows/release.yml)
+   workflow builds and publishes the ZIPs; check it is green and the release page
+   has its files.
+5. **Announce.** Every release gets an SJK chat announcement (below): send its draft
+   to Sol, who posts it. A Discord ping is only for releases Sol calls big.
 
 ## Donations
 
