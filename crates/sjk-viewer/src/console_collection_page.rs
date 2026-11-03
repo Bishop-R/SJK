@@ -386,7 +386,13 @@ impl ViewerConsole {
             .map(|value| sjk_client::split_color_value(value).0)
             .and_then(|colour| u8::try_from(colour).ok())
             .unwrap_or(4);
-        crate::player_menu::saber_color(index, [255, 255, 255])
+        // A custom (RGB) blade in its own tint, as the game draws it (0 reads as red), not
+        // white (Neffie: an RGB blade did not show as chosen).
+        let tint = self
+            .integer_cvar("cp_sbRGB1")
+            .and_then(|packed| u32::try_from(packed).ok())
+            .unwrap_or(0);
+        crate::player_menu::saber_color(index, sjk_client::unpack_saber_rgb(tint))
     }
 
     /// Draw the page with its text to `target`.
@@ -817,14 +823,23 @@ mod tests {
     fn the_stock_blade_swatch_reads_the_whole_colour() {
         let directory = tempfile::tempdir().unwrap();
         let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        let tint = [40, 200, 90];
+        let packed = sjk_client::pack_saber_rgb(tint);
+        console.set_cvar("cp_sbRGB1", &packed.to_string());
         for (value, index) in [("11", 11), ("1", 1), ("6", 6), ("4", 4)] {
             console.set_cvar("color1", value);
             assert_eq!(
                 console.stock_blade(),
-                crate::player_menu::saber_color(index, [255, 255, 255]),
+                crate::player_menu::saber_color(index, tint),
                 "{value}"
             );
         }
+        // The custom blade is the player's tint, not white.
+        console.set_cvar("color1", "6");
+        assert_eq!(
+            console.stock_blade(),
+            sjk_ui::Color::new(40.0 / 255.0, 200.0 / 255.0, 90.0 / 255.0, 1.0)
+        );
     }
 
     #[test]

@@ -779,6 +779,7 @@ fn found_tidal(tier: usize) -> Prize {
         id: "saber_tidal".to_owned(),
         name: "Tidal blade".to_owned(),
         count: 2,
+        unknown: "saber shader",
     })
 }
 
@@ -792,6 +793,7 @@ fn found_new() -> Prize {
         id: "saber_comet".to_owned(),
         name: "Comet blade".to_owned(),
         count: 1,
+        unknown: "saber shader",
     })
 }
 
@@ -839,6 +841,7 @@ fn found(tier: usize, holocron: u64, id: &str, count: u32) -> Prize {
         id: id.to_owned(),
         name: skin.map_or("A blade", |skin| skin.name).to_owned(),
         count,
+        unknown: "saber shader",
     })
 }
 
@@ -1022,6 +1025,7 @@ fn duel6_sjk_blade_card() {
             id: "saber_sun".to_owned(),
             name: "Sun blade".to_owned(),
             count: 1,
+            unknown: "saber shader",
         };
         let blade_card = Shown {
             holocron: 61,

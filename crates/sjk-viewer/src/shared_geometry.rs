@@ -316,3 +316,26 @@ pub(crate) fn relocate(
         range.vertices = range.vertices.start + base..range.vertices.end + base;
     }
 }
+
+#[cfg(test)]
+mod empty_hilt_tests {
+    use super::*;
+
+    /// Hub #197 (`saber saber_empty saber_left`): an empty community hilt, a model made of
+    /// its blade tag alone, flattens to no vertices. In a match it is appended to the
+    /// shared buffers mid-match (`clientinfo_refresh::load_hilt`); that must raise no wgpu
+    /// error, the way the menu stage's zero-sized buffer did (#214, `menu_stage::sabers`).
+    #[test]
+    #[ignore = "requires an available GPU; uses no installed game assets"]
+    fn an_empty_hilt_appended_mid_match_raises_no_wgpu_error() {
+        let gpu = pollster::block_on(crate::gpu_context::Context::new(None, None)).unwrap();
+        let device = &gpu.device;
+        let mut geometry = SharedGeometry::upload(device, &[], &[]);
+        let placement = crate::gpu_guard::capture(device, || {
+            geometry.append(device, &gpu.queue, &[], &[]).unwrap()
+        })
+        .expect("no wgpu error");
+        assert_eq!((placement.vertex_base, placement.index_base), (0, 0));
+        assert_eq!((geometry.vertex_count, geometry.index_count), (0, 0));
+    }
+}

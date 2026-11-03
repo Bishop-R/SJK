@@ -94,6 +94,7 @@ fn twelve() -> Vec<Prize> {
             id: id.to_owned(),
             name: skin.map_or("A blade", |skin| skin.name).to_owned(),
             count: 1,
+            unknown: "saber shader",
         })
     };
     vec![

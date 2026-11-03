@@ -193,14 +193,34 @@ pub(crate) struct Found {
     pub(crate) name: String,
     /// How many of it the player holds now, this one included.
     pub(crate) count: u32,
+    /// What it is when this client does not know it ([`unknown_kind`]): "saber shader",
+    /// "tag", "card"...; the words a fallback card shows (Kushina, 30/10/2026: loot newer
+    /// than the client showed as a dark, empty shader card).
+    pub(crate) unknown: &'static str,
+}
+
+/// What a prize this client does not know is, from the hub's id: its unlock ids start
+/// with their kind (`saber_`, `tag_`, `banner_`, `toy_`); "prize" for anything else.
+pub(crate) fn unknown_kind(id: &str) -> &'static str {
+    const KINDS: [(&str, &str); 4] = [
+        ("saber_", "saber shader"),
+        ("tag_", "tag"),
+        ("banner_", "profile banner"),
+        ("toy_", "toy"),
+    ];
+    KINDS
+        .iter()
+        .find(|(prefix, _)| id.starts_with(prefix))
+        .map_or("prize", |(_, kind)| kind)
 }
 
 impl Found {
     /// The shader `unlock` the hub said holocron `opened` brought; `None` for a tier the
     /// client does not know. One it does not know still shows, by the hub's name.
     fn of(opened: &sjk_identity::Opened, unlock: &sjk_identity::OpenedUnlock) -> Option<Self> {
+        let unknown = unknown_kind(&unlock.id);
         let name = if unlock.name.trim().is_empty() {
-            "A new saber shader".to_owned()
+            format!("A new {unknown}")
         } else {
             unlock.name.trim().to_owned()
         };
@@ -222,7 +242,31 @@ impl Found {
             id: unlock.id.clone(),
             name,
             count: unlock.count,
+            unknown,
         })
+    }
+
+    /// A card this client cannot show (a rarity or finish newer than it): still a prize,
+    /// shown as an unknown card rather than dropped.
+    fn unknown_card(opened: &sjk_identity::Opened) -> Option<Self> {
+        let held = opened.card.as_ref()?;
+        Some(Self {
+            holocron: opened.holocron,
+            tier: holocrons::any(&opened.tier)?.slot,
+            skin: None,
+            tag: None,
+            id: held.card.clone().unwrap_or_else(|| "card".to_owned()),
+            name: "A new card".to_owned(),
+            count: 1,
+            unknown: "card",
+        })
+    }
+
+    /// Whether this client knows nothing of it: no shader, tag or banner of its id.
+    pub(super) fn is_unknown(&self) -> bool {
+        self.skin.is_none()
+            && self.tag.is_none()
+            && crate::profile_card::banner::get(&self.id).is_none()
     }
 
     /// The colour it is shown in: its tier's, or the holocron's for one this client
@@ -244,8 +288,10 @@ impl Found {
             "bonus profile banner"
         } else if self.tag.is_some() {
             "tag"
-        } else {
+        } else if self.skin.is_some() {
             "saber shader"
+        } else {
+            self.unknown
         }
     }
 }
@@ -301,7 +347,9 @@ impl Prize {
                 shards: opened.shards,
             }));
         }
-        Shown::of(opened).map(Self::Card)
+        Shown::of(opened)
+            .map(Self::Card)
+            .or_else(|| Found::unknown_card(opened).map(Self::Shader))
     }
 
     pub(super) fn tier(&self) -> usize {
@@ -344,7 +392,7 @@ impl Prize {
             Self::Shader(found) => match (found.skin, found.tag) {
                 (Some(skin), _) => strip::Item::Shader(skin),
                 (None, Some(tag)) => strip::Item::Tag(tag),
-                (None, None) => strip::Item::New,
+                (None, None) => strip::Item::New(found.kind()),
             },
             Self::Shards(pile) => strip::Item::Shards {
                 tier: pile.tier,
@@ -1548,7 +1596,7 @@ impl Panel {
             strip::Item::Banner(banner) => {
                 crate::profile_card::banner::draw(&mut self.ui, rect, banner.id);
             }
-            strip::Item::New => {
+            strip::Item::New(kind) => {
                 let _ = self.ui.draw_list_mut().push(DrawCommand::RoundedRect {
                     rect,
                     radius: 14.0 * k * s,
@@ -1573,7 +1621,7 @@ impl Panel {
                 text(
                     &mut self.ui,
                     TextFamily::Body,
-                    format_args!("New shader"),
+                    format_args!("New {}", short_kind(kind)),
                     frame.rect(x, y + height - 40.0 * k, width, 26.0 * k),
                     17.0 * k * s,
                     color::TEXT,
@@ -1635,6 +1683,17 @@ impl Panel {
         }
         // The blade the hub's pack brought, even for a shader this client does not list.
         let look = self.skins.get(&found.id);
+        // Nothing this client can draw it with: a fallback picture, not an empty swatch.
+        if look.is_none() && found.is_unknown() {
+            self.unknown_picture(frame, colour, middle, height, eased);
+            let _ = self.ui.draw_list_mut().push(DrawCommand::Border {
+                rect: area,
+                radius: 22.0 * s,
+                width: 3.0 * s,
+                color: color::alpha(colour, eased),
+            });
+            return;
+        }
         if let Some(look) = look {
             crate::blade_pictures::focus(look.id);
         }
@@ -1658,6 +1717,62 @@ impl Panel {
             width: 3.0 * s,
             color: color::alpha(colour, eased),
         });
+    }
+
+    /// The picture of a prize this client does not know (Kushina, 30/10/2026): a large
+    /// question mark in a ring of `colour`, centred on `middle`, `height` tall at most.
+    fn unknown_picture(
+        &mut self,
+        frame: &Frame,
+        colour: Color,
+        middle: [f32; 2],
+        height: f32,
+        alpha: f32,
+    ) {
+        let s = frame.s;
+        let side = (height * 0.55).min(220.0);
+        let ring = frame.rect(
+            middle[0] - side * 0.5,
+            middle[1] - side * 0.5 - 20.0,
+            side,
+            side,
+        );
+        let _ = self.ui.draw_list_mut().push(DrawCommand::RoundedRect {
+            rect: ring,
+            radius: side * 0.5 * s,
+            color: color::alpha(colour, 0.12 * alpha),
+        });
+        let _ = self.ui.draw_list_mut().push(DrawCommand::Border {
+            rect: ring,
+            radius: side * 0.5 * s,
+            width: 3.0 * s,
+            color: color::alpha(colour, 0.8 * alpha),
+        });
+        text(
+            &mut self.ui,
+            TextFamily::Display,
+            format_args!("?"),
+            frame.rect(
+                middle[0] - side * 0.5,
+                middle[1] - side * 0.35 - 20.0,
+                side,
+                side * 0.7,
+            ),
+            side * 0.6 * s,
+            color::alpha(colour, alpha),
+            FontWeight::Semibold,
+            TextAlign::Center,
+        );
+        text(
+            &mut self.ui,
+            TextFamily::Body,
+            format_args!("Update SJK to see it"),
+            frame.rect(middle[0] - 300.0, middle[1] + side * 0.5, 600.0, 30.0),
+            20.0 * s,
+            color::alpha(color::TEXT, alpha),
+            FontWeight::Regular,
+            TextAlign::Center,
+        );
     }
 
     /// Tag `tag`'s picture over `[x, y, width, height]` at `alpha`, or its name in its
@@ -1858,7 +1973,15 @@ impl Panel {
                     format!("{} {} saber shader", skin.tier.symbol(), skin.tier.label())
                 }
                 (None, Some(tag)) => format!("{} {} tag", tag.tier.symbol(), tag.tier.label()),
-                (None, None) => "A saber shader new to this version of SJK".to_owned(),
+                (None, None) => {
+                    let kind = found.kind();
+                    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                        "An"
+                    } else {
+                        "A"
+                    };
+                    format!("{article} {kind} new to this version of SJK")
+                }
             }
         };
         text(
@@ -1884,9 +2007,7 @@ impl Panel {
                         (None, Some(_)) => {
                             "Stick it on walls and floors with toy_tag; everyone on the map sees it."
                         }
-                        (None, None) => {
-                            "It is yours: update SJK to see it in your Collection and wear it."
-                        }
+                        (None, None) => "It is yours: update SJK to see it in your Collection.",
                     }
                 }
             ),
@@ -2154,7 +2275,7 @@ impl Panel {
             strip::Item::Banner(banner) => {
                 crate::profile_card::banner::draw(&mut self.ui, rect, banner.id);
             }
-            strip::Item::New => {
+            strip::Item::New(_) => {
                 let _ = list.push(DrawCommand::Border {
                     rect,
                     radius: 8.0 * k * s,
@@ -2174,6 +2295,11 @@ impl Panel {
             }
         }
     }
+}
+
+/// A kind's last word, for a strip tile's short label ("profile banner" -> "banner").
+fn short_kind(kind: &str) -> &str {
+    kind.rsplit(' ').next().unwrap_or(kind)
 }
 
 /// Ease in and out.

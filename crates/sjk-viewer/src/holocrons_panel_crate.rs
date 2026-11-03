@@ -67,8 +67,9 @@ pub(crate) enum Item {
     },
     /// A saber shader.
     Shader(&'static Unlockable),
-    /// A saber shader newer than this client (only ever the prize).
-    New,
+    /// A prize newer than this client (only ever the prize), with what it is ("saber
+    /// shader", "tag", "card", [`super::opening::unknown_kind`]).
+    New(&'static str),
     /// A tag (`tags.rs`, 27/10/2026; only ever the prize: the strip's neighbours are cards,
     /// shaders and shards).
     Tag(&'static crate::tags::Tag),
@@ -88,7 +89,7 @@ impl Item {
             Self::Shader(skin) => skin.tier.colour(),
             Self::Tag(tag) => tag.tier.colour(),
             Self::Banner(banner) => banner.tier.colour(),
-            Self::New => crate::menu::sjk::color::GOLD,
+            Self::New(_) => crate::menu::sjk::color::GOLD,
             Self::Shards { .. } => crate::cards::shard::KYBER,
         }
     }
@@ -102,7 +103,7 @@ impl Item {
             // A tag stands just under a shader of its tier.
             Self::Tag(tag) => tag.tier as u32 * 10,
             Self::Banner(banner) => banner.tier as u32 * 10,
-            Self::New => 21,
+            Self::New(_) => 21,
             // A consolation: above a plain Common card, below everything rarer.
             Self::Shards { .. } => 2,
         }
@@ -116,7 +117,7 @@ impl Item {
             Self::Shader(skin) => skin.tier >= Rarity::Legendary,
             Self::Tag(tag) => tag.tier >= Rarity::Legendary,
             Self::Banner(banner) => banner.tier >= Rarity::Legendary,
-            Self::New | Self::Shards { .. } => false,
+            Self::New(_) | Self::Shards { .. } => false,
         }
     }
 }
@@ -353,7 +354,7 @@ mod tests {
                         assert!(cards::ODDS[tier].finish[*finish] > 0);
                     }
                     Item::Shader(skin) => assert!(skin.droppable, "{}", skin.id),
-                    Item::New | Item::Tag(_) | Item::Banner(_) => {
+                    Item::New(_) | Item::Tag(_) | Item::Banner(_) => {
                         panic!("only a prize is new or a tag")
                     }
                     Item::Shards { tier: of, shards } => {
@@ -400,7 +401,7 @@ mod tests {
                     crystal.id
                 );
             }
-            let strip = strip(crystal.slot, 4_000_000_001, Item::New);
+            let strip = strip(crystal.slot, 4_000_000_001, Item::New("saber shader"));
             assert_eq!(strip.len(), TILES);
             assert!(
                 strip

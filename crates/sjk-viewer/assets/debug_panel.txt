@@ -24,6 +24,24 @@
 
 # ---- Console & chat ----
 
+[unknown-prize-card]
+area: Menus & settings
+title: Holocrons: loot this build does not know shows a "?" card, not a dark empty one
+change: An unknown shader, tag, toy, banner or card shows "?" in a ring and "Update SJK to see it".
+change: The strip tile says New tag / New shader / New card; batch finds say the kind too.
+test: Open holocrons with an older build while the hub drops a newer shader: "?" card, its name.
+test: A known shader still shows its blade swatch; a known tag its picture.
+note: Hard to reach on purpose; the unit tests cover the kinds.
+
+[rgb-saber-follow]
+area: Menus & settings
+title: RGB saber: a colour set by saberColor shows on the model at once (Neffie)
+change: The Collection/Profile model follows color1/color2 and cp_sbRGB1/2, not only the hilts.
+change: Collection's stock blade swatch shows the custom tint instead of white.
+test: saberColor 40 200 90 in the console, open Collection: model and stock swatch are green.
+test: Restart SJK: the RGB blade still shows green without touching a slider.
+note: Not proven to be Neffie's whole report; ask her where it showed red (menu or in game).
+
 [tag-spray-surfaces]
 area: Gameplay
 title: Tags: spray can sound, no glitches on glass, grates, flags or curved walls

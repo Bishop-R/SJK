@@ -84,6 +84,7 @@ fn duel6_profile_banners() {
                         id: "banner_hyperspace".to_owned(),
                         name: "Hyperspace".to_owned(),
                         count: 2,
+                        unknown: "profile banner",
                     },
                 ),
             ]),
