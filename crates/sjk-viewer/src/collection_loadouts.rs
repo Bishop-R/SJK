@@ -337,6 +337,7 @@ impl Card {
     }
 
     /// Whether a name is being typed (the field takes every key and its repeats).
+    #[cfg(test)]
     pub(crate) fn typing(&self) -> bool {
         self.renaming.is_some()
     }
@@ -413,10 +414,10 @@ impl Card {
                 .filter(|row| *row < SLOTS)
         };
         if !activate {
-            if let Some(row) = in_range(ROW_BASE).or_else(|| in_range(WEAR_BASE)) {
-                if self.renaming.is_none() {
-                    self.row = row;
-                }
+            if let Some(row) = in_range(ROW_BASE).or_else(|| in_range(WEAR_BASE))
+                && self.renaming.is_none()
+            {
+                self.row = row;
             }
             return Reply::None;
         }

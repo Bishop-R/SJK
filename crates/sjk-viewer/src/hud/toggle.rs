@@ -32,6 +32,7 @@ pub(crate) enum Part {
 
 impl Part {
     /// Every part, in the Settings rows' order.
+    #[cfg(test)]
     pub(crate) const ALL: [Self; 4] = [Self::Elements, Self::Crosshair, Self::Names, Self::Chat];
 
     /// Its switch: archived, on while the HUD switch hides the part.
