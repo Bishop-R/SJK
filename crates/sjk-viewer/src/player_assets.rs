@@ -142,8 +142,19 @@ pub(super) fn load_player_appearance_with(
         camera_origin,
         camera_yaw,
         cache,
-        true,
+        Wearer::Player,
     )
+}
+
+/// [`load_player_appearance_with`] for an NPC, whose skin is the one its model
+/// string appends (`crate::player_skin::SkinNaming::AppendedNpc`).
+pub(super) fn load_npc_appearance_with(
+    vfs: &VirtualFileSystem,
+    directory: &str,
+    variant: &str,
+    cache: &mut GlaCache,
+) -> Result<PlayerPreview, Box<dyn Error>> {
+    load_appearance(vfs, directory, variant, [0.0; 3], 0.0, cache, Wearer::Npc)
 }
 
 /// The game's own model in `directory`, whatever rig model a pack lays over it
@@ -155,10 +166,43 @@ pub(super) fn load_stock_player_appearance(
     variant: &str,
     cache: &mut GlaCache,
 ) -> Result<PlayerPreview, Box<dyn Error>> {
-    load_appearance(vfs, directory, variant, [0.0; 3], 0.0, cache, false)
+    load_appearance(
+        vfs,
+        directory,
+        variant,
+        [0.0; 3],
+        0.0,
+        cache,
+        Wearer::StockPlayer,
+    )
 }
 
-/// [`load_player_appearance_with`], with rig models and their emotes when `rigs`.
+/// Who wears an appearance, which says how its skin is named and whether rig models
+/// and their emotes apply.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Wearer {
+    /// A client, rig models included.
+    Player,
+    /// A client's stock model, without rig models ([`load_stock_player_appearance`]).
+    StockPlayer,
+    /// An NPC, rig models included; its skin is the one its model string appends.
+    Npc,
+}
+
+impl Wearer {
+    fn rigs(self) -> bool {
+        self != Self::StockPlayer
+    }
+
+    fn naming(self) -> crate::player_skin::SkinNaming {
+        match self {
+            Self::Npc => crate::player_skin::SkinNaming::AppendedNpc,
+            Self::Player | Self::StockPlayer => crate::player_skin::SkinNaming::Client,
+        }
+    }
+}
+
+/// [`load_player_appearance_with`] for `wearer`.
 fn load_appearance(
     vfs: &VirtualFileSystem,
     directory: &str,
@@ -166,8 +210,9 @@ fn load_appearance(
     camera_origin: [f32; 3],
     camera_yaw: f32,
     cache: &mut GlaCache,
-    rigs: bool,
+    wearer: Wearer,
 ) -> Result<PlayerPreview, Box<dyn Error>> {
+    let rigs = wearer.rigs();
     // A vehicle names itself, not a model (`$<vehicle>`): the vehicle table knows what it wears.
     let vehicle = match sjk_client::legacy_vehicle_name(directory) {
         Some(name) => Some(
@@ -204,7 +249,13 @@ fn load_appearance(
     fit_skeleton(&mut mesh, &animation, mesh_directory, &animation_path)?;
     // A skin never costs the model: a skin that gives no handle falls back to
     // model_default.skin, then to the surfaces' own shaders (skin handle 0).
-    let skin = crate::player_skin::resolve(vfs, mesh_directory, mesh_variant)?;
+    // A vehicle's skin comes from its vehicle table, named as a client's is.
+    let naming = if vehicle.is_some() {
+        crate::player_skin::SkinNaming::Client
+    } else {
+        wearer.naming()
+    };
+    let skin = crate::player_skin::resolve(vfs, mesh_directory, mesh_variant, naming)?;
     let rig = rig_manifest
         .map(|manifest| {
             crate::rig_model::RigModel::load(vfs, directory, &manifest, &animation, &mesh)

@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::actor_load::build_actor_mesh;
-use crate::player_assets::{GlaCache, load_player_appearance_with};
+use crate::player_assets::{GlaCache, load_npc_appearance_with};
 use crate::world_materials::pipeline_jobs::Compiled;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
@@ -64,15 +64,9 @@ fn read(
         mut cache,
         mipmapped,
     } = sources;
-    let preview = load_player_appearance_with(
-        &vfs,
-        &appearance.model,
-        &appearance.variant,
-        [0.0; 3],
-        0.0,
-        &mut cache,
-    )
-    .map_err(|error| error.to_string())?;
+    let preview =
+        load_npc_appearance_with(&vfs, &appearance.model, &appearance.variant, &mut cache)
+            .map_err(|error| error.to_string())?;
     let mut scene = FlattenedScene::default();
     let mesh = build_actor_mesh(
         &mut scene,

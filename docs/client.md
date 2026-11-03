@@ -874,6 +874,13 @@ animates is not swapped for Kyle:
   shaders. A name is a three-part skin only when it has `|` and says `head`,
   `torso` and `lower`; the console notes each fallback
   ([player_skin.rs](../crates/sjk-viewer/src/player_skin.rs)).
+- An NPC's skin, the one appended to its model string, follows
+  `CG_HandleAppendedSkin` (`cg_players.c:8519-8566`) instead: any `|` makes it three
+  parts, and a part no file holds keeps the parts read before it, as the renderer's
+  skin cache gives every NPC after the first (`RE_RegisterSkin`, `tr_skin.cpp`). JoF
+  Shuttle's alien younglings name `head_a3|torso_a3|` (no lower part) and have no
+  `model_default.skin`, so they drew grey with their GLM's `[nomaterial]` shaders
+  until 02/11/2026 (Kushina's report).
 - A surface is drawn only while all its GLM flags are clear (`RenderSurfaces`,
   rd-vanilla `tr_ghoul2.cpp`): a tag (`*r_hand`, `*hip_l`, `*head_front`: the bolt
   flag) is never drawn, whatever the skin names for it. Community models often give
