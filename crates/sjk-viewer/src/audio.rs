@@ -38,7 +38,7 @@ mod controls;
 mod dialogue;
 pub(crate) use controls::{
     BOOMBOX_CHANNEL, EMOTE_CHANNEL, PROTECTED_CHANNELS, SKIN_SOUNDS_CVAR, TOY_CHANNEL,
-    VOICE_CHANNEL, VOICE_VOLUME_CVAR, interface_channel,
+    TOY_SHOW_CHANNEL, VOICE_CHANNEL, VOICE_VOLUME_CVAR, interface_channel,
 };
 #[path = "audio_dynamic.rs"]
 mod dynamic;

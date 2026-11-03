@@ -3160,6 +3160,8 @@ mod tests {
             box_hunt: None,
             secrets: None,
             secrets_revision: 0,
+            secret_shows: None,
+            secret_shows_revision: 0,
             secret: None,
             assets_note: None,
             crashes_sent: 0,

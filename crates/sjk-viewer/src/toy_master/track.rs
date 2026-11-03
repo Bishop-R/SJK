@@ -107,8 +107,15 @@ impl Track {
         (at, at.checked_sub(1))
     }
 
+    /// `t` ms after the lead as its sound's time: the sound starts as the toy pops back,
+    /// so the pop's length earlier, and the steps and the voice are timed on it.
+    fn heard(&self, t: f32) -> f32 {
+        t + self.show.pop as f32
+    }
+
     /// The toy's spin `t` ms after the lead, in turns a second, eased from the last step's.
     fn speed(&self, t: f32) -> f32 {
+        let t = self.heard(t);
         let (at, before) = self.steps_at(t);
         let step = &self.show.steps[at];
         let from = before.map_or(0.0, |before| self.show.steps[before].spin);
@@ -119,8 +126,8 @@ impl Track {
         speed * self.singing(t)
     }
 
-    /// How far the toy's sound sings `t` ms after the lead, from 0 to 1, eased in and
-    /// out over [`VOICE_RAMP`]; always 1 for a show without a voice.
+    /// How far the toy's sound sings `t` ms into it, from 0 to 1, eased in and out over
+    /// [`VOICE_RAMP`]; always 1 for a show without a voice.
     fn singing(&self, t: f32) -> f32 {
         let voice = &self.show.voice;
         if voice.is_empty() {
@@ -151,6 +158,7 @@ impl Track {
         on: f32,
         off: f32,
     ) -> f32 {
+        let t = self.heard(t);
         let (at, before) = self.steps_at(t);
         let step = &self.show.steps[at];
         if t < step.at as f32 {
@@ -213,7 +221,7 @@ impl Track {
         ) * float;
         let dance = self.level(t, |step| step.dance);
         let ring = self.level(t, |step| step.ring);
-        let (at, _) = self.steps_at(t);
+        let (at, _) = self.steps_at(self.heard(t));
         Some(Moment {
             scale: 1.0,
             turn,
@@ -454,10 +462,15 @@ pub(crate) mod tests {
             ..stepped()
         };
         let track = Track::new(&show);
-        let turn = |ms: f32| track.at(LEAD + ms).unwrap().turn;
+        // Times in the sound, which starts as the toy pops back (450 ms before the lead).
+        let turn = |ms: f32| track.at(LEAD - 450.0 + ms).unwrap().turn;
         let speed = |ms: f32| (turn(ms + 10.0) - turn(ms)) / 10.0;
         assert!(speed(9_000.0).abs() < 1e-4);
-        assert!((speed(10_500.0) - 3.0 * 0.36).abs() < 0.01, "{}", speed(10_500.0));
+        assert!(
+            (speed(10_500.0) - 3.0 * 0.36).abs() < 0.01,
+            "{}",
+            speed(10_500.0)
+        );
         assert!(speed(11_200.0).abs() < 1e-4);
         assert!(speed(11_600.0) > 1.0);
         assert!(speed(13_000.0).abs() < 1e-4);

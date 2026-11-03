@@ -53,7 +53,12 @@ pub(crate) const TOY_CHANNEL: ChannelId = ChannelId(14);
 pub(crate) const BOOMBOX_CHANNEL: ChannelId = ChannelId(15);
 
 /// The channels of long music the mixer cuts last ([`sjk_audio::MixerConfig`]).
-pub(crate) const PROTECTED_CHANNELS: &[ChannelId] = &[EMOTE_CHANNEL, BOOMBOX_CHANNEL];
+pub(crate) const PROTECTED_CHANNELS: &[ChannelId] =
+    &[EMOTE_CHANNEL, BOOMBOX_CHANNEL, TOY_SHOW_CHANNEL];
+
+/// The channel a Toy Master toy's show sound plays on: a song of minutes, kept like the
+/// boombox's so a busy fight never steals it from a player who walks up later.
+pub(crate) const TOY_SHOW_CHANNEL: ChannelId = ChannelId(16);
 
 /// The channel every voice sound plays on: `CHAN_VOICE`, which `CHAN_VOICE_ATTEN` and
 /// `CHAN_VOICE_GLOBAL` join (`sjk_client` `normalize_voice_channel`, as the game's
@@ -409,6 +414,7 @@ impl GameAudio {
         source: SourceId,
         channel: ChannelId,
         attenuation: sjk_audio::Attenuation,
+        elapsed_ms: u64,
     ) {
         let Some(volume) = self.toy_sounds.gain(toy, volume) else {
             return;
@@ -416,16 +422,19 @@ impl GameAudio {
         let Some(handle) = self.find_handle(path) else {
             return;
         };
-        self.output.send(AudioCommand::Play(
-            handle,
-            PlayRequest {
-                origin: Some(origin),
-                source,
-                channel,
-                volume,
-                attenuation,
-            },
-        ));
+        let request = PlayRequest {
+            origin: Some(origin),
+            source,
+            channel,
+            volume,
+            attenuation,
+        };
+        // A sound joined after it started plays from as far in (the boombox's way).
+        self.output.send(if elapsed_ms == 0 {
+            AudioCommand::Play(handle, request)
+        } else {
+            AudioCommand::PlayTrack(handle, request, elapsed_ms, std::time::Instant::now())
+        });
     }
 
     /// Stop the toy sound playing on `source`'s `channel`.

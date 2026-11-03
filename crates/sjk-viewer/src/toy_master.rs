@@ -50,9 +50,9 @@ const SHOW_VOLUME: f32 = 2.0;
 /// (`0x5000_0000`), the Monitor's (`0x5100_0000`) and the mystery boxes'
 /// (`0x5200_0000`).
 const SOURCE_BASE: u32 = 0x5300_0000;
-/// The channel a toy's show sound plays on (stopped when the show ends), and its other
-/// sounds'.
-const SHOW_CHANNEL: sjk_audio::ChannelId = sjk_audio::ChannelId(1);
+/// The channel a toy's show sound plays on (stopped when the show ends; kept from other
+/// sounds as the boombox's is), and its other sounds'.
+const SHOW_CHANNEL: sjk_audio::ChannelId = crate::audio::TOY_SHOW_CHANNEL;
 const CUE_CHANNEL: sjk_audio::ChannelId = sjk_audio::ChannelId(0);
 
 /// Toy `id`'s own sound source.
@@ -64,7 +64,11 @@ fn source(id: i64) -> sjk_audio::SourceId {
 pub(crate) const COMMANDS: &[(&str, &str)] = &[
     (
         "toymaster_place",
-        "SJK creator: hide a toy of the kind given where you aim, facing you ('server': for this server only)",
+        "SJK creator: hide a toy of the kind given where you aim, facing you ('server': for this server only; 'escort': shown only on the server you are on)",
+    ),
+    (
+        "toymaster_escort",
+        "SJK creator: show the toy nearest you (or the one with the id given) only on the server you are on (on), or to everyone (off)",
     ),
     (
         "toymaster_remove",
@@ -197,8 +201,10 @@ struct Here {
     sound: String,
     /// How its show plays.
     track: Track,
-    /// Its kind (the creator's list alone).
+    /// Its kind, and whether it shows only where SJK's creator is (the creator's list
+    /// alone).
     kind: Option<String>,
+    escorted: bool,
     /// Its show under way, and the moments it played so far (0 nothing, 1 the vanish, 2
     /// the pop).
     playing: Option<(Instant, u8)>,
@@ -221,6 +227,8 @@ struct Cue {
     source: sjk_audio::SourceId,
     /// The show's sound, carrying far, on [`SHOW_CHANNEL`].
     show: bool,
+    /// How far into the sound it plays from, in milliseconds (a show joined late).
+    from_ms: u64,
 }
 
 /// A toy the creator asked to hide, waiting for the map's checksum.
@@ -229,6 +237,7 @@ struct PendingPlace {
     origin: Vec3,
     yaw: f32,
     server: String,
+    escorted: bool,
 }
 
 /// The toys of the loaded map, the presses waiting to be sent and the sounds to play.
@@ -299,6 +308,7 @@ impl ToyMaster {
                     origin: here.origin.to_array(),
                     source: source(here.id),
                     show: true,
+                    from_ms: 0,
                 });
             }
         }
@@ -366,6 +376,7 @@ impl ToyMaster {
                         .filter(|here| *here.track.show() == placed.show)
                         .map_or_else(|| Track::new(&placed.show), |here| here.track.clone()),
                     kind: placed.kind.clone(),
+                    escorted: placed.escorted,
                     playing: before.and_then(|here| here.playing),
                     show_at: before.and_then(|here| here.show_at),
                     seed: before.map_or(0, |here| here.seed),
@@ -418,6 +429,57 @@ impl ToyMaster {
         }
     }
 
+    /// Toy `id`'s show, under way for `elapsed` already (the player arrived after it
+    /// started, as the hub's presence tells it): joined where it is, its vanish and pop
+    /// past when they are, its sound from as far in, its drops thrown as they were and
+    /// the ones taken gone. Nothing when the toy played or joined a show on this map load.
+    fn join(&mut self, under_way: &wire::ShowUnderWay, elapsed: Duration, now: Instant) {
+        let Some(here) = self
+            .here
+            .iter_mut()
+            .find(|here| here.id == under_way.id && here.show_at.is_none() && !here.done)
+        else {
+            return;
+        };
+        let Some(started) = now.checked_sub(elapsed) else {
+            return;
+        };
+        let show = here.track.show();
+        let back = Duration::from_millis(u64::from(show.vanish + show.gone));
+        let length = Duration::from_millis(u64::from(here.track.length()));
+        if elapsed >= length + DROPS_KEPT {
+            return;
+        }
+        // Past the pop: its sounds and sparkles are over, the show's sound plays from as
+        // far in as it is (`tick` plays it from the pop otherwise).
+        let played = if elapsed >= back { 2 } else { 0 };
+        if played == 2 && elapsed < length && !here.sound.is_empty() {
+            self.cues.push(Cue {
+                path: Some(here.sound.clone()),
+                origin: here.origin.to_array(),
+                source: source(here.id),
+                show: true,
+                from_ms: u64::try_from((elapsed - back).as_millis()).unwrap_or(u64::MAX),
+            });
+        }
+        here.playing = (elapsed < length).then_some((started, played));
+        here.show_at = Some(started);
+        here.seed = under_way.seed;
+        here.drops = drops::Drops::default();
+        here.floats = float::Floats::default();
+        here.done = true;
+        if let Some(kinds) = under_way.kinds().filter(|kinds| !kinds.is_empty()) {
+            here.drops = drops::Drops::new(here.track.show(), under_way.seed, &kinds, here.origin);
+            for drop in 0..kinds.len() as u32 {
+                if under_way.taken & (1 << drop) != 0
+                    && let Some(drop) = here.drops.get_mut(drop)
+                {
+                    drop.taken = true;
+                }
+            }
+        }
+    }
+
     /// Toy `id`'s show throws `kinds`, from `seed` (it must be under way).
     fn throw(&mut self, id: i64, seed: u32, kinds: &[wire::DropKind]) {
         if let Some(here) = self.here.iter_mut().find(|here| here.id == id)
@@ -458,6 +520,7 @@ impl ToyMaster {
                     origin,
                     source: source(here.id),
                     show: false,
+                    from_ms: 0,
                 });
                 self.sparkles.push(here.origin);
             }
@@ -470,6 +533,7 @@ impl ToyMaster {
                     origin,
                     source: source(here.id),
                     show: false,
+                    from_ms: 0,
                 });
                 if !here.sound.is_empty() {
                     self.cues.push(Cue {
@@ -477,6 +541,7 @@ impl ToyMaster {
                         origin,
                         source: source(here.id),
                         show: true,
+                        from_ms: 0,
                     });
                 }
                 self.sparkles.push(here.origin);
@@ -488,6 +553,7 @@ impl ToyMaster {
                     origin,
                     source: source(here.id),
                     show: true,
+                    from_ms: 0,
                 });
             }
         }
@@ -668,6 +734,21 @@ impl GpuState {
                 None => {}
             }
         }
+        // Shows that started before the player came (or loaded the map): joined where
+        // they are, for this map load only.
+        if let Some((told, shows)) =
+            crate::player_identity::with_snapshot(|snapshot| snapshot.secret_shows.clone())
+                .flatten()
+        {
+            let since = now.saturating_duration_since(told);
+            for under_way in shows
+                .iter()
+                .filter(|under_way| under_way.round == i64::from(round))
+            {
+                let elapsed = Duration::from_millis(under_way.ago) + since;
+                self.toy_master.join(under_way, elapsed, now);
+            }
+        }
         self.toy_master.tick(now);
         self.run_toy_master_bodies(now);
         self.toy_master.publish(now);
@@ -798,6 +879,12 @@ impl GpuState {
             }
             Ok(SecretDone::Placed(id)) => self.toy_master_print(format!("Toy {id} hidden")),
             Ok(SecretDone::Removed(id)) => self.toy_master_print(format!("Toy {id} taken away")),
+            Ok(SecretDone::Escorted(id, true)) => {
+                self.toy_master_print(format!("Toy {id} now shows only on the server you are on"))
+            }
+            Ok(SecretDone::Escorted(id, false)) => {
+                self.toy_master_print(format!("Toy {id} now shows to everyone"));
+            }
             // A drop asked for and refused: the player may ask again (the hub's
             // `taken_` takes it away when someone else has it).
             Err(why) if self.toy_master.asking() => {
@@ -852,6 +939,7 @@ impl GpuState {
             server: pending.server,
             origin: pending.origin.to_array(),
             yaw: pending.yaw,
+            escorted: pending.escorted,
         };
         if crate::player_identity::with_service(|service| service.place_secret(placing)).is_none() {
             self.toy_master_print("Toy Master: not connected to the SJK hub".to_owned());
@@ -878,17 +966,19 @@ impl GpuState {
         let server = session.server().to_string();
         match name {
             "toymaster_place" => {
+                const USAGE: &str = "toymaster_place <kind> [server] [escort]";
                 let kind = args
                     .first()
-                    .ok_or("toymaster_place <kind> [server] (toymaster_list names the kinds)")?
+                    .ok_or(format!("{USAGE} (toymaster_list names the kinds)"))?
                     .to_owned();
-                let one_server = match args.get(1).map(String::as_str) {
-                    None => false,
-                    Some("server") => true,
-                    Some(other) => {
-                        return Err(format!("toymaster_place <kind> [server], not {other}"));
+                let (mut one_server, mut escorted) = (false, false);
+                for word in &args[1..] {
+                    match word.as_str() {
+                        "server" => one_server = true,
+                        "escort" => escorted = true,
+                        other => return Err(format!("{USAGE}, not {other}")),
                     }
-                };
+                }
                 let (eye, forward) = self.world_notes.view().ok_or("No view to aim from")?;
                 let hit = self
                     .decal_surfaces
@@ -900,13 +990,54 @@ impl GpuState {
                     origin: eye + forward * hit.distance,
                     yaw: yaw.rem_euclid(360.0),
                     server: if one_server { server } else { String::new() },
+                    escorted,
                 });
                 let map = crate::remap_blocked_maps::map_name(&self.world_load_map).to_owned();
                 self.map_edits.want_checksum(&map);
                 Ok(vec![format!(
-                    "Hiding a {kind} on {map}{}...",
-                    if one_server { " for this server" } else { "" }
+                    "Hiding a {kind} on {map}{}{}...",
+                    if one_server { " for this server" } else { "" },
+                    if escorted {
+                        ", shown only where you are"
+                    } else {
+                        ""
+                    }
                 )])
+            }
+            "toymaster_escort" => {
+                const USAGE: &str = "toymaster_escort [id] on|off";
+                let (id, word) = match args {
+                    [word] => (None, word),
+                    [id, word] => (
+                        Some(id.parse().map_err(|_| format!("Not a toy id: {id}"))?),
+                        word,
+                    ),
+                    _ => return Err(USAGE.into()),
+                };
+                let escorted = match word.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    other => return Err(format!("{USAGE}, not {other}")),
+                };
+                let id = match id {
+                    Some(id) => id,
+                    None => {
+                        let from = Vec3::from_array(session.latest_snapshot().player.origin());
+                        self.toy_master
+                            .here
+                            .iter()
+                            .map(|here| (here.id, here.origin.distance(from)))
+                            .filter(|(_, distance)| *distance <= REMOVE_REACH)
+                            .min_by(|a, b| a.1.total_cmp(&b.1))
+                            .map(|(id, _)| id)
+                            .ok_or("No hidden toy near you: give its id (toymaster_list)")?
+                    }
+                };
+                crate::player_identity::with_service(|service| {
+                    service.escort_secret(id, escorted);
+                })
+                .ok_or("Not connected to the SJK hub")?;
+                Ok(vec![format!("Setting toy {id}...")])
             }
             "toymaster_remove" => {
                 let id = match args.first() {
@@ -952,8 +1083,13 @@ impl GpuState {
                 format!(", {:.0} units away", here.origin.distance(from))
             });
             let done = if here.done { ", played its show" } else { "" };
+            let escorted = if here.escorted {
+                ", shown only where you are"
+            } else {
+                ""
+            };
             lines.push(format!(
-                "  {}: {} at {:.0} {:.0} {:.0}{away}{done}",
+                "  {}: {} at {:.0} {:.0} {:.0}{away}{done}{escorted}",
                 here.id,
                 here.kind.as_deref().unwrap_or("?"),
                 here.origin.x,
@@ -1157,6 +1293,7 @@ impl GpuState {
                         full_volume_distance: SOUND_FULL,
                         falloff_per_unit: 1.0 / (SOUND_RANGE - SOUND_FULL),
                     },
+                    cue.from_ms,
                 );
             } else {
                 audio.play_toy(
@@ -1196,6 +1333,7 @@ impl GpuState {
                 sound: String::new(),
                 track: Track::new(&show),
                 kind: None,
+                escorted: false,
                 playing: since.map(|since| (now - since, 2)),
                 show_at: since.map(|since| now - since),
                 seed: 0,
@@ -1235,6 +1373,7 @@ impl GpuState {
                 sound: String::new(),
                 show,
                 kind: None,
+                escorted: false,
             }],
             kinds: Vec::new(),
         };
@@ -1373,6 +1512,7 @@ mod tests {
             sound: "sound/a.mp3".to_owned(),
             show: SHOW,
             kind: None,
+            escorted: false,
         }
     }
 
@@ -1513,5 +1653,58 @@ mod tests {
                 .is_some_and(|cue| cue.path.is_none() && cue.show)
         );
         assert_eq!(toys.sparkles.len(), 2);
+    }
+
+    /// A player who arrives after a show started joins it where it is: no vanish or pop
+    /// once they are past, the sound from as far in, the drops thrown with the ones taken
+    /// gone; a toy that played its show on this map load is not joined again.
+    #[test]
+    fn a_show_under_way_is_joined_where_it_is() {
+        let mut toys = ToyMaster::default();
+        let mut stepped = toy(1, [0.0; 3]);
+        stepped.show = track::tests::stepped();
+        let secrets = wire::Secrets {
+            secrets: vec![stepped, toy(2, [500.0, 0.0, 0.0])],
+            kinds: Vec::new(),
+        };
+        toys.take(&secrets, "mp/ffa3", -5, "", true);
+        let under_way = wire::ShowUnderWay {
+            id: 1,
+            round: 7,
+            ago: 40_000,
+            seed: 5,
+            drops: "cch".to_owned(),
+            taken: 0b010,
+        };
+        let now = Instant::now();
+        toys.join(&under_way, Duration::from_millis(40_000), now);
+        let here = &toys.here[0];
+        assert_eq!(here.playing.map(|(_, played)| played), Some(2));
+        assert_eq!(here.show_elapsed(now).map(|ms| ms.round()), Some(40_000.0));
+        assert_eq!(here.drops.list.len(), 3);
+        assert!(here.drops.list[1].taken && !here.drops.list[0].taken);
+        // Only the show's sound, from where it is: 40 s less the vanish and the gone.
+        assert_eq!(toys.cues.len(), 1);
+        assert_eq!(toys.cues[0].path.as_deref(), Some("sound/a.mp3"));
+        assert_eq!(toys.cues[0].from_ms, 40_000 - 180 - 1_200);
+        toys.tick(now);
+        assert_eq!(toys.cues.len(), 1, "no vanish or pop once past them");
+        // Told again (every presence answer): joined once only.
+        toys.join(&under_way, Duration::from_millis(41_000), now);
+        assert_eq!(toys.cues.len(), 1);
+        // Just started: it plays its vanish and pop as anyone's.
+        let early = wire::ShowUnderWay {
+            id: 2,
+            ago: 100,
+            ..under_way.clone()
+        };
+        toys.join(&early, Duration::from_millis(100), now);
+        assert_eq!(toys.here[1].playing.map(|(_, played)| played), Some(0));
+        assert_eq!(toys.cues.len(), 1);
+        // Long over, drops and all: nothing.
+        let mut late = ToyMaster::default();
+        late.take(&secrets, "mp/ffa3", -5, "", true);
+        late.join(&under_way, Duration::from_secs(600), now);
+        assert!(late.here[0].show_at.is_none() && late.cues.is_empty());
     }
 }

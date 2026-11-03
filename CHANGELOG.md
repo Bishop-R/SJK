@@ -53,6 +53,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Lugormod v3 servers: your own movement is predicted as the server moves you: scaled players' size and eye height, standing up under low ceilings, the admin jetpack in FFA, rolls with the stun baton; other servers are unchanged (`cg_noPredict 1` still turns prediction off) _(Lumaya, PR #287)_
 - Boombox on the floor: `boombox_place` (Place key in Collection > Toys, the quick wheel or Key bindings) stands your boombox on the floor in front of you, facing the way you look, and the music plays from there, a little quieter behind it; press again to pick it back up. It goes when you turn the toy off, change map or leave, and See and hear others' boomboxes hides others' boxes and their music _(Sol, after VisionJK's boombox by Blackwolf)_
 - The Toy Master's toys can dance to their song: a toy spins only while its song sings and stands still in the silences, starting and stopping in a blink _(Sol)_
+- The Toy Master's shows can be joined late: arrive on a server or load the map while a show is under way and you see it where it is, hear its song from the same moment and find its drops as they lie; a show's song is no longer cut by a busy fight, so walking up from afar you hear it _(Sol)_
 
 ## 2026.1102.1 (Alpha) | 02/11/2026
 
