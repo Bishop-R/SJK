@@ -13,7 +13,6 @@ Format, read by the client (crates/sjk-viewer/src/changelog_data.rs, whose
 tests check this file):
 - "## <version> | <dd/mm/yyyy>" starts a release ("## Unreleased" for main
   after the last release, without a date);
-- Map editor in a web browser, creator only for now: `mapedit_web` opens the map in 3D in your browser, served by SJK on this PC only, and every edit there is made in the game at once, as the in-game editor makes it; its drawing is VisionJK's web admin page _(Sol, after Blackwolf's VisionJK and Lixsl's JKAdmin)_
 - other lines up to the first item are the release's introduction;
 - "> <Heading>: <sentence>" lines before the first item are the release's short
   recap (3 to 6 lines, shown by the what's-new card after an update); every release
