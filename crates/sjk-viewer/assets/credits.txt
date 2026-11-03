@@ -537,6 +537,10 @@ role: Ideas for SJK
 did: Quick wheel custom commands remembered in the command list
 did: The Empower glow hidden with a setting
 
+[Lex]
+role: Ideas for SJK
+did: Hit sounds (cg_hitsounds) heard without EJK's pack
+
 [AngeloPapaya]
 role: Ideas for SJK
 did: Low jump: one press, the shortest hop a tap makes (lowjump)

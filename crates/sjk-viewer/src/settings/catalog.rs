@@ -274,6 +274,11 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Hit sounds",
+        cvar: "cg_hitsounds",
+        kind: ValueKind::Choice(&["0", "1", "2", "3", "4", "5", "6"]),
+    },
+    Setting {
         label: "Sound sonar",
         cvar: crate::sound_sonar::CVAR,
         kind: ValueKind::Bool,

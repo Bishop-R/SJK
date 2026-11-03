@@ -32,6 +32,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Hit sounds (`cg_hitsounds`, Settings > Sound, off by default): a sound each time your attack hits a player, another for a teammate, as in EJK; without EJK's or jaPRO's pack SJK plays its own (a tick, a blip, two notes or a knock) instead of nothing _(Sol, after Lex's idea and JoF EJK)_
 - Green on shield hits (`cg_hitMarkerShield`, Settings > HUD, off by default): with the damage hitmarker on, a hit your shield took shows green instead of red _(Sol, after AngeloPapaya's idea)_
 - Kill feed anywhere: Move HUD elements (`hud_edit`) shows a sample kill to drag while none shows, and the feed may now go anywhere, its entries lining up on their left in the screen's left half _(Sol, after AngeloPapaya's idea)_
 - Move with console open (`cl_consoleMove`, Settings > Controls, off by default): the movement keys you hold as the console opens keep moving you while you type, and letting one go stops it _(Sol, after AngeloPapaya's idea)_

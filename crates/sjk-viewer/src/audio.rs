@@ -44,6 +44,8 @@ pub(crate) use controls::{
 mod dynamic;
 #[path = "audio_feedback.rs"]
 mod feedback;
+/// `cg_hitsounds`' sounds made in memory when no pack brings them.
+mod hit_sounds;
 #[path = "audio_holstered_staff.rs"]
 mod holstered_staff;
 #[cfg(feature = "mod-jof")]

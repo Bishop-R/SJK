@@ -181,7 +181,7 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "cg_hitsounds",
             0_i64,
             archive,
-            "Hit cues 1-4; saber variants 5-6",
+            "A sound when your attack hits a player: 0 off, 1-4 four sounds (a pack's hitsound*.wav, else SJK's); 5-6 saber hit variants",
         ),
         CvarDefinition::new(
             "cg_oldPainSounds",

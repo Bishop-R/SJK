@@ -24,6 +24,14 @@
 
 # ---- Console & chat ----
 
+[hit-sounds-made]
+area: Audio
+title: Hit sounds (cg_hitsounds) without EJK's pack, and its Settings row
+change: Settings > Sound > Hit sounds; 1-4 play SJK's own tones when no hitsound*.wav exists.
+change: A pack's hitsound*.wav still wins; teammate hits play a falling buzz.
+test: Settings > Sound > Hit sounds: Tick; hit a bot or player: a tick for each hit.
+test: Try Blip, Two notes, Knock; hit a teammate in TFFA: the buzz.
+test: The effects volume (s_volume) turns them down with the rest.
 [hitmarker-shield]
 area: HUD
 title: Damage hitmarker green on shield hits (cg_hitMarkerShield), off by default

@@ -15,6 +15,19 @@ The shield sphere option and damage-event timing are unchanged.
 damage-direction indicator near the crosshair when you take damage. It defaults
 to `0` (off); `cg_hitMarker 1` enables it immediately and saves the choice.
 It does not change damage camera kick, hit sounds or damage-event timing.
+
+Settings > Sound > Hit sounds (`cg_hitsounds`, TaystJK's and JoF EJK's, Lex's request,
+03/11/2026; off by default) plays a sound beside you each time the server counts a hit
+of yours on another player (`PERS_HITS` rises, as `CG_CheckLocalSounds` reads it) and
+another when it falls, a hit on a teammate; the server counts both
+(`G_Damage`), so nothing is guessed. 1 to 4 choose the sound: jaPRO's and EJK's
+`sound/effects/hitsound.wav` to `hitsound4.wav` (and `hitsoundteam.wav`) when a pack
+brings them, else short tones SJK makes in memory, a tick, a blip, two notes and a knock,
+and a falling buzz for a teammate
+([hit_sounds.rs](../crates/sjk-viewer/src/audio/hit_sounds.rs)); before 03/11/2026 the
+option was silent without such a pack. 5 and 6 change the saber's hit sounds instead
+(the stock `saberhit.wav` only, or one of the four at random), as in TaystJK. The sounds
+follow the effects volume (`s_volume`).
 With Settings > HUD > Green on shield hits (`cg_hitMarkerShield`, off by default,
 AngeloPapaya's idea, 03/11/2026) the indicator is green instead of red when the hit took
 your shield: the armour in the snapshot carrying the damage event is lower than in the one
