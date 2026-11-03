@@ -87,6 +87,13 @@ multiplayer. Read [docs/status.md](docs/status.md),
   `cargo test --locked --workspace` and
   `cargo clippy --locked --workspace --all-targets`. Explain any check that could
   not run.
+- Every merge into `main` first runs the startup check, which needs a GPU and the
+  game data in `JKA_GAME_DATA`:
+  `cargo test --release -p sjk-viewer --bin sjk the_client_starts_in_a_quarter_of_the_main_stack -- --ignored`.
+  It builds the menu's world and draws its first frames in a quarter of the main
+  thread's stack ([startup_stack.rs](crates/sjk-viewer/src/startup_stack.rs)); a
+  failure (`STATUS_STACK_OVERFLOW`) blocks the merge until the stack use is found and
+  cut. Raising the reserve again is not the fix.
 - Passing Cargo tests currently does not establish gameplay parity: the repository
   has no bundled regression suite. Use focused external evidence for affected behavior.
   Small unit tests and fixtures that pin the changed behavior, such as the byte
