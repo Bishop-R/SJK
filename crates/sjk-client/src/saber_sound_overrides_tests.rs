@@ -600,3 +600,70 @@ fn a_set_whose_files_are_not_in_the_game_data_leaves_the_stock_sounds_even_alone
         .collect();
     assert_eq!(hums, ["sound/weapons/saber/saberhum1.wav"]);
 }
+
+#[test]
+fn with_skin_sounds_only_dual_and_thrown_sabers_hum_with_the_set_alone() {
+    // #233: duals (a second saber, `saber2`) and a thrown saber kept the stock hum.
+    let mut game = game_state();
+    game.replace_config_string(
+        CS_PLAYERS + usize::from(SKINNED),
+        b"n\\Player\\model\\kyle/default\\saber1\\single_1\\saber2\\single_1".to_vec(),
+    )
+    .unwrap();
+    game.replace_config_string(CS_SOUNDS + 5, b"sound/weapons/saber/saberhum1.wav".to_vec())
+        .unwrap();
+    let vfs = vfs();
+    let mut next = 0;
+    let mut register = |_: &str, _: &[u8]| {
+        next += 1;
+        Some(SoundHandle(next))
+    };
+    let mut adapter = LegacySoundAdapter::new(&game, &vfs, &mut register);
+    adapter.register_saber_sound_sets(&[SET], &vfs, &mut register);
+    wear(&mut adapter, SKINNED);
+    let hums = |adapter: &mut LegacySoundAdapter, entities| {
+        adapter.observe_loops(&snapshot(entities), 1_000, [0.0; 3], |state| {
+            state.trajectory_base()
+        });
+        adapter
+            .loop_decisions()
+            .iter()
+            .map(|decision| {
+                (
+                    decision.kind,
+                    adapter
+                        .loop_sound(decision.sound.unwrap())
+                        .unwrap()
+                        .path
+                        .to_string(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let duals = || vec![player_entity(SKINNED, AT_SKINNED)];
+    let stock = "sound/weapons/saber/saberhum1.wav".to_owned();
+    // Over the stock hums, the sabers' stock hum plays (one loop for both: the same
+    // sound on one entity is added once, as `S_AddLoopingSound` merges it).
+    assert_eq!(
+        hums(&mut adapter, duals()),
+        [
+            (LegacyLoopKind::SaberHumPrimary, stock.clone()),
+            (LegacyLoopKind::SaberHumSkin, SET.hum.to_owned()),
+        ]
+    );
+    adapter.set_saber_skin_sounds_only(true);
+    assert_eq!(
+        hums(&mut adapter, duals()),
+        [(LegacyLoopKind::SaberHumSkin, SET.hum.to_owned())]
+    );
+    assert_eq!(
+        hums(&mut adapter, vec![thrown_saber(200, SKINNED)]),
+        [(LegacyLoopKind::SaberHumSkin, SET.hum.to_owned())]
+    );
+    // A set registered again (a pack update) keeps the clients' hums pointing at it.
+    adapter.register_saber_sound_sets(&[SET], &vfs, &mut register);
+    assert_eq!(
+        hums(&mut adapter, duals()),
+        [(LegacyLoopKind::SaberHumSkin, SET.hum.to_owned())]
+    );
+}

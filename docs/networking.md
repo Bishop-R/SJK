@@ -21,6 +21,13 @@ not authorize a wire change.
 Client [compatibility profiles](../crates/sjk-client/src/compat_profile.rs)
 explicitly distinguish BaseJKA, JA+, TaystJK/jaPRO and unknown modules from
 serverinfo, or before connecting from a `getinfo` reply's `game` directory.
+The connect userinfo is chosen from that reply, and a JA+ server reads the plugin keys
+from the connect userinfo only (#222: without them katas, diagonal kicks and
+`+button12` stayed a plain hook until the next map). A join asks `getinfo` three times,
+400 ms each; unanswered, it connects as the server ran at this client's last join
+there ([server_profiles.rs](../crates/sjk-viewer/src/server_profiles.rs)), else as base
+JKA, and logs it. When the gamestate shows a module whose keys the connect lacked, the
+join disconnects and joins again with them, 3.5 s later (`sv_reconnectlimit`).
 Profile detection and implemented adapter behavior are not a promise that every
 feature of those servers is reproduced by SJK's dedicated server.
 

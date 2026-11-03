@@ -311,6 +311,10 @@ impl LegacySoundAdapter {
             .register(sets, &mut self.sounds, vfs, &mut register);
         let hums: Vec<&str> = sets.iter().map(|set| set.hum).collect();
         self.loops.register_saber_hums(&hums, vfs, &mut register);
+        // The clients' hums point into the table just rebuilt: an unchanged client list
+        // would not refresh them ([`Self::set_saber_sound_overrides`]).
+        self.loops
+            .set_saber_hum_overrides(&self.saber_overrides.clients);
     }
 
     /// Which registered set each client slot wears (`None`: the stock sounds). Cheap

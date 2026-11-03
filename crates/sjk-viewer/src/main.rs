@@ -3323,6 +3323,8 @@ struct ParticleAtlas {
     /// Some stage is a dynamic glow stage, so effects sort glowing layers apart.
     any_glow: bool,
     remaps: effect_remaps::State,
+    /// The atlas being rebuilt on a worker for new effects (`particle_atlas.rs`).
+    pending: particle_atlas::Pending,
 }
 
 #[derive(Clone)]

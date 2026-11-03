@@ -436,11 +436,12 @@ pub(crate) fn pose(
     scratch.pose(gla, &skin::model_space(points))
 }
 
-/// Where an actor posed by [`pose`] is placed: at the pelvis, unturned, unscaled.
+/// Where an actor posed by [`pose`] is placed: at the pelvis, unturned, at the model
+/// scale the actor's transform already carries (`iModelScale`, `actor_model_scale.rs`):
+/// a youngling or a Jawa keeps its size (#223), its limbs scaled about the pelvis.
 pub(crate) fn place(transform: &mut sjk_runtime::Transform, points: &[Vec3; JOINTS]) {
     transform.translation = points[PELVIS].to_array();
     transform.rotation = glam::Quat::IDENTITY.to_array();
-    transform.scale = [1.0; 3];
 }
 
 /// The points of a body standing at `origin` (a player's origin), facing `yaw`
@@ -1741,14 +1742,15 @@ mod tests {
     }
 
     #[test]
-    fn a_ragdoll_places_its_actor_at_the_pelvis_unturned() {
+    fn a_ragdoll_places_its_actor_at_the_pelvis_unturned_at_its_scale() {
         let body = Body::new(&start());
         let mut transform = sjk_runtime::Transform::IDENTITY;
-        transform.scale = [1.2; 3];
+        transform.scale = [0.6; 3];
         transform.rotation = glam::Quat::from_rotation_z(1.0).to_array();
         place(&mut transform, body.points());
         assert_eq!(transform.translation, body.centre().to_array());
-        assert_eq!(transform.scale, [1.0; 3]);
+        // A small model (`iModelScale` 60) stays small.
+        assert_eq!(transform.scale, [0.6; 3]);
         assert_eq!(transform.rotation, glam::Quat::IDENTITY.to_array());
     }
 }

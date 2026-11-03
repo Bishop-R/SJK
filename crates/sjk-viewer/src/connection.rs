@@ -347,18 +347,71 @@ fn join_with_storage(
     map_known: impl FnOnce(String),
 ) -> Result<JoinedSession, Box<dyn Error>> {
     let server = resolve_server(address)?;
-    let profile = query_server_info(server, Duration::from_millis(650))
-        .map(|info| {
+    let profile = match server_info(server) {
+        Some(info) => {
             if let Some(map) = info.get("mapname") {
                 map_known(map.to_owned());
             }
             CompatProfile::from_server_info(&info)
-        })
-        .unwrap_or(CompatProfile::BaseJka);
+        }
+        None => {
+            let known = server_profiles::known(server);
+            log::progress(format_args!(
+                "connect: {server} did not answer getinfo; connecting as {}",
+                known.as_ref().map_or("base JKA", CompatProfile::id)
+            ));
+            known.unwrap_or(CompatProfile::BaseJka)
+        }
+    };
+    let joined = join_socket(
+        server,
+        profile.clone(),
+        game_data,
+        userinfo,
+        storage,
+        guid.as_ref(),
+        prepared.clone(),
+        phases.clone(),
+    )?;
+    let detected = joined.session.compat_profile().clone();
+    server_profiles::remember(server, &detected);
+    if detected.userinfo_extensions() == profile.userinfo_extensions() {
+        return Ok(joined);
+    }
+    // A JA+ server reads a client's plugin keys (`cjp_client`) from its connect
+    // userinfo only: joined without them, it treats SJK as a client without the
+    // plugin until the next map (#222: no katas or kicks, +button12 a plain hook).
+    log::progress(format_args!(
+        "connect: joined {server} as {} but it runs {}; reconnecting with its keys",
+        profile.id(),
+        detected.id()
+    ));
+    let mut session = joined.session;
+    let _ = session.disconnect();
+    drop(session);
+    // `sv_reconnectlimit` (3 s by default) turns away a reconnect sooner.
+    thread::sleep(server_profiles::RECONNECT_WAIT);
     join_socket(
-        server, profile, game_data, userinfo, storage, guid, prepared, phases,
+        server,
+        detected,
+        game_data,
+        userinfo,
+        None,
+        guid.as_ref(),
+        prepared,
+        phases,
     )
 }
+
+/// `getinfo` asked a few times: a single packet lost, or a server still dropping
+/// this client after a reconnect, made a JA+ server look like base JKA (#222).
+fn server_info(server: SocketAddr) -> Option<InfoString> {
+    (0..server_profiles::GETINFO_TRIES)
+        .find_map(|_| query_server_info(server, server_profiles::GETINFO_WAIT).ok())
+}
+
+#[path = "server_profiles.rs"]
+mod server_profiles;
 
 /// Stamp this client's `ja_guid` for `server` into the userinfo it connects
 /// with. Computed per server, as `cl_guidServerUniq` has it by default.
@@ -395,13 +448,13 @@ fn join_socket(
     game_data: &Path,
     userinfo: &LegacyUserInfo,
     storage: Option<Box<dyn sjk_client::download::DownloadStorage>>,
-    guid: Option<crate::client_guid::Policy>,
+    guid: Option<&crate::client_guid::Policy>,
     prepared: mpsc::SyncSender<GameState>,
     phases: mpsc::Sender<TimelinePhase>,
 ) -> Result<JoinedSession, Box<dyn Error>> {
     let assets = Pk3Fingerprint::open(game_data.join("base/assets3.pk3"))?;
     log::progress(format_args!("connecting to {server}"));
-    let userinfo = &with_server_guid(userinfo, server, guid.as_ref());
+    let userinfo = &with_server_guid(userinfo, server, guid);
     let mut timeline = ConnectTimeline::new();
     let mut session = ClientSession::join_with_downloads(
         server,
