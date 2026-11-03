@@ -32,7 +32,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
-- Maps lit by switchable or flickering lights, such as the JoF Shuttle trial mission ship, the JoF missions and Memorial Grounds, show that light instead of drawing it dark, and follow the server as a light is switched off or on (SJK and Vanilla graphics presets; Kushina's report) _(Slash)_
+- Maps lit by switchable or flickering lights, such as the JoF Shuttle trial mission ship, the JoF missions and Memorial Grounds, show that light instead of drawing it dark, and follow the server as a light is switched off or on (SJK and Vanilla graphics presets; Kushina's report) _(Slash, PR #339, after Kushina's report)_
 
 ## 2026.1103.1 (Alpha) | 03/11/2026
 
