@@ -132,8 +132,8 @@ The map's own worldspawn remaps apply when its world loads, as rd-vanilla
 so `remapshader2` too) whose value is `old;new`, split at the first `;`. A value
 without `;`, or an empty key or value, ends the scan as in C. Both shaders must
 exist. These remaps are not gated by `cg_remaps` and last as long as the loaded
-map. `vertexremapshader` keys are skipped: they apply only under `r_vertexLight`,
-which SJK does not have.
+map. `vertexremapshader` keys apply in their place only under `r_vertexLight 1`
+([vertex lighting](#vertex-lighting-r_vertexlight)).
 
 Map, server and local remaps of one shader follow rd-vanilla, where every source
 writes the same remapped-shader slot: the latest remap wins. Worldspawn remaps come
@@ -321,6 +321,26 @@ surfaces keep the colours they loaded with (all styles on). SJK's server does no
 retail game starts `START_OFF` lights off. `misc_bsp` instances keep their styles at full
 strength. The light grid already reads styles as white
 ([entity_lighting.rs](../crates/sjk-viewer/src/entity_lighting.rs)).
+
+## Vertex lighting (`r_vertexLight`)
+
+A surface q3map2 lit by vertex (`LIGHTMAP_BY_VERTEX`, lightmap number -3: `-vertex`
+builds, `q3map_nolightmap` or `q3map_onlyvertexlighting` shaders, the water and lights
+of `oot`) takes rd-vanilla `FinishShader`'s rule for its shader
+(`world_stage::material_stages`, `tr_shader.cpp:2878-2905`): the first `map $lightmap`
+stage takes the vertex colours (`rgbGen exactVertex`, alpha left as the vertex's); a
+leading one is dropped instead and the stage after it, made opaque, takes them. Every
+other `$lightmap` stage of such a shader draws the white image, as `ParseStage` gives
+it. Before 03/11/2026 those stages drew SJK's grey fallback lightmap, so a vertex-lit
+surface lost its bake and showed at half brightness (`oot`'s 9 765 vertex-lit
+surfaces, hub report #176).
+
+`r_vertexLight 1` (archived, read when a map loads, as rd-vanilla's latched cvar) lights
+the whole world that way: every surface takes `LIGHTMAP_BY_VERTEX` and its vertex
+styles (`sjk_bsp::Bsp::light_by_vertex`, after `ShaderForShaderNum`), so the rule above
+applies to every shader, and the worldspawn's `vertexremapshader` keys apply with the
+`remapshader` ones. Unlike rd-vanilla, dynamic lights stay on, and the lightmap pages
+are still loaded (unused). Change it, then load the map again.
 
 ## Projected stage coordinates (`tcGen vector`)
 

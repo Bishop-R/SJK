@@ -129,6 +129,7 @@ mod frame_pacing;
 mod frame_queue;
 mod frame_split;
 mod lightmap_styles;
+mod vertex_light;
 
 mod charge_flash;
 mod e2e_whisper_card;

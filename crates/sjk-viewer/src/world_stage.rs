@@ -98,16 +98,16 @@ pub(crate) fn material_stages(
 ) -> (Vec<ShaderStage>, f32, ShaderCull) {
     if let Some(definition) = definition {
         let sort = definition.resolved_sort();
-        return (
-            definition
-                .stages
-                .iter()
-                .filter(|stage| stage.surface_sprites.is_none())
-                .cloned()
-                .collect(),
-            sort,
-            definition.cull,
-        );
+        let mut stages: Vec<ShaderStage> = definition
+            .stages
+            .iter()
+            .filter(|stage| stage.surface_sprites.is_none())
+            .cloned()
+            .collect();
+        if lightmap == LIGHTMAP_BY_VERTEX {
+            vertex_lit_lightmap_stage(&mut stages);
+        }
+        return (stages, sort, definition.cull);
     }
     let diffuse = implicit_stage(TextureGenerator::Base, StageBlend::Filter, lightmap >= 0);
     if lightmap >= 0 {
@@ -134,6 +134,50 @@ pub(crate) fn material_stages(
         }
         (vec![stage], SORT_OPAQUE, ShaderCull::Front)
     }
+}
+
+/// `FinishShader`'s rule for a shader on a `LIGHTMAP_BY_VERTEX` surface (rd-vanilla
+/// `tr_shader.cpp:2878-2905`): its first `$lightmap` stage, which `ParseStage` gave the
+/// white image, takes the vertex colours (`CGEN_EXACT_VERTEX`, `AGEN_SKIP`). A leading
+/// one is dropped instead and the stage after it, made opaque (`GLS_DEFAULT`), takes
+/// them. Pre-lit surfaces (q3map2 `-vertex`, `q3map_nolightmap` and the like) and every
+/// surface under `r_vertexLight 1` are such; without it their `$lightmap` stage drew the
+/// grey fallback lightmap and their bake was lost.
+fn vertex_lit_lightmap_stage(stages: &mut Vec<ShaderStage>) {
+    // `isLightmap` is `map $lightmap` alone; `tcGen lightmap` on a texture is not one.
+    let lightmap = |stage: &ShaderStage| {
+        stage
+            .images
+            .iter()
+            .any(|image| image.eq_ignore_ascii_case("$lightmap"))
+    };
+    let Some(index) = stages.iter().position(lightmap) else {
+        return;
+    };
+    if index == 0 {
+        stages.remove(0);
+        let Some(stage) = stages.first_mut() else {
+            return;
+        };
+        stage.blend = StageBlend::Replace;
+        stage.alpha_function = None;
+        stage.depth_write = true;
+        stage.depth_function = DepthFunction::LessEqual;
+    }
+    // `ParseStage` gives every `$lightmap` stage of such a shader the white image.
+    for stage in stages.iter_mut().filter(|stage| lightmap(stage)) {
+        stage.images = vec!["$whiteimage".into()];
+        stage.texture_generator = TextureGenerator::Base;
+        stage.texture_modifications.clear();
+    }
+    let stage = &mut stages[index];
+    stage.rgb_generator = Some("exactVertex".into());
+    stage.rgb_wave = None;
+    stage.rgb_constant = None;
+    // AGEN_SKIP leaves the alpha EXACT_VERTEX copied: the vertex alpha here.
+    stage.alpha_generator = Some("vertex".into());
+    stage.alpha_wave = None;
+    stage.alpha_constant = None;
 }
 
 /// rd-vanilla `LIGHTMAP_NONE` (`tr_local.h:437`): models registered without a
@@ -481,4 +525,53 @@ pub(crate) fn evaluate_wave(wave: &WaveForm, time: f32) -> f32 {
         _ => ((index as f32 * std::f32::consts::TAU) / 1023.0).sin(),
     };
     wave.base + table * wave.amplitude
+}
+
+#[cfg(test)]
+mod vertex_lit_tests {
+    use super::*;
+
+    fn stages(script: &str, lightmap: i32) -> Vec<ShaderStage> {
+        let definitions = sjk_shader::parse_shader_script(script.as_bytes(), "scripts/t.shader")
+            .expect("script parses");
+        material_stages(Some(&definitions[0]), lightmap).0
+    }
+
+    #[test]
+    fn leading_lightmap_stage_gives_way_to_vertex_colour() {
+        // rd-vanilla FinishShader: the `$lightmap` stage is dropped and the texture after
+        // it becomes an opaque exact-vertex stage.
+        let script = "textures/a {\n{ map $lightmap }\n\
+                      { map textures/a/floor blendFunc filter alphaFunc GE128 }\n}";
+        let vertex = stages(script, LIGHTMAP_BY_VERTEX);
+        assert_eq!(vertex.len(), 1);
+        assert_eq!(vertex[0].images, ["textures/a/floor"]);
+        assert_eq!(vertex[0].blend, StageBlend::Replace);
+        assert_eq!(vertex[0].alpha_function, None);
+        assert!(vertex[0].depth_write);
+        assert_eq!(vertex[0].rgb_generator.as_deref(), Some("exactVertex"));
+        assert_eq!(vertex[0].alpha_generator.as_deref(), Some("vertex"));
+        // A lightmapped surface keeps both stages as written.
+        assert_eq!(stages(script, 0).len(), 2);
+    }
+
+    #[test]
+    fn later_lightmap_stage_becomes_white_vertex_colour() {
+        // oot's `textures/oot/wtr_uvwater_01`: water, then `$lightmap` as a filter.
+        let script = "textures/a {\n\
+                      { map textures/a/water blendFunc GL_SRC_ALPHA GL_ONE \
+                        rgbGen wave sin 1 0.05 0 0.5 }\n\
+                      { map $lightmap blendFunc GL_DST_COLOR GL_ZERO }\n\
+                      { map $lightmap blendFunc GL_DST_COLOR GL_ONE }\n}";
+        let vertex = stages(script, LIGHTMAP_BY_VERTEX);
+        assert_eq!(vertex.len(), 3);
+        assert!(vertex[0].rgb_wave.is_some());
+        assert_eq!(vertex[1].images, ["$whiteimage"]);
+        assert_eq!(vertex[1].texture_generator, TextureGenerator::Base);
+        assert_eq!(vertex[1].rgb_generator.as_deref(), Some("exactVertex"));
+        assert_eq!(vertex[1].blend, stages(script, 0)[1].blend);
+        // A further lightmap stage draws white, its colour as written.
+        assert_eq!(vertex[2].images, ["$whiteimage"]);
+        assert_ne!(vertex[2].rgb_generator.as_deref(), Some("exactVertex"));
+    }
 }
