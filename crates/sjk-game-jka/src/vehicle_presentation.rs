@@ -15,6 +15,10 @@ pub struct WeaponPresentation {
     /// `muzzleFX`: the flash `EV_VEH_FIRE` plays bolted to the muzzle that fired
     /// (`CG_VehMuzzleFireFX`). Its `Sound` primitive is the weapon's firing sound.
     pub muzzle_effect: Option<String>,
+    /// `impactFX`: what the shot plays where it hits instead of its carrier weapon's
+    /// impact (`CG_VehicleWeaponImpact`, `cg_weapons.c`): the AT-ST's laser flies as
+    /// `WP_ROCKET_LAUNCHER` but bursts in `atst/wall_impact`, not a rocket explosion.
+    pub impact_effect: Option<String>,
 }
 
 pub(crate) fn parse(text: &[u8], name: &[u8]) -> WeaponPresentation {
@@ -37,6 +41,8 @@ pub(crate) fn parse(text: &[u8], name: &[u8]) -> WeaponPresentation {
             Some(&mut result.loop_sound)
         } else if key.eq_ignore_ascii_case(b"muzzleFX") {
             Some(&mut result.muzzle_effect)
+        } else if key.eq_ignore_ascii_case(b"impactFX") {
+            Some(&mut result.impact_effect)
         } else {
             None
         };
@@ -61,6 +67,7 @@ mod tests {
 {
 	muzzleFX	ships/reb_blastermuzzleflash
 	shotFX	ships/reb_blastershot
+	impactFX	ships/reb_blasterimpact
 }
 ";
         let weapon = parse(text, b"WeaponA");
@@ -69,6 +76,10 @@ mod tests {
             Some("ships/reb_blastermuzzleflash")
         );
         assert_eq!(weapon.shot_effect.as_deref(), Some("ships/reb_blastershot"));
+        assert_eq!(
+            weapon.impact_effect.as_deref(),
+            Some("ships/reb_blasterimpact")
+        );
         assert_eq!(parse(text, b"WeaponB"), WeaponPresentation::default());
     }
 }

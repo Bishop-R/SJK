@@ -44,6 +44,8 @@ pub(crate) struct Sinks<'a> {
     pub(crate) counters: &'a mut Counters,
     pub(crate) bsp: &'a sjk_bsp::Bsp,
     pub(crate) trace_scratch: &'a mut sjk_bsp::TraceScratch,
+    /// The map's missile and vehicle weapon effects (vehicle shots' `impactFX`).
+    pub(crate) missiles: &'a sjk_client::LegacyMissileEffects,
 }
 
 /// Observe one accepted snapshot through every snapshot-driven presentation
@@ -74,6 +76,7 @@ pub(crate) fn observe(
             effects: sinks.effects,
             vfs: sinks.vfs,
             audio: sinks.audio,
+            missiles: sinks.missiles,
         },
         visual_now,
     );
@@ -278,6 +281,7 @@ impl GpuState {
                     counters: &mut self.snapshot_observations,
                     bsp: &self.bsp,
                     trace_scratch: &mut self.trace_scratch,
+                    missiles: &self.missile_effects,
                 },
             );
         });
@@ -381,6 +385,7 @@ impl GpuState {
                     counters: &mut self.snapshot_observations,
                     bsp: &self.bsp,
                     trace_scratch: &mut self.trace_scratch,
+                    missiles: &self.missile_effects,
                 },
             );
             let toys = self.toy_moments();

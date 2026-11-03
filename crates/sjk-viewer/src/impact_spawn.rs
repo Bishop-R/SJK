@@ -19,6 +19,8 @@ pub(crate) struct Sinks<'a> {
     pub(crate) effects: &'a mut EffectLibrary,
     pub(crate) vfs: &'a VirtualFileSystem,
     pub(crate) audio: &'a mut Option<GameAudio>,
+    /// The map's vehicle weapons, for their shots' `impactFX`.
+    pub(crate) missiles: &'a sjk_client::LegacyMissileEffects,
 }
 
 /// What `CG_EntityEvent` knows about the local viewer when it picks a beam
@@ -113,6 +115,24 @@ pub(crate) fn spawn_impact(
     now: Instant,
 ) -> usize {
     impact.start = local.beam_start(impact);
+    // `CG_VehicleWeaponImpact` (`cg_weapons.c`): a vehicle weapon's shot with an
+    // `impactFX` plays it alone, in place of its carrier weapon's impact.
+    if let Some(name) = sinks.missiles.vehicle_impact_effect(impact.vehicle_weapon) {
+        effect_runtime::spawn_effect(
+            sinks.particles,
+            sinks.auxiliary,
+            sinks.effects,
+            sinks.vfs,
+            name,
+            Vec3::from_array(impact.origin),
+            now,
+            u32::from(impact.entity_number) | (u32::from(impact.event) << 16),
+            0,
+            sinks.audio,
+            combat_effects::rotation_from_direction(impact.direction),
+        );
+        return 1;
+    }
     let mut spawned = 0;
     for visual in impacts::plan(impact, flesh_sparks).iter() {
         // Each effect of a run has its own seed, as if it were its own visual.

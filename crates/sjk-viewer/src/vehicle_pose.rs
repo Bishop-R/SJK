@@ -49,7 +49,7 @@ pub(crate) fn root_rotation(kind: VehicleKind, angles: [f32; 3]) -> [f32; 4] {
     sjk_client::legacy_angles_to_quaternion(match kind {
         VehicleKind::Fighter => angles,
         VehicleKind::Speeder | VehicleKind::Walker => [0.0, angles[1], angles[2]],
-        VehicleKind::Upright => [0.0, angles[1], 0.0],
+        VehicleKind::Upright | VehicleKind::Animal => [0.0, angles[1], 0.0],
     })
 }
 

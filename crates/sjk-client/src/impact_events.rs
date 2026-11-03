@@ -12,6 +12,9 @@ const ET_EVENTS: u8 = 18; // codemp/game/bg_public.h:1265
 const MAX_GENTITIES: usize = 1_024; // codemp/game/bg_public.h:1196
 const EVENT_VALUE_MASK: u16 = 0xff; // codemp/game/bg_public.h:783-790
 const EF_ALT_FIRING: u32 = 1 << 10; // codemp/game/bg_public.h:649
+/// `EF_JETPACK_ACTIVE`: on a missile, "we're a vehicle weapon shot" (`cg_weapons.c`
+/// `CG_VehicleWeaponImpact`).
+const EF_JETPACK_ACTIVE: u32 = 1 << 11; // codemp/game/bg_public.h:650
 
 pub const EV_SABER_HIT: u16 = 30; // codemp/game/bg_public.h:847
 pub const EV_SABER_BLOCK: u16 = 31; // codemp/game/bg_public.h:848
@@ -71,6 +74,10 @@ pub struct LegacyImpactEvent {
     pub shot: [f32; 3],
     /// `angles2`, the facing of the concussion alt shot's rings.
     pub ring_direction: [f32; 3],
+    /// A missile event's vehicle weapon index (`otherEntityNum2` of a shot flagged
+    /// `EF_JETPACK_ACTIVE`), 0 for any other: `CG_VehicleWeaponImpact` plays that
+    /// weapon's `impactFX` instead of the carrier weapon's impact.
+    pub vehicle_weapon: u16,
 }
 
 /// Allocation-free event de-duplicator equivalent to centity `previousEvent`.
@@ -169,6 +176,7 @@ impl LegacyImpactTracker {
                 full_charge: entity.should_target(),
                 shot: entity.angles(),
                 ring_direction: entity.angles2(),
+                vehicle_weapon: vehicle_weapon(kind, entity.e_flags(), entity.other_entity_num2()),
             });
         }
         for (index, active) in self.active.iter().copied().enumerate() {
@@ -182,6 +190,22 @@ impl LegacyImpactTracker {
 impl Default for LegacyImpactTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// `CG_VehicleWeaponImpact`'s test (`cg_weapons.c`, called by `EV_MISSILE_HIT`,
+/// `EV_MISSILE_MISS` and `EV_MISSILE_MISS_METAL` in `cg_event.c`): a missile flagged
+/// `EF_JETPACK_ACTIVE` with a nonzero `otherEntityNum2` is a vehicle weapon's shot.
+const fn vehicle_weapon(kind: LegacyImpactKind, e_flags: u32, other_entity_num2: u16) -> u16 {
+    match kind {
+        LegacyImpactKind::MissileHitPlayer
+        | LegacyImpactKind::MissileHitWall
+        | LegacyImpactKind::MissileHitMetal
+            if e_flags & EF_JETPACK_ACTIVE != 0 =>
+        {
+            other_entity_num2
+        }
+        _ => 0,
     }
 }
 
@@ -215,3 +239,26 @@ pub const fn legacy_impact_latches_saber_flare(event: LegacyImpactEvent) -> bool
 }
 
 pub use sjk_protocol::{legacy_byte_to_direction, legacy_direction_to_byte};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_flagged_missile_events_carry_a_vehicle_weapon() {
+        // The AT-ST laser: a WP_ROCKET_LAUNCHER-carried shot, flagged, weapon index 3.
+        for kind in [
+            LegacyImpactKind::MissileHitPlayer,
+            LegacyImpactKind::MissileHitWall,
+            LegacyImpactKind::MissileHitMetal,
+        ] {
+            assert_eq!(vehicle_weapon(kind, EF_JETPACK_ACTIVE, 3), 3);
+            // A hand weapon's missile (no flag) keeps its own impact.
+            assert_eq!(vehicle_weapon(kind, 0, 3), 0);
+        }
+        assert_eq!(
+            vehicle_weapon(LegacyImpactKind::SaberHit, EF_JETPACK_ACTIVE, 3),
+            0
+        );
+    }
+}

@@ -426,6 +426,7 @@ mod tests {
             full_charge: false,
             shot: [0.0; 3],
             ring_direction: [1.0, 0.0, 0.0],
+            vehicle_weapon: 0,
         }
     }
 
