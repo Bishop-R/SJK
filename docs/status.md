@@ -9,8 +9,13 @@ as the Windows/macOS builds before constructing the client, preserving larger
 limits and the inherited hard limit ([client.md](client.md)). The shared constant
 also defines the existing startup test's quarter-stack budget. Subprocess tests
 cover raising the soft limit, preserving larger/unlimited limits, and capping the
-request at a restrictive hard limit. Full workspace and patched startup validation
-are pending; this does not establish gameplay or graphics compatibility.
+request at a restrictive hard limit. Verified: formatting, workspace build/tests/clippy
+on Linux CI, the local optimized build, and an isolated no-argument launch of the
+patched client inheriting an 8 MiB limit (world attached, HUD/fonts loaded, still
+running after 100 seconds). The existing 16 MiB startup guard built the menu world
+and rendered its first 30 frames successfully using Mesa llvmpipe software Vulkan.
+Not verified: hardware-GPU behavior, gameplay, a complete in-game update/restart
+round trip, or Windows/macOS runtime behavior.
 
 ## Holocron catch-up, play signals, tag copies (client side)
 
