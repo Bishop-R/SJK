@@ -1025,6 +1025,12 @@ too: Sol built two Settings > Chat options for it (29/10/2026), Chat backdrop
 Chat text outline (`cg_chatBoxOutline`), a dark edge round every letter instead of its
 shadow.
 
+AngeloPapaya, a player, asked for JoF EJK's low jump: Sol built it as the `lowjump` bind
+(03/11/2026), jump held for one user command, the shortest hop a tap makes. He asked
+to move with the console open: Sol built Move with console open (`cl_consoleMove`). He
+asked to place the kill feed anywhere: the HUD edit mode now shows a sample kill to drag
+and the feed may stand anywhere on the screen.
+
 ## Testing
 
 Glen, a player, was the first to play SJK on a Mac (25/10/2026), on a MacBook Pro

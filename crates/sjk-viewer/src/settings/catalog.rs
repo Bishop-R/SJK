@@ -1046,6 +1046,11 @@ pub(super) const CONTROLS: &[Setting] = &[
         cvar: crate::input::mouse_repeat::CVAR,
         kind: ValueKind::Choice(&["0", "1", "2"]),
     },
+    Setting {
+        label: "Move with console open",
+        cvar: crate::console_move::CVAR,
+        kind: ValueKind::Bool,
+    },
 ];
 pub(super) const GAME: &[Setting] = &[
     Setting {

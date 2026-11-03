@@ -619,7 +619,7 @@ const HELP: &[(&str, &str)] = &[
     ("cg_hudScale", "Size of the HUD: higher is larger."),
     (
         crate::hud_edit::COMMAND,
-        "Drag the HUD's elements over the game with the mouse; right-click one to put it back.",
+        "Drag the HUD's elements over the game with the mouse, the kill feed too; right-click one to put it back.",
     ),
     (
         crate::hud::RadialPlacement::SPREAD_CVAR,
@@ -762,7 +762,7 @@ const HELP: &[(&str, &str)] = &[
     ),
     (
         "cg_killfeed",
-        "The last kills at the top right: killer, weapon icon, victim; a skull for suicides and falls.",
+        "The last kills, killer, weapon icon, victim, at the top right or wherever Move HUD elements put it.",
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
@@ -878,6 +878,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::input::mouse_repeat::CVAR,
         "Hold mouse 4 or 5 to run its bind again 20 times a second, like a held key (JoF EJK, there at the frame rate).",
+    ),
+    (
+        crate::console_move::CVAR,
+        "Movement keys held as the console opens keep moving you, with no talk balloon; keys pressed while it is open still type.",
     ),
     // GAME
     (

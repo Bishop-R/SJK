@@ -32,6 +32,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Kill feed anywhere: Move HUD elements (`hud_edit`) shows a sample kill to drag while none shows, and the feed may now go anywhere, its entries lining up on their left in the screen's left half _(Sol, after AngeloPapaya's idea)_
+- Move with console open (`cl_consoleMove`, Settings > Controls, off by default): the movement keys you hold as the console opens keep moving you while you type, and letting one go stops it _(Sol, after AngeloPapaya's idea)_
+- Low jump (`lowjump`, Settings > Key bindings > Movement > Low jump (EJK)): one press jumps for a single command, the shortest hop a tap makes, as JoF EJK's bind does; only what a quick tap sends _(Sol, after AngeloPapaya's idea and JoF EJK)_
 - Fewer stutters when players join or NPCs appear: the hats and capes players wear and the models an effect needs load in the background, and new effects no longer rebuild every effect picture inside one frame (210 ms when JoF's NPCs spawned) _(Sol, after Lex's and Nib's reports)_
 - JA+ katas, kicks and `+button12` no longer turn into a plain hook after a join whose server info was lost: SJK asks again, remembers what each server runs and, if it still joined without its JA+ keys, joins again with them _(Sol, after Rollembones' report)_
 - Younglings, Jawas and other resized models keep their size as a ragdoll _(Sol, after Rollembones' report)_

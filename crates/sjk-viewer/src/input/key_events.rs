@@ -68,6 +68,19 @@ impl GpuState {
             self.news_key(&event);
             return;
         }
+        // `cl_consoleMove`: a movement key held from before the console opened keeps
+        // moving the player; its repeats are not typed (`console_move`).
+        if console_open
+            && event.repeat
+            && let PhysicalKey::Code(code) = event.physical_key
+            && self
+                .console
+                .as_ref()
+                .is_some_and(|console| console.holds_bound_key(code))
+            && self.console_keeps_moving()
+        {
+            return;
+        }
         if !console_open && self.text_dialog.is_open() {
             let action = self.text_dialog.handle_key(&event);
             self.apply_dialog_action(action);

@@ -427,6 +427,8 @@ pub(crate) fn update(
             gpu.local_prediction.predicted_state(),
             gpu.console.as_ref(),
         );
+        // An empty kill feed shows a sample to drag in the HUD edit mode.
+        gpu.hud.kill_feed.set_preview(gpu.hud_edit.is_open());
         gpu.hud.update_match_information(
             session.game_state(),
             presentation_time,

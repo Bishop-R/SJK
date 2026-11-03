@@ -24,6 +24,30 @@
 
 # ---- Console & chat ----
 
+[killfeed-anywhere]
+area: HUD
+title: Kill feed placed anywhere (HUD edit mode)
+change: hud_edit shows a sample kill (Killer [saber] Victim) while no kill shows.
+change: Moved past the vote panel it takes a full column; in the left half it aligns left.
+test: Open Move HUD elements with no kills: the sample shows, drag it to the top left.
+test: Kill someone: the real kill lines up on the left, names not cut short.
+test: Right-click it in the mode: back to the top right, under the FPS readout.
+[console-move]
+area: Input
+title: Move with console open (cl_consoleMove), off by default
+change: Movement keys held as the console opens keep their hold; no BUTTON_TALK then.
+change: Their key repeats are not typed; keys pressed with the console open still type.
+test: Settings > Controls > Move with console open on; run forward, open the console.
+test: You keep running, no talk balloon; the line gets no wwww; let W go: you stop.
+test: Off (default): opening the console stops you, as before.
+[low-jump]
+area: Input
+title: Low jump (lowjump), as JoF EJK's bind
+change: lowjump holds jump in the next user command only: the shortest hop a tap makes.
+change: Key bindings > Movement > Low jump (EJK); unbound by default.
+test: Bind it (bind v lowjump), jump with it and with Space: the low jump is lower.
+test: With Force jump 3, hold Space and press it: the held jump goes on as before.
+note: Nothing the server would not take from a quick tap; no restriction applies.
 [join-stutter-1103]
 area: Rendering & effects
 title: Joins and NPC spawns: hats, effect models and the effect atlas load in the background

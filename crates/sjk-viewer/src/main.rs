@@ -75,6 +75,7 @@ mod connection;
 mod connection_commands;
 mod console;
 mod console_backdrop;
+mod console_move;
 mod console_overlay;
 mod console_runtime;
 mod cosmetics;

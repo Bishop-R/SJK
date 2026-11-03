@@ -3558,7 +3558,9 @@ warm-up and interruption notices, the frame rate and timer in the upper right, t
 power-up and inventory icons, the text-only game HUD (`cg_hudFiles 1`), the stock
 vehicle HUD drawn from the game's pictures, centre prints and the scoreboard. Only
 what shows at the moment can be dragged: the vote panel during a vote, the lagometer
-with `cg_lagometer` on, the jetpack bar with a jetpack, and so on.
+with `cg_lagometer` on, the jetpack bar with a jetpack, and so on. The kill feed is
+the exception (AngeloPapaya's idea, 03/11/2026): while the mode is open and no kill
+shows, it shows a sample, "Killer [saber] Victim", to drag.
 
 The upper right stacks the readouts as JoF EJK's `CG_DrawUpperRight` does, in every
 HUD style ([console_overlay.rs](../crates/sjk-viewer/src/console_overlay.rs)): with
@@ -3689,7 +3691,8 @@ so it shows in third person
 ## Kill feed
 
 `cg_killfeed` (on by default, Settings > HUD > "Kill feed") lists the last kills
-at the top right of the HUD, in every HUD style
+at the top right of the HUD, or where the player moved it (the HUD edit mode, or
+`cg_killfeedX` leftward and `cg_killfeedY` downward in 640x480 units), in every HUD style
 ([kill_feed.rs](../crates/sjk-viewer/src/hud/kill_feed.rs)). Each entry is
 `killer [icon] victim`, or `[skull] victim` for a suicide or a death to the world
 (a fall, lava, a trigger), on a dark plate; an entry where the viewed player
@@ -3717,7 +3720,13 @@ draws at the top right — the FPS readout, duel portrait, snapshot,
 inventory and powerup column — and never reaches left of the vote panel's right
 edge, so it does not cover the top centre's vote and timer. It is part of the
 HUD's draw list, so it hides whenever the HUD does: scoreboard held,
-`cg_drawHud 0` or `cg_draw2D 0`, intermission, menus and the console. Names draw
+`cg_drawHud 0` or `cg_draw2D 0`, intermission, menus and the console. Moved
+(AngeloPapaya's idea, 03/11/2026), it may stand anywhere: once its right edge is less
+than 200 pixels (1080-line) right of the vote panel's edge, it no longer keeps clear of
+the top centre but takes a column as wide as its longest entry (two names at their
+longest, the widest cause word and the gaps), held inside the screen; when that column
+lies mostly in the screen's left half, the entries line up on its left edge instead of
+its right, and the top right's readouts no longer push it down. Names draw
 in the HUD's font (Inter, or SJK HUD with `cg_classicHudFont`), which the feed
 measures them in.
 
@@ -7039,7 +7048,16 @@ player or several players match, it lists them and sends nothing. See
 Held actions such as `+button12` work from binds, cfg files and the console. A
 hold typed at the console lasts until its `-` command, as in the stock client:
 opening the console, a menu or chat, or losing window focus, releases held keys
-but not typed holds; `in_restart` and session changes release both. `+grapple` is
+but not typed holds; `in_restart` and session changes release both. With Settings >
+Controls > Move with console open (`cl_consoleMove`, off by default as in stock,
+AngeloPapaya's idea, 03/11/2026), the movement keys held as the console opens (forward,
+back, strafing, jump, crouch, walk) keep their hold and their key repeats are not typed;
+letting one go stops it. Commands made while the console is the only thing open then
+leave `BUTTON_TALK` out, which the server's movement would read as "stand still"
+(`PmoveSingle` zeroes the moves of a talking command), so no talk balloon shows either.
+A key pressed with the console open still types: the console keeps the keyboard, so a
+command starting with w, a, s or d types as it should, and changing direction needs the
+console closed. See [console_move.rs](../crates/sjk-viewer/src/console_move.rs). `+grapple` is
 EternalJK's name for `+button12`, the JA+/JaPRO grapple hook; on a JA+ server
 releasing it also taps `+use`, as EternalJK does. See
 [input.rs](../crates/sjk-viewer/src/input.rs).
@@ -7054,6 +7072,15 @@ one command and `cg_fkDuration` (default 50) lasts 0.4 s.
 `cg_fkSecondJumpDelay` starts the second jump at that frame (both 0). A server
 forbids it with bit 7 (`RESTRICT_FLIPKICKBIND`) of serverinfo `restricts`. See
 [flip_kick.rs](../crates/sjk-viewer/src/input/flip_kick.rs).
+
+`lowjump` is JoF EJK's low jump bind (`CG_Lowjump_f`, AngeloPapaya's idea, 03/11/2026;
+Settings > Key bindings > Movement > Low jump (EJK), unbound by default): jump is held in
+the next user command only and released in the one after, the shortest hop a tap can
+make (EJK sends `+moveup`, then `-moveup` a frame later). It is not a cheat: the server
+gets one command with jump pressed, which a quick finger sends too, and the height is
+what the server's own movement gives that tap (with Force jump, letting go early cuts the
+jump short). A jump key held at the same time keeps holding. See
+[input.rs](../crates/sjk-viewer/src/input.rs) (`GameplayInput::low_jump`).
 
 `weapmelee` (SJK's; Settings > Key bindings > Weapons > Melee (fists), unbound by
 default, Sol's request of 10/10/2026) selects the melee weapon, the fists

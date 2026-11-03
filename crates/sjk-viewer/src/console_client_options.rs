@@ -40,6 +40,12 @@ pub(super) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
         cvars.register(CvarDefinition::new(name, value, CvarFlags::ARCHIVE, help))?;
     }
     cvars.register(CvarDefinition::new(
+        crate::console_move::CVAR,
+        false,
+        CvarFlags::ARCHIVE,
+        "Movement keys held as the console opens keep moving you, without the talk balloon (0 stock: they stop)",
+    ))?;
+    cvars.register(CvarDefinition::new(
         "cl_conXOffset",
         0.0,
         CvarFlags::NONE,

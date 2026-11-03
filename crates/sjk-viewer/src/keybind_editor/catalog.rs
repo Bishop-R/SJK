@@ -69,6 +69,14 @@ pub(crate) const ACTIONS: &[BindableAction] = &[
     action(Movement, "Mouse look", "+mlook", "/"),
     // JoF EJK's `controls.menu` "FlipKick:" row: one press, a run of jump taps.
     action(Movement, "Flip kick (JoF)", "flipkick", ""),
+    // JoF EJK's `lowjump` (`ui_shared.c` bind list): jump for one command, the
+    // shortest hop a tap makes.
+    action(
+        Movement,
+        "Low jump (EJK)",
+        crate::input::LOW_JUMP_COMMAND,
+        "",
+    ),
     // INTERACTION
     action(Interaction, "Attack", "+attack", "MOUSE1"),
     action(Interaction, "Alternate attack", "+altattack", "MOUSE2"),
