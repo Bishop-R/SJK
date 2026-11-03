@@ -30,6 +30,10 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+- Linux starts after an update again: the client requests the same main-thread stack allowance as Windows and macOS, within the system hard limit _(Bishop-R)_
+
 ## 2026.1103.2 (Alpha) | 03/11/2026
 
 Clan chats for JoF and S, holocrons earned by playing, tag copies to break down or craft, loadouts, fishing and many fixes.

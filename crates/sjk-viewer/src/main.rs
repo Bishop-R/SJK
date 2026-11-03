@@ -60,6 +60,9 @@ mod kyber;
 mod loot_odds;
 mod propgun;
 mod propgun_frame;
+#[cfg(any(target_os = "linux", test))]
+#[path = "../stack_size.rs"]
+mod stack_size;
 
 mod saber_colour_command;
 mod shader_image;
@@ -439,6 +442,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 fn main() {
     log::init();
+    platform::configure_main_stack();
     platform::raise_open_file_limit();
     crash_report::install();
     if let Err(error) = app_launch::run() {

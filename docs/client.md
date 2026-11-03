@@ -2923,7 +2923,10 @@ was a stack copy, and the main thread's nested frames (`window_event` 3.1 MB,
 Building the menu's first world on the main thread came within 2 MiB of the same
 8 MiB with a clean profile and overflowed it with JoF content loaded (03/11/2026),
 so the client reserves 64 MiB for its main thread on Windows and macOS
-([`build.rs`](../crates/sjk-viewer/build.rs)). The client's start must fit in a quarter of
+([`build.rs`](../crates/sjk-viewer/build.rs)). Linux raises its inherited soft stack
+limit to the same allowance before building the client, without lowering a larger
+limit or changing the hard limit; a restrictive hard limit or failed adjustment is
+logged ([`main_stack.rs`](../crates/sjk-viewer/src/platform/main_stack.rs)). The client's start must fit in a quarter of
 that: [startup_stack.rs](../crates/sjk-viewer/src/startup_stack.rs) checks it, run
 before every merge into `main` (AGENTS.md).
 
