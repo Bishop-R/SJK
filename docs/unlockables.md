@@ -1629,7 +1629,13 @@ A shader newer than the client (14/10/2026): when an opening brings a shader thi
 catalogue does not list, the ceremony still shows it, by the name the hub sent, in the
 holocron's colour, with its blade if the hub's pack brought one, the crate spin ending on a
 "?" tile; it reads "update SJK to see it in your Collection". The Collection lists it once
-the client knows it.
+the client knows it. Since 03/11/2026 any prize the client does not know is shown the same
+way, by its kind (Kushina, 30/10/2026: such a shader came out as a dark, empty blade card):
+the kind is read from the hub's id (`saber_`, `tag_`, `banner_`, `toy_`; "prize" for
+anything else, `opening::unknown_kind`), the strip's tile says "New tag", "New shader"...,
+and without a blade from the pack the card shows a "?" in a ring and "Update SJK to see
+it" instead of an empty swatch. A card of a rarity or finish the client does not know is
+no longer left out: it shows as "A new card".
 
 ## Profile covers
 

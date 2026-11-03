@@ -1087,7 +1087,10 @@ stored custom tint that is black's own near-black (`BLACK_RGB`, which an earlier
 build saved for black) counts as none: the custom chip showed it as a second black chip
 that gave a white blade, and now shows and starts from the stock blue (`stored_rgb`,
 Dave's test, 28/10/2026). Any other tint is the player's, however dark. Collection's
-stock-blade swatch reads the whole `color1`, so black shows black there too. The classic page keeps retail's six swatches.
+stock-blade swatch reads the whole `color1`, so black shows black there too, and a custom
+colour in its `cp_sbRGB1` tint (it showed white; Neffie, 03/11/2026). The stage model
+behind the Collection and Profile follows `color1`, `color2` and the tints as well as the
+hilts, so a colour set elsewhere (`saberColor`, a config) shows without touching a slider. The classic page keeps retail's six swatches.
 
 Other servers show colour 11 as before: purple, or the player's RGB tint when
 one is set. (JoF EJK shows orange there; SJK keeps its earlier colour.) Ordinary RGB colours, including

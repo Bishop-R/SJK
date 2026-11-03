@@ -1209,6 +1209,50 @@ mod tests {
             panic!("a shader prize");
         };
         assert_eq!(tidal.skin.map(|skin| skin.id), Some("saber_tidal"));
+        assert!(!tidal.is_unknown());
+        assert!(found.is_unknown());
+    }
+
+    /// Any prize newer than this client shows as a fallback of its kind (Kushina,
+    /// 30/10/2026: "again new shader bug"): a tag, toy or banner it does not know says
+    /// what it is, and a card of a rarity it does not know still shows, not dropped.
+    #[test]
+    fn any_prize_this_client_does_not_know_shows_by_its_kind() {
+        let unlock = |id: &str| sjk_identity::Opened {
+            card: None,
+            credits: 0,
+            unlock: Some(sjk_identity::OpenedUnlock {
+                finish: None,
+                id: id.to_owned(),
+                name: String::new(),
+                count: 1,
+            }),
+            ..opened("rare", "normal")
+        };
+        for (id, kind) in [
+            ("tag_from_the_future", "tag"),
+            ("toy_from_the_future", "toy"),
+            ("banner_from_the_future", "profile banner"),
+            ("saber_from_the_future", "saber shader"),
+            ("something_else", "prize"),
+        ] {
+            let Some(opening::Prize::Shader(found)) = opening::Prize::of(&unlock(id)) else {
+                panic!("{id}: a prize");
+            };
+            assert!(found.is_unknown(), "{id}");
+            assert_eq!(found.kind(), kind, "{id}");
+            assert_eq!(found.name, format!("A new {kind}"), "{id}");
+            assert_eq!(
+                opening::Prize::Shader(found).item(),
+                super::strip::Item::New(kind)
+            );
+        }
+        let mut future = opened("rare", "normal");
+        future.card.as_mut().unwrap().rarity = "beyond_mythical".to_owned();
+        let Some(opening::Prize::Shader(card)) = opening::Prize::of(&future) else {
+            panic!("an unknown card still shows");
+        };
+        assert_eq!((card.kind(), card.name.as_str()), ("card", "A new card"));
     }
 
     /// A Solar blade card brings its blade beside it (20/10/2026): the card shows, with
@@ -1398,8 +1442,8 @@ mod tests {
             serial: 5,
             opened: vec![
                 opened("uncommon", "holo"),
-                opened("uncommon", "glitter"),
                 opened("rare", "solar"),
+                opened("uncommon", "glitter"),
             ],
             message: String::new(),
         };
@@ -1409,8 +1453,13 @@ mod tests {
         };
         assert_eq!(
             shown.len(),
-            2,
-            "a finish the client does not know is left out"
+            3,
+            "a finish the client does not know still shows, as a new card"
+        );
+        assert!(
+            matches!(&shown[2], opening::Prize::Shader(card) if card.kind() == "card"),
+            "{:?}",
+            shown[2]
         );
         let (opening::Prize::Card(first), opening::Prize::Card(second)) = (&shown[0], &shown[1])
         else {
@@ -1430,6 +1479,13 @@ mod tests {
         assert!(matches!(
             panel.ceremony,
             Some(opening::Ceremony::Showing { index: 1, .. })
+        ));
+        panel.advance(now);
+        panel.advance(now);
+        panel.advance(now);
+        assert!(matches!(
+            panel.ceremony,
+            Some(opening::Ceremony::Showing { index: 2, .. })
         ));
         panel.advance(now);
         panel.advance(now);

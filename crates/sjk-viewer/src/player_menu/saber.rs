@@ -190,9 +190,30 @@ impl SaberMenu {
                 .text_value(cvar)
                 .is_none_or(|value| value.eq_ignore_ascii_case(held))
         };
-        if !same("saber1", &self.draft.primary) || !same("saber2", &self.draft.secondary) {
+        if !same("saber1", &self.draft.primary)
+            || !same("saber2", &self.draft.secondary)
+            || self.colours_moved(console)
+        {
             self.open(console);
         }
+    }
+
+    /// Whether `color1`/`color2` or the custom tints no longer say what the draft holds:
+    /// the `saberColor` command, a config or another screen changed the colour while the
+    /// hilts stayed (Neffie: an RGB blade stayed red on the stage until a slider moved).
+    fn colours_moved(&self, console: &ViewerConsole) -> bool {
+        let colours = [
+            menu_colour(colour_cvar(console, "color1")),
+            menu_colour(colour_cvar(console, "color2")),
+        ];
+        let tints = ["cp_sbRGB1", "cp_sbRGB2"].map(|cvar| {
+            console
+                .integer_cvar(cvar)
+                .and_then(|value| u32::try_from(value).ok())
+                .filter(|packed| *packed != 0)
+                .map(unpack_saber_rgb)
+        });
+        colours != [self.draft.color1, self.draft.color2] || tints != self.draft.rgb
     }
 
     pub(super) fn open(&mut self, console: &ViewerConsole) {
@@ -634,6 +655,26 @@ mod tests {
         assert_eq!(menu.rgb(false), [35, 0, 0], "the blade");
         assert_eq!(menu.custom_rgb(false), [35, 0, 0], "the chip");
         assert_eq!(menu.channel(false, 0), 35, "the slider");
+    }
+
+    /// Neffie: an RGB colour set while the hilts stayed (`saberColor`, a config) showed on
+    /// the stage only once a slider moved. The stage follows the colour cvars too.
+    #[test]
+    fn the_stage_follows_a_colour_set_outside_the_menu() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut console = ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        let mut menu = SaberMenu::new();
+        menu.open(&console);
+        menu.follow(&console);
+        assert_eq!(menu.rgb(false), Color::Blue.blade_rgb());
+        crate::saber_colour_command::run(&mut console, &["40", "200", "90"].map(str::to_owned))
+            .unwrap();
+        menu.follow(&console);
+        assert_eq!(menu.stage_sabers(false).colors, [[40, 200, 90]; 2]);
+        // Followed once, it holds still while nothing changes.
+        let draft = menu.draft.clone();
+        menu.follow(&console);
+        assert_eq!(menu.draft, draft);
     }
 
     /// Kushina's report #126: sabers chosen with the `saber` command (a quick-wheel

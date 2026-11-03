@@ -15,6 +15,26 @@ boundary, gift choice, the new command and its wheel queueing), fmt, clippy. Not
 verified: in a game, on JA+ with Star Trek teleports, or that no other mod's own teleport
 command is missing from `OWN_MOVES`.
 
+## Saber reports: unknown loot, RGB follow, empty hilt, late joiners
+
+03/11/2026, `personal/saber-bugs-1103`, based on `main` `d3881f31`. Holocron loot this
+build does not know (Kushina, 30/10) showed as a dark, empty shader card: any unknown
+prize now shows a "?" card saying its kind, read from the hub's id, and a card of an
+unknown rarity or finish is shown rather than dropped ([unlockables.md](unlockables.md)).
+RGB saber shown red (Neffie): the config round trip, the Profile page and the userinfo
+(`cp_sbRGB1` sent with colour 6) were checked by tests and are right; two gaps were fixed,
+the stage model following only the hilts (a colour set by `saberColor` or a config waited
+for a slider) and the Collection's stock blade showing a custom colour white. Where
+Neffie saw red is not known; an in-game red with the right cvars would be the server's
+`c3`. Hub #197 (`saber saber_empty saber_left` crashed): the same empty-hilt cause as #214,
+fixed on `main` by `53157216` (stage path, both hands); the in-game mid-match path was
+checked with a GPU test (an empty hilt appended to the shared geometry raises no wgpu
+error). Neither hilt is installed here, so the report itself was not replayed. Late
+joiners' invisible saber shaders: the looks (roster, feed, name match twice a second,
+revision), the per-slot skin table and the GPU's lazy glow and signature uploads were read
+and showed no stale gate; the cause is still unknown. Verified: unit tests, the GPU tests
+above, fmt, clippy. Not verified: in a game.
+
 ## Tags: spray sound, odd surfaces
 
 03/11/2026, `personal/tag-spray`, based on `main` `3a209013` (Sol: tag decals sometimes

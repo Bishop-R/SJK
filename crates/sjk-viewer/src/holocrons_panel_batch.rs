@@ -522,18 +522,22 @@ impl Panel {
                         [x, words_y],
                         item.colour(),
                     );
+                    // Its kind, capitalized ("Tag", "Saber shader", "Card").
+                    let kind = found.kind();
+                    let (first, rest) = kind.split_at(1);
+                    let kind = format!("{}{rest}", first.to_ascii_uppercase());
                     if found.count > 1 {
                         found_note(
                             self,
                             frame,
-                            format_args!("Shader, x{}", found.count),
+                            format_args!("{kind}, x{}", found.count),
                             [x, words_y + 22.0],
                         );
                     } else {
                         found_note(
                             self,
                             frame,
-                            format_args!("Shader, new"),
+                            format_args!("{kind}, new"),
                             [x, words_y + 22.0],
                         );
                     }
