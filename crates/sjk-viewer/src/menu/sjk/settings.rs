@@ -817,6 +817,80 @@ mod tests {
         menu
     }
 
+    /// A long list (here the chat colours, 11 choices) scrolls to its end with the
+    /// wheel, and its thumb taken and dragged moves it to either end (hub #227).
+    #[test]
+    fn a_long_list_scrolls_by_wheel_and_by_its_thumb() {
+        use sjk_ui::{InputEvent, PointerButton, Vec2};
+        let (_directory, mut console) = console();
+        let font = crate::text::test_font();
+        let mut menu = menu();
+        menu.open_sjk_settings(&console, 9, ReturnTarget::MainMenu);
+        menu.settings.select_cvar("cg_chatColor");
+        assert!(menu.settings.try_dropdown_for_test(&console));
+        let draw = |menu: &mut ClientMenu| {
+            let mut vertices = Vec::new();
+            menu.append_sjk_settings(TextTarget::Inter(&mut vertices, &font), [1920.0, 1080.0]);
+        };
+        for _ in 0..12 {
+            draw(&mut menu);
+            let row = menu.settings.dropdown_rect_for_test(false).expect("a row");
+            let position = Vec2::new(row.x + row.width * 0.5, row.y + row.height * 0.5);
+            menu.handle_pointer(InputEvent::PointerMove(position), &mut console);
+            menu.handle_pointer(
+                InputEvent::PointerWheel {
+                    position,
+                    delta: Vec2::new(0.0, -1.0),
+                },
+                &mut console,
+            );
+        }
+        assert_eq!(menu.settings.dropdown_state(), Some((3..11, 11)));
+        // Up to the top by the thumb, then down to the end, the list still open.
+        for (to_top, shown) in [(true, 0..8), (false, 3..11)] {
+            draw(&mut menu);
+            let bar = menu
+                .settings
+                .dropdown_rect_for_test(true)
+                .expect("the thumb");
+            let middle = bar.x + bar.width * 0.5;
+            let from = Vec2::new(
+                middle,
+                if to_top {
+                    bar.bottom() - 2.0
+                } else {
+                    bar.y + 2.0
+                },
+            );
+            let to = Vec2::new(
+                middle + 40.0,
+                if to_top {
+                    bar.y - 300.0
+                } else {
+                    bar.bottom() + 300.0
+                },
+            );
+            let button = PointerButton::Primary;
+            menu.handle_pointer(InputEvent::PointerMove(from), &mut console);
+            menu.handle_pointer(
+                InputEvent::PointerPress {
+                    position: from,
+                    button,
+                },
+                &mut console,
+            );
+            menu.handle_pointer(InputEvent::PointerMove(to), &mut console);
+            menu.handle_pointer(
+                InputEvent::PointerRelease {
+                    position: to,
+                    button,
+                },
+                &mut console,
+            );
+            assert_eq!(menu.settings.dropdown_state(), Some((shown, 11)));
+        }
+    }
+
     #[test]
     fn the_rail_shows_every_classic_setup_group_and_the_renderer_as_one() {
         // Every settings panel of the classic Setup pages has its category,

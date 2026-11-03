@@ -170,7 +170,7 @@ impl GpuState {
         if text != 0 {
             pass.set_pipeline(&self.text_pipeline);
             pass.set_bind_group(0, &self.text_bind_group, &[]);
-            pass.set_vertex_buffer(0, self.text_vertex_buffer.slice(..));
+            pass.set_vertex_buffer(0, self.text_vertex_buffer.buffer().slice(..));
             pass.draw(0..text, 0..1);
         }
         if classic_text != 0
@@ -182,7 +182,7 @@ impl GpuState {
                 &self.text_pipeline
             });
             pass.set_bind_group(0, group, &[]);
-            pass.set_vertex_buffer(0, self.classic_text_vertex_buffer.slice(..));
+            pass.set_vertex_buffer(0, self.classic_text_vertex_buffer.buffer().slice(..));
             pass.draw(0..classic_text, 0..1);
         }
         // The console's character set goes last so the console covers all text.

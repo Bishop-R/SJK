@@ -304,9 +304,9 @@ impl TextDialog {
         }
         let idle = match kind {
             Kind::Note { .. } => {
-                "Enter saves, Tab moves, Esc cancels; click the scene to note something else."
+                "Ctrl+Enter saves, Enter starts a line, Esc cancels; click the scene to note something else."
             }
-            _ => "Enter sends, Tab moves between the controls, Esc cancels.",
+            _ => "Ctrl+Enter sends, Enter starts a new line, Tab moves, Esc cancels.",
         };
         text(
             ui,

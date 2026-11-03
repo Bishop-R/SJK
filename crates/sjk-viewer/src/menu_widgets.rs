@@ -48,6 +48,62 @@ pub(crate) struct MenuCanvas {
     /// A card laid over the page this frame ([`Self::cover`]): where it lies (window
     /// pixels) and the id of its first text run.
     cover: Option<(Rect, u32)>,
+    /// The scrollbars drawn this frame ([`Self::scrollbar`]), which a press and a drag
+    /// move ([`Self::scrollbar_drag`]).
+    scrollbars: [Option<Scrollbar>; MAX_SCROLLBARS],
+    /// The scrollbar the pointer holds, where on its thumb it took it (pixels from the
+    /// thumb's top) and the first row it last asked for.
+    grabbed: Option<(MenuToken, f32, usize)>,
+}
+
+/// Scrollbars a canvas keeps a frame.
+const MAX_SCROLLBARS: usize = 4;
+
+/// One scrollbar drawn with [`MenuCanvas::scrollbar`]: its token, track and rows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Scrollbar {
+    token: MenuToken,
+    track: Rect,
+    /// Where the pointer takes it: the track, widened to a grip.
+    grip: Rect,
+    first: usize,
+    visible: usize,
+    total: usize,
+}
+
+/// The top and height of the thumb of a scrollbar on `track` showing `visible` of
+/// `total` rows from `first`.
+pub(crate) fn scrollbar_thumb(
+    track: Rect,
+    first: usize,
+    visible: usize,
+    total: usize,
+) -> (f32, f32) {
+    let fraction = (visible as f32 / total.max(visible) as f32).clamp(0.08, 1.0);
+    let height = track.height * fraction;
+    let travel = track.height - height;
+    let denominator = total.saturating_sub(visible).max(1) as f32;
+    let top = track.y + travel * (first as f32 / denominator).clamp(0.0, 1.0);
+    (top, height)
+}
+
+impl Scrollbar {
+    /// The thumb's top and height.
+    fn thumb(&self) -> (f32, f32) {
+        scrollbar_thumb(self.track, self.first, self.visible, self.total)
+    }
+
+    /// The first row that puts the thumb's top at `top`.
+    fn first_at(&self, top: f32) -> usize {
+        let (_, height) = self.thumb();
+        let travel = self.track.height - height;
+        let last = self.total.saturating_sub(self.visible);
+        if travel <= 0.0 {
+            return 0;
+        }
+        let ratio = ((top - self.track.y) / travel).clamp(0.0, 1.0);
+        (ratio * last as f32).round() as usize
+    }
 }
 
 impl MenuCanvas {
@@ -90,6 +146,8 @@ impl MenuCanvas {
             dropped: 0,
             overflow_logged: false,
             cover: None,
+            scrollbars: [None; MAX_SCROLLBARS],
+            grabbed: None,
         }
     }
 
@@ -118,6 +176,7 @@ impl MenuCanvas {
         self.text_len = 0;
         self.family = TextFamily::Body;
         self.cover = None;
+        self.scrollbars = [None; MAX_SCROLLBARS];
     }
 
     /// Lay a card over the page from here on (a hover card): text draws over every
@@ -132,7 +191,10 @@ impl MenuCanvas {
         self.hovered_token
     }
 
-    /// Draw a draggable scrollbar and register its entire track for pointer input.
+    /// Draw a draggable scrollbar and register its track, widened to a grip, for
+    /// pointer input. A screen moves it by passing its events to
+    /// [`Self::scrollbar_drag`], which turns a press on it and a drag into the first
+    /// row to show.
     pub(crate) fn scrollbar(
         &mut self,
         token: MenuToken,
@@ -146,12 +208,10 @@ impl MenuCanvas {
             radius: track.width * 0.5,
             color: Color::new(1.0, 1.0, 1.0, 0.08),
         });
-        let fraction = (visible as f32 / total.max(visible) as f32).clamp(0.08, 1.0);
-        let thumb_height = track.height * fraction;
-        let travel = track.height - thumb_height;
-        let denominator = total.saturating_sub(visible).max(1) as f32;
-        let thumb_y = track.y + travel * (first as f32 / denominator).clamp(0.0, 1.0);
-        let active = self.token_hovered(token) || self.token_pressed(token);
+        let (thumb_y, thumb_height) = scrollbar_thumb(track, first, visible, total);
+        let active = self.token_hovered(token)
+            || self.token_pressed(token)
+            || self.grabbed.is_some_and(|(held, ..)| held == token);
         let _ = self.draw.push(DrawCommand::RoundedRect {
             rect: Rect::new(track.x, thumb_y, track.width, thumb_height),
             radius: track.width * 0.5,
@@ -161,7 +221,44 @@ impl MenuCanvas {
                 Color::new(0.42, 0.56, 0.66, 0.72)
             },
         });
-        self.interactive(token, track, false, true);
+        self.scrollbar_area(token, track, first, visible, total);
+    }
+
+    /// Register a scrollbar a screen draws itself (its thumb as
+    /// [`scrollbar_thumb`] places it) for pointer input, as [`Self::scrollbar`] does:
+    /// its track widened to a grip, moved by [`Self::scrollbar_drag`].
+    pub(crate) fn scrollbar_area(
+        &mut self,
+        token: MenuToken,
+        track: Rect,
+        first: usize,
+        visible: usize,
+        total: usize,
+    ) {
+        // A thin bar is hard to hit: the grip is at least 16 pixels wide at 1080p.
+        let grip_width = (16.0 * crate::ui_scale::height_scale(self.viewport[1])).max(track.width);
+        let grip = Rect::new(
+            track.x + track.width * 0.5 - grip_width * 0.5,
+            track.y,
+            grip_width,
+            track.height,
+        );
+        let bar = Scrollbar {
+            token,
+            track,
+            grip,
+            first,
+            visible,
+            total,
+        };
+        if let Some(slot) = self
+            .scrollbars
+            .iter_mut()
+            .find(|slot| slot.is_none_or(|known| known.token == token))
+        {
+            *slot = Some(bar);
+        }
+        self.interactive(token, grip, false, true);
     }
 
     /// Draw a semantic accent bar supplied by the calling screen.
@@ -285,5 +382,110 @@ mod storage_tests {
         }
         canvas.finish(0);
         assert_eq!(canvas.widget_count(), MAX_WIDGETS);
+    }
+}
+
+#[cfg(test)]
+mod scrollbar_tests {
+    use super::*;
+    use sjk_ui::{InputEvent, PointerButton, Vec2};
+
+    /// A frame with a list of 50 rows, 10 shown from `first`, its bar on a 400-pixel
+    /// track at x 100 and a scroll region (the list) left of it.
+    fn frame(canvas: &mut MenuCanvas, first: usize) {
+        canvas.begin_transparent([1920.0, 1080.0]);
+        canvas.scroll_region(7, Rect::new(0.0, 100.0, 90.0, 400.0));
+        canvas.scrollbar(7, Rect::new(100.0, 100.0, 4.0, 400.0), first, 10, 50);
+        canvas.finish(0);
+    }
+
+    fn send(canvas: &mut MenuCanvas, event: InputEvent) -> Option<(MenuToken, usize)> {
+        let event = canvas.pointer(event)?;
+        canvas.scrollbar_drag(&event)
+    }
+
+    /// A press on the thumb and a drag move the list as far as the thumb goes, beside
+    /// the thin bar too (its grip is wider) and past the track's ends; a press on the
+    /// track brings the thumb there; a press in the list itself is not the bar's.
+    #[test]
+    fn the_thumb_drags_and_the_track_jumps() {
+        let button = PointerButton::Primary;
+        let mut canvas = MenuCanvas::new();
+        frame(&mut canvas, 0);
+        // The thumb is 80 pixels tall at the top: take it 6 pixels beside the bar.
+        let at = Vec2::new(108.0, 120.0);
+        send(&mut canvas, InputEvent::PointerMove(at));
+        assert_eq!(
+            send(
+                &mut canvas,
+                InputEvent::PointerPress {
+                    position: at,
+                    button
+                }
+            ),
+            Some((7, 0))
+        );
+        // Half the travel (160 of 320) down is half of the 40 rows past the first page.
+        let half = Vec2::new(140.0, 280.0);
+        assert_eq!(
+            send(&mut canvas, InputEvent::PointerMove(half)),
+            Some((7, 20))
+        );
+        frame(&mut canvas, 20);
+        let below = Vec2::new(300.0, 900.0);
+        assert_eq!(
+            send(&mut canvas, InputEvent::PointerMove(below)),
+            Some((7, 40))
+        );
+        frame(&mut canvas, 40);
+        assert_eq!(
+            send(
+                &mut canvas,
+                InputEvent::PointerRelease {
+                    position: below,
+                    button
+                }
+            ),
+            Some((7, 40))
+        );
+        assert_eq!(
+            send(&mut canvas, InputEvent::PointerMove(half)),
+            None,
+            "let go"
+        );
+        // A press low on the track brings the thumb's middle there.
+        frame(&mut canvas, 0);
+        let low = Vec2::new(102.0, 460.0);
+        send(&mut canvas, InputEvent::PointerMove(low));
+        assert_eq!(
+            send(
+                &mut canvas,
+                InputEvent::PointerPress {
+                    position: low,
+                    button
+                }
+            ),
+            Some((7, 40))
+        );
+        send(
+            &mut canvas,
+            InputEvent::PointerRelease {
+                position: low,
+                button,
+            },
+        );
+        // A press in the list scrolls nothing.
+        let list = Vec2::new(40.0, 300.0);
+        send(&mut canvas, InputEvent::PointerMove(list));
+        assert_eq!(
+            send(
+                &mut canvas,
+                InputEvent::PointerPress {
+                    position: list,
+                    button
+                }
+            ),
+            None
+        );
     }
 }

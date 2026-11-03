@@ -236,6 +236,12 @@ impl Dropdown {
         self.first = self.first.saturating_add_signed(rows as isize).min(max);
     }
 
+    /// Show choice `first` at the top, kept within the list.
+    fn scroll_to(&mut self, first: usize) {
+        self.first = first;
+        self.scroll_by(0);
+    }
+
     /// Highlight choice `index` and scroll it into view.
     fn highlight(&mut self, index: usize) {
         self.highlighted = index.min(self.picks.len().saturating_sub(1));
@@ -575,6 +581,24 @@ impl SettingsMenu {
             self.selected = row;
             self.reveal_selected();
         }
+    }
+
+    /// The open list's first row's pointer area, or its thumb's (tests).
+    #[cfg(test)]
+    pub(crate) fn dropdown_rect_for_test(&self, bar: bool) -> Option<sjk_ui::Rect> {
+        self.ui.rect_for(if bar {
+            classic_view::DROPDOWN_BAR_TOKEN
+        } else {
+            classic_view::DROPDOWN_BASE
+        })
+    }
+
+    /// The open list's rows and its length, if one is open (tests).
+    #[cfg(test)]
+    pub(crate) fn dropdown_state(&self) -> Option<(std::ops::Range<usize>, usize)> {
+        self.dropdown
+            .as_ref()
+            .map(|dropdown| (dropdown.shown(), dropdown.picks.len()))
     }
 
     /// Select the row of setting `cvar`, scrolled into a panel (menu snapshots).

@@ -40,7 +40,8 @@
 use crate::GpuState;
 use crate::gpu_texture;
 use crate::text::system_font::{self, Scope};
-use crate::text::{self, MAX_TEXT_VERTICES, TextVertex, UiFont, retail_font};
+use crate::text::vertex_buffer::TextVertexBuffer;
+use crate::text::{self, TextVertex, UiFont, retail_font};
 use sjk_ui::{DrawList, TextId};
 use std::sync::mpsc::{self, Receiver};
 
@@ -96,7 +97,7 @@ impl RetailFont {
 struct Layer {
     font: UiFont,
     vertices: Vec<TextVertex>,
-    buffer: wgpu::Buffer,
+    buffer: TextVertexBuffer,
     /// The font's atlas, kept to bind it again with the wide atlas ([`GameFonts::rebind`]).
     atlas: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
@@ -188,12 +189,7 @@ impl Layer {
             gpu.sampler,
             gpu.wide,
         );
-        let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SJK game font text vertices"),
-            size: (MAX_TEXT_VERTICES * std::mem::size_of::<TextVertex>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = TextVertexBuffer::new(gpu.device, "SJK game font text vertices");
         Self {
             font,
             vertices: Vec::with_capacity(4_096),
@@ -218,7 +214,7 @@ impl Layer {
                 pipeline
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_vertex_buffer(0, self.buffer.slice(..));
+            pass.set_vertex_buffer(0, self.buffer.buffer().slice(..));
             pass.draw(0..self.count, 0..1);
         }
     }
@@ -573,12 +569,9 @@ impl GameFonts {
     }
 
     /// Copy this frame's vertices to the GPU.
-    pub(crate) fn upload(&mut self, queue: &crate::frame_queue::FrameQueue) {
+    pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &crate::frame_queue::FrameQueue) {
         for layer in self.layers_mut() {
-            layer.count = u32::try_from(layer.vertices.len()).unwrap_or(0);
-            if layer.count != 0 {
-                queue.write_buffer(&layer.buffer, 0, bytemuck::cast_slice(&layer.vertices));
-            }
+            layer.count = layer.buffer.write(device, queue, &layer.vertices);
         }
     }
 

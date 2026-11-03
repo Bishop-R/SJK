@@ -722,7 +722,7 @@ pub(crate) fn pips(
 /// `highlighted` one on a band, the one in use (`current`) in gold with a dot;
 /// choice `i` answers to `token_base + i`. `scroll` is the first label's place
 /// in the whole list and the list's length: a list longer than `labels` shows
-/// a thumb on its right edge.
+/// a thumb on its right edge, which answers to `bar_token` for dragging.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn list(
     canvas: &mut MenuCanvas,
@@ -734,6 +734,7 @@ pub(crate) fn list(
     current: usize,
     token_base: u16,
     scroll: (usize, usize),
+    bar_token: u16,
 ) {
     let [x, y, width, height] = rect;
     let s = frame.s;
@@ -803,14 +804,18 @@ pub(crate) fn list(
     }
     let (first, total) = scroll;
     if total > labels.len() {
-        let track = height - 24.0;
-        let thumb = (track * labels.len() as f32 / total as f32).max(16.0);
-        let along = (track - thumb) * first as f32 / (total - labels.len()) as f32;
+        // The thumb, which a press and a drag move ([`MenuCanvas::scrollbar_drag`],
+        // answering to `bar_token`), as the wheel does.
+        let track = frame.rect(x + width - 9.0, y + 12.0, 4.0, height - 24.0);
+        canvas.scrollbar_area(bar_token, track, first, labels.len(), total);
+        let (top, thumb) = crate::menu_widgets::scrollbar_thumb(track, first, labels.len(), total);
+        let (top, thumb) = ((top - track.y) / s + y + 12.0, thumb / s);
+        let lit = canvas.token_hovered(bar_token);
         pill(
             canvas,
             frame,
-            [x + width - 9.0, y + 12.0 + along, 4.0, thumb],
-            color::alpha(color::HOLO, 0.5),
+            [x + width - 9.0, top, 4.0, thumb],
+            color::alpha(color::HOLO, if lit { 0.85 } else { 0.5 }),
         );
     }
 }

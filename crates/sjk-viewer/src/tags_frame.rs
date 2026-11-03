@@ -31,6 +31,19 @@ impl GpuState {
         )
     }
 
+    /// The player's eye, where the tag's reach is counted from.
+    fn tag_eye(&self) -> Option<Vec3> {
+        let session = self.live_session.as_ref()?;
+        let player = &session.latest_snapshot().player;
+        let origin = self
+            .local_prediction
+            .predicted_state()
+            .map_or(Vec3::from_array(player.origin()), |state| {
+                Vec3::from(state.origin)
+            });
+        Some(origin + Vec3::Z * player.view_height() as f32)
+    }
+
     /// What the player holds of tag or card `id`: what the profile lists (every finish in
     /// a local game, which has no hub).
     fn tag_held(&self, id: &str) -> crate::tags::Held {
@@ -85,10 +98,11 @@ impl GpuState {
             return;
         };
         let (start, forward) = self.ping_ray(camera);
+        let reach = crate::tags::reach_from(start, self.tag_eye());
         let trace = self.bsp.trace_box_with(
             &mut self.trace_scratch,
             start.to_array(),
-            (start + forward * crate::tags::REACH).to_array(),
+            (start + forward * reach).to_array(),
             sjk_bsp::Aabb::new([0.0; 3], [0.0; 3]).expect("point bounds are valid"),
             TAG_MASK,
         );

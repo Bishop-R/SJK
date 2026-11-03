@@ -33,6 +33,8 @@ pub(super) const CLASSIC_SCROLL_TOKEN: u16 = 911;
 pub(super) const CLASSIC_SCROLLBAR_TOKEN: u16 = 912;
 /// The `i`-th shown choice of an open dropdown answers to `DROPDOWN_BASE + i`.
 pub(super) const DROPDOWN_BASE: u16 = 1_000;
+/// The thumb of an open dropdown's list in the SJK UI, which a drag moves.
+pub(super) const DROPDOWN_BAR_TOKEN: u16 = 915;
 /// Rows one wheel notch scrolls, as the settings form steps.
 pub(super) const CLASSIC_WHEEL_ROWS: i32 = 1;
 /// Segment `i` of row `row`'s segmented choice answers to
@@ -233,6 +235,12 @@ impl SettingsMenu {
     #[cfg(test)]
     pub(crate) fn search_for_snapshot(&mut self, console: &ViewerConsole, text: &str) {
         self.set_search(console, text.to_owned());
+    }
+
+    /// Open the selected row's dropdown, if it has one (tests).
+    #[cfg(test)]
+    pub(crate) fn try_dropdown_for_test(&mut self, console: &ViewerConsole) -> bool {
+        self.open_dropdown(console, self.selected)
     }
 
     /// Open the selected row's dropdown, for the menu snapshots.

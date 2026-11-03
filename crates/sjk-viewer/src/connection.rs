@@ -67,6 +67,9 @@ impl crate::GpuState {
         if let Some(console) = &mut self.console {
             console.set_cvar("cl_reconnectArgs", &address);
             console.close_for_connection();
+            self.join_password.clear();
+            self.join_password
+                .push_str(console.text_value("password").unwrap_or_default().trim());
         }
         let result = self
             .console
@@ -185,8 +188,39 @@ impl crate::GpuState {
         }
     }
 
+    /// `password <pw>` typed while a join is still trying, or on the screen that says
+    /// why it failed (the server refused a wrong or missing password, or was full):
+    /// join the same server again with it, as stock's client sends its next
+    /// `connect` with the new userinfo (`CL_CheckForResend`). Retyping the password a
+    /// join already sent changes nothing. (headshotsmcgee117's report, 03/11/2026:
+    /// only `connect <ip>;password <pw>` worked.)
+    fn rejoin_on_new_password(&mut self) {
+        let (Some(console), Some(menu), Some(address)) = (
+            self.console.as_ref(),
+            self.client_menu.as_ref(),
+            self.last_connect_address.as_ref(),
+        ) else {
+            return;
+        };
+        let waiting = matches!(
+            menu.phase(),
+            crate::client_state::ClientPhase::Connecting(_)
+                | crate::client_state::ClientPhase::ConnectionError
+        );
+        let password = console.text_value("password").unwrap_or_default().trim();
+        if !waiting || self.live_session.is_some() || password == self.join_password {
+            return;
+        }
+        log::progress(format_args!(
+            "password changed while joining: joining again"
+        ));
+        let address = address.clone();
+        self.begin_address_join(address);
+    }
+
     pub(crate) fn poll_client_shell(&mut self) {
         self.poll_resident_connection();
+        self.rejoin_on_new_password();
         if self
             .console
             .as_mut()

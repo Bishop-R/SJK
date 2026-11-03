@@ -35,6 +35,32 @@ revision), the per-slot skin table and the GPU's lazy glow and signature uploads
 and showed no stale gate; the cause is still unknown. Verified: unit tests, the GPU tests
 above, fmt, clippy. Not verified: in a game.
 
+## Player reports 03/11: chat outline, full servers, report box, scrollbars, password, tags
+
+03/11/2026, `personal/ui-bugs-1103`, based on `main` `d3881f31`, read from the code (no
+game started):
+- Hub #211 (Creo): the chat outline drew nine quads a letter, and a text batch's 32 768
+  vertices (about 600 outlined letters for the whole font layer) cut off the lines past
+  them. Batches hold 196 608 now, their GPU buffers growing from the old size on demand
+  ([client.md](client.md#text-size-and-spacing)). Unit test: a thousand outlined letters fit.
+- Full servers read 30/32 (Kushina, Blep): stock's `getinfo` already leaves private
+  slots out of both numbers, so the servers they saw must count them; the chosen row
+  takes `sv_privateClients` off when `getstatus` shows `getinfo` gave the whole
+  `sv_maxclients` ([sjk-ui.md](sjk-ui.md#servers)). Only the chosen row is corrected, and
+  no live server was queried to confirm which servers do this.
+- Hub #227 (Groark): Enter in the report box starts a line, Ctrl+Enter sends; the hub
+  still stores line breaks as spaces (a hub change would keep them). The away emote list's
+  wheel scrolled to its end in a test with 79 emotes: not reproduced; its thumb is now
+  draggable.
+- Foshin: scrollbars drawn by `MenuCanvas::scrollbar` take a press and a drag
+  (`scrollbar_drag`); wired into the Profile screen and Settings' lists.
+- headshotsmcgee117: `password <pw>` during a join (or on its failure screen) joins again.
+- Kushina, tags: in third person with `cg_dynamicCrosshair 0` the tag's 128-unit trace
+  started at the camera; it counts from the eye now. The loud noise in her recordings
+  of tag selection was not found in the code.
+Verified: fmt, clippy, the viewer's unit tests. Not verified: in a game or on the
+reporters' servers.
+
 ## Tags: spray sound, odd surfaces
 
 03/11/2026, `personal/tag-spray`, based on `main` `3a209013` (Sol: tag decals sometimes

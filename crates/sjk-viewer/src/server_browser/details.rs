@@ -49,6 +49,26 @@ pub(crate) struct DetailsView {
     pub(crate) players: Vec<DetailPlayer>,
     /// Bots reported by the server (ping 0), for the player-count caption.
     pub(crate) bots: usize,
+    /// The server's whole `sv_maxclients`, private slots included, as `getstatus` gives it.
+    pub(crate) max_clients: Option<u16>,
+    /// `sv_privateClients`: the first slots, kept for `sv_privatePassword`.
+    pub(crate) private_slots: u16,
+}
+
+impl DetailsView {
+    /// The places open to a player without the private password, when the browser row's
+    /// `capacity` (from `getinfo`) counted the private slots too.
+    ///
+    /// Stock `SVC_Info` (`sv_main.cpp`) gives `sv_maxclients - sv_privateClients` and
+    /// counts only the clients in the public slots, so its row reads full exactly when
+    /// `SV_DirectConnect` (`sv_client.cpp`) says "Server is full". Some servers answer
+    /// `getinfo` with the whole `sv_maxclients` instead, and their full rows read 30/32
+    /// (Kushina's and Blep's reports, 03/11/2026); `getstatus` names both cvars, so the
+    /// selected row takes the private slots off.
+    pub(crate) fn public_capacity(&self, capacity: u16) -> Option<u16> {
+        (self.private_slots > 0 && self.max_clients == Some(capacity))
+            .then(|| capacity.saturating_sub(self.private_slots))
+    }
 }
 
 impl DetailsView {
@@ -91,6 +111,13 @@ impl DetailsView {
             facts,
             players,
             bots,
+            max_clients: info
+                .get_i32("sv_maxclients")
+                .and_then(|value| u16::try_from(value).ok()),
+            private_slots: info
+                .get_i32("sv_privateClients")
+                .and_then(|value| u16::try_from(value).ok())
+                .unwrap_or(0),
         }
     }
 }
@@ -240,5 +267,33 @@ impl ServerDetails {
             return DetailsState::Failed(error);
         }
         DetailsState::Querying
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn view(max_clients: Option<u16>, private_slots: u16) -> DetailsView {
+        DetailsView {
+            address: "192.0.2.1:29070".parse().unwrap(),
+            hostname: String::new(),
+            map: String::new(),
+            facts: Vec::new(),
+            players: Vec::new(),
+            bots: 0,
+            max_clients,
+            private_slots,
+        }
+    }
+
+    /// A row that counted 2 private slots of 32 as open reads 30 places; a stock row
+    /// (already 30) and a server without private slots keep theirs.
+    #[test]
+    fn private_slots_come_off_a_row_that_counted_them() {
+        assert_eq!(view(Some(32), 2).public_capacity(32), Some(30));
+        assert_eq!(view(Some(32), 2).public_capacity(30), None);
+        assert_eq!(view(Some(32), 0).public_capacity(32), None);
+        assert_eq!(view(None, 2).public_capacity(32), None);
     }
 }

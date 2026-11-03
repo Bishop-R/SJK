@@ -2,11 +2,12 @@
 //! for a world note (`world_notes`, the second `worldnote` press), a bug report
 //! (`bug_report`, the Report a bug button under the game menu) or a player report
 //! (`player_report`, a reason on the game menu's Report page). Escape or Cancel drops
-//! it; Enter or Send sends it.
+//! it; Ctrl+Enter or Send sends it. Enter in the box starts a new line (hub #227), and
+//! on a button presses it.
 //!
 //! All keep only what the hub accepts as it is typed or pasted (letters and digits of
-//! any script, spaces and [`sjk_identity::report::PUNCTUATION`], line breaks turned into
-//! spaces), a report
+//! any script, spaces, line breaks and [`sjk_identity::report::PUNCTUATION`]; the hub
+//! stores line breaks as spaces), a report
 //! at most 600 characters, a note at most [`NOTE_MAX`], a player report at most 300.
 //!
 //! The text has an insertion point (the console's `LineEdit`): the arrows, Home, End,
@@ -208,8 +209,13 @@ fn refusal(kind: &Kind, text: &str) -> Option<&'static str> {
 fn typed(kind: &Kind, field: &str, text: &str) -> String {
     let room = limit(kind).saturating_sub(field.chars().count());
     text.chars()
-        .map(|c| if c.is_whitespace() { ' ' } else { c })
-        .filter(|c| sjk_identity::report::allowed(*c))
+        .filter(|c| *c != '\r')
+        .map(|c| match c {
+            '\n' => c,
+            c if c.is_whitespace() => ' ',
+            c => c,
+        })
+        .filter(|c| *c == '\n' || sjk_identity::report::allowed(*c))
         .take(room)
         .collect()
 }
@@ -422,6 +428,12 @@ impl TextDialog {
         match key {
             KeyCode::Escape => return self.close(),
             KeyCode::Tab => self.step_focus(shift),
+            // Ctrl+Enter sends from anywhere; Enter in the box starts a new line (Groark,
+            // hub #227: a report went off mid-sentence), on a button presses it.
+            KeyCode::Enter | KeyCode::NumpadEnter if self.control => return self.send(),
+            KeyCode::Enter | KeyCode::NumpadEnter if self.focus == Focus::Field => {
+                self.insert("\n");
+            }
             KeyCode::Enter | KeyCode::NumpadEnter => return self.press_focused(),
             KeyCode::Space if self.focus != Focus::Field => return self.press_focused(),
             _ if self.focus == Focus::Field
@@ -469,18 +481,35 @@ impl TextDialog {
                     Some(text) => text,
                     None => return Action::None,
                 };
-                let kind = self.kind.as_ref().expect("open");
-                let kept = typed(kind, &self.text, text);
-                if !kept.is_empty() {
-                    let limit = limit(kind);
-                    self.edit
-                        .insert_counted(&mut self.text, &kept, limit, |_| 1);
-                    self.touched();
-                }
+                self.insert(text);
             }
             _ => {}
         }
         Action::None
+    }
+
+    /// Insert what `text` types at the caret, as much of it as the kind keeps and has
+    /// room for.
+    fn insert(&mut self, text: &str) {
+        let kind = self.kind.as_ref().expect("open");
+        let kept = typed(kind, &self.text, text);
+        if kept.is_empty() {
+            return;
+        }
+        let limit = limit(kind);
+        // The line edit drops control characters: each line break goes in between.
+        for (index, line) in kept.split('\n').enumerate() {
+            if index > 0 {
+                self.edit.insert_counted(&mut self.text, "", limit, |_| 1);
+                if self.text.chars().count() < limit {
+                    let at = self.edit.cursor(&self.text);
+                    self.text.insert(at, '\n');
+                    self.edit.place(&self.text, at + 1, false);
+                }
+            }
+            self.edit.insert_counted(&mut self.text, line, limit, |_| 1);
+        }
+        self.touched();
     }
 
     /// The text changed: the refusal no longer applies and the caret shows.
@@ -670,8 +699,8 @@ mod tests {
     #[test]
     fn reports_and_notes_keep_only_what_the_hub_accepts() {
         assert_eq!(
-            typed(&Kind::Report, "", "Door *flickers*\n\u{1F642} @left&!"),
-            "Door flickers  left!"
+            typed(&Kind::Report, "", "Door *flickers*\r\n\u{1F642} @left&!"),
+            "Door flickers\n left!"
         );
         // Cvars and commands are kept (19/10/2026).
         let cvars = "cg_fov \"90\"; /kill [x] <y> #2 \\ +a=b";
@@ -768,6 +797,28 @@ mod tests {
         dialog.edit.cursor(&dialog.text)
     }
 
+    /// Enter in the box starts a new line (hub #227); Ctrl+Enter sends; Enter on Send
+    /// sends.
+    #[test]
+    fn enter_starts_a_line_and_ctrl_enter_sends() {
+        let mut dialog = TextDialog::default();
+        dialog.open(Kind::Report);
+        typed_keys(&mut dialog, "The door");
+        assert_eq!(dialog.key(KeyCode::Enter, None), Action::None);
+        typed_keys(&mut dialog, "flickers");
+        assert_eq!(dialog.text, "The door\nflickers");
+        dialog.set_control(true);
+        assert_eq!(
+            dialog.key(KeyCode::NumpadEnter, None),
+            Action::Send(Kind::Report, "The door\nflickers".into())
+        );
+        dialog.set_control(false);
+        dialog.open(Kind::Report);
+        typed_keys(&mut dialog, "The door flickers");
+        dialog.key(KeyCode::Tab, None);
+        assert!(matches!(dialog.key(KeyCode::Enter, None), Action::Send(..)));
+    }
+
     /// Left, Right, Home, End, Delete and Backspace work at the caret, not at the end.
     #[test]
     fn the_caret_edits_in_the_middle_of_the_text() {
@@ -846,17 +897,17 @@ mod tests {
         for _ in 0..4 {
             dialog.key(KeyCode::Delete, None);
         }
-        // Pasted: what the hub refuses is dropped, a line break is a space.
+        // Pasted: what the hub refuses is dropped, a line break kept.
         dialog.key(KeyCode::KeyV, Some("{b}\n\u{1F642}ö"));
         assert_eq!(
             dialog.text.chars().count(),
             sjk_identity::report::TEXT_MAX - 1
         );
-        assert!(dialog.text.starts_with("b ö"), "{:?}", &dialog.text[..8]);
-        assert_eq!(cursor(&dialog), "b ö".len());
+        assert!(dialog.text.starts_with("b\nö"), "{:?}", &dialog.text[..8]);
+        assert_eq!(cursor(&dialog), "b\nö".len());
         typed_keys(&mut dialog, "zz");
         assert_eq!(dialog.text.chars().count(), sjk_identity::report::TEXT_MAX);
-        assert!(dialog.text.starts_with("b özaaa"));
+        assert!(dialog.text.starts_with("b\nözaaa"));
         // At the start, Backspace has nothing to remove; none of it can panic.
         dialog.key(KeyCode::Home, None);
         dialog.key(KeyCode::Backspace, None);

@@ -144,6 +144,17 @@ impl ServerBrowser {
     pub(crate) fn tick_details(&mut self) {
         let selected = self.visible_entry(self.selected).map(|entry| entry.address);
         self.details.tick(selected);
+        // A server whose `getinfo` counted its private slots as open: the selected row
+        // shows the places a player can take ([`DetailsView::public_capacity`]).
+        if let DetailsState::Ready(view) = self.details.state()
+            && let Some(entry) = self
+                .entries
+                .iter_mut()
+                .find(|entry| entry.address == view.address)
+            && let Some(capacity) = view.public_capacity(entry.capacity)
+        {
+            entry.capacity = capacity;
+        }
     }
 
     /// What the details panel shows for the selected row.

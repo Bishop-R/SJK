@@ -5800,7 +5800,9 @@ sees it there.
   `cg_tagFinish`, its finish (`normal`, `holo` or `solar`; one not held sticks Normal). A
   finish chip of the tag in use changes its finish at once.
 - **Sticking:** `toy_tag` (a bind, Settings > Key bindings > Interaction "Toy: Tag", the
-  quick wheel's Toys page) traces the crosshair 128 units into the world and sticks the
+  quick wheel's Toys page) traces the crosshair 128 units past the player's eye into the
+  world (in third person with `cg_dynamicCrosshair 0` the trace starts at the camera, so
+  the camera's distance is added, at most 256; Kushina's tags did not go up) and sticks the
   chosen tag where it lands: upright on a wall, its top away from the player on a floor,
   56 units wide. One tag a player: a new one replaces the last, at most one every 10
   seconds. `toy_tag clear` takes it off. A tag the player does not hold is refused, and
@@ -6813,6 +6815,13 @@ the screen's right edge (EternalJK's can).
 
 ## Passwords in the console
 
+`password <pw>` typed while a join is still trying, or on the screen that says why it
+failed (a wrong or missing password, a full server), joins the same server again with
+it (headshotsmcgee117's report, 03/11/2026: only `connect <ip>;password <pw>` worked), as
+stock's client sends its next `connect` with the new userinfo (`CL_CheckForResend`). The
+password a join already sent changes nothing ([connection.rs](../crates/sjk-viewer/src/connection.rs),
+`rejoin_on_new_password`).
+
 The console never prints a password: what it prints is kept in the scrollback,
 `qconsole.log` and the crash trail that the session log, crash reports and log uploads
 are made from ([identity](identity.md#crash-reports)).
@@ -7376,7 +7385,12 @@ nameplates' Strong outline draws (`text::CodePalette::DarkOutlined`, per text ru
 `ChatOverlay::palette_of`). A black letter (`^0`) keeps the faint light halo the
 nameplates give dark names instead, as an outline as dark as it would hide it. It costs
 nine glyph quads a letter instead of two. Centre prints, the sender card and the
-combat numbers keep their shadow.
+combat numbers keep their shadow. A text batch (each font's layer, the Inter HUD text)
+held 32 768 vertices until 03/11/2026, some 600 outlined letters, and a busy chat ran
+past it: the letters after the cap were dropped, whole lines with them (Creo, hub #211).
+A batch now holds up to 196 608 (`text::MAX_TEXT_VERTICES`), its GPU buffer starting at
+the old size and doubling the first frame that needs more
+([text/vertex_buffer.rs](../crates/sjk-viewer/src/text/vertex_buffer.rs)).
 
 `cg_darkTextOutline` (default 0, archived; Settings > Chat > **White edge on dark
 text**, shared with the nameplates) edges the dark letters of the feed and the field
