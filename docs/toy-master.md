@@ -63,6 +63,21 @@ shrunk away in its show. The client sends the presses on the toy twice a second 
   dance only in third person.
 - Once a toy played its show on a map load, presses on it count no more until the next
   (a player who has not found it yet still finds it with one press).
+- A player who arrives after a show started (connected or loaded the map late) joins it
+  where it is (since 03/11/2026): the hub's presence answer, read every few seconds,
+  lists the shows under way on the server (`shows`: the toy, the map load, how long ago
+  it started, the drops' seed and letters and the ones taken), and the client starts
+  the show that far in (`ToyMaster::join`), past its vanish and pop when they are over,
+  its sound from as far in (`PlayTrack`, as the boombox's), its drops thrown as they
+  were with the ones taken gone. A toy that played or joined a show on this map load is
+  not joined again.
+- The show's sound plays on a channel of its own kept from other sounds
+  (`TOY_SHOW_CHANNEL`, protected as the boombox's): a song of minutes is never stolen
+  by a busy fight, so a player far away when it started hears it from where it is when
+  they walk up.
+- The steps and the voice are timed on the sound, which starts as the toy pops back:
+  `track.rs` reads them the pop's length (`pop`) ahead of the lead (since 03/11/2026;
+  before, they came 450 ms late).
 
 ## A show in steps
 
@@ -86,6 +101,14 @@ steps plays a stepped show's spin for `spin` only.
   later the players are drawn standing again. Each client floats them by itself, from
   the show's seed and the slot.
 - `spit`: the toy throws out the show's drops, spread evenly over the step (below).
+
+A show may also have a voice (`Show::voice`, since 03/11/2026): the spans, from and to in
+milliseconds after its sound starts, when its sound sings. Then the toy spins only within
+them, at its step's speed, and stands still between, starting and stopping over 90 ms
+(`VOICE_RAMP`): the dancers and the ring, which turn with it, stop too. The other steps'
+flags (dance, ring, float, spit) keep their own times, so the drops are spread as before.
+A client older than the voice ignores it and spins all through its steps. The hub takes
+the spans from the toy's song with its voice separated out (Demucs).
 
 Changes are eased: a spin's speed over 0.7 s, the dance and the ring over 0.5 s, the
 toy's rise over 1.5 s and its landing over 0.9 s. The toy's sound plays for the whole
@@ -143,9 +166,18 @@ how many there are. Other players' cards count the ones they found the same way.
 | --- | --- |
 | `toymaster_place <kind> [server]` | Hide a toy of that kind where you aim, facing you: on every server running this map file, or with `server` on this one only |
 | `toymaster_remove [id]` | Take away the toy nearest you (within 256 units), or the one with that id |
+| `toymaster_escort [id] on\|off` | Show the toy nearest you (or the one with that id) only on the server you are on, or to everyone again |
 | `toymaster_list` | The kinds there are, and the toys on this map with their ids and distance |
 
-All three are the creator's only. Placing needs the map's BSP checksum (as map edits
+`toymaster_place <kind> [server] escort` hides one shown only where the creator is
+(since 03/11/2026): the hub lists an escorted toy to anyone else only when they are on
+the server the creator is on, for that server alone, and the presence answer's
+`secrets` stamp changes when the creator comes or goes (or a toy is placed, taken away
+or escorted), so the clients there read the toys at once and the toy appears or goes
+within seconds. A client from before then never sees an escorted toy. `toymaster_list`
+says which are escorted.
+
+All of these are the creator's only. Placing needs the map's BSP checksum (as map edits
 do, `sv_mapChecksum`). The hub takes the creator's request only; every placing and
 removal goes to the staff log.
 

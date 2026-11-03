@@ -75,6 +75,11 @@ pub struct PresenceRead {
     pub blocks: Vec<crate::MapBlock>,
     /// The hub's map edits stamp, which grows with every change to any map's edits.
     pub map_edits: Option<i64>,
+    /// The hub's Toy Master stamp for this server (since 03/11/2026): when it changes,
+    /// the toys listed for it changed (one placed or removed, SJK's creator came or went).
+    pub secrets: Option<i64>,
+    /// The Toy Master's shows under way on this server.
+    pub shows: Vec<crate::toy_master::ShowUnderWay>,
 }
 /// What the client asks of a hub (`PROTOCOL.md`, "Endpoints").
 pub trait Hub: Send {
@@ -634,8 +639,13 @@ pub trait Hub: Send {
         ))
     }
 
-    /// Every toy the Toy Master hid (`GET /v1/secrets`, 30/10/2026).
-    fn secrets(&mut self, _identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
+    /// Every toy the Toy Master hid (`GET /v1/secrets`, 30/10/2026), with the ones shown
+    /// only where SJK's creator is when the player is on `server` with them (03/11/2026).
+    fn secrets(
+        &mut self,
+        _identity: &Identity,
+        _server: Option<&str>,
+    ) -> Result<crate::toy_master::Secrets, HubError> {
         Err(HubError::Protocol(
             "this hub client does not read the Toy Master's toys".to_owned(),
         ))
@@ -686,6 +696,19 @@ pub trait Hub: Send {
     fn remove_secret(&mut self, _identity: &Identity, _id: i64) -> Result<(), HubError> {
         Err(HubError::Protocol(
             "this hub client does not remove toys".to_owned(),
+        ))
+    }
+
+    /// SJK's creator: show toy `id` only where the creator is, or everywhere again
+    /// (`POST /v1/creator/secret/escort`, 03/11/2026).
+    fn escort_secret(
+        &mut self,
+        _identity: &Identity,
+        _id: i64,
+        _escorted: bool,
+    ) -> Result<(), HubError> {
+        Err(HubError::Protocol(
+            "this hub client does not escort toys".to_owned(),
         ))
     }
 
@@ -1960,8 +1983,16 @@ impl Hub for HttpHub {
         .map(|_| ())
     }
 
-    fn secrets(&mut self, identity: &Identity) -> Result<crate::toy_master::Secrets, HubError> {
-        parse(self.send(Some(identity), "GET", "/v1/secrets", None)?)
+    fn secrets(
+        &mut self,
+        identity: &Identity,
+        server: Option<&str>,
+    ) -> Result<crate::toy_master::Secrets, HubError> {
+        let path = match server {
+            Some(server) => format!("/v1/secrets?server={}", encode_server(server)),
+            None => "/v1/secrets".to_owned(),
+        };
+        parse(self.send(Some(identity), "GET", &path, None)?)
     }
 
     fn use_secret(
@@ -2012,6 +2043,7 @@ impl Hub for HttpHub {
                 "server": placing.server,
                 "origin": placing.origin,
                 "yaw": placing.yaw,
+                "escorted": placing.escorted,
             })),
         )?;
         answer["id"]
@@ -2025,6 +2057,21 @@ impl Hub for HttpHub {
             "POST",
             "/v1/creator/secret/remove",
             Some(json!({ "id": id })),
+        )
+        .map(|_| ())
+    }
+
+    fn escort_secret(
+        &mut self,
+        identity: &Identity,
+        id: i64,
+        escorted: bool,
+    ) -> Result<(), HubError> {
+        self.send(
+            Some(identity),
+            "POST",
+            "/v1/creator/secret/escort",
+            Some(json!({ "id": id, "escorted": escorted })),
         )
         .map(|_| ())
     }
@@ -2101,10 +2148,14 @@ impl Hub for HttpHub {
         let players = parse(answer["players"].clone())?;
         // A hub from before map blocks leaves them out; a malformed list is none.
         let blocks = serde_json::from_value(answer["blocks"].clone()).unwrap_or_default();
+        // Shows under way: a malformed list is none (the shows are cosmetic).
+        let shows = serde_json::from_value(answer["shows"].clone()).unwrap_or_default();
         Ok(PresenceRead {
             players,
             blocks,
             map_edits: answer["map_edits"].as_i64(),
+            secrets: answer["secrets"].as_i64(),
+            shows,
         })
     }
 

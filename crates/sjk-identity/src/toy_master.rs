@@ -48,6 +48,11 @@ pub struct Show {
     /// That model's own radius, in units.
     #[serde(default)]
     pub ring_radius: f32,
+    /// When its sound sings, from and to, in milliseconds after it starts, in order
+    /// (since 03/11/2026): with any, the toy spins only while its sound sings and stands
+    /// still between (its steps still say how fast).
+    #[serde(default)]
+    pub voice: Vec<[u32; 2]>,
 }
 
 /// One step of a show, from `at` (milliseconds after its sound starts) to the next: the
@@ -218,6 +223,10 @@ pub struct Secret {
     /// The kind it is, sent to SJK's creator only.
     #[serde(default)]
     pub kind: Option<String>,
+    /// Shown only on the server SJK's creator is on (since 03/11/2026): the hub lists it
+    /// to anyone else only then, for that server. Told to the creator only.
+    #[serde(default)]
+    pub escorted: bool,
 }
 
 fn one() -> f32 {
@@ -283,6 +292,37 @@ pub struct Placing {
     pub origin: [f32; 3],
     /// Facing, in degrees.
     pub yaw: f32,
+    /// Shown only on the server SJK's creator is on ([`Secret::escorted`]).
+    pub escorted: bool,
+}
+
+/// A show under way on the player's server, as the hub's presence answer tells it
+/// (since 03/11/2026): for a player who arrived after it started, so they join it where
+/// it is.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+pub struct ShowUnderWay {
+    /// The toy.
+    pub id: i64,
+    /// The map load it plays in (the game's `sv_serverid`).
+    pub round: i64,
+    /// How long ago it started, in milliseconds, when the hub answered.
+    pub ago: u64,
+    /// How its drops are thrown (0 without drops).
+    #[serde(default)]
+    pub seed: u32,
+    /// What each drop is, a letter a drop as in `drops_` (empty without drops).
+    #[serde(default)]
+    pub drops: String,
+    /// The drops taken already, a bit each.
+    #[serde(default)]
+    pub taken: u32,
+}
+
+impl ShowUnderWay {
+    /// What each of its drops is; `None` for letters this client does not know.
+    pub fn kinds(&self) -> Option<Vec<DropKind>> {
+        self.drops.chars().map(DropKind::from_letter).collect()
+    }
 }
 
 /// What a feed event of [`TOY`] says: toy `id` plays its show (`show_<id>`).
@@ -342,6 +382,35 @@ mod tests {
         assert_eq!(secrets.secrets[0].kind.as_deref(), Some("k"));
         assert_eq!(secrets.secrets[0].scale, 1.0);
         assert_eq!(secrets.kinds, ["k"]);
+    }
+
+    /// A show under way as the hub's presence tells it, and a toy shown only where the
+    /// creator is.
+    #[test]
+    fn a_show_under_way_and_an_escorted_toy_read_as_the_hub_sends_them() {
+        let text = r#"[{"id":3,"round":77,"ago":12000,"seed":9,"drops":"csh","taken":2},
+            {"id":4,"round":77,"ago":5}]"#;
+        let shows: Vec<ShowUnderWay> = serde_json::from_str(text).unwrap();
+        assert_eq!((shows[0].id, shows[0].round, shows[0].ago), (3, 77, 12_000));
+        assert_eq!(
+            shows[0].kinds(),
+            Some(vec![
+                DropKind::Credits,
+                DropKind::Shards,
+                DropKind::Holocron
+            ])
+        );
+        assert_eq!(shows[1].kinds(), Some(Vec::new()));
+        assert_eq!((shows[1].seed, shows[1].taken), (0, 0));
+        let odd = ShowUnderWay {
+            drops: "cx".to_owned(),
+            ..ShowUnderWay::default()
+        };
+        assert_eq!(odd.kinds(), None);
+        let text = r#"{"secrets":[{"id":3,"map":"m","checksum":1,"origin":[0,0,0],
+            "yaw":0,"escorted":true}]}"#;
+        let secrets: Secrets = serde_json::from_str(text).unwrap();
+        assert!(secrets.secrets[0].escorted);
     }
 
     #[test]

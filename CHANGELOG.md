@@ -13,7 +13,6 @@ Format, read by the client (crates/sjk-viewer/src/changelog_data.rs, whose
 tests check this file):
 - "## <version> | <dd/mm/yyyy>" starts a release ("## Unreleased" for main
   after the last release, without a date);
-- JoF: your moves leave as JoF EJK sends them, one a frame stamped with the moment it is made, instead of filling the frame's missed 8 ms with moves stamped in the past; below 125 FPS those made Heimdall, JoF's anti-cheat, kick for `cl_timeNudge` though it was 0 _(Sol, after JoF EJK; Krieger's and Slash's reports)_
 - other lines up to the first item are the release's introduction;
 - "> <Heading>: <sentence>" lines before the first item are the release's short
   recap (3 to 6 lines, shown by the what's-new card after an update); every release
@@ -55,6 +54,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 - Boombox on the floor: `boombox_place` (Place key in Collection > Toys, the quick wheel or Key bindings) stands your boombox on the floor in front of you, facing the way you look, and the music plays from there, a little quieter behind it; press again to pick it back up. It goes when you turn the toy off, change map or leave, and See and hear others' boomboxes hides others' boxes and their music _(Sol, after VisionJK's boombox by Blackwolf)_
 - Box hunt: every hunter has one life. A hunter the mark kills is out of that hunt (the mark no longer shows for them, and killing it later wins nothing), and a player teleported other than by the map or a spawn (`amtele`, an admin's teleport) or flying in noclip is out at once for cheating; a mark caught cheating ends the hunt. When every hunter is out, the mark wins 100 credits per hunter, up to 3 times a day. The card at the top says how many hunters are left, or that you're out _(Sol)_
 - Box hunt: a mark caught teleporting or in noclip, or typing in the chat for 30 seconds (warned at 20), blows up: everyone in the hunt sees the explosion, the mark dies, and a hunter still in the chase, picked at random, wins the free mystery box roll a kill would have. The mark now sees the hunters still after them ringed in red, as hunters see the mark _(Sol)_
+- The Toy Master's toys can dance to their song: a toy spins only while its song sings and stands still in the silences, starting and stopping in a blink _(Sol)_
+- The Toy Master's shows can be joined late: arrive on a server or load the map while a show is under way and you see it where it is, hear its song from the same moment and find its drops as they lie; a show's song is no longer cut by a busy fight, so walking up from afar you hear it _(Sol)_
+- JoF: your moves leave as JoF EJK sends them, one a frame stamped with the moment it is made, instead of filling the frame's missed 8 ms with moves stamped in the past; below 125 FPS those made Heimdall, JoF's anti-cheat, kick for `cl_timeNudge` though it was 0 _(Sol, after JoF EJK; Krieger's and Slash's reports)_
 
 ## 2026.1102.1 (Alpha) | 02/11/2026
 

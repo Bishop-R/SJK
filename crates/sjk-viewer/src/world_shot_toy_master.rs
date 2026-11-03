@@ -134,6 +134,7 @@ fn duel6_toy_master_show() {
             reach: 400.0,
             ring,
             ring_radius: 100.0,
+            voice: Vec::new(),
         };
         let lead = 1_830;
         let kinds = {

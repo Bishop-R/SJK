@@ -1522,6 +1522,7 @@ impl GpuState {
                     source,
                     channel,
                     KNOCK_REACH,
+                    0,
                 );
                 continue;
             }
