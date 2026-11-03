@@ -953,6 +953,11 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "White edge on dark text",
+        cvar: crate::text::DARK_OUTLINE_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Chat card size",
         cvar: crate::chat::options::CARD_SCALE_CVAR,
         kind: ValueKind::Float {

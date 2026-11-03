@@ -37,6 +37,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 = cg_soundSonar: Sound sonar, for deaf and hard-of-hearing players: arcs round the crosshair point toward the sounds you hear.
 = cg_scoreboardIDs: New: each player's client number, small before the name on SJK's scoreboard, as the classic one's Id column shows it.
 
+- White outline on dark text: black and other dark letters in names and chat can get a crisp white outline instead of the soft glow, Settings > Chat "White edge on dark text" (`cg_darkTextOutline`) _(Sol)_
 - SJK map edits arrive within seconds on a server once the SJK team publishes them, instead of up to 10 minutes later; Settings > Game "Sync map edits" (or `mapedits_sync`) asks the hub at once _(Sol)_
 - 3D sound (Settings > Sound, `s_spatial`, off by default): sounds are heard from your head, also in third person; a sound behind a wall or a shut door becomes quieter and duller, and the room round you rings, a hall longer than a corridor _(Sol, after VisionJK's idea by Blackwolf)_
 - Move the HUD with the mouse: Settings > HUD "Move HUD elements" (or `hud_edit`) outlines the health, Force, weapon, timer, lagometer, chat, kill feed, movement keys and the rest over the game; drag one to move it, right-click it to put it back _(Slash, PR #295, after Lex's idea)_

@@ -88,6 +88,9 @@ pub(super) struct Options {
     pub(super) backdrop: f32,
     /// Chat text in a dark outline instead of its shadow ([`OUTLINE_CVAR`]).
     pub(super) outline: bool,
+    /// Dark letters edged in a white outline instead of the soft halo
+    /// ([`crate::text::DARK_OUTLINE_CVAR`]).
+    pub(super) white: bool,
 }
 
 impl Default for Options {
@@ -136,6 +139,7 @@ impl Options {
             tabs: super::tabs::Tabs::read(console),
             backdrop: integer(BACKDROP_CVAR, 0).clamp(0, 100) as f32 / 100.0,
             outline: integer(OUTLINE_CVAR, 0) != 0,
+            white: crate::text::CodePalette::white_outline_on(console),
         }
     }
 

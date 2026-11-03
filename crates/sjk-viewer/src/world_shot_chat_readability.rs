@@ -1,6 +1,7 @@
 //! World shots of the chat box's readability options over ffa3's sunlit sand (Creo's
 //! report, 29/10/2026: the chat is hard to read over bright ground): as before, with
-//! `cg_chatBoxBackdrop 50`, with `cg_chatBoxOutline 1`, and with both, at 1080p. Game
+//! `cg_chatBoxBackdrop 50`, with `cg_chatBoxOutline 1`, and with both, then the white
+//! outline on dark letters (`cg_darkTextOutline 1`) alone and with the outline, at 1080p. Game
 //! lines in several colours, a long wrapped one and two SJK chat lines (gold, with the
 //! emblem and the tick). Off-screen renders (no game window), ignored like the other
 //! world shots: they need a GPU adapter and the installed game data named by
@@ -59,6 +60,7 @@ fn ffa3_chat_readability() {
             "^7Kyle^7: ^2anyone up for a duel?",
             "^1Sol^7Vulpes^7: ^2HELLO there, the quick brown fox jumps over the lazy dog and keeps on running all the way",
             "^4Blue^7Fox^7: ^7can you read this over the sand?",
+            "^0Dark^4Jedi^7: ^0black letters ^4dark blue ^1red ^7and white",
         ] {
             chat.receive(
                 sjk_client::ServerEventKind::Chat,
@@ -81,15 +83,19 @@ fn ffa3_chat_readability() {
             None,
             now,
         );
-        for (backdrop, outline, name) in [
-            ("0", "0", "off"),
-            ("50", "0", "backdrop50"),
-            ("0", "1", "outline"),
-            ("50", "1", "both"),
+        for (backdrop, outline, white, name) in [
+            ("0", "0", "0", "off"),
+            ("50", "0", "0", "backdrop50"),
+            ("0", "1", "0", "outline"),
+            ("50", "1", "0", "both"),
+            ("0", "0", "1", "white"),
+            ("0", "1", "1", "outline-white"),
+            ("50", "0", "1", "backdrop50-white"),
         ] {
             if let Some(console) = gpu.console.as_mut() {
                 assert!(console.set_cvar(crate::chat::options::BACKDROP_CVAR, backdrop));
                 assert!(console.set_cvar(crate::chat::options::OUTLINE_CVAR, outline));
+                assert!(console.set_cvar(crate::text::DARK_OUTLINE_CVAR, white));
             }
             let name = format!("ffa3-chat-readability-{name}-1080p");
             println!("{}", shoot(&mut gpu, 12, &name).display());

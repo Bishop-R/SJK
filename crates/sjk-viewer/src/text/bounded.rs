@@ -241,6 +241,53 @@ mod tests {
         assert!(CodePalette::DarkOutlined.halo(quake_color(0)));
     }
 
+    /// `cg_darkTextOutline`: a dark letter gets a crisp white ring instead of the faint
+    /// halo; a light one keeps its shadow, or the dark outline where that is on.
+    #[test]
+    fn the_white_outline_rings_dark_letters_in_white() {
+        let font = test_font();
+        let rect = Rect::new(0.0, 0.0, 200.0, 20.0);
+        let draw = |palette| {
+            let mut vertices = Vec::new();
+            append_bounded(
+                &mut vertices,
+                &font,
+                "^0a^7b",
+                [0.0, 0.0],
+                rect,
+                rect,
+                1.0,
+                [640.0, 480.0],
+                TextFace::Regular,
+                [1.0; 4],
+                0.0,
+                TextOverflow::Clip,
+                palette,
+            );
+            vertices
+        };
+        let white = draw(CodePalette::Haloed.white_outlined(true));
+        assert_eq!(white.len(), (9 + 2) * 6);
+        assert!(
+            white[..8 * 6]
+                .iter()
+                .all(|v| v.color == [1.0, 1.0, 1.0, 0.85])
+        );
+        let two_tone = draw(CodePalette::Outlined.white_outlined(true));
+        assert_eq!(two_tone.len(), (9 + 9) * 6);
+        assert!(two_tone[..8 * 6].iter().all(|v| v.color[..3] == [1.0; 3]));
+        assert!(two_tone[9 * 6..17 * 6].iter().all(|v| v.color[0] < 0.1));
+        assert_eq!(
+            CodePalette::DarkOutlined.white_outlined(true),
+            CodePalette::TwoTone
+        );
+        assert_eq!(CodePalette::Game.white_outlined(true), CodePalette::Game);
+        assert_eq!(
+            CodePalette::Haloed.white_outlined(false),
+            CodePalette::Haloed
+        );
+    }
+
     #[test]
     fn the_outline_setting_picks_the_palette() {
         assert_eq!(CodePalette::nameplate(0), CodePalette::Game);

@@ -818,6 +818,10 @@ const HELP: &[(&str, &str)] = &[
         "Edges chat letters and what you type in a dark outline instead of a shadow, so they read over bright maps.",
     ),
     (
+        crate::text::DARK_OUTLINE_CVAR,
+        "Black and other dark letters in names and chat get a white outline instead of a soft glow.",
+    ),
+    (
         crate::chat::options::CARD_SCALE_CVAR,
         "Size of the player card a chat name shows, over the chat's own size: 0.5 half, 2 double.",
     ),

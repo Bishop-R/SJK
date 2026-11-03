@@ -104,6 +104,11 @@ pub(crate) fn register(cvars: &mut CvarRegistry) -> Result<(), sjk_shell::CvarEr
             "Dark outline round each letter of the chat and the chat field instead of its drop shadow",
         ),
         (
+            crate::text::DARK_OUTLINE_CVAR,
+            0,
+            "Dark letters of names and chat in a white outline instead of a soft glow",
+        ),
+        (
             "cg_fovViewmodelAdjust",
             1,
             "Lower the first-person weapon when cg_fovViewmodel is over 90",
