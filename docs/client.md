@@ -1948,7 +1948,8 @@ separate green/blue shells remain. The local animation switch leaves the
 Protect/Absorb colour preference and ordinary Push/Grip-caster effects alone.
 
 **Empower glow** (`cg_empowerEffect`) defaults to -1, following the server's
-`jp_empowerEffect`: 0 full body, 1 arms, 2 hands. Set 0/1/2 to override that shape.
+`jp_empowerEffect`: 0 full body, 1 arms, 2 hands. Set 0/1/2 to override that shape,
+or 3 to hide the Empower glow (SJK only; a server cannot ask for it).
 Only Empower-marked body blur is trimmed; ordinary Push stays full body.
 Mindtrick hides Force effects and flamethrower audio from the affected viewer;
 active Sight reveals them. These presentation rules apply independently of menu

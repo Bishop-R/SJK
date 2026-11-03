@@ -30,6 +30,10 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
+## Unreleased
+
+- Hide the Empower glow: Settings "Empower glow" (`cg_empowerEffect`) 3 turns off the body glow of empowered players; ordinary Push still shows _(Slash, after Dante's idea)_
+
 ## 2026.1103.1 (Alpha) | 03/11/2026
 
 3D sound and a sound sonar, a HUD you move with the mouse, quieter and fuller chat, profile banners, one life per box hunter and a cat that dances to its song.
