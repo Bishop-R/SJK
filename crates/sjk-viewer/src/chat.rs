@@ -815,15 +815,21 @@ impl ChatOverlay {
 
     /// The palette each text run of this frame draws in, by its id: with
     /// `cg_chatBoxOutline` on, the feed's and the composer's in a dark outline
-    /// ([`crate::text::CodePalette::DarkOutlined`]), the rest as the game draws it.
+    /// ([`crate::text::CodePalette::DarkOutlined`]); with `cg_darkTextOutline` on, their
+    /// dark letters in a white one; the rest as the game draws it.
     fn palette_of(&self) -> impl Fn(u32) -> crate::text::CodePalette + Copy + use<> {
-        let outline = self.options.outline;
+        use crate::text::CodePalette;
+        let feed = match (self.options.outline, self.options.white) {
+            (true, white) => CodePalette::DarkOutlined.white_outlined(white),
+            (false, true) => CodePalette::WhiteEdged,
+            (false, false) => CodePalette::Game,
+        };
         let chat = self.chat_text;
         move |id| {
-            if outline && chat.iter().any(|(start, end)| (*start..*end).contains(&id)) {
-                crate::text::CodePalette::DarkOutlined
+            if chat.iter().any(|(start, end)| (*start..*end).contains(&id)) {
+                feed
             } else {
-                crate::text::CodePalette::Game
+                CodePalette::Game
             }
         }
     }

@@ -424,6 +424,9 @@ includes:
   hears from the player's head, muffles sounds behind walls and shut doors and rings
   the room round the player with a small reverb sized by rays, in SJK's own mixer,
   off by default;
+- white edge on dark text (03/11/2026): `cg_darkTextOutline` rings black and other dark
+  letters of nameplates and chat in a crisp white outline instead of the soft halo,
+  off by default;
 - SJK Alpha (19/10/2026), the first collection of cards: the Mythical rarity, the
   Credits and Meme kinds, and card 1, "Bishop", honouring the author of JKR (art by
   Sol, AI-assisted: a rusted helmet portrait).

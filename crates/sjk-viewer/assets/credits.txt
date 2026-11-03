@@ -198,6 +198,7 @@ did: tcGen vector stages: textures projected in world space, as in JKA
 did: Collection marks: worn, favourite, locked and New saber shaders, the lock held by the hub
 did: Toon models: cartoon-style banded shading with a bright rim, an option off by default
 did: 3D sound: sounds muffled behind walls and doors, rooms that ring (after VisionJK)
+did: White edge on dark text: black names and chat in a white outline, an option
 link: https://github.com/Sol-Vulpes/SJK
 link: https://sol-vulpes.github.io/SJK/
 

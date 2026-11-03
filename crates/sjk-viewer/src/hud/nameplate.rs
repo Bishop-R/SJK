@@ -703,7 +703,8 @@ impl State {
                 console
                     .and_then(|c| c.integer_cvar("cg_nameplateoutline"))
                     .unwrap_or(1),
-            ),
+            )
+            .white_outlined(crate::text::CodePalette::white_outline_on(console)),
             style: Style::of(
                 console
                     .and_then(|c| c.integer_cvar("cg_nameplatestyle"))

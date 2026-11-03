@@ -3744,6 +3744,13 @@ to read on busy backgrounds) chooses the edge: 0 Off, the drop shadow only
 (`CodePalette::Game`); 1 Faint, the default, the halo above (`Haloed`); 2 Strong, the
 halo at 38% and every other letter ringed by eight dark copies (0.45 opaque each)
 instead of its shadow (`Outlined`, `text::Edge`).
+`cg_darkTextOutline` (default 0; Settings > Chat "White edge on dark text", which
+applies to the nameplates too; Sol's request, 03/11/2026: the halo reads as a glow) swaps
+the halo for a crisp white outline, the same eight copies in white at 85% each
+(`CodePalette::white_outlined`): with Faint, dark letters in white and the rest in
+their shadow (`WhiteEdged`); with Strong, dark letters in white and the rest in the
+dark outline (`TwoTone`). Off keeps the shadow only. It applies to the chat too (see
+`cg_chatBoxOutline`).
 
 **Styles** (31/10/2026, Sol's decision to let players choose among the designs SJK has
 had): `cg_nameplateStyle` (Settings "Nameplate style", and the Style row on the
@@ -7305,6 +7312,12 @@ nameplates' Strong outline draws (`text::CodePalette::DarkOutlined`, per text ru
 nameplates give dark names instead, as an outline as dark as it would hide it. It costs
 nine glyph quads a letter instead of two. Centre prints, the sender card and the
 combat numbers keep their shadow.
+
+`cg_darkTextOutline` (default 0, archived; Settings > Chat > **White edge on dark
+text**, shared with the nameplates) edges the dark letters of the feed and the field
+(luminance under 0.3: black, dark blue, red) in a crisp white outline: alone, the rest
+keep their shadow (`CodePalette::WhiteEdged`); with `cg_chatBoxOutline`, the rest keep
+the dark outline (`TwoTone`), so black letters get white instead of the faint halo.
 
 A message too long for one row wraps onto up to four, each drawn as its own text,
 and every row after the first starts in the colour code in force where the row

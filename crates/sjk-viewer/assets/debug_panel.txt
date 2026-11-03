@@ -8309,3 +8309,13 @@ change: stamped in the past; other servers keep the 8 ms grid with catch-up.
 test: on JoF with gameplay_fps 0, play 30 min with com_maxfps 60: no Heimdall kick.
 test: movement and jumps feel as before at 125+ FPS; at 60 FPS like JoF EJK.
 test: on a non-JoF server at 60 FPS, gameplay_fps 333 still moves like 333.
+
+[white-text-outline]
+area: HUD
+title: White edge on dark text: dark letters of names and chat in a white outline
+change: cg_darkTextOutline (Settings > Chat, off by default) swaps the soft halo round
+change: black, dark blue and red letters for a crisp white ring, nameplates and chat.
+test: turn it on; black ^0 names on nameplates show a white outline, not a glow.
+test: Name outline Faint, Strong and Off: Off keeps the shadow only.
+test: chat with and without Chat text outline: dark letters white, the rest as before.
+note: if the line is too thick or strong, say so (ring copies are 85% opaque).

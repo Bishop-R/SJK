@@ -541,7 +541,19 @@ pub(crate) enum CodePalette {
     /// faint light halo of [`Self::Haloed`] (`cg_chatBoxOutline`; Creo's idea,
     /// 29/10/2026: chat hard to read over a bright map).
     DarkOutlined,
+    /// As [`Self::Haloed`], a dark glyph edged in a crisp white outline instead of the
+    /// soft halo ([`DARK_OUTLINE_CVAR`]; Sol's request, 03/11/2026: the halo reads as a
+    /// glow), the rest in its shadow.
+    WhiteEdged,
+    /// Every glyph outlined instead of its shadow: a dark one in white, the rest in the
+    /// dark outline ([`Self::Outlined`] or [`Self::DarkOutlined`] with
+    /// [`DARK_OUTLINE_CVAR`] on).
+    TwoTone,
 }
+
+/// `cg_darkTextOutline`: dark letters of names and chat edged in a white outline
+/// instead of the soft light halo; off by default.
+pub(crate) const DARK_OUTLINE_CVAR: &str = "cg_darkTextOutline";
 
 /// Darkest glyph colour drawn without a halo in [`CodePalette::Haloed`], by its
 /// luminance.
@@ -564,6 +576,11 @@ const HALO_ALPHA_STRONG: f32 = 0.38;
 /// A light glyph's dark outline in [`CodePalette::Outlined`].
 const OUTLINE_TINT: [f32; 3] = [0.04, 0.04, 0.06];
 const OUTLINE_ALPHA: f32 = 0.45;
+/// A dark glyph's white outline in [`CodePalette::WhiteEdged`] and
+/// [`CodePalette::TwoTone`]: opaque enough per copy that the ring reads as a line,
+/// not a glow.
+const WHITE_TINT: [f32; 3] = [1.0, 1.0, 1.0];
+const WHITE_ALPHA: f32 = 0.85;
 /// Darkest glyph colour [`CodePalette::DarkOutlined`] edges in a dark outline, by its
 /// luminance: below it (black, `^0`) the glyph keeps the faint light halo.
 const OUTLINE_BLACK_BELOW: f32 = 0.05;
@@ -577,7 +594,9 @@ impl CodePalette {
     /// Whether a glyph of `color` gets a light halo instead of its dark shadow.
     pub(crate) fn halo(self, color: [f32; 4]) -> bool {
         match self {
-            Self::Haloed | Self::Outlined => luminance(color) < HALO_BELOW,
+            Self::Haloed | Self::Outlined | Self::WhiteEdged | Self::TwoTone => {
+                luminance(color) < HALO_BELOW
+            }
             Self::DarkOutlined => luminance(color) < OUTLINE_BLACK_BELOW,
             Self::Game | Self::Legible => false,
         }
@@ -590,7 +609,10 @@ impl CodePalette {
         match (self, self.halo(color)) {
             (Self::Haloed | Self::DarkOutlined, true) => ring(HALO_TINT, HALO_ALPHA),
             (Self::Outlined, true) => ring(HALO_TINT, HALO_ALPHA_STRONG),
-            (Self::Outlined | Self::DarkOutlined, false) => ring(OUTLINE_TINT, OUTLINE_ALPHA),
+            (Self::WhiteEdged | Self::TwoTone, true) => ring(WHITE_TINT, WHITE_ALPHA),
+            (Self::Outlined | Self::DarkOutlined | Self::TwoTone, false) => {
+                ring(OUTLINE_TINT, OUTLINE_ALPHA)
+            }
             _ => Edge::Shadow,
         }
     }
@@ -604,6 +626,24 @@ impl CodePalette {
             1 => Self::Haloed,
             _ => Self::Outlined,
         }
+    }
+
+    /// This palette with [`DARK_OUTLINE_CVAR`] applied: `white` swaps the light halo
+    /// round dark glyphs for a white outline; a palette with no halo is unchanged.
+    pub(crate) fn white_outlined(self, white: bool) -> Self {
+        match (self, white) {
+            (Self::Haloed, true) => Self::WhiteEdged,
+            (Self::Outlined | Self::DarkOutlined, true) => Self::TwoTone,
+            _ => self,
+        }
+    }
+
+    /// Whether [`DARK_OUTLINE_CVAR`] is on.
+    pub(crate) fn white_outline_on(console: Option<&crate::console::ViewerConsole>) -> bool {
+        console
+            .and_then(|c| c.integer_cvar(DARK_OUTLINE_CVAR))
+            .unwrap_or(0)
+            != 0
     }
 
     /// The colour of code `index` (0-9), as a display value.
