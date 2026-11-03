@@ -701,6 +701,22 @@ pub(crate) fn open_page(url: &str) {
     if !url.starts_with("https://") {
         return;
     }
+    launch_browser(url);
+}
+
+/// Open a page the client itself serves on this PC (`http://127.0.0.1:<port>/...`, the
+/// browser map editor) in the default browser.
+pub(crate) fn open_local_page(url: &str) {
+    let local = url
+        .strip_prefix("http://127.0.0.1:")
+        .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()));
+    // `start` would read `&` as the end of the command.
+    if local && !url.contains(['&', '"', ' ', '^', '|', '<', '>']) {
+        launch_browser(url);
+    }
+}
+
+fn launch_browser(url: &str) {
     let _ = if cfg!(target_os = "windows") {
         // `start` reads its first quoted argument as a window title.
         crate::platform::hidden_command("cmd")

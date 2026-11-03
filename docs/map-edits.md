@@ -131,6 +131,71 @@ search it places or remaps), Ctrl+Z undoes, Ctrl+Y (or Ctrl+Shift+Z) redoes, Del
 edit deletes it. Each button runs the command the console would (`mapedit_hide`,
 `mapedit_place <model>`, ...), so both stay one editor.
 
+## The browser editor (creator only for now)
+
+`mapedit_web` edits the map in a web browser (03/11/2026, Sol's request). For now only
+SJK's creator may use it (the hub's creator flag, Sol's key alone): the command refuses
+everyone else, and the game checks the flag again on every request the page makes, so a
+running page stops editing when it goes. The command turns the editor on, starts a small
+HTTP server in the client on 127.0.0.1 at a free port and opens the default browser on
+`http://127.0.0.1:<port>/?t=<token>`. Code:
+[map_edits/web](../crates/sjk-viewer/src/map_edits/web/mod.rs).
+
+The page draws the map the player is on in 3D with WebGL, with its shader scripts, its
+`misc_model_static` props and its flares, and SJK's edits as the game draws them: hidden
+props and surfaces left out, remap edits applied, placed models and shown faces drawn. It
+starts at the player's view (My view in game goes back there). Drag looks, W A S D flies,
+Q and E go down and up, Shift is faster, the wheel sets the speed. Its panel has the
+in-game panel's pages: Selected (a click on the map selects what the game's own pick
+finds along that ray; Hide, Hide whole model, Place a copy, a shader list with pictures
+and Remap, Remove remap), Place (the models list; a click on the map places the chosen
+one, then Turn, Up, Down, Left, Right, Away, Closer, Smaller, Bigger, Remove, Shift for
+fine steps) and Edits (the list, Delete, Undo, Redo; a double click flies to a placed
+model), and under them the scope (All servers, This server), the last answer and Publish.
+H hides the selection, Ctrl+Z and Ctrl+Y undo and redo.
+
+Every edit is a request the game thread runs as the in-game editor's command
+(`mapedit_hide`, `mapedit_place <model>`, `mapedit_turn`, `mapedit_move x y z`, ...), so
+it is drawn in the game at once, saved, undone and published exactly like the in-game
+editor's, and the in-game panel shows its answer. The page reads the game's state about
+once a second (`api/edits`: the map, the edits, what they draw, the selection, the view),
+so a map change loads the new map in the page; the server stops with `mapedit off` and
+when the game quits.
+
+The drawing is VisionJK's web admin page (by Blackwolf, GPL-2.0, used with his approval;
+VisionJK's panel comes from JKAdmin's by Lixsl), cut down to the map: its files under
+[web/page/vjk](../crates/sjk-viewer/src/map_edits/web/page/vjk) are copies, each headed
+with where it comes from and what SJK changed (the batches keep each surface's triangles so
+an edit can hide one; the props keep their entity numbers), `models.js` is its MD3 loading
+and drawing taken from three of its files, and `editor-remaps.js` is only the part that
+draws remaps and the shaders' pictures. Players, the HUD, effects, weapons, server
+entities, clips, routes and bots are left out: map edits change only what is drawn.
+`web/page/sjk` is SJK's own (the stubs for the parts left out, the edits, the panel, the
+camera and the frame). The page is put together at compile time from `index.html`'s
+`<!--#include -->` lines ([page.rs](../crates/sjk-viewer/src/map_edits/web/page.rs)), no
+build tools.
+
+The server ([http.rs](../crates/sjk-viewer/src/map_edits/web/http.rs)) answers only on
+127.0.0.1, only to requests that name it as `127.0.0.1:<port>` or `localhost:<port>` in
+`Host` (a site that points a name of its own at 127.0.0.1 is refused), and only with the
+random token: in the page's address, then as the `X-SJK-Token` header of every `api/`
+request. A POST must come from the page (`Origin`) as JSON. Files are read only from the
+game data, by a path the game data accepts (no `..`, no absolute path):
+
+| Request | Answers |
+| --- | --- |
+| `GET api/map?name=<map>` | `maps/<map>.bsp` |
+| `GET api/file?name=<path>` | a file of the game data (images, shader scripts, models) |
+| `GET api/shaders` | `{"files": [...]}`: the shader scripts in the order the game reads them |
+| `GET api/list?kind=dir&dir=&ext=` | the folders and files of a folder, as VisionJK's |
+| `GET api/edits` | the game's state (above) |
+| `GET api/lists` | the models to place and the shaders a remap may draw |
+| `POST api/edit` | `{"op": "select"\|"hide"\|"place"\|"turn"\|"move"\|"scale"\|"remap"\|"scope"\|"current"\|"delete"\|"undo"\|"redo"\|"publish", ...}` |
+
+Not yet: the map's own and the server's remaps are not drawn in the page (only remap
+edits), nor the selection's outline (a marker stands at the point chosen); a mover is drawn
+where the map file has it; Grab has no page version.
+
 ## Limits
 
 - Only MD3s already in the player's game data can be placed; a custom model needs a pack
@@ -151,3 +216,10 @@ edit deletes it. Each button runs the command the console would (`mapedit_hide`,
   `duel6_map_editor_panel` for the panel; `caulk_face_shown` (02/11/2026) selects a
   duel6 caulk wall under the crosshair and draws it with a wall shader. Not tried in a
   game.
+- The browser editor (03/11/2026): unit tests of its HTTP parsing, the Host, token and
+  origin checks, the paths and the edit requests, an end-to-end test of the server on a
+  socket with a fake game thread (the page, `api/map`, an edit, refusals), and the page in
+  headless Chrome (SwiftShader) on retail duel6 served by the ignored test
+  `serve_the_page_for_a_browser` (no script errors; the map, its props and the panel drawn;
+  a hidden prop, a placed copy, hidden surfaces and a remap from a fake state drawn; a
+  click's request reaching the server). Not tried with the game running.

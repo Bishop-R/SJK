@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SJK map editor</title>
+<style>
+<!--#include sjk/style.css -->
+</style>
+</head>
+<body>
+<main id="view">
+	<canvas id="gl"></canvas>
+	<div id="loading">Waiting for SJK...</div>
+	<div id="keysHint">Drag: look &middot; W A S D: fly &middot; Q E: down, up &middot; Shift: faster &middot; wheel: speed &middot; click: select (on Place: put the model there) &middot; H: hide &middot; Ctrl+Z, Ctrl+Y</div>
+	<div id="toasts"></div>
+</main>
+<aside id="panel">
+	<header>
+		<div class="title"><span class="mark">SJK</span> Map editor</div>
+		<div class="sub"><span id="mapName"></span> <span id="busy" hidden>&middot; working...</span></div>
+		<div id="problem" class="problem" hidden></div>
+	</header>
+	<nav id="tabs"><button data-tab="selected">Selected</button><button data-tab="place">Place</button><button data-tab="edits">Edits</button></nav>
+	<section id="tab-selected">
+		<div class="kind" id="selKind"></div>
+		<div class="summary" id="selSummary"></div>
+		<div class="buttons"><button id="btnHide">Hide</button><button id="btnHideGroup" title="The surfaces of a model the map compiler merged into the world">Hide whole model</button><button id="btnCopy">Place a copy</button></div>
+		<h3>Draw another shader</h3>
+		<input id="shaderFind" placeholder="Search, or type a shader name" spellcheck="false" autocomplete="off">
+		<div class="count" id="shaderCount"></div>
+		<div id="shaderList" class="tiles"></div>
+		<div class="buttons"><button id="btnRemap">Remap</button><button id="btnUnremap">Remove remap</button></div>
+	</section>
+	<section id="tab-place" hidden>
+		<input id="modelFind" placeholder="Search the models" spellcheck="false" autocomplete="off">
+		<div class="count" id="modelCount"></div>
+		<div id="modelList" class="list"></div>
+		<p class="hint">Choose a model, then click the map where it goes.</p>
+		<h3>Placed model</h3>
+		<div class="summary" id="currentName"></div>
+		<div id="moves" class="grid">
+			<button data-move="turnl">Turn left</button><button data-move="up">Up</button><button data-move="turnr">Turn right</button>
+			<button data-move="left">Left</button><button data-move="away">Away</button><button data-move="right">Right</button>
+			<button data-move="smaller">Smaller</button><button data-move="closer">Closer</button><button data-move="bigger">Bigger</button>
+			<button data-move="down">Down</button><button data-move="remove" class="ember">Remove</button>
+		</div>
+		<p class="hint">Steps of 15 degrees, 8 units and 1.1 times; Shift held: 1 degree, 1 unit, 1.01.</p>
+	</section>
+	<section id="tab-edits" hidden>
+		<div id="editList" class="list"></div>
+		<p class="hint">Dimmed: for another server. Click a placed model to move it on Place; double-click to fly to it.</p>
+		<div class="buttons"><button id="btnDelete">Delete</button><button id="btnUndo">Undo</button><button id="btnRedo">Redo</button></div>
+	</section>
+	<footer>
+		<div id="scope" class="buttons"><span>New edits for</span><button data-scope="all">All servers</button><button data-scope="server" id="scopeServer">This server</button></div>
+		<div id="answer"></div>
+		<div class="buttons"><button id="btnPublish">Publish</button><button id="btnMyView" title="Fly to where you look in the game">My view in game</button></div>
+		<div class="count" id="pubState"></div>
+	</footer>
+</aside>
+<script>
+<!--#include sjk/head.js -->
+<!--#include vjk/util.js -->
+<!--#include sjk/stubs.js -->
+<!--#include vjk/bsp.js -->
+<!--#include vjk/gl.js -->
+<!--#include vjk/map.js -->
+<!--#include vjk/scripts-programs.js -->
+<!--#include vjk/scripts-parse.js -->
+<!--#include vjk/scripts-world.js -->
+<!--#include vjk/scripts-models.js -->
+<!--#include vjk/models.js -->
+<!--#include vjk/world-ents.js -->
+<!--#include vjk/flares.js -->
+<!--#include vjk/pick.js -->
+<!--#include vjk/camera.js -->
+<!--#include vjk/editor-remaps.js -->
+<!--#include sjk/edits.js -->
+<!--#include sjk/panel.js -->
+<!--#include sjk/view.js -->
+<!--#include sjk/tail.js -->
+</script>
+</body>
+</html>

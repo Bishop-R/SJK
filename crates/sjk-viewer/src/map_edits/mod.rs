@@ -18,12 +18,15 @@
 //! - remaps join the world's remaps as source `edit`, over the map's and the server's;
 //! - shown faces (caulk and nodraw brush sides) are built as small models once and drawn
 //!   each frame ([`faces`]).
+//!
+//! Staff edit in game ([`editor`], [`panel`]) or in a web browser ([`web`]).
 
 pub(crate) mod document;
 pub(crate) mod editor;
 pub(crate) mod faces;
 pub(crate) mod panel;
 mod panel_view;
+pub(crate) mod web;
 
 use crate::{ActorInstance, GpuState};
 use document::{Document, Kind};
@@ -77,6 +80,8 @@ pub(crate) struct State {
     pub(crate) panel: panel::Panel,
     /// The strip over play while the editor is on and its panel hidden.
     pub(crate) strip: panel_view::Strip,
+    /// The browser editor's server while it runs (`mapedit_web`, [`web`]).
+    pub(crate) web: Option<web::http::Server>,
 }
 
 /// Finding the loaded map's document.
@@ -301,6 +306,7 @@ impl GpuState {
 
     /// Once a frame: find the map's document, then apply what changed.
     pub(crate) fn refresh_map_edits(&mut self) {
+        self.map_edit_web_frame();
         if self.is_menu_world || crate::menu_pictures::pictured(&self.world_load_map).is_some() {
             return;
         }

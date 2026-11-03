@@ -159,25 +159,21 @@ pub(crate) fn append(
     if polygon.len() < 3 {
         return Err("a face has three corners at least".into());
     }
-    let size = size.map_or(DEFAULT_TEXTURE_SIZE, |[w, h]| {
-        [w.max(1) as f32, h.max(1) as f32]
-    });
-    let (s, t) = texture_axes(normal);
     let vertex_base: u32 = scene.vertices.len().try_into()?;
     let index_start: u32 = scene.indices.len().try_into()?;
-    scene.vertices.extend(polygon.iter().map(|point| {
-        let world = Vec3::from_array(*point);
-        crate::GpuVertex {
-            position: (world - Vec3::from_array(origin)).to_array(),
-            normal,
-            color: [1.0; 4],
-            texture_coordinates: [
-                world.dot(s) / TEXTURE_SCALE / size[0],
-                world.dot(t) / TEXTURE_SCALE / size[1],
-            ],
-            lightmap_coordinates: [0.0; 2],
-        }
-    }));
+    let coordinates = texture_coordinates(polygon, normal, size);
+    scene.vertices.extend(
+        polygon
+            .iter()
+            .zip(coordinates)
+            .map(|(point, texture_coordinates)| crate::GpuVertex {
+                position: (Vec3::from_array(*point) - Vec3::from_array(origin)).to_array(),
+                normal,
+                color: [1.0; 4],
+                texture_coordinates,
+                lightmap_coordinates: [0.0; 2],
+            }),
+    );
     // Wound as the map's drawn faces are (clockwise seen from the front), so a shader
     // culling back faces shows it on the side its normal points to.
     let corner = |i: usize| Vec3::from_array(polygon[i]);
@@ -204,6 +200,30 @@ pub(crate) fn append(
         indices: index_start..scene.indices.len().try_into()?,
         material,
     }])
+}
+
+/// The texture coordinates of `polygon`'s corners as Radiant textures a new brush (the
+/// axial projection at scale 0.5 of an image of `size`, 256 square when unknown): what
+/// [`append`] draws, and the browser editor's page too.
+pub(crate) fn texture_coordinates(
+    polygon: &[[f32; 3]],
+    normal: [f32; 3],
+    size: Option<[u32; 2]>,
+) -> Vec<[f32; 2]> {
+    let size = size.map_or(DEFAULT_TEXTURE_SIZE, |[w, h]| {
+        [w.max(1) as f32, h.max(1) as f32]
+    });
+    let (s, t) = texture_axes(normal);
+    polygon
+        .iter()
+        .map(|point| {
+            let world = Vec3::from_array(*point);
+            [
+                world.dot(s) / TEXTURE_SCALE / size[0],
+                world.dot(t) / TEXTURE_SCALE / size[1],
+            ]
+        })
+        .collect()
 }
 
 /// Radiant's texture axes for a face with `normal` (`TextureAxisFromPlane`): the world

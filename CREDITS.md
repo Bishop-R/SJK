@@ -957,6 +957,12 @@ as VisionJK's does; SJK's code is its own.
 Blackwolf's VisionJK client and its 3D sound (`v_spatial`, Steam Audio) gave SJK the
 idea of its own 3D sound (`s_spatial`), built in SJK's mixer with his agreement.
 
+Blackwolf's VisionJK web admin page (GPL-2.0, used with his approval, 03/11/2026) draws
+the map in SJK's browser map editor (`mapedit_web`): its WebGL drawing of a map with its
+shader scripts, props and flares is copied into
+`crates/sjk-viewer/src/map_edits/web/page/vjk`, each file headed with what SJK changed.
+VisionJK credits that panel's origin to JKAdmin's web admin panel by Lixsl.
+
 ## Art
 
 Reyced made Solfox, a fox player model (`models/players/solfox`), for Sol in October
