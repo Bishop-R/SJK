@@ -423,6 +423,12 @@ mod tests {
                 ][..]
             )
         );
+        console.queue_command("japlus.guntelewall 300").unwrap();
+        console.execute_buffered_frame(None, |_, _| false);
+        assert_eq!(
+            console.client_commands.pending.back().map(Vec::as_slice),
+            Some(&["japlus.guntelewall".to_owned(), "300".to_owned()][..])
+        );
         let tokens = ["amtele".to_owned(), "3".to_owned()];
         assert_eq!(
             super::forward_payload("amtele 3", &tokens, true),

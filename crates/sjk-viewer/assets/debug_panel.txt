@@ -24,6 +24,18 @@
 
 # ---- Console & chat ----
 
+[box-hunt-1103]
+area: Gameplay
+title: Box hunt: only your own teleports cheat; caps from 09:00; japlus.guntelewall
+change: Map teleporters and admin amtele/bring no longer blow up the mark or put hunters out.
+change: Own amtele (goto, guntele...), setviewpos, own noclip and fakenoclip still count.
+change: Hub: 5 wins a day from 09:00 Paris (was 24 h); a box's gift goes to a hunter in play.
+test: As the mark, walk through a map teleporter: you stay the mark, nothing blows up.
+test: As the mark, have a JA+ admin amtele/bring you: you stay the mark.
+test: As the mark, japlus.guntele 300 or japlus.goto someone: you blow up (cheat).
+test: As a hunter, fakenoclip or noclip during a chase: you are out for cheating.
+test: japlus.guntelewall 300 facing a wall: you land behind it; from a quick wheel choice too.
+note: Hub branch box-hunt-1103 must be deployed for the 09:00 day and the gift change.
 [tag-spray-surfaces]
 area: Gameplay
 title: Tags: spray can sound, no glitches on glass, grates, flags or curved walls

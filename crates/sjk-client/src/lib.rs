@@ -39,6 +39,7 @@ pub mod download;
 mod download_session;
 mod duel_isolation;
 pub mod player_model_eligibility;
+pub mod sent_commands;
 pub use duel_isolation::duel_passes_through;
 mod duel_hide;
 pub use duel_hide::{
@@ -437,6 +438,7 @@ pub struct ClientSession {
     cosmetic_unlocks: CosmeticUnlockTable,
     userinfo_updates: userinfo_update::UserinfoUpdateTracker,
     command_pacer: reliable_pacing::ReliableCommandPacer,
+    sent_commands: sent_commands::SentCommands,
     demo_recorder: DemoRecorder,
 }
 
@@ -815,6 +817,7 @@ impl ClientSession {
     ) -> Result<(), ClientError> {
         let command = legacy_text::legacy_command(command);
         if let Some(local) = &mut self.local {
+            self.sent_commands.note(&command, Instant::now());
             local.reliable(&command);
             return Ok(());
         }
@@ -828,10 +831,17 @@ impl ClientSession {
     /// Release the next paced reliable command if its window has opened.
     pub fn pump_reliable_commands(&mut self, now: Instant) -> Result<(), ClientError> {
         if let Some(command) = self.command_pacer.pop_due(now) {
+            self.sent_commands.note(&command, now);
             self.queue_reliable_command(command)?;
             self.send_pending_reliable_commands()?;
         }
         Ok(())
+    }
+
+    /// The last reliable commands released to the server, with when each left
+    /// ([`sent_commands::SentCommands`]).
+    pub fn sent_commands(&self) -> &sent_commands::SentCommands {
+        &self.sent_commands
     }
 
     /// Reliable commands accepted but not yet released to the server.

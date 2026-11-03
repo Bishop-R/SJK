@@ -134,7 +134,9 @@ threw them down as a [ragdoll](client.md#ragdoll) and they got up). Not in a due
 the flag, or wherever the Ragdoll could not strike them (`Ragdoll::strikable`). The
 laugh plays at the box for every SJK player who sees the roll (before 30/10/2026, to
 every hunter wherever they were, at the opening). The hub hands what they paid (nothing
-for a free roll) to another player on the server with the Box hunt toy on, at random;
+for a free roll) to another player on the server with the Box hunt toy on, at random, one
+in play when there is one (since 03/11/2026, hub reports #189 and #204: before, a hunter
+who had just left or sat in a menu could get it unseen, and the credits looked lost);
 with nobody else hunting there, it is lost. The opener reads where it went as it blows
 up; the one who got the credits reads it in the centre of the screen and the other
 hunters in the chat once the roll stops on the bear (the hub's box hunt event
@@ -211,7 +213,9 @@ in the world, so it is hidden with them (menus, console, scoreboard, intermissio
 next box they open costs nothing (the centre says "press Use for your free roll" at a
 box). The hunt then rests until 10 minutes after that mark was picked (a minute at
 least). A hunter who wins nothing (they hold 3 unspent or won 5 that day) reads why in
-the centre too (31/10/2026; before, in the chat only, so it looked like a kill that won
+the centre too. The day begins at 09:00 in Paris, as the holocrons' caps' (since
+03/11/2026, hub report #228: a rolling 24 hours counted the evening before against
+"today", so a player stopped after 3 or 4 kills one morning) (31/10/2026; before, in the chat only, so it looked like a kill that won
 nothing).
 
 **One life** (Sol, 01/11/2026): the hunters of a mark are its roster: those in play when
@@ -222,23 +226,33 @@ player, so the mark has to earn it), the mark no longer shows for them (no label
 arrow), the card says "YOU'RE OUT", and killing the mark after they respawn wins nothing.
 When every hunter still there is out, one at least killed by the mark, the mark wins 100
 credits per hunter counted (ledger reason `box_hunt`, note `survived`; History says "Box
-hunt: you outlasted every hunter"), at most 3 times in 24 hours (after that, nothing),
+hunt: you outlasted every hunter"), at most 3 times a day (from 09:00 in Paris; after that, nothing),
 and the hunt rests as after a kill. A hunter who left the server, took the toy off or was
 away a minute stands in nobody's way and is not counted. The card counts the hunters
 left ("2 OF 3 HUNTERS LEFT", from the hub's read). Hunters out only for cheating hand the
 mark nothing: one must have been killed.
 
-**Cheating** (Sol, 01/11/2026): a player in a hunt, mark or hunter, who is teleported or
-flies in noclip is out of it at once. The hub sees neither, so the player's own client
-watches its own player state ([hunt_watch.rs](../crates/sjk-viewer/src/mystery_box/hunt_watch.rs)):
-the game's `EF_TELEPORT_BIT` flipping while they stay alive (JA+'s `amtele` and
-`amtelemark`, an admin's teleport of them, any server command that moves them), or
-`PM_NOCLIP`. The map's own teleporters (`trigger_teleport`, `target_teleporter`) and
-spawns flip the bit too: a landing within 128 units of a point the map names for them
-(their targets, `misc_teleporter_dest`, the spawn points) is not a cheat, nor a spawn
-after dying, spectating or following someone. A hunter caught is out as one killed is
-(`cheat`; the others read "is out for cheating"). Out of a hunt (resting, no mark),
-teleports are free.
+**Cheating** (Sol, 01/11/2026): a player in a hunt, mark or hunter, who teleports
+themselves or flies in noclip is out of it at once. The hub sees neither, so the player's
+own client watches its own player state and its own commands
+([hunt_watch.rs](../crates/sjk-viewer/src/mystery_box/hunt_watch.rs)). Only the player's
+own doing counts (since 03/11/2026, hub reports #235 and #237: a mark an admin brought to
+them blew up, and map teleporters took hunters out): the game's `EF_TELEPORT_BIT` flipping
+while they stay alive is a cheat only within 5 seconds of a command of theirs that moves
+them (the `OWN_MOVES` table: JA+'s `amtele` in the forms that move the sender, which
+`japlus.guntele`, `japlus.guntelewall`, `japlus.goto` and `japlus.teleoffset` send, and
+`setviewpos`, which `japlus.recall` sends; 5 seconds for JA+'s Star Trek teleport, which
+beams the player about 2 seconds late). The client keeps the last 16 reliable commands it
+released to the server with when each left (`sjk_client::sent_commands`). `PM_NOCLIP`
+counts after the player's own `noclip` on that map, and SJK's own fake noclip
+(`fakenoclip`, the free camera) always. The map's teleporters, a spawn after dying,
+spectating or following someone, and an admin moving the player (`amtele <player> ...`, a
+bring) are not cheats; nor is the player's own `amtele <slot> ...` moving someone else. A
+hunter caught is out as one killed is (`cheat`; the others read "is out for cheating").
+Out of a hunt (resting, no mark), teleports are free. Before 03/11/2026 any flip of the bit
+counted unless the player landed within 128 units of a point the map names for its
+teleporters or a spawn point, which missed teleporters a server adds and every admin
+teleport.
 
 **The mark blows up** (Sol, 02/11/2026): a mark caught cheating, or typing in the chat
 for 30 seconds straight (warned "Leave the chat!" at 20; their client watches it and says
@@ -291,9 +305,10 @@ All the numbers are the hub's, PROVISIONAL.
 - The chat watch is the mark's own client, as the cheat watch is: a modified client could
   keep quiet.
 - Teleports and noclip are seen by the player's own client: a modified client could keep
-  quiet, and a map whose teleporter lands more than 128 units from the point it names
-  would count as a cheat. A teleport during a long lag spike can be missed (two flips of
-  the bit between snapshots).
+  quiet. A teleport during a long lag spike can be missed (two flips of the bit between
+  snapshots). A map teleporter taken within 5 seconds of the player's own teleport command
+  counts as a cheat, and a teleport command a mod names otherwise than `OWN_MOVES` does not
+  (one more entry each).
 - Away is what the player's own client says: a modified client could say it is in play.
   The client of 31/10/2026 sends `away`, which a hub before that day refuses (its read
   takes no other field): the hub goes first.
@@ -302,9 +317,9 @@ All the numbers are the hub's, PROVISIONAL.
 - Verified: unit tests (the pick of the faced box, which boxes stand on a map file and
   server, the roll slowing to its prize, the stop, the take and the take after 10
   seconds, the lid, the words over a box, the hunt's words and reads, the result lines,
-  the mark by the event before a read, the cheat watch (a teleport off the map's landing points, noclip, a spawn, a new map), the out and outlasted words and card, the blown words, the chat warning and limit, the hunters ringed for the mark, the mark's end by the hub's seconds left or its
+  the mark by the event before a read, the cheat watch (the player's own teleport, not the map's or an admin's, the `amtele` forms, noclip asked or forced, fake noclip, a spawn, a new map), the out and outlasted words and card, the blown words, the chat warning and limit, the hunters ringed for the mark, the mark's end by the hub's seconds left or its
   clock; on the hub, the mark picked among hunters in play only and 3 of them, the away
   mark handed on after a minute (or kept with too few others), the kill counted only
-  from the mark and for a hunter still in the chase, a hunter out by the mark's kill or a cheat, the mark's win once all are out (not for cheaters alone, nor past 3 a day, nor held up by one who left), the mark's cheat or chat blowing it up and a hunter in the chase winning a free roll (within the limits), the mark alone reading its hunters, the pause, the free roll spent; on the hub, the odds, placing and
+  from the mark and for a hunter still in the chase, a hunter out by the mark's kill or a cheat, the mark's win once all are out (not for cheaters alone, nor past 3 a day, nor held up by one who left), a hunter's 5 wins a day counted from 09:00 in Paris, a box's price going to a hunter in play first, the mark's cheat or chat blowing it up and a hunter in the chase winning a free roll (within the limits), the mark alone reading its hunters, the pause, the free roll spent; on the hub, the odds, placing and
   removing as the creator only, the price, the roll, the cooldown and another server's
   box). Not tried in a game; the hub side is deployed (27/10/2026).

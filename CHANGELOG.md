@@ -32,6 +32,9 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Box hunt: map teleporters and an admin teleporting or bringing you no longer count as cheating; only your own teleports (`amtele`, `japlus.goto`, `japlus.guntele` and the like), your own `noclip` and `fakenoclip` do _(Sol, after belyash's and Sanji's reports)_
+- Box hunt: the 5 free rolls a hunter can win a day and the mark's 3 bounties a day now count from 09:00 Paris time, as holocrons do, instead of the last 24 hours; a box that blows up hands its price to a hunter in play rather than one who just left _(Sol, after Nib's and Rollembones' reports)_
+- `japlus.guntelewall <distance>` (JA+ admin): teleports you that far the way you look, through walls, floors and ceilings, as `japlus.guntele` did before it learned to stop at walls; works from the quick wheel with its distance _(Sol, after Nib's report)_
 - Hide the Empower glow: Settings "Empower glow" (`cg_empowerEffect`) 3 turns off the body glow of empowered players; ordinary Push still shows _(Slash, PR #338, after Dante's idea)_
 - Maps lit by switchable or flickering lights, such as the JoF Shuttle trial mission ship, the JoF missions and Memorial Grounds, show that light instead of drawing it dark, and follow the server as a light is switched off or on (SJK and Vanilla graphics presets) _(Slash, PR #339, after Kushina's report)_
 - NPCs whose skin names only a head and a torso, such as the alien younglings of the JoF Shuttle trial mission, wear their skin instead of drawing grey (Kushina's report) _(Slash, PR #336)_

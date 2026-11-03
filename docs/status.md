@@ -1,3 +1,20 @@
+## Box hunt: own teleports only, caps from 09:00, `japlus.guntelewall`
+
+03/11/2026, `personal/box-hunt-1103` from `main` `d3881f31`, with hub branch
+`box-hunt-1103` (hub reports #189, #204, #228, #232, #235, #237). The cheat watch
+([mystery-boxes.md](mystery-boxes.md#box-hunt)) took any flip of `EF_TELEPORT_BIT` off the
+map's named landing points as a cheat, so admin brings blew marks up and teleporters a
+server adds took hunters out; it now needs a command of the player's own that moves them
+(the client's last released reliable commands, `sjk_client::sent_commands`) within 5
+seconds, noclip counts after the player's own `noclip`, and fake noclip always. Hub: the 5
+free rolls and the mark's 3 bounties a day count from 09:00 in Paris instead of a rolling
+24 hours, and a blown-up box's price goes to a hunter in play first. New
+`japlus.guntelewall <distance>` restores the old through-walls teleport beside
+`japlus.guntele` ([mods.md](mods.md)). Verified: unit tests (watch, `amtele` forms, day
+boundary, gift choice, the new command and its wheel queueing), fmt, clippy. Not
+verified: in a game, on JA+ with Star Trek teleports, or that no other mod's own teleport
+command is missing from `OWN_MOVES`.
+
 ## Tags: spray sound, odd surfaces
 
 03/11/2026, `personal/tag-spray`, based on `main` `3a209013` (Sol: tag decals sometimes
