@@ -130,8 +130,14 @@ pub(crate) const LAUNCHER_ICON: u32 = TAG_ICON_FIRST + TAG_ICON_CELLS;
 pub(crate) const MOVEMENT_KEY_ICON_FIRST: u32 = LAUNCHER_ICON + 1;
 /// Movement key cells: six keys, each released and pressed.
 pub(crate) const MOVEMENT_KEY_ICON_CELLS: u32 = 12;
+/// First of the quick wheel's own pictures' cells (`quick_wheel::pictures`, a player's
+/// PNG or JPEG for a wheel choice), after the movement keys'.
+pub(crate) const CUSTOM_WHEEL_ICON_FIRST: u32 = MOVEMENT_KEY_ICON_FIRST + MOVEMENT_KEY_ICON_CELLS;
+/// Own wheel picture cells: the eight left in the atlas's last row, which may grow no
+/// taller (the test `the_atlas_fits_the_texture_size_the_client_asks_for`).
+pub(crate) const CUSTOM_WHEEL_ICON_CELLS: u32 = 8;
 /// Every icon cell.
-pub(crate) const ATLAS_CELLS: u32 = MOVEMENT_KEY_ICON_FIRST + MOVEMENT_KEY_ICON_CELLS;
+pub(crate) const ATLAS_CELLS: u32 = CUSTOM_WHEEL_ICON_FIRST + CUSTOM_WHEEL_ICON_CELLS;
 const TOTAL_CELLS: u32 = ATLAS_CELLS;
 const ATLAS_HEIGHT: u32 = TOTAL_CELLS.div_ceil(COLUMNS) * ICON_SIZE;
 

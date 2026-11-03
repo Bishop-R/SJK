@@ -74,6 +74,7 @@ impl SettingsMenu {
     ) {
         let frame = Frame::new(viewport);
         let editor = &mut self.wheel;
+        editor.poll_picture();
         editor.ui.begin_transparent(viewport);
         editor.ui.push_opacity(reveal);
         backdrop(&mut editor.ui, viewport);
@@ -100,6 +101,7 @@ impl SettingsMenu {
     ) {
         let frame = Frame::new(viewport);
         let editor = &mut self.wheel;
+        editor.poll_picture();
         editor.ui.begin_transparent(viewport);
         editor.ui.push_opacity(reveal);
         let _ = editor.ui.draw_list_mut().push(DrawCommand::SolidRect {
@@ -1043,6 +1045,81 @@ impl WheelEditor {
                 .hit_region(token, frame.rect(DETAIL_X, y, DETAIL_WIDTH, 44.0));
             y += 64.0;
         }
+        // Its own picture (Nib's idea): a PNG or JPEG from the PC, in place of `{•}`.
+        text(
+            &mut self.ui,
+            TextFamily::Body,
+            format_args!("Picture"),
+            frame.rect(DETAIL_X, y, DETAIL_WIDTH, 26.0),
+            17.0 * s,
+            color::MUTED,
+            FontWeight::Regular,
+            TextAlign::Start,
+        );
+        y += 30.0;
+        let own = self
+            .form_picture
+            .as_deref()
+            .and_then(crate::quick_wheel::pictures::for_file);
+        let stock =
+            crate::quick_wheel::catalog::icon_index(crate::quick_wheel::catalog::CUSTOM_ICON)
+                .map(crate::ui_renderer::wheel_icon);
+        choice_icon(
+            &mut self.ui,
+            frame,
+            DETAIL_X + 26.0,
+            y + 26.0,
+            52.0,
+            own.or(stock),
+        );
+        let has_own = self.form_picture.is_some();
+        kit::button(
+            &mut self.ui,
+            frame,
+            [DETAIL_X + 70.0, y + 6.0, 190.0, 40.0],
+            if has_own {
+                "Change picture"
+            } else {
+                "Choose picture"
+            },
+            false,
+            true,
+            false,
+            FORM_PICTURE,
+        );
+        if has_own {
+            kit::button(
+                &mut self.ui,
+                frame,
+                [DETAIL_X + 270.0, y + 6.0, 112.0, 40.0],
+                "Remove",
+                false,
+                true,
+                false,
+                FORM_PICTURE_CLEAR,
+            );
+        }
+        y += 58.0;
+        let line = if self.picture_note.is_empty() {
+            "PNG or JPEG, 4 MB at most; a copy is kept in your SJK folder".to_owned()
+        } else {
+            self.picture_note.clone()
+        };
+        text(
+            &mut self.ui,
+            TextFamily::Body,
+            format_args!("{line}"),
+            frame.rect(DETAIL_X, y, DETAIL_WIDTH, 22.0),
+            15.0 * s,
+            if self.picture_note.is_empty() || self.picture_note.ends_with("...") {
+                color::QUIET
+            } else {
+                color::EMBER
+            },
+            FontWeight::Regular,
+            TextAlign::Start,
+        );
+        y += 40.0;
         let ready = !label.trim().is_empty() && !command.trim().is_empty();
         kit::button(
             &mut self.ui,
@@ -1078,6 +1155,7 @@ impl WheelEditor {
             }
             (Some(Typing::Custom { field, .. }), _, _) => {
                 keys.push((&["Tab"][..], "other field"));
+                keys.push((&["F3"][..], "picture"));
                 keys.push((
                     &["Enter"][..],
                     if *field == Field::Label {

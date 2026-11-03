@@ -24,6 +24,16 @@
 
 # ---- Console & chat ----
 
+[wheel-own-pictures]
+area: Menus & settings
+title: Quick wheel: a PNG/JPEG of your own as a custom choice's picture
+change: Settings > Quick wheel > a custom choice's form: Choose picture (F3), Remove.
+change: Kept in GameData/SJK/wheel_icons/ and wheel_icons.json; eight pictures at most.
+test: Add a custom choice, Choose picture, pick a PNG: the form and the ring show it.
+test: Save, open the wheel in a match: the choice shows the picture.
+test: Pick a .txt renamed .png or a 5 MB file: refused with a red line.
+test: Remove, Save: the choice shows {.} again. Restart: pictures are kept.
+
 [loadouts]
 area: Menus & settings
 title: Loadouts: save your look, wear it in one click (Collection)

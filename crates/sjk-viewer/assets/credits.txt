@@ -527,6 +527,7 @@ did: The Fishing toy: a rod, fish anywhere and Echoes on the line
 [Nib]
 role: Ideas for SJK
 did: Saber sounds of your choice, apart from your saber shader
+did: Pictures of your own for the quick wheel's custom choices
 
 [g0dchris]
 role: Ideas for SJK

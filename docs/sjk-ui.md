@@ -1063,7 +1063,12 @@ detail's columns:
   ("Change Rain", "Add to Weather") with Cancel, then the catalogue, 17 lines of
   40 under the groups' sub-headings, the highlighted line on the band, "On the
   page" in gold after actions the page has. A custom choice: its title, what a
-  command can be, the Name and Command fields, Cancel and Save (gold).
+  command can be, the Name and Command fields, then Picture (03/11/2026, Nib's idea):
+  the choice's picture at 52 (its own, or `{•}`), Choose picture (Change picture once
+  it has one; F3 too) and Remove, and a quiet line under them ("PNG or JPEG, 4 MB at
+  most; a copy is kept in your SJK folder", or in ember why a picture was refused),
+  then Cancel and Save (gold), which keeps the picture with the command
+  ([client.md](client.md#quick-wheels)).
 - **Keys:** bottom right, what has the keyboard's, and Tab for the next group.
 
 Outside the SJK UI the editor draws the same columns on its own over the

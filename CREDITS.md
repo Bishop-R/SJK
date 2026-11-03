@@ -998,7 +998,9 @@ Sanjisan, a player, asked to whisper a player by clicking their name in the chat
 built it as the pinned chat card's Whisper button (23/10/2026).
 
 Nib, a player, asked to choose the saber sounds apart from the saber shader (18/10/2026,
-and hub report #109): Sol built it as the Saber tab's Sounds row (23/10/2026).
+and hub report #109): Sol built it as the Saber tab's Sounds row (23/10/2026). Nib also
+asked for pictures of the player's own on the quick wheel: Sol built Choose picture in
+the custom choice's form (03/11/2026).
 
 Dante, a player, asked for the quick wheel's custom commands to be remembered in the
 command list once made, and for duels won in each saber style to count as achievements:

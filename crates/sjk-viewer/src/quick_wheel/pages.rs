@@ -110,10 +110,12 @@ impl Slot {
         }
     }
 
-    /// Its picture in the UI atlas: the emote's own for `sjkemote <id>` when it has
-    /// one (`emote_icons`), else [`Self::icon`]'s.
+    /// Its picture in the UI atlas: the player's own for its command when it has one
+    /// ([`super::pictures`]), else the emote's own for `sjkemote <id>` when it has one
+    /// (`emote_icons`), else [`Self::icon`]'s.
     pub(crate) fn texture(&self) -> Option<sjk_ui::TextureId> {
-        crate::emote_icons::for_command(self.command())
+        super::pictures::for_command(self.command())
+            .or_else(|| crate::emote_icons::for_command(self.command()))
             .or_else(|| self.icon().map(crate::ui_renderer::wheel_icon))
     }
 
@@ -191,6 +193,8 @@ pub(crate) struct WheelPages {
     /// Where the remembered custom commands are kept, and they, newest first.
     commands_path: Option<PathBuf>,
     saved: Vec<SavedCommand>,
+    /// The choices' own pictures, by command ([`super::pictures`]).
+    pub(crate) pictures: super::pictures::Pictures,
 }
 
 impl WheelPages {
@@ -237,6 +241,7 @@ impl WheelPages {
             pages,
             commands_path: Some(commands_path),
             saved,
+            pictures: super::pictures::Pictures::load(directory),
         };
         if seed {
             pages.remember_from_pages();
@@ -290,6 +295,7 @@ impl WheelPages {
             pages: defaults(),
             commands_path: None,
             saved: Vec::new(),
+            pictures: super::pictures::Pictures::default(),
         }
     }
 
@@ -620,6 +626,7 @@ fn parse(bytes: &[u8]) -> Option<(Vec<Page>, u64)> {
         pages: Vec::new(),
         commands_path: None,
         saved: Vec::new(),
+        pictures: super::pictures::Pictures::default(),
     };
     for item in items.iter().take(MAX_PAGES) {
         let Some(name) = item

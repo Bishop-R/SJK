@@ -6250,6 +6250,21 @@ A custom choice is a name (up to 24 characters) and any console command (up to
 `amtele 3`) as typing it would; the tests pin that it keeps them through the form,
 `wheel.json` and `wheel_commands.json`.
 
+A custom choice may show a picture of the player's own in place of `{•}` (Nib's idea,
+03/11/2026; [pictures.rs](../crates/sjk-viewer/src/quick_wheel/pictures.rs)): its form's
+Choose picture (or F3) opens the system's file dialog for a PNG or JPEG of at most 4 MB
+and 4096 pixels a side; the picture is fitted into a wheel icon (a 128-pixel square, its
+shape kept, on transparency) and kept as a small PNG in `wheel_icons/` in the profile
+folder, named by its content, so the original can move or be deleted. Remove gives the
+stock picture back. Which command shows which picture is kept in `wheel_icons.json`
+beside `wheel.json` (`{"version": 1, "icons": {"say gg": "<16 hex digits>.png"}}`, only
+names of that form taken); a choice is matched by its command, so the same command on
+two pages shows the same picture, and it takes precedence over an emote's own picture.
+Eight different pictures at most are in use at once, the room left in the UI atlas; the
+form refuses a ninth, saying so. A picture that no longer decodes is reported to the log
+and its choice shows `{•}`. Unit tests cover the checks, the fitting, the file and the
+limit; the dialog itself was not opened in a test.
+
 ### Settings
 
 In the SJK UI, Settings has a Quick wheel category (after HUD; see

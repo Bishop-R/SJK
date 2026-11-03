@@ -32,6 +32,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Quick wheel pictures of your own: a custom choice's form (Settings > Quick wheel) has Choose picture, which takes a PNG or JPEG from your PC (4 MB at most) and shows it on the wheel in place of the `{.}` icon; up to eight different pictures _(Sol, after Nib's idea)_
 - Loadouts: save the look you wear (hilts, each blade's shader and its parts, colours with your hat and cape, nameplate style and tag) in one of five slots and wear it again in one click, from the Loadouts button (P) on the Collection's Shaders, Tags and Nameplates tabs; kept on your PC _(Sol, after Lex's idea)_
 - Choose what the HUD switch hides: under HUD in Settings > HUD, four switches say whether `cg_drawHud 0` hides the HUD's elements, the crosshair, names over players and the chat; by default it hides what it always did and the chat stays _(Sol, after Blep's idea)_
 - The Hax trap's switches (`cl_haxTrap`, `cl_haxAway`) moved from Settings > Gameplay to the Hax's card in Collection > Toys; a Settings search for them still finds them _(Sol, after Lex's idea)_
