@@ -30,7 +30,16 @@ The site (site/assets/site.js, parseChangelog) reads the release headings,
 introductions and recap lines too.
 Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
-## Unreleased
+## 2026.1103.1 (Alpha) | 03/11/2026
+
+3D sound and a sound sonar, a HUD you move with the mouse, quieter and fuller chat, profile banners, one life per box hunter and a cat that dances to its song.
+
+> Sound: Muffled sound behind walls and a sonar for hard-of-hearing players, both off by default.
+> Your HUD: Drag its pieces where you want them with `hud_edit`.
+> Chat: Quiet mode, your PC's fonts, emoji reactions and long messages sent whole.
+> Profile banners: Collect covers for your Profile and player card.
+> Box hunt: One life per hunter, and a cheating mark blows up.
+> Toy Master: The cat spins while its song sings, and late arrivals join the show.
 
 = s_spatial: 3D sound: sounds behind walls and shut doors are muffled and rooms ring, heard from your head even in third person.
 = cg_soundSonar: Sound sonar, for deaf and hard-of-hearing players: arcs round the crosshair point toward the sounds you hear.
