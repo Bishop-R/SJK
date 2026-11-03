@@ -249,6 +249,7 @@ mod tests {
             text: "hi".to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         }
     }
 

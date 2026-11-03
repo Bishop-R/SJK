@@ -23,6 +23,13 @@
 //! the feed (made while the player was away) join the chat through
 //! [`post_announcements`].
 //!
+//! The clan chats ([`crate::channels`], `PROTOCOL.md` "Clan chats") come through the
+//! same poll for the ones the worker says the player joined ([`FeedShared::channels`]);
+//! their messages are kept apart ([`ChatState::clan`]), so the docked chat and the chat
+//! page, which show the SJK chat, never show them. Joining or leaving one starts the
+//! reading again from `after` 0 under a new epoch ([`ChatState::loaded`]), which
+//! brings its backlog.
+//!
 //! Another game server starts the reading again from `after` 0, whose answer carries
 //! that server's looks of the last minute. The looks queued for the viewer carry the
 //! server they were read for and the reading's generation ([`FeedShared::generation`],
@@ -87,6 +94,12 @@ pub(crate) type NewsSink = Box<dyn Fn(FeedNews) + Send>;
 pub struct ChatState {
     /// The last messages, oldest first.
     pub messages: VecDeque<ChatMessage>,
+    /// The last messages of the clan chats read ([`crate::channels`]), oldest first,
+    /// [`MESSAGES_KEPT`] at most, each with its [`ChatMessage::channel`].
+    pub clan: VecDeque<ChatMessage>,
+    /// The clan chats the hub lets the player read, as it last listed them; empty for a
+    /// player who may read none (and from hubs before clan chats).
+    pub channels: Vec<crate::ListedChannel>,
     /// Counts changes to `messages`, `online`, `people` and `live`, so a reader that derives from
     /// them knows when to derive again.
     pub revision: u64,
@@ -120,6 +133,8 @@ pub(crate) struct FeedShared {
     pub(crate) server: Option<String>,
     /// Whether the SJK chat shows: without it no message is kept.
     pub(crate) chat: bool,
+    /// The clan chats the player joined ([`crate::channels`]), asked for with the chat.
+    pub(crate) channels: Vec<crate::HubChannel>,
     /// The player's own id at the hub ([`crate::Snapshot::key_id`]), to tell their
     /// drops from others'; empty for this PC's key.
     pub(crate) person: String,
@@ -264,6 +279,8 @@ pub(crate) struct FeedWorker {
     server: Option<String>,
     /// Whether the chat shows, as last told.
     chat: bool,
+    /// The clan chats asked for, as last told.
+    channels: Vec<crate::HubChannel>,
     after: u64,
     due: Instant,
     backoff: Duration,
@@ -305,6 +322,7 @@ impl FeedWorker {
             url: None,
             server: None,
             chat: false,
+            channels: Vec::new(),
             after: 0,
             due: now,
             backoff: RETRY_MIN,
@@ -348,9 +366,17 @@ impl FeedWorker {
         }
         if shared.url != self.url {
             self.chat = shared.chat;
+            self.channels.clone_from(&shared.channels);
             self.switch(shared.url.clone(), now);
         } else if shared.chat != self.chat {
+            self.channels.clone_from(&shared.channels);
             self.show_chat(shared.chat, now);
+        } else if shared.channels != self.channels {
+            // A clan chat joined or left: read again from the backlog, under a new epoch,
+            // as when the chat is turned on, so the joined chat's history is marked as
+            // backlog rather than shown as news.
+            self.channels.clone_from(&shared.channels);
+            self.show_chat(self.chat, now);
         }
         // Another server: its looks of the last minute come with `after` 0, and the
         // old server's ids say nothing of it.
@@ -367,7 +393,15 @@ impl FeedWorker {
         let Some(hub) = self.hub.as_mut() else {
             return IDLE;
         };
-        match hub.feed(&self.identity, self.after, shared.server.as_deref(), WAIT) {
+        // Clan chats only with the chat on: off, the feed keeps no message.
+        let channels: &[crate::HubChannel] = if self.chat { &self.channels } else { &[] };
+        match hub.feed(
+            &self.identity,
+            self.after,
+            shared.server.as_deref(),
+            channels,
+            WAIT,
+        ) {
             Ok(feed) => {
                 self.apply(feed, &shared);
                 self.backoff = RETRY_MIN;
@@ -420,6 +454,8 @@ impl FeedWorker {
         let mut state = lock(&self.state);
         state.loaded = None;
         state.messages.clear();
+        state.clan.clear();
+        state.channels.clear();
         state.live = false;
         state.online = 0;
         state.people = None;
@@ -529,18 +565,26 @@ impl FeedWorker {
             state.people = Some(people);
             changed = true;
         }
+        if state.channels != feed.channels {
+            state.channels = std::mem::take(&mut feed.channels);
+            changed = true;
+        }
         // Ids that go backwards mean the hub restarted: its backlog starts afresh.
         if feed.next < self.after {
-            changed |= !state.messages.is_empty();
+            changed |= !state.messages.is_empty() || !state.clan.is_empty();
             state.messages.clear();
+            state.clan.clear();
         }
         if !feed.deleted.is_empty() {
-            let before = state.messages.len();
+            let before = state.messages.len() + state.clan.len();
             // The SJK team's lines are not the hub's messages, whatever id they hold.
             state.messages.retain(|message| {
                 message.official.is_some() || !feed.deleted.contains(&message.id)
             });
-            changed |= state.messages.len() != before;
+            state
+                .clan
+                .retain(|message| !feed.deleted.contains(&message.id));
+            changed |= state.messages.len() + state.clan.len() != before;
         }
         // Drops, finds, announcements and rounds share the messages' ids: merged, the
         // chat keeps the order they came in.
@@ -565,36 +609,20 @@ impl FeedWorker {
             incoming.sort_by_key(|message| message.id);
         }
         for message in incoming {
-            if state
-                .messages
-                .back()
-                .is_some_and(|last| message.id <= last.id)
-            {
-                // An after=0 refresh can replay known messages. Refresh their
-                // reactions too, without inserting another chat line.
-                if let Some(held) = state.messages.iter_mut().find(|held| {
-                    held.id == message.id
-                        && held.official.is_none()
-                        && held.holocron.is_none()
-                        && held.key_id == message.key_id
-                        && held.text == message.text
-                }) && held.reactions != message.reactions
-                {
-                    held.reactions = message.reactions;
-                    changed = true;
-                }
-                continue;
-            }
-            if state.messages.len() == MESSAGES_KEPT {
-                state.messages.pop_front();
-            }
-            state.messages.push_back(message);
-            changed = true;
+            let held = match message.channel {
+                crate::HubChannel::Sjk => &mut state.messages,
+                // Only the clan chats asked for; a channel this client does not know
+                // is left out.
+                channel if self.channels.contains(&channel) => &mut state.clan,
+                _ => continue,
+            };
+            changed |= keep(held, message);
         }
         for update in feed.reaction_updates.drain(..) {
-            if let Some(message) = state
-                .messages
+            let ChatState { messages, clan, .. } = &mut *state;
+            if let Some(message) = messages
                 .iter_mut()
+                .chain(clan.iter_mut())
                 .find(|m| m.id == update.message && m.holocron.is_none() && m.official.is_none())
             {
                 if message.reactions != update.reactions {
@@ -608,6 +636,31 @@ impl FeedWorker {
             state.revision += 1;
         }
     }
+}
+
+/// Put `message` at the end of `held` (one channel's messages), keeping
+/// [`MESSAGES_KEPT`]; a message `held` has already only refreshes its reactions (an
+/// `after` 0 reading replays the backlog). Whether `held` changed.
+fn keep(held: &mut VecDeque<ChatMessage>, message: ChatMessage) -> bool {
+    if held.back().is_some_and(|last| message.id <= last.id) {
+        if let Some(known) = held.iter_mut().find(|known| {
+            known.id == message.id
+                && known.official.is_none()
+                && known.holocron.is_none()
+                && known.key_id == message.key_id
+                && known.text == message.text
+        }) && known.reactions != message.reactions
+        {
+            known.reactions = message.reactions;
+            return true;
+        }
+        return false;
+    }
+    if held.len() == MESSAGES_KEPT {
+        held.pop_front();
+    }
+    held.push_back(message);
+    true
 }
 
 /// The chat entry for `drop`, as `own` (the player's key id) sees it. Its text is left
@@ -633,6 +686,7 @@ fn drop_message(drop: DropEvent, own: &str) -> ChatMessage {
         emoji: String::new(),
         client: String::new(),
         text: String::new(),
+        channel: Default::default(),
     }
 }
 
@@ -674,6 +728,7 @@ fn find_message(find: FindEvent, own: &str) -> ChatMessage {
         emoji: String::new(),
         client: String::new(),
         text: String::new(),
+        channel: Default::default(),
     }
 }
 
@@ -696,6 +751,7 @@ fn official_message(id: u64, at: i64, official: Official) -> ChatMessage {
         text: String::new(),
         holocron: None,
         official: Some(official),
+        channel: Default::default(),
     }
 }
 
@@ -820,12 +876,15 @@ mod tests {
             _: &Identity,
             after: u64,
             server: Option<&str>,
+            channels: &[crate::HubChannel],
             wait: u64,
         ) -> Result<Feed, HubError> {
-            self.asked
-                .lock()
-                .unwrap()
-                .push(format!("after={after} server={server:?} wait={wait}"));
+            let asked = if channels.is_empty() {
+                format!("after={after} server={server:?} wait={wait}")
+            } else {
+                format!("after={after} server={server:?} wait={wait} channels={channels:?}")
+            };
+            self.asked.lock().unwrap().push(asked);
             if let Some(meanwhile) = self.meanwhile.lock().unwrap().take() {
                 meanwhile();
             }
@@ -857,6 +916,7 @@ mod tests {
             text: text.to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         }
     }
 
@@ -939,6 +999,7 @@ mod tests {
                 url: Some(url.to_owned()),
                 server: server.map(str::to_owned),
                 chat: true,
+                channels: Vec::new(),
                 person: String::new(),
                 generation: shared.generation + 1,
             };
@@ -1331,6 +1392,60 @@ mod tests {
         rig.script(answer(3, Vec::new()));
         rig.worker.step(t0 + Duration::from_secs(4));
         assert_eq!(lock(&rig.state).revision, state.revision);
+    }
+
+    #[test]
+    fn clan_chats_joined_are_asked_for_and_kept_apart() {
+        let t0 = Instant::now();
+        let mut rig = rig(t0);
+        rig.read("https://hub", None);
+        let clan = |id, text, channel| ChatMessage {
+            channel,
+            ..message(id, text)
+        };
+        let listed = vec![crate::ListedChannel {
+            id: crate::HubChannel::Jof,
+            home: true,
+        }];
+        rig.script(Ok(Feed {
+            channels: listed.clone(),
+            ..answer(1, vec![message(1, "sjk")]).unwrap()
+        }));
+        rig.worker.step(t0);
+        assert_eq!(lock(&rig.state).channels, listed, "what the hub lists");
+        // Joining asks again from the start, which brings the clan's backlog.
+        lock(&rig.shared).channels = vec![crate::HubChannel::Jof];
+        rig.script(answer(
+            3,
+            vec![
+                message(1, "sjk"),
+                clan(2, "clan", crate::HubChannel::Jof),
+                // Not joined, or unknown here: left out.
+                clan(3, "other", crate::HubChannel::Sith),
+            ],
+        ));
+        rig.worker.step(t0 + Duration::from_secs(2));
+        assert_eq!(rig.asked()[1], "after=0 server=None wait=25 channels=[Jof]");
+        let state = lock(&rig.state).clone();
+        assert_eq!(rig.texts(), ["sjk"], "the SJK chat's messages alone");
+        let clan_texts: Vec<&str> = state.clan.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(clan_texts, ["clan"]);
+        // Deleted by staff: gone from the clan's too.
+        rig.script(Ok(Feed {
+            deleted: vec![2],
+            ..answer(4, Vec::new()).unwrap()
+        }));
+        rig.worker.step(t0 + Duration::from_secs(4));
+        assert!(lock(&rig.state).clan.is_empty());
+        // Leaving forgets its lines and stops asking.
+        rig.script(answer(4, vec![clan(5, "late", crate::HubChannel::Jof)]));
+        let epoch = lock(&rig.state).loaded;
+        lock(&rig.shared).channels.clear();
+        rig.worker.step(t0 + Duration::from_secs(6));
+        assert_eq!(rig.asked()[3], "after=0 server=None wait=25");
+        let state = lock(&rig.state).clone();
+        assert!(state.clan.is_empty());
+        assert_ne!(state.loaded, epoch, "a new reading");
     }
 
     #[test]

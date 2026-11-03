@@ -1324,6 +1324,10 @@ pub struct ChatMessage {
     pub client: String,
     /// What they said.
     pub text: String,
+    /// The channel it was said in: the SJK chat (the hub leaves the field out) or a
+    /// clan chat ([`crate::channels`]).
+    #[serde(default)]
+    pub channel: crate::channels::HubChannel,
     /// Set when this "message" is a holocron drop the feed relayed (never read from
     /// the wire): `text` is empty and the viewer words the line.
     #[serde(skip)]
@@ -1538,6 +1542,10 @@ pub struct Feed {
     /// list them, and from answers the hub leaves them out of).
     #[serde(default)]
     pub people: Option<People>,
+    /// The clan chats the reader may read ([`crate::channels`]; absent from hubs before
+    /// 03/11/2026, and for a reader who may read none).
+    #[serde(default)]
+    pub channels: Vec<crate::channels::ListedChannel>,
 }
 
 /// The feed's `people` (`PROTOCOL.md`, "The feed"): the keys reading the feed now and

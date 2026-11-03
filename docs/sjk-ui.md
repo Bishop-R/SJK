@@ -2510,6 +2510,7 @@ every menu style, on the 16:9 frame:
 - **Chatting while trading** (hub report #215): the window keeps the keyboard (Enter
   for its gold button, Esc to close it) but lets the chat keys through: a key bound to
   `messagemode` to `messagemode6` (Chat, Team chat, the whispers, SJK chat, Admin chat)
+  (and `messagemode7`, `messagemode8`, the clan chats, through the same composer)
   opens the composer, the window staying open under it. In a game the chat draws after
   the window, over its shade, its recent lines too, so the other player's answers show;
   the composer has the keys until it sends (Enter) or closes (Esc), and the window's

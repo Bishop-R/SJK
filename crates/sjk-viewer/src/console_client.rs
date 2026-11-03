@@ -80,6 +80,14 @@ pub(super) const COMMANDS: &[(&str, &str)] = &[
         crate::chat::tabs::ADMIN_COMMAND,
         "Compose admin chat (amsay): read only by the server's admins, on JA+ and jaPRO servers",
     ),
+    (
+        crate::chat::tabs::JOF_COMMAND,
+        "Compose in JoF's clan chat through the SJK hub, once joined (verified JoF and S players, staff)",
+    ),
+    (
+        crate::chat::tabs::SITH_COMMAND,
+        "Compose in the Sith clan's chat (S) through the SJK hub, once joined (verified JoF and S players, staff)",
+    ),
     (crate::am_color::COMMAND, crate::am_color::HELP),
     (
         crate::chat_sounds::PREVIEW_COMMAND,
@@ -1028,6 +1036,9 @@ impl crate::GpuState {
             }
             crate::chat::tabs::ADMIN_COMMAND => {
                 self.apply_input_action(Some(crate::input::InputAction::AdminMessageMode));
+            }
+            crate::chat::tabs::JOF_COMMAND | crate::chat::tabs::SITH_COMMAND => {
+                self.apply_input_action(crate::input::chat_action(&name));
             }
             crate::am_color::COMMAND => {
                 let console = self.console.as_mut().ok_or("Console unavailable")?;

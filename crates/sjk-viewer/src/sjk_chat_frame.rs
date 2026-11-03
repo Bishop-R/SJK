@@ -15,10 +15,17 @@ impl GpuState {
             return;
         };
         if console.bool_cvar("cl_sjkChat") == Some(false) {
+            // No hub chat at all: no clan chat buttons either.
+            self.chat.set_clan_chats([false; 2]);
             return;
         }
         let feed = console.bool_cvar(FEED_CVAR) != Some(false);
         let in_console = console.bool_cvar(CONSOLE_CVAR) != Some(false);
+        // The clan chats the player joined (`chat/tabs.rs`): read with the chat, a
+        // button each in the composer.
+        let clans =
+            player_identity::follow_clan_chats(|clan| chat::tabs::join_choice(console, clan));
+        self.chat.set_clan_chats(clans);
         self.chat.set_sjk_feed_visible(feed);
         let sound = sound_on(console);
         let mutes = player_mutes::revision();
@@ -58,11 +65,12 @@ impl GpuState {
                 .iter()
                 .filter(|message| after.is_some_and(|after| message.id > after));
             chat.follow_server_copies(joined, own_key.as_deref(), state.outcome.as_ref(), now);
-            let news =
-                after.is_some_and(|after| chat::sjk::worth_a_sound(&state.messages, after, hushed));
+            let news = after.is_some_and(|after| {
+                chat::sjk::worth_a_sound(chat::sjk::merged(state), after, hushed)
+            });
             let console_lines = if in_console {
                 after.map_or_else(Vec::new, |after| {
-                    chat::sjk::console_lines(&state.messages, after, is_muted)
+                    chat::sjk::console_lines(chat::sjk::merged(state), after, is_muted)
                 })
             } else {
                 Vec::new()

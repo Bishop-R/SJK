@@ -122,7 +122,9 @@ buttons under Verify (Gold, JoF, Sith, Jawa, each with its tick; the one drawn n
 verifies the player with that tick, or changes it when they already are; Verify alone
 keeps the group they had. A group shows only while the player is verified; staff and
 the creators wear their own whatever it is. Hubs older than ticks send none, so every
-verified player shows gold, as clients older than ticks show everyone.
+verified player shows gold, as clients older than ticks show everyone. Since 03/11/2026
+the JoF and Sith groups also open the clan chats ([hub-chat.md](hub-chat.md#clan-chats)):
+verifying a player with one of those ticks lets them in, unverifying takes them out.
 
 The ticks are computed at start like the gold seal
 ([tick_badge.rs](../crates/sjk-viewer/src/ui_renderer/tick_badge.rs), icon cells after

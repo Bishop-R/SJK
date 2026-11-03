@@ -12,6 +12,8 @@ pub(super) const LATEST: u16 = 102;
 pub(super) const SJK: u16 = 103;
 pub(super) const ADMIN: u16 = 104;
 pub(super) const PM: u16 = 105;
+pub(super) const JOF: u16 = 106;
+pub(super) const SITH: u16 = 107;
 
 /// Keys the composer acts on itself rather than typing their text.
 fn handled_key(key: KeyCode) -> bool {
@@ -108,20 +110,24 @@ impl ChatOverlay {
 
     pub(super) fn submit(&mut self) -> ChatInputResult {
         let input = self.input.as_ref().expect("active input");
-        if input.channel == Channel::Sjk {
+        // The hub's chats: the SJK chat and the clan chats.
+        if input.channel.is_hub() {
+            let channel = input.channel;
             let text = input.text.trim().to_owned();
             self.input = None;
             self.scroll = 0;
             self.unread = 0;
-            return if text.is_empty() {
-                ChatInputResult::None
-            } else {
-                self.sent_on(Channel::Sjk, None);
-                ChatInputResult::Sjk(text)
+            if text.is_empty() {
+                return ChatInputResult::None;
+            }
+            self.sent_on(channel, None);
+            return match channel.clan() {
+                Some(clan) => ChatInputResult::Clan(text, clan),
+                None => ChatInputResult::Sjk(text),
             };
         }
         let destination = match input.channel {
-            Channel::Sjk => unreachable!("sent to the hub above"),
+            Channel::Sjk | Channel::Jof | Channel::Sith => unreachable!("sent to the hub above"),
             Channel::Global => ChatDestination::Global,
             Channel::Team => ChatDestination::Team,
             Channel::Admin => ChatDestination::Admin,
@@ -188,7 +194,7 @@ impl ChatOverlay {
             // different widget than the one recorded here and is discarded.
             self.pressed_action = card::BUTTONS
                 .into_iter()
-                .chain([card::CARD, LATEST, PM, ADMIN, SJK, TEAM, GLOBAL])
+                .chain([card::CARD, LATEST, PM, ADMIN, SITH, JOF, SJK, TEAM, GLOBAL])
                 .chain(0..MAX_VISIBLE as u16)
                 .find(|token| {
                     self.ui
@@ -255,6 +261,8 @@ impl ChatOverlay {
             TEAM => self.choose(Channel::Team),
             SJK => self.choose(Channel::Sjk),
             ADMIN => self.choose(Channel::Admin),
+            JOF => self.choose(Channel::Jof),
+            SITH => self.choose(Channel::Sith),
             PM => self.step_pm(1),
             LATEST => {
                 self.scroll = 0;
@@ -301,6 +309,7 @@ impl crate::GpuState {
                     && crate::player_identity::is_staff();
                 self.send_sjk_chat(text, only);
             }
+            ChatInputResult::Clan(text, channel) => self.send_clan_chat(text, channel),
             ChatInputResult::None => {}
         }
         self.sync_cursor_policy();
@@ -321,6 +330,30 @@ impl crate::GpuState {
             crate::player_identity::chat(text)
         } {
             Some("^3SJK chat needs the SJK identity (cl_identity 1)")
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            self.chat.receive(
+                sjk_client::ServerEventKind::Chat,
+                why.to_owned(),
+                None,
+                Instant::now(),
+            );
+        }
+    }
+
+    /// Hand a message to a clan chat (`chat/tabs.rs`); say why when it cannot go. It
+    /// never goes to the game server.
+    pub(crate) fn send_clan_chat(&mut self, text: String, channel: sjk_identity::HubChannel) {
+        let off = self
+            .console
+            .as_ref()
+            .is_some_and(|console| console.bool_cvar("cl_sjkChat") == Some(false));
+        let why = if off {
+            Some("^3The clan chats come with SJK chat, which is off (cl_sjkChat 1 turns it on)")
+        } else if !crate::player_identity::chat_clan(text, channel) {
+            Some("^3The clan chats need the SJK identity (cl_identity 1)")
         } else {
             None
         };

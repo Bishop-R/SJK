@@ -179,9 +179,15 @@ pub trait Hub: Send {
         ))
     }
     /// Send an SJK chat message (already checked by [`crate::chat::check`]) signed by
-    /// the identity, with the in-game `name` worn (may be empty); the hub answers with
-    /// its id.
-    fn chat(&mut self, _identity: &Identity, _text: &str, _name: &str) -> Result<u64, HubError> {
+    /// the identity, with the in-game `name` worn (may be empty), in `channel` (the SJK
+    /// chat or a clan chat, [`crate::channels`]); the hub answers with its id.
+    fn chat(
+        &mut self,
+        _identity: &Identity,
+        _text: &str,
+        _name: &str,
+        _channel: crate::HubChannel,
+    ) -> Result<u64, HubError> {
         Err(HubError::Protocol(
             "this hub client does not send chat".to_owned(),
         ))
@@ -329,13 +335,14 @@ pub trait Hub: Send {
             "this hub client does not send looks".to_owned(),
         ))
     }
-    /// What is new after `after` (chat, and the emotes and looks of `server`), waiting up to `wait`
-    /// seconds at the hub for something to come.
+    /// What is new after `after` (chat, the clan chats `channels`, and the emotes and
+    /// looks of `server`), waiting up to `wait` seconds at the hub for something to come.
     fn feed(
         &mut self,
         _identity: &Identity,
         _after: u64,
         _server: Option<&str>,
+        _channels: &[crate::HubChannel],
         _wait: u64,
     ) -> Result<Feed, HubError> {
         Err(HubError::Protocol(
@@ -1247,12 +1254,22 @@ fn encode_model(model: &str) -> String {
         .collect()
 }
 
-/// `GET /v1/feed`'s path and query.
-fn feed_path(after: u64, server: Option<&str>, wait: u64) -> String {
+/// `GET /v1/feed`'s path and query: `channels` only when a clan chat is wanted, so a
+/// hub from before clan chats sees the query it always did.
+fn feed_path(
+    after: u64,
+    server: Option<&str>,
+    channels: &[crate::HubChannel],
+    wait: u64,
+) -> String {
     let mut path = format!("/v1/feed?after={after}&wait={wait}");
     if let Some(server) = server {
         path.push_str("&server=");
         path.push_str(&encode_server(server));
+    }
+    if let Some(channels) = crate::channels::wanted_query(channels) {
+        path.push_str("&channels=");
+        path.push_str(&channels);
     }
     path
 }
@@ -2185,10 +2202,20 @@ impl Hub for HttpHub {
         Ok((claimed_name.to_owned(), answer["has"].as_bool()))
     }
 
-    fn chat(&mut self, identity: &Identity, text: &str, name: &str) -> Result<u64, HubError> {
+    fn chat(
+        &mut self,
+        identity: &Identity,
+        text: &str,
+        name: &str,
+        channel: crate::HubChannel,
+    ) -> Result<u64, HubError> {
         let mut body = json!({ "text": text });
         if !name.is_empty() {
             body["name"] = json!(name);
+        }
+        // The SJK chat goes as it always did, for hubs before clan chats.
+        if channel.is_clan() {
+            body["channel"] = json!(channel.wire());
         }
         let answer = self.send(Some(identity), "POST", "/v1/chat", Some(body))?;
         answer["id"]
@@ -2416,9 +2443,10 @@ impl Hub for HttpHub {
         identity: &Identity,
         after: u64,
         server: Option<&str>,
+        channels: &[crate::HubChannel],
         wait: u64,
     ) -> Result<Feed, HubError> {
-        let path = feed_path(after, server, wait);
+        let path = feed_path(after, server, channels, wait);
         parse(self.send(Some(identity), "GET", &path, None)?)
     }
 }
@@ -2544,14 +2572,24 @@ mod tests {
 
     #[test]
     fn the_feed_path_carries_after_wait_and_the_server() {
-        assert_eq!(feed_path(0, None, 25), "/v1/feed?after=0&wait=25");
+        assert_eq!(feed_path(0, None, &[], 25), "/v1/feed?after=0&wait=25");
         assert_eq!(
-            feed_path(14, Some("1.2.3.4:29070"), 25),
+            feed_path(14, Some("1.2.3.4:29070"), &[], 25),
             "/v1/feed?after=14&wait=25&server=1.2.3.4%3A29070"
         );
         assert_eq!(
-            feed_path(1, Some("[::1]:29070"), 0),
+            feed_path(1, Some("[::1]:29070"), &[], 0),
             "/v1/feed?after=1&wait=0&server=%5B%3A%3A1%5D%3A29070"
+        );
+        // The clan chats joined (`PROTOCOL.md`, "Clan chats").
+        assert_eq!(
+            feed_path(
+                3,
+                None,
+                &[crate::HubChannel::Jof, crate::HubChannel::Sith],
+                25
+            ),
+            "/v1/feed?after=3&wait=25&channels=jof,sith"
         );
     }
 

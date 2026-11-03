@@ -251,6 +251,7 @@ mod tests {
             text: text.to_owned(),
             holocron: None,
             official: None,
+            channel: Default::default(),
         }
     }
 

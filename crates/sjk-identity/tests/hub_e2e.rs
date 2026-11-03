@@ -447,10 +447,12 @@ fn chat_and_emotes_reach_other_players_through_the_long_poll() {
     let other = Identity::generate().unwrap();
     hub.register(&me, Some("^2Chatty")).unwrap();
     hub.register(&other, None).unwrap();
-    let start = reader.feed(&other, 0, None, 0).unwrap();
+    let start = reader.feed(&other, 0, None, &[], 0).unwrap();
 
     // The rules are the hub's too.
-    let refused = hub.chat(&me, "hi \u{1F600}", "").unwrap_err();
+    let refused = hub
+        .chat(&me, "hi \u{1F600}", "", sjk_identity::HubChannel::Sjk)
+        .unwrap_err();
     assert!(
         matches!(refused, HubError::Rejected { ref code, .. } if code == "chat_characters"),
         "{refused:?}"
@@ -461,11 +463,12 @@ fn chat_and_emotes_reach_other_players_through_the_long_poll() {
     let said = std::thread::scope(|scope| {
         let waiting = scope.spawn(|| {
             let asked = Instant::now();
-            let feed = reader.feed(&other, start.next, None, 25).unwrap();
+            let feed = reader.feed(&other, start.next, None, &[], 25).unwrap();
             (feed, asked.elapsed())
         });
         std::thread::sleep(Duration::from_secs(2));
-        hub.chat(&me, &text, "^2Chatty").unwrap();
+        hub.chat(&me, &text, "^2Chatty", sjk_identity::HubChannel::Sjk)
+            .unwrap();
         waiting.join().unwrap()
     });
     let (feed, waited) = said;
@@ -495,7 +498,9 @@ fn chat_and_emotes_reach_other_players_through_the_long_poll() {
     );
     hub.claim(&me, &server, 4, "^2Chatty", false).unwrap();
     hub.emote(&me, &server, "wave", None, false).unwrap();
-    let here = reader.feed(&other, feed.next, Some(&server), 0).unwrap();
+    let here = reader
+        .feed(&other, feed.next, Some(&server), &[], 0)
+        .unwrap();
     assert_eq!(here.emotes.len(), 1);
     assert_eq!(
         (here.emotes[0].slot, here.emotes[0].emote.as_str()),
@@ -506,7 +511,9 @@ fn chat_and_emotes_reach_other_players_through_the_long_poll() {
     // One in step with slot 7's carries it (after the emote quota's gap).
     std::thread::sleep(std::time::Duration::from_millis(2_100));
     hub.emote(&me, &server, "wave", Some(7), false).unwrap();
-    let synced = reader.feed(&other, here.next, Some(&server), 0).unwrap();
+    let synced = reader
+        .feed(&other, here.next, Some(&server), &[], 0)
+        .unwrap();
     assert_eq!(synced.emotes.last().map(|emote| emote.sync), Some(Some(7)));
     hub.release(&me, &server).unwrap();
 }
@@ -595,14 +602,20 @@ fn looks_travel_with_the_claim_and_the_feed() {
     assert_eq!(bare[0].look, None);
     // Something in the feed's sequence, so the reader's next `after` is not 0 (which
     // gives no looks) on a fresh hub.
-    hub.chat(&other, "looks are coming", "").unwrap();
-    let start = hub.feed(&other, 0, Some(&server), 0).unwrap();
+    hub.chat(
+        &other,
+        "looks are coming",
+        "",
+        sjk_identity::HubChannel::Sjk,
+    )
+    .unwrap();
+    let start = hub.feed(&other, 0, Some(&server), &[], 0).unwrap();
     assert!(start.looks.is_empty(), "after 0 gives no looks");
     let id = hub.look(&me, &server, &lit).unwrap();
     assert!(id > 0);
     let players = hub.presence(&server).unwrap();
     assert_eq!(players[0].look, Some(lit.clone()));
-    let feed = hub.feed(&other, start.next, Some(&server), 0).unwrap();
+    let feed = hub.feed(&other, start.next, Some(&server), &[], 0).unwrap();
     let event = &feed.looks[0];
     assert_eq!(event.id, id);
     assert_eq!((event.slot, event.claimed_name.as_str()), (3, "^2Looky"));

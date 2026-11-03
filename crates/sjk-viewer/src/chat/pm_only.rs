@@ -23,7 +23,7 @@ pub(crate) fn reset(console: &mut ViewerConsole) {
 
 impl super::ChatOverlay {
     pub(super) fn pm_visible(&self, line: &super::ChatLine) -> bool {
-        !self.options.pm_only || line.channel == super::Channel::Sjk || line.server_private
+        !self.options.pm_only || line.channel.is_hub() || line.server_private
     }
 }
 

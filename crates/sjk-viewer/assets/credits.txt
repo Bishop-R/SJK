@@ -58,6 +58,7 @@ did: The Box hunt toy: kill the mark for a free mystery box roll
 did: The Banana peel toy: drop peels; opted-in players who walk onto one slip as ragdolls
 did: The Prop gun toy: hold a fake gun from your own pk3; its bolts knock opted-in players down
 did: A macOS build for Apple Silicon, built by GitHub with every release (experimental)
+did: Clan chats: JoF's and the Sith clan's chats beside SJK chat, through the hub
 did: Medals from the SJK team, with medal pictures generated and chosen by Sol
 did: Card pictures drawn from the game: characters posed with lit sabers, weapons, moves
 did: Medal ranks I to V set by the SJK team, from Polished to Solar, pips on ribbons
@@ -545,6 +546,7 @@ did: Hit sounds (cg_hitsounds) heard without EJK's pack
 did: Report a bug from the main menu, not only in a match
 did: The Hax trap's switches on the Hax's card in the Collection
 did: Loadouts: a saved look worn again in one click
+did: Clan chats: a JoF chat and an S chat beside SJK chat, for their verified players
 
 [akr]
 role: Ideas for SJK

@@ -12,6 +12,7 @@ pub mod assets;
 pub mod avatar;
 pub mod ban;
 pub mod bio;
+pub mod channels;
 pub mod chat;
 pub mod crash;
 pub mod emoji;
@@ -39,6 +40,7 @@ pub mod wire;
 
 pub use assets::Pack;
 pub use ban::{BanOutcome, ChatBan};
+pub use channels::{HubChannel, ListedChannel};
 pub use crash::CrashReport;
 pub use feed::{ChatState, ReceivedLooks};
 pub use history::{HistoryLine, HistoryPage, HistoryState};

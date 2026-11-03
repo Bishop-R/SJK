@@ -3130,10 +3130,15 @@ the game (All once they leave). That lasts while SJK runs. The team, crosshair,
 last-attacker and SJK keys always open on their own channel.
 
 The composer's row of channels (29/10/2026;
-[chat/tabs.rs](../crates/sjk-viewer/src/chat/tabs.rs)) is All, then Team, SJK, Admin and
-PM, each behind its own switch in Settings > Chat (`cg_chatTabTeam`, `cg_chatTabSjk`,
-`cg_chatTabAdmin` 1 by default, `cg_chatTabPm` 0): a channel switched off leaves the row
-and Tab skips it, but its key still opens it. Admin sends `amsay`, which only the
+[chat/tabs.rs](../crates/sjk-viewer/src/chat/tabs.rs)) is All, then Team, SJK, the clan
+chats JoF and S once joined ([hub-chat.md](hub-chat.md#clan-chats), 03/11/2026), Admin
+and PM, each behind its own setting in Settings > Chat (`cg_chatTabTeam`,
+`cg_chatTabSjk`, `cg_chatTabJof`, `cg_chatTabS`, `cg_chatTabAdmin` 1 by default,
+`cg_chatTabPm` 0): a channel switched off (0) leaves the row and Tab skips it, but its
+key still opens it; since 03/11/2026 (Sol's request) Not in Tab (2) keeps the button
+while Tab skips it, so a player keeps Team or Admin clickable out of the cycle (Tab
+from a channel it skips goes on to the next one it stops on). The clan chats' keys are
+`messagemode7` (JoF) and `messagemode8` (S). Admin sends `amsay`, which only the
 server's admins read (JoF EJK `Cmd_Amsay_f`, `SAY_ADMIN`; they see it as `<Admin>`), and
 shows only on JA+ and jaPRO servers; its key is `messagemode6` (Controls > Admin chat, no
 key by default), which says so on other servers. Leaving one moves a composer on Admin to
@@ -3146,7 +3151,9 @@ too (Dave, 29/10/2026): while the composer is on Team, SJK, Admin or a whisper, 
 shows only that channel's messages (whispers both ways, encrypted ones and the server's
 private lines included; admin lines are jaPRO's `<Admin>(name)`), All shows everything,
 and closing the composer shows everything again; `cg_chatTabFilter` 0 (Settings > Chat >
-Tabs hide other chat) keeps the feed whole.
+Tabs hide other chat) keeps the feed whole while typing: every chat in view, each line
+labelled with its channel (TEAM, SJK, JoF, S), the button picking only where the
+message goes.
 
 Open the chat composer with your chat binding: the cursor is free while composing.
 Resting the pointer on a name (a sender's, or an SJK chat sender's) shows their

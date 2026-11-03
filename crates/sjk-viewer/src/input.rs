@@ -57,6 +57,9 @@ pub(crate) enum InputAction {
     SjkMessageMode,
     /// Admin chat, `amsay` (`messagemode6`, `chat/tabs.rs`).
     AdminMessageMode,
+    /// A clan chat through the SJK hub (`messagemode7` JoF, `messagemode8` S,
+    /// `chat/tabs.rs`).
+    ClanMessageMode(sjk_identity::HubChannel),
     ToggleCamera,
     SaberToggle,
     SaberStyle,
@@ -323,6 +326,8 @@ impl GameplayInput {
                     | "messagemode4"
                     | "messagemode5"
                     | "messagemode6"
+                    | "messagemode7"
+                    | "messagemode8"
                     | "togglecamera"
                     | "sabertoggle"
                     | "saberstyle"
@@ -630,7 +635,8 @@ fn button_for_command(command: &str) -> Option<GameButton> {
 
 /// The chat a bound command opens: `messagemode` (All) and `messagemode2` (Team),
 /// `messagemode3`/`messagemode4` (whispers), `messagemode5` (SJK chat) and
-/// `messagemode6` (Admin chat); `None` for any other command.
+/// `messagemode6` (Admin chat), `messagemode7` and `messagemode8` (the clan chats);
+/// `None` for any other command.
 pub(crate) fn chat_action(command: &str) -> Option<InputAction> {
     let name = command.split_ascii_whitespace().next()?;
     let action = match name.to_ascii_lowercase().as_str() {
@@ -640,6 +646,8 @@ pub(crate) fn chat_action(command: &str) -> Option<InputAction> {
         "messagemode4" => InputAction::TargetMessage(true),
         "messagemode5" => InputAction::SjkMessageMode,
         "messagemode6" => InputAction::AdminMessageMode,
+        "messagemode7" => InputAction::ClanMessageMode(sjk_identity::HubChannel::Jof),
+        "messagemode8" => InputAction::ClanMessageMode(sjk_identity::HubChannel::Sith),
         _ => return None,
     };
     Some(action)
@@ -672,6 +680,13 @@ impl super::GpuState {
                 self.sync_cursor_policy();
             }
             Some(InputAction::AdminMessageMode) => {}
+            Some(InputAction::ClanMessageMode(clan)) if self.live_session.is_some() => {
+                self.gameplay_input.release_keys();
+                self.chat.open_clan(clan);
+                self.sync_cursor_policy();
+            }
+            // The clan chats show only in a game's chat.
+            Some(InputAction::ClanMessageMode(_)) => {}
             // Without a game the composer has nowhere to show: the page has it.
             Some(InputAction::SjkMessageMode) => {
                 if let Some(console) = &mut self.console {

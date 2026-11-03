@@ -81,10 +81,13 @@ fn duel6_sjk_chat_gifs_page() {
                 text: (*text).to_owned(),
                 holocron: None,
                 official: None,
+                channel: Default::default(),
             },
         )
         .collect();
     let state = sjk_identity::ChatState {
+        clan: Default::default(),
+        channels: Vec::new(),
         reaction: None,
         own_key: None,
         messages,
@@ -242,6 +245,7 @@ fn duel6_sjk_chat_gifs_feed() {
                     text: text.to_owned(),
                     holocron: None,
                     official: None,
+                    channel: Default::default(),
                 };
             let state = |messages: Vec<sjk_identity::ChatMessage>| sjk_identity::ChatState {
                 messages: messages.into_iter().collect(),
@@ -325,9 +329,12 @@ fn duel6_sjk_chat_gif_picker() {
             text: format!("look https://giphy.com/gifs/ShotPick{:02}X", n),
             holocron: None,
             official: None,
+            channel: Default::default(),
         })
         .collect();
     let state = sjk_identity::ChatState {
+        clan: Default::default(),
+        channels: Vec::new(),
         reaction: None,
         own_key: None,
         messages,

@@ -52,6 +52,7 @@ fn duel6_find_blades_in_chat() {
             text: String::new(),
             holocron: Some(holocron),
             official: None,
+            channel: Default::default(),
         };
         let blade = |skin: &crate::unlockables::Unlockable| sjk_identity::FindMark {
             shader: true,
