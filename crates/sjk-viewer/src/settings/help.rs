@@ -215,6 +215,13 @@ const CHOICE_NAMES: &[(&str, &str, &str)] = &[
     (crate::hud::lagometer::CVAR, "3", "No backdrop"),
     ("cg_predictLegacy", "0", "Current"),
     ("cg_predictLegacy", "255", "As in 2026.1028.1"),
+    ("cg_hitsounds", "0", "Off"),
+    ("cg_hitsounds", "1", "Tick"),
+    ("cg_hitsounds", "2", "Blip"),
+    ("cg_hitsounds", "3", "Two notes"),
+    ("cg_hitsounds", "4", "Knock"),
+    ("cg_hitsounds", "5", "Saber: stock hit"),
+    ("cg_hitsounds", "6", "Saber: mixed hits"),
     (crate::audio::SKIN_SOUNDS_CVAR, "0", "Off"),
     (crate::audio::SKIN_SOUNDS_CVAR, "1", "With normal"),
     (crate::audio::SKIN_SOUNDS_CVAR, "2", "Only skin"),
@@ -496,6 +503,14 @@ const HELP: &[(&str, &str)] = &[
     ),
     ("cg_footsteps", "Footstep sounds, yours and other players'."),
     (
+        crate::audio::muted_sounds::CVAR,
+        "Words, such as ysalamiri hacking: no sound whose file name holds one plays. mutesounds <player> mutes a player.",
+    ),
+    (
+        "cg_hitsounds",
+        "A sound each time you hit a player (another for a teammate), as in EJK. Saber: only changes saber hit sounds.",
+    ),
+    (
         crate::sound_sonar::CVAR,
         "For deaf and hard-of-hearing players: arcs round the crosshair point to the sounds played. Needs sound output (not s_initsound 0).",
     ),
@@ -619,7 +634,7 @@ const HELP: &[(&str, &str)] = &[
     ("cg_hudScale", "Size of the HUD: higher is larger."),
     (
         crate::hud_edit::COMMAND,
-        "Drag the HUD's elements over the game with the mouse; right-click one to put it back.",
+        "Drag the HUD's elements over the game with the mouse, the kill feed too; right-click one to put it back.",
     ),
     (
         crate::hud::RadialPlacement::SPREAD_CVAR,
@@ -762,7 +777,7 @@ const HELP: &[(&str, &str)] = &[
     ),
     (
         "cg_killfeed",
-        "The last kills at the top right: killer, weapon icon, victim; a skull for suicides and falls.",
+        "The last kills, killer, weapon icon, victim, at the top right or wherever Move HUD elements put it.",
     ),
     ("cg_drawChat", "Shows chat messages over the game."),
     (
@@ -878,6 +893,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::input::mouse_repeat::CVAR,
         "Hold mouse 4 or 5 to run its bind again 20 times a second, like a held key (JoF EJK, there at the frame rate).",
+    ),
+    (
+        crate::console_move::CVAR,
+        "Movement keys held as the console opens keep moving you, with no talk balloon; keys pressed while it is open still type.",
     ),
     // GAME
     (
@@ -1019,6 +1038,10 @@ const HELP: &[(&str, &str)] = &[
     (
         "cg_hitMarker",
         "Red direction indicator when you take damage. Off by default; camera kick and sounds stay the same.",
+    ),
+    (
+        crate::damage_feedback::SHIELD_CVAR,
+        "With the damage hitmarker on, it shows green instead of red when the hit took your shield.",
     ),
     (
         "cg_shieldBrightness",
@@ -1323,6 +1346,10 @@ const HELP: &[(&str, &str)] = &[
     (
         crate::e2e_whispers::CVAR,
         "Whispers to SJK players go end-to-end encrypted through the SJK hub: only you two can read them. Off sends them through the server.",
+    ),
+    (
+        crate::sound_mutes::IGNORE_CVAR,
+        "A JA+ or jaPRO ignore <player> also mutes their sounds until the map changes; ignore again hears them.",
     ),
     (
         crate::map_blocks::CVAR,

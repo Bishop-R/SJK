@@ -40,6 +40,7 @@ impl GpuState {
             .is_none_or(|console| console.bool_cvar(map_blocks::CVAR) != Some(false));
         let Some(session) = self.live_session.as_ref() else {
             self.map_blocks.enter(None, follow);
+            self.sound_mutes.players.enter(None, false);
             if self.muted_players.clear() {
                 player_mutes::set_roster(std::iter::empty(), None);
             }
@@ -48,8 +49,11 @@ impl GpuState {
             muted_players::set_shown(0);
             return;
         };
-        // A new map load (`sv_serverid`) ends the blocks for the map.
+        // A new map load (`sv_serverid`) ends the blocks for the map, and the muted sounds.
         self.map_blocks.enter(Some(session.server_id()), follow);
+        self.sound_mutes
+            .players
+            .enter(Some(session.server_id()), false);
         let own = session.game_state().client_num;
         let roster = self.chat.roster_targets();
         let chat = &self.chat;
@@ -75,6 +79,19 @@ impl GpuState {
         );
         let muted = self.muted_players.slots().muted;
         muted_players::set_shown(muted);
+        // Players whose sounds alone are muted (`mutesounds`, `ignore`): worked out only
+        // while there are some, as the players in their slots may leave.
+        self.follow_ignores();
+        if self.sound_mutes.players.pending() {
+            let chat = &self.chat;
+            let shown: [&str; muted_players::SLOTS] =
+                std::array::from_fn(|slot| chat.player_label(slot as u16));
+            let own = self
+                .live_session
+                .as_ref()
+                .and_then(|session| usize::try_from(session.game_state().client_num).ok());
+            self.sound_mutes.players.resolve(&shown, own, &[]);
+        }
         self.chat.set_map_blocks(
             self.map_blocks.own_slots(),
             self.map_blocks.shared_slots(),
@@ -110,7 +127,7 @@ impl GpuState {
     pub(crate) fn refresh_muted_models(&mut self, audio: &mut Option<GameAudio>) {
         let muted = self.muted_players.slots().muted;
         if let Some(audio) = audio {
-            audio.set_muted_clients(muted);
+            audio.set_muted_clients(muted | self.sound_mutes.players.own_slots());
         }
         let changed = muted ^ self.muted_players.applied;
         if changed == 0 || self.live_session.is_none() {

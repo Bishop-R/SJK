@@ -181,7 +181,7 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "cg_hitsounds",
             0_i64,
             archive,
-            "Hit cues 1-4; saber variants 5-6",
+            "A sound when your attack hits a player: 0 off, 1-4 four sounds (a pack's hitsound*.wav, else SJK's); 5-6 saber hit variants",
         ),
         CvarDefinition::new(
             "cg_oldPainSounds",
@@ -1219,6 +1219,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Show the red damage-direction indicator near the crosshair (0 off, 1 on)",
         ),
         CvarDefinition::new(
+            crate::damage_feedback::SHIELD_CVAR,
+            false,
+            archive,
+            "The damage indicator shows green, not red, when the hit took your shield (armour)",
+        ),
+        CvarDefinition::new(
             "cg_shieldBrightness",
             2_i64,
             archive,
@@ -1379,6 +1385,18 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             true,
             archive,
             "Whisper other SJK players end-to-end encrypted through the SJK hub: only the two of you can read it (0 sends every whisper through the game server)",
+        ),
+        CvarDefinition::new(
+            crate::sound_mutes::IGNORE_CVAR,
+            false,
+            archive,
+            "A JA+ or jaPRO ignore <player> you send also mutes that player's sounds until the map changes; ignore again hears them",
+        ),
+        CvarDefinition::new(
+            crate::audio::muted_sounds::CVAR,
+            "",
+            archive,
+            "Words: every sound whose file path holds one is never played (s_muteSounds \"ysalamiri hacking\")",
         ),
         CvarDefinition::new(
             crate::map_blocks::CVAR,

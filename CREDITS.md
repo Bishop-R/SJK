@@ -1025,6 +1025,22 @@ too: Sol built two Settings > Chat options for it (29/10/2026), Chat backdrop
 Chat text outline (`cg_chatBoxOutline`), a dark edge round every letter instead of its
 shadow.
 
+Lex, a player, asked for `cg_hitsounds`, a sound for each hit as EJK plays it: SJK had
+the option but only EJK's and jaPRO's packs bring its sounds, so Sol made SJK's own for
+players without them (03/11/2026).
+
+akr and Neffie, players, asked to mute one player's sounds and more kinds of sounds,
+such as the ysalamiri's: Sol built `mutesounds` (with the servers' `ignore` muting them
+too, `cl_ignoreMutesSounds`) and Muted sounds, `s_muteSounds`, which silences any sound by
+a word of its file name (03/11/2026).
+
+AngeloPapaya, a player, asked for JoF EJK's low jump: Sol built it as the `lowjump` bind
+(03/11/2026), jump held for one user command, the shortest hop a tap makes. He asked
+to move with the console open: Sol built Move with console open (`cl_consoleMove`). He
+asked to place the kill feed anywhere: the HUD edit mode now shows a sample kill to drag
+and the feed may stand anywhere on the screen. His idea of a green damage flash on armour
+became Green on shield hits (`cg_hitMarkerShield`).
+
 ## Testing
 
 Glen, a player, was the first to play SJK on a Mac (25/10/2026), on a MacBook Pro

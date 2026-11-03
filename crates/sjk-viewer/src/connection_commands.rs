@@ -59,8 +59,13 @@ impl GpuState {
                 .as_ref()
                 .is_some_and(console::ViewerConsole::is_open)
         {
-            self.gameplay_input.release_keys();
-            self.release_pointer();
+            if self.console_keeps_moving() {
+                // `cl_consoleMove`: the movement keys keep their hold.
+                self.release_pointer_keeping_movement();
+            } else {
+                self.gameplay_input.release_keys();
+                self.release_pointer();
+            }
         }
         consumed
     }

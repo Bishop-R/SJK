@@ -640,6 +640,11 @@ impl ViewerConsole {
         }
     }
 
+    /// Whether `code` went down through the bindings and is still held.
+    pub(crate) fn holds_bound_key(&self, code: KeyCode) -> bool {
+        self.held_keys.contains(code)
+    }
+
     /// A mouse button bound under `key` went up, wherever the release was routed: it
     /// stops repeating push or pull, and its own presses (`in_mouseRepeat`).
     pub(crate) fn force_repeat_button_up(&mut self, key: &str) {

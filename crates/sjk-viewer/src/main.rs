@@ -75,6 +75,7 @@ mod connection;
 mod connection_commands;
 mod console;
 mod console_backdrop;
+mod console_move;
 mod console_overlay;
 mod console_runtime;
 mod cosmetics;
@@ -342,6 +343,7 @@ mod sjk_packs;
 mod sky_stage;
 mod small_card_notice;
 mod snapshot_presentation;
+mod sound_mutes;
 mod sound_sonar;
 mod static_models;
 mod stock_blades;
@@ -736,6 +738,8 @@ struct GpuState {
     muted_players: muted_players::MutedPlayers,
     /// Players blocked until the map changes, by this player or by staff for everyone.
     map_blocks: map_blocks::MapBlocks,
+    /// Players whose sounds are muted until the map changes (`mutesounds`).
+    sound_mutes: sound_mutes::SoundMutes,
     game_menu: bool,
     in_game_menu: ingame_menu::InGameMenu,
     game_menu_page: GameMenuPage,
@@ -1170,6 +1174,7 @@ impl GpuState {
                 force_bar: [0.0; 4],
                 _padding: [0.0; 3],
                 crosshair_parameters: [0.0, 0.0, 640.0, 480.0],
+                damage_color: [0.0; 4],
             }),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
@@ -1696,6 +1701,7 @@ impl GpuState {
             chat: chat::ChatOverlay::with_emojis(emojis),
             muted_players: muted_players::MutedPlayers::default(),
             map_blocks: map_blocks::MapBlocks::default(),
+            sound_mutes: sound_mutes::SoundMutes::default(),
             game_menu,
             in_game_menu: ingame_menu::InGameMenu::new(),
             game_menu_page: if game_menu {
@@ -2181,6 +2187,7 @@ impl GpuState {
             force_bar: hud_layout.force_bar,
             _padding: [0.0; 3],
             crosshair_parameters: self.hud.targeting.parameters(viewport),
+            damage_color: damage.map_or([0.0; 4], damage_feedback::Sample::color),
         };
         self.queue
             .write_buffer(&self.hud_buffer, 0, bytemuck::bytes_of(&hud_uniform));

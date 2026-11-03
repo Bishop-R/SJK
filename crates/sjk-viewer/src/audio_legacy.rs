@@ -70,16 +70,26 @@ impl LegacyLoadTask {
                             crate::log::progress(format_args!("optional kill cue missing: {path}"));
                         }
                     }
+                    let mut cue = 0;
                     let cue_handles = transitions::CUES.map(|requested| {
-                        let Some((path, asset)) = assets::resolve_sound(&vfs, requested) else {
-                            crate::log::progress(format_args!(
-                                "optional feedback missing: {requested}"
-                            ));
-                            return None;
+                        let index = cue;
+                        cue += 1;
+                        let (path, bytes) = match assets::resolve_sound(&vfs, requested) {
+                            Some((path, asset)) => (path, asset.bytes.into()),
+                            // `cg_hitsounds` without jaPRO's or EJK's pack: SJK's own.
+                            None => match hit_sounds::made(index) {
+                                Some(bytes) => (format!("sjk/hitsound{index}.wav"), bytes),
+                                None => {
+                                    crate::log::progress(format_args!(
+                                        "optional feedback missing: {requested}"
+                                    ));
+                                    return None;
+                                }
+                            },
                         };
                         let handle = SoundHandle(next_handle);
                         next_handle = next_handle.wrapping_add(1);
-                        sounds.push((path, handle, asset.bytes.into()));
+                        sounds.push((path, handle, bytes));
                         Some(handle)
                     });
                     Ok(PreparedLegacyAudio {

@@ -63,6 +63,11 @@ const TOP: f32 = 32.0;
 const GAP_BELOW: f32 = 10.0;
 /// Room kept right of the screen's centre: the vote panel's half width and a gap.
 const CENTRE_CLEARANCE: f32 = 320.0;
+/// Room the feed keeps clear of the centre only while it has at least this much there:
+/// moved further left (`cg_killfeedX`, the HUD edit mode), it may stand anywhere.
+const MIN_ROOM: f32 = 200.0;
+/// Widest a word mark is taken to be when the column is sized (`TURBOLASER`).
+const WORD_ROOM: f32 = 160.0;
 const ROW_GAP: f32 = 4.0;
 const PAD_X: f32 = 10.0;
 const PAD_Y: f32 = 4.0;
@@ -319,6 +324,8 @@ pub(crate) struct Feed {
     /// The HUD's server time at the last update.
     now: i32,
     options: Options,
+    /// The HUD edit mode is open: an empty feed shows a sample kill to drag.
+    preview: bool,
 }
 
 impl Default for Feed {
@@ -330,6 +337,7 @@ impl Default for Feed {
             consumed: 0,
             now: 0,
             options: Options::default(),
+            preview: false,
         }
     }
 }
@@ -338,6 +346,12 @@ impl Feed {
     /// Read the options for this frame.
     pub(crate) fn sample(&mut self, console: Option<&ViewerConsole>) {
         self.options = Options::read(console);
+    }
+
+    /// While the HUD edit mode is open, an empty feed shows a sample kill, so it can be
+    /// found and dragged ([`crate::hud_edit`]); the sample fades as a kill does after.
+    pub(crate) fn set_preview(&mut self, preview: bool) {
+        self.preview = preview;
     }
 
     /// The options read by the last [`Feed::sample`].
@@ -376,6 +390,25 @@ impl Feed {
             }
         }
         self.consumed = tracker.decoded();
+        if self.preview && self.shown().next().is_none() {
+            self.push_sample(now);
+        }
+    }
+
+    /// A sample kill, stamped `now`: "Killer [saber] Victim".
+    fn push_sample(&mut self, now: i32) {
+        self.newest = (self.newest + 1) % CAPACITY;
+        self.len = (self.len + 1).min(CAPACITY);
+        let entry = &mut self.entries[self.newest];
+        entry.solo = false;
+        entry.means = 3;
+        entry.attacker_force = 0;
+        entry.start = now;
+        entry.local = false;
+        entry.killer.clear();
+        entry.killer.push_str("Killer");
+        entry.victim.clear();
+        entry.victim.push_str("Victim");
     }
 
     fn push(
@@ -488,7 +521,11 @@ impl Feed {
                 measure(&entry.killer, size).min(name_max)
             };
             let plate = Rect::new(
-                area.right - (fixed + killer + victim),
+                if area.align_left {
+                    area.left
+                } else {
+                    area.right - (fixed + killer + victim)
+                },
                 y,
                 fixed + killer + victim,
                 row,
@@ -585,8 +622,11 @@ pub(super) struct Area {
     pub(super) right: f32,
     /// Top of the newest entry.
     pub(super) top: f32,
-    /// Entries end in an ellipsis rather than pass this (the top centre's widgets).
+    /// Entries end in an ellipsis rather than pass this (the top centre's widgets, or
+    /// the column's left edge when the feed was moved away from them).
     pub(super) left: f32,
+    /// The feed was moved into the screen's left half: entries line up on `left`.
+    pub(super) align_left: bool,
     /// Window pixels per 1080-line pixel, with `cg_hudScale`.
     pub(super) scale: f32,
 }
@@ -603,15 +643,33 @@ impl Area {
         options: Options,
     ) -> Self {
         let [width, height] = viewport;
-        let under = if stack_bottom > 0.0 {
+        let right = width - RIGHT * scale - options.offset[0] * width / 640.0;
+        // The widest entry: two names at their longest, the mark and the gaps.
+        let icon = options.icon_size * VIRTUAL_TO_1080 * scale;
+        let column =
+            (2.0 * (NAME_MAX + PAD_X + SPACE) + WORD_ROOM) * scale * options.text_scale.max(1.0)
+                + icon;
+        let column_left = (right - column).max(RIGHT * scale);
+        let clear = width * 0.5 + CENTRE_CLEARANCE * dpi_scale;
+        // Where it stands by default the feed keeps right of the vote and timer;
+        // moved past them, it takes its whole column wherever that is.
+        let left = if right >= clear + MIN_ROOM * scale {
+            column_left.max(clear)
+        } else {
+            column_left
+        };
+        let align_left = (left + right) * 0.5 < width * 0.5;
+        // The top right's readouts push it down only on that side.
+        let under = if stack_bottom > 0.0 && !align_left {
             stack_bottom + GAP_BELOW * scale
         } else {
             0.0
         };
         Self {
-            right: width - RIGHT * scale - options.offset[0] * width / 640.0,
+            right,
             top: (TOP * scale).max(under) + options.offset[1] * height / 480.0,
-            left: width * 0.5 + CENTRE_CLEARANCE * dpi_scale,
+            left,
+            align_left,
             scale,
         }
     }
@@ -927,6 +985,61 @@ mod tests {
         );
         assert_eq!(nudged.right, 1920.0 - RIGHT - 30.0);
         assert_eq!(nudged.top, TOP + 45.0);
+    }
+
+    #[test]
+    fn moved_to_the_left_it_lines_up_on_its_left_under_nothing() {
+        let options = Options::default();
+        // Dragged to the top left: 1500 of 1920 pixels leftward.
+        let left = Area::below(
+            [1920.0, 1080.0],
+            1.0,
+            1.0,
+            300.0,
+            Options {
+                offset: [500.0, 0.0],
+                ..options
+            },
+        );
+        assert!(left.align_left);
+        assert_eq!(left.left, RIGHT, "its column stops at the screen's edge");
+        assert_eq!(left.top, TOP, "the top right's stack is on the other side");
+        // Past the vote panel but still on the right: the whole column, right-aligned.
+        let middle = Area::below(
+            [1920.0, 1080.0],
+            1.0,
+            1.0,
+            0.0,
+            Options {
+                offset: [150.0, 0.0],
+                ..options
+            },
+        );
+        assert!(!middle.align_left);
+        assert!(middle.left < 960.0 + CENTRE_CLEARANCE);
+        assert!(
+            middle.right - middle.left > 600.0,
+            "room for two long names"
+        );
+    }
+
+    #[test]
+    fn the_hud_edit_mode_shows_a_sample_while_the_feed_is_empty() {
+        let tracker = ObituaryTracker::new();
+        let game = game();
+        let mut feed = Feed::default();
+        feed.observe(&tracker, &game, 1_000, 0);
+        assert_eq!(feed.showing(), 0);
+        feed.set_preview(true);
+        feed.observe(&tracker, &game, 1_000, 0);
+        assert_eq!(feed.showing(), 1);
+        assert_eq!(feed.text(TEXT_FIRST + 3 * feed.newest as u32), "Killer");
+        // It is renewed while the mode stays open, never piling up.
+        feed.observe(&tracker, &game, 1_000 + HOLD_MS + FADE_MS, 0);
+        assert_eq!(feed.showing(), 1);
+        feed.set_preview(false);
+        feed.observe(&tracker, &game, 1_000 + 3 * (HOLD_MS + FADE_MS), 0);
+        assert_eq!(feed.showing(), 0, "it fades once the mode closes");
     }
 
     /// Five long-named kills with every kind of mark draw inside their area and

@@ -182,6 +182,13 @@ impl HeldKeys {
         self.slots[index] = Some((code, name));
     }
 
+    /// Whether `code` was pressed through the bindings and is still down.
+    pub(crate) fn contains(&self, code: KeyCode) -> bool {
+        self.slots
+            .iter()
+            .any(|slot| slot.is_some_and(|(held, _)| held == code))
+    }
+
     /// Forget `code` and return the name it was pressed under.
     pub(crate) fn release(&mut self, code: KeyCode) -> Option<KeyName> {
         self.slots

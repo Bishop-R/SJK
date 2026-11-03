@@ -32,6 +32,13 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Mute one player's sounds: `mutesounds <player>` silences their voice, steps, saber, Force, emotes and toys until the map changes, their chat and look unchanged (`unmutesounds` lifts it); with Ignore mutes sounds (`cl_ignoreMutesSounds`, Settings > Chat, off by default) a JA+ or jaPRO `ignore` does it too _(Sol, after akr's and Neffie's ideas)_
+- Muted sounds (`s_muteSounds`, Settings > Sound): words such as `ysalamiri hacking`, and no sound whose file name holds one plays, items' and power-ups' loops included _(Sol, after akr's and Neffie's ideas)_
+- Hit sounds (`cg_hitsounds`, Settings > Sound, off by default): a sound each time your attack hits a player, another for a teammate, as in EJK; without EJK's or jaPRO's pack SJK plays its own (a tick, a blip, two notes or a knock) instead of nothing _(Sol, after Lex's idea and JoF EJK)_
+- Green on shield hits (`cg_hitMarkerShield`, Settings > HUD, off by default): with the damage hitmarker on, a hit your shield took shows green instead of red _(Sol, after AngeloPapaya's idea)_
+- Kill feed anywhere: Move HUD elements (`hud_edit`) shows a sample kill to drag while none shows, and the feed may now go anywhere, its entries lining up on their left in the screen's left half _(Sol, after AngeloPapaya's idea)_
+- Move with console open (`cl_consoleMove`, Settings > Controls, off by default): the movement keys you hold as the console opens keep moving you while you type, and letting one go stops it _(Sol, after AngeloPapaya's idea)_
+- Low jump (`lowjump`, Settings > Key bindings > Movement > Low jump (EJK)): one press jumps for a single command, the shortest hop a tap makes, as JoF EJK's bind does; only what a quick tap sends _(Sol, after AngeloPapaya's idea and JoF EJK)_
 - Fewer stutters when players join or NPCs appear: the hats and capes players wear and the models an effect needs load in the background, and new effects no longer rebuild every effect picture inside one frame (210 ms when JoF's NPCs spawned) _(Sol, after Lex's and Nib's reports)_
 - JA+ katas, kicks and `+button12` no longer turn into a plain hook after a join whose server info was lost: SJK asks again, remembers what each server runs and, if it still joined without its JA+ keys, joins again with them _(Sol, after Rollembones' report)_
 - Younglings, Jawas and other resized models keep their size as a ragdoll _(Sol, after Rollembones' report)_

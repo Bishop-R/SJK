@@ -247,8 +247,20 @@ impl GpuState {
         self.gameplay_input.release_keys();
     }
 
+    /// Free the pointer as [`Self::release_pointer`] does, keeping the movement keys
+    /// held ([`crate::console_move`]).
+    pub(crate) fn release_pointer_keeping_movement(&mut self) {
+        self.apply_cursor_mode(CursorMode::Free);
+        self.gameplay_input.release_keys_but_movement();
+    }
+
     /// Keyboard catchers also advertise BUTTON_TALK, as CL_CmdButtons does.
     pub(crate) fn key_catcher_active(&self) -> bool {
+        self.catcher_active(true)
+    }
+
+    /// [`Self::key_catcher_active`], the console counted or not.
+    fn catcher_active(&self, console: bool) -> bool {
         self.game_menu
             || self.hud_edit.is_open()
             || self.text_dialog.is_open()
@@ -256,10 +268,11 @@ impl GpuState {
             || self.official.window.is_open()
             || self.news.is_open()
             || self.chat.is_typing()
-            || self
-                .console
-                .as_ref()
-                .is_some_and(|console| console.is_open())
+            || (console
+                && self
+                    .console
+                    .as_ref()
+                    .is_some_and(|console| console.is_open()))
             || self
                 .client_menu
                 .as_ref()
@@ -268,8 +281,9 @@ impl GpuState {
 
     /// Commands carry `BUTTON_TALK`: a key catcher is open, or the window is away
     /// (alt-tabbed or minimised, see [`crate::console::ViewerConsole::window_talk`]).
+    /// With `cl_consoleMove` the open console alone does not ([`crate::console_move`]).
     pub(crate) fn talk_button(&self) -> bool {
-        self.key_catcher_active()
+        self.catcher_active(!self.console_keeps_moving())
             || self
                 .console
                 .as_ref()

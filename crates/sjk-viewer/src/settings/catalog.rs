@@ -274,6 +274,16 @@ pub(super) const AUDIO: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Hit sounds",
+        cvar: "cg_hitsounds",
+        kind: ValueKind::Choice(&["0", "1", "2", "3", "4", "5", "6"]),
+    },
+    Setting {
+        label: "Muted sounds",
+        cvar: crate::audio::muted_sounds::CVAR,
+        kind: ValueKind::Text,
+    },
+    Setting {
         label: "Sound sonar",
         cvar: crate::sound_sonar::CVAR,
         kind: ValueKind::Bool,
@@ -648,6 +658,11 @@ pub(super) const HUD: &[Setting] = &[
     Setting {
         label: "Damage hitmarker",
         cvar: "cg_hitMarker",
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Green on shield hits",
+        cvar: crate::damage_feedback::SHIELD_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {
@@ -1045,6 +1060,11 @@ pub(super) const CONTROLS: &[Setting] = &[
         label: "Hold mouse 4/5 repeats",
         cvar: crate::input::mouse_repeat::CVAR,
         kind: ValueKind::Choice(&["0", "1", "2"]),
+    },
+    Setting {
+        label: "Move with console open",
+        cvar: crate::console_move::CVAR,
+        kind: ValueKind::Bool,
     },
 ];
 pub(super) const GAME: &[Setting] = &[
@@ -1741,6 +1761,11 @@ pub(super) const NETWORK: &[Setting] = &[
     Setting {
         label: "Follow SJK staff blocks",
         cvar: crate::map_blocks::CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
+        label: "Ignore mutes sounds",
+        cvar: crate::sound_mutes::IGNORE_CVAR,
         kind: ValueKind::Bool,
     },
     Setting {

@@ -24,6 +24,54 @@
 
 # ---- Console & chat ----
 
+[sound-mutes]
+area: Audio
+title: Mute one player's sounds (mutesounds), ignore ties, sounds muted by name
+change: mutesounds <player> silences what they cause until the map changes; chat/look stay.
+change: cl_ignoreMutesSounds: a JA+/jaPRO ignore <player> also mutes their sounds (toggle).
+change: s_muteSounds "words": no sound whose file path holds one plays.
+test: mutesounds target on a bot: its steps, saber and voice are gone; its chat still shows.
+test: unmutesounds all: heard again. Change map: mutesounds lists nobody.
+test: Settings > Chat > Ignore mutes sounds on; on JA+ type ignore <name>: silent; again: back.
+test: s_muteSounds saberhum: hums gone at once; clear it: back.
+[hit-sounds-made]
+area: Audio
+title: Hit sounds (cg_hitsounds) without EJK's pack, and its Settings row
+change: Settings > Sound > Hit sounds; 1-4 play SJK's own tones when no hitsound*.wav exists.
+change: A pack's hitsound*.wav still wins; teammate hits play a falling buzz.
+test: Settings > Sound > Hit sounds: Tick; hit a bot or player: a tick for each hit.
+test: Try Blip, Two notes, Knock; hit a teammate in TFFA: the buzz.
+test: The effects volume (s_volume) turns them down with the rest.
+[hitmarker-shield]
+area: HUD
+title: Damage hitmarker green on shield hits (cg_hitMarkerShield), off by default
+change: With cg_hitMarker 1, a hit that lowered your armour shows the arc in green.
+test: cg_hitMarker 1, cg_hitMarkerShield 1; pick up a shield, take a hit: green arc.
+test: Without armour, or with the option off: the red arc as before.
+[killfeed-anywhere]
+area: HUD
+title: Kill feed placed anywhere (HUD edit mode)
+change: hud_edit shows a sample kill (Killer [saber] Victim) while no kill shows.
+change: Moved past the vote panel it takes a full column; in the left half it aligns left.
+test: Open Move HUD elements with no kills: the sample shows, drag it to the top left.
+test: Kill someone: the real kill lines up on the left, names not cut short.
+test: Right-click it in the mode: back to the top right, under the FPS readout.
+[console-move]
+area: Input
+title: Move with console open (cl_consoleMove), off by default
+change: Movement keys held as the console opens keep their hold; no BUTTON_TALK then.
+change: Their key repeats are not typed; keys pressed with the console open still type.
+test: Settings > Controls > Move with console open on; run forward, open the console.
+test: You keep running, no talk balloon; the line gets no wwww; let W go: you stop.
+test: Off (default): opening the console stops you, as before.
+[low-jump]
+area: Input
+title: Low jump (lowjump), as JoF EJK's bind
+change: lowjump holds jump in the next user command only: the shortest hop a tap makes.
+change: Key bindings > Movement > Low jump (EJK); unbound by default.
+test: Bind it (bind v lowjump), jump with it and with Space: the low jump is lower.
+test: With Force jump 3, hold Space and press it: the held jump goes on as before.
+note: Nothing the server would not take from a quick tap; no restriction applies.
 [join-stutter-1103]
 area: Rendering & effects
 title: Joins and NPC spawns: hats, effect models and the effect atlas load in the background

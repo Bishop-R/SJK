@@ -1,3 +1,27 @@
+## #ideas 03/11: low jump, console movement, kill feed, shield hits, hit sounds, sound mutes
+
+03/11/2026, `personal/hud-ideas-1103` from `main` `566c944e`, read from the code and JoF
+EJK's source, nothing tried in a game. AngeloPapaya's ideas: `lowjump` (EJK's
+`CG_Lowjump_f`: jump in one user command only), Move with console open
+(`cl_consoleMove`, off: held movement keys keep their hold and `BUTTON_TALK` is left out
+while the console alone is open, [client.md](client.md)), the kill feed placed anywhere
+(a sample kill to drag in the HUD edit mode; moved past the vote panel it takes a full
+column, aligned left in the left half), and Green on shield hits (`cg_hitMarkerShield`,
+off: the damage indicator of the hits *you take* turns green when your armour fell; hits
+you land have no indicator, so that reading of the idea was not built). Lex's
+`cg_hitsounds` existed (TaystJK port) but was silent without jaPRO's or EJK's
+`hitsound*.wav`; SJK now makes short tones when they are missing, and the option has a
+Settings row. akr's and Neffie's: `mutesounds <player>` (what a block silences, without
+the rest, until the map changes), `cl_ignoreMutesSounds` (off: a JA+/jaPRO `ignore` the
+player sends mutes the same way), and `s_muteSounds` (any sound by a word of its path,
+tested where the mixer is fed) ([hub-chat.md](hub-chat.md#muting-a-players-sounds)).
+Verified: unit tests (low jump at 8/7/4/3 ms, held movement kept, kill feed area and
+sample, shield test, made WAVs decode, mute words, ignore parsing), fmt, clippy,
+workspace tests. Not verified: in a game; which sound akr and Neffie heard as the
+ysalamiri's (no loop of that name in base JKA, so it is likely a mod's or map's: the
+words reach it whatever plays it); how the made hit sounds sound; JA+'s and jaPRO's
+`ignore` argument forms beyond a name or slot.
+
 ## Joins, JA+ keys, ragdoll scale, skin hum, sound device (hub #236 #230 #222 #223 #233 #210)
 
 03/11/2026, `personal/gameplay-1103` from `main` `d1640233`. Read from the code and Sol's

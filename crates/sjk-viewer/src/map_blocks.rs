@@ -100,6 +100,11 @@ impl MapBlocks {
         count
     }
 
+    /// Whether this player blocked anyone for the map (the slots may need working out).
+    pub(crate) fn pending(&self) -> bool {
+        self.own.iter().any(Option::is_some) || self.own_slots != 0
+    }
+
     /// The slots this player blocked for the map, as last worked out.
     pub(crate) fn own_slots(&self) -> u32 {
         self.own_slots
