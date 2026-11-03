@@ -1167,6 +1167,7 @@ impl GpuState {
                 force_bar: [0.0; 4],
                 _padding: [0.0; 3],
                 crosshair_parameters: [0.0, 0.0, 640.0, 480.0],
+                damage_color: [0.0; 4],
             }),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
@@ -2177,6 +2178,7 @@ impl GpuState {
             force_bar: hud_layout.force_bar,
             _padding: [0.0; 3],
             crosshair_parameters: self.hud.targeting.parameters(viewport),
+            damage_color: damage.map_or([0.0; 4], damage_feedback::Sample::color),
         };
         self.queue
             .write_buffer(&self.hud_buffer, 0, bytemuck::bytes_of(&hud_uniform));

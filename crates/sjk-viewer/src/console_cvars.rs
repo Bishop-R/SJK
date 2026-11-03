@@ -1219,6 +1219,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Show the red damage-direction indicator near the crosshair (0 off, 1 on)",
         ),
         CvarDefinition::new(
+            crate::damage_feedback::SHIELD_CVAR,
+            false,
+            archive,
+            "The damage indicator shows green, not red, when the hit took your shield (armour)",
+        ),
+        CvarDefinition::new(
             "cg_shieldBrightness",
             2_i64,
             archive,

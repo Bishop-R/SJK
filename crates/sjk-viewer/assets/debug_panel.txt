@@ -24,6 +24,12 @@
 
 # ---- Console & chat ----
 
+[hitmarker-shield]
+area: HUD
+title: Damage hitmarker green on shield hits (cg_hitMarkerShield), off by default
+change: With cg_hitMarker 1, a hit that lowered your armour shows the arc in green.
+test: cg_hitMarker 1, cg_hitMarkerShield 1; pick up a shield, take a hit: green arc.
+test: Without armour, or with the option off: the red arc as before.
 [killfeed-anywhere]
 area: HUD
 title: Kill feed placed anywhere (HUD edit mode)

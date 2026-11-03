@@ -515,6 +515,7 @@ impl Group {
                 "cg_crosshair",
                 "cg_crosshairSize",
                 "cg_hitMarker",
+                crate::damage_feedback::SHIELD_CVAR,
                 "cg_drawCrosshairNames",
                 "cg_drawPlayerNames",
                 "cg_drawPlayerNamesScale",

@@ -21,6 +21,7 @@ struct HudState {
     armor_bar: vec4<f32>,
     force_bar: vec4<f32>,
     crosshair_parameters: vec4<f32>,
+    damage_color: vec4<f32>,
 }
 
 @group(0) @binding(0)
@@ -130,7 +131,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let inner = 0.080 - 0.004 * hud.damage_strength;
         let outer = 0.092 + 0.004 * hud.damage_strength;
         if radial >= inner && radial <= outer && facing > 0.88 {
-            return vec4(1.0, 0.11, 0.045, hud.damage_alpha * (0.55 + 0.40 * hud.damage_strength));
+            let tint = select(vec3(1.0, 0.11, 0.045), hud.damage_color.rgb, hud.damage_color.a > 0.5);
+            return vec4(tint, hud.damage_alpha * (0.55 + 0.40 * hud.damage_strength));
         }
     }
 

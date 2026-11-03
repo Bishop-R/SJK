@@ -1025,6 +1025,10 @@ const HELP: &[(&str, &str)] = &[
         "Red direction indicator when you take damage. Off by default; camera kick and sounds stay the same.",
     ),
     (
+        crate::damage_feedback::SHIELD_CVAR,
+        "With the damage hitmarker on, it shows green instead of red when the hit took your shield.",
+    ),
+    (
         "cg_shieldBrightness",
         "How bright the shield flash on the body is: 1 is the stock look, 2 the default, 12 the strongest. Not used by the sphere.",
     ),

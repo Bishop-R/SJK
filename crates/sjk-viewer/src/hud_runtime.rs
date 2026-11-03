@@ -140,6 +140,9 @@ pub(crate) struct HudUniform {
     pub(crate) _padding: [f32; 3],
     /// Offset UV and dimensions used to size the crosshair.
     pub(crate) crosshair_parameters: [f32; 4],
+    /// The damage indicator's colour when its alpha is above 0.5, else stock's red
+    /// (`cg_hitMarkerShield`: green for a hit the shield took).
+    pub(crate) damage_color: [f32; 4],
 }
 
 /// Refresh retained HUD data and project movement guides through this frame's camera.

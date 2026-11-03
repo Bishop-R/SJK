@@ -1029,7 +1029,8 @@ AngeloPapaya, a player, asked for JoF EJK's low jump: Sol built it as the `lowju
 (03/11/2026), jump held for one user command, the shortest hop a tap makes. He asked
 to move with the console open: Sol built Move with console open (`cl_consoleMove`). He
 asked to place the kill feed anywhere: the HUD edit mode now shows a sample kill to drag
-and the feed may stand anywhere on the screen.
+and the feed may stand anywhere on the screen. His idea of a green damage flash on armour
+became Green on shield hits (`cg_hitMarkerShield`).
 
 ## Testing
 

@@ -542,6 +542,7 @@ role: Ideas for SJK
 did: Low jump: one press, the shortest hop a tap makes (lowjump)
 did: Moving with the console open (cl_consoleMove)
 did: The kill feed placed anywhere, dragged in the HUD edit mode
+did: The damage hitmarker in green for hits your shield takes
 
 == Testing
 

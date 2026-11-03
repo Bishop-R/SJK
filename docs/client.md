@@ -15,6 +15,15 @@ The shield sphere option and damage-event timing are unchanged.
 damage-direction indicator near the crosshair when you take damage. It defaults
 to `0` (off); `cg_hitMarker 1` enables it immediately and saves the choice.
 It does not change damage camera kick, hit sounds or damage-event timing.
+With Settings > HUD > Green on shield hits (`cg_hitMarkerShield`, off by default,
+AngeloPapaya's idea, 03/11/2026) the indicator is green instead of red when the hit took
+your shield: the armour in the snapshot carrying the damage event is lower than in the one
+before (`G_Damage` takes from armour first). A hit that took health only, or came with no
+armour left, stays red. It is the indicator of the damage you take: a hit you land shows
+nothing on the screen, and the server tells the attacker only the target's health and
+armour of the last hit (`PERS_ATTACKEE_ARMOR`, which `cg_hitsounds` listens to beside
+`PERS_HITS`), so nothing here colours hits on others
+([damage_feedback.rs](../crates/sjk-viewer/src/damage_feedback.rs)).
 
 Settings > Mods > Asset browser or `assetbrowser` opens SJK's installed PK3 browser (also discoverable through F3
 in the console's command browser). Select a pack with the arrow keys or wheel;

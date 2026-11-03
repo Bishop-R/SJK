@@ -32,6 +32,7 @@ Add each release's notes here when it is tagged (docs/sjk.md "Releases").
 -->
 ## Unreleased
 
+- Green on shield hits (`cg_hitMarkerShield`, Settings > HUD, off by default): with the damage hitmarker on, a hit your shield took shows green instead of red _(Sol, after AngeloPapaya's idea)_
 - Kill feed anywhere: Move HUD elements (`hud_edit`) shows a sample kill to drag while none shows, and the feed may now go anywhere, its entries lining up on their left in the screen's left half _(Sol, after AngeloPapaya's idea)_
 - Move with console open (`cl_consoleMove`, Settings > Controls, off by default): the movement keys you hold as the console opens keep moving you while you type, and letting one go stops it _(Sol, after AngeloPapaya's idea)_
 - Low jump (`lowjump`, Settings > Key bindings > Movement > Low jump (EJK)): one press jumps for a single command, the shortest hop a tap makes, as JoF EJK's bind does; only what a quick tap sends _(Sol, after AngeloPapaya's idea and JoF EJK)_

@@ -651,6 +651,11 @@ pub(super) const HUD: &[Setting] = &[
         kind: ValueKind::Bool,
     },
     Setting {
+        label: "Green on shield hits",
+        cvar: crate::damage_feedback::SHIELD_CVAR,
+        kind: ValueKind::Bool,
+    },
+    Setting {
         label: "Overhead names",
         cvar: "cg_drawPlayerNames",
         kind: ValueKind::Integer {

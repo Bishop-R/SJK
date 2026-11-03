@@ -21,6 +21,27 @@ pub(crate) struct Sample {
     pub(crate) y: f32,
     pub(crate) alpha: f32,
     pub(crate) strength: f32,
+    /// The hit took the player's shield (armour) and `cg_hitMarkerShield` is on: the
+    /// indicator shows green instead of red.
+    pub(crate) shield: bool,
+}
+
+/// `cg_hitMarkerShield` (AngeloPapaya's idea, 03/11/2026): the damage indicator turns
+/// green when the hit took armour, off by default (stock has only red).
+pub(crate) const SHIELD_CVAR: &str = "cg_hitMarkerShield";
+
+/// The green of a shield hit.
+const SHIELD_GREEN: [f32; 3] = [0.20, 0.95, 0.35];
+
+impl Sample {
+    /// The HUD uniform's `damage_color`: green for a shield hit, else none (red).
+    pub(crate) fn color(self) -> [f32; 4] {
+        if self.shield {
+            [SHIELD_GREEN[0], SHIELD_GREEN[1], SHIELD_GREEN[2], 1.0]
+        } else {
+            [0.0; 4]
+        }
+    }
 }
 
 /// `DAMAGE_DEFLECT_TIME` / `DAMAGE_RETURN_TIME` (`cg_local.h:42-43`).
@@ -36,12 +57,16 @@ struct Event {
     kick_pitch: f32,
     kick_roll: f32,
     server_time: i32,
+    /// The player's armour fell with the hit: the shield took (some of) it.
+    shield: bool,
 }
 
 /// Tracks `damageEvent` and exposes the active 500ms directional pulse.
 #[derive(Default)]
 pub(crate) struct Feedback {
     previous_event: Option<u8>,
+    /// The armour at the last snapshot, to tell a hit the shield took.
+    previous_armor: Option<i32>,
     active: Option<Event>,
 }
 
@@ -52,11 +77,18 @@ impl Feedback {
         at_time: i32,
         console: Option<&crate::console::ViewerConsole>,
     ) -> Option<Sample> {
+        let shield = console
+            .and_then(|console| console.bool_cvar(SHIELD_CVAR))
+            .unwrap_or(false);
         console
             .and_then(|console| console.bool_cvar("cg_hitmarker"))
             .unwrap_or(false)
             .then(|| self.sample(at_time))
             .flatten()
+            .map(|sample| Sample {
+                shield: shield && sample.shield,
+                ..sample
+            })
     }
 
     /// Whether damage feedback has established stock's `cg.attackerTime` gate.
@@ -72,15 +104,20 @@ impl Feedback {
             .previous_event
             .is_some_and(|previous| previous != damage_event);
         self.previous_event = Some(damage_event);
+        let armor = player.armor();
+        let shield = shield_hit(self.previous_armor.replace(armor), armor);
         if changed && player.damage_count() != 0 {
-            self.active = Some(calculate(
-                player.damage_yaw(),
-                player.damage_pitch(),
-                player.damage_count(),
-                player.health(),
-                player.view_angles(),
-                server_time,
-            ));
+            self.active = Some(Event {
+                shield,
+                ..calculate(
+                    player.damage_yaw(),
+                    player.damage_pitch(),
+                    player.damage_count(),
+                    player.health(),
+                    player.view_angles(),
+                    server_time,
+                )
+            });
         }
     }
 
@@ -95,6 +132,7 @@ impl Feedback {
             y: event.y,
             alpha: 1.0 - age as f32 / DAMAGE_TIME_MILLIS as f32,
             strength: event.kick / 10.0,
+            shield: event.shield,
         })
     }
 
@@ -114,6 +152,12 @@ impl Feedback {
         };
         (ratio > 0.0).then(|| [ratio * event.kick_pitch, ratio * event.kick_roll])
     }
+}
+
+/// Whether a hit taken with the armour going from `previous` to `now` hit the shield:
+/// the armour fell (`G_Damage` takes from armour first, `CheckArmor`).
+fn shield_hit(previous: Option<i32>, now: i32) -> bool {
+    previous.is_some_and(|previous| now < previous)
 }
 
 fn calculate(
@@ -161,6 +205,7 @@ fn calculate(
         kick_pitch,
         kick_roll,
         server_time,
+        shield: false,
     }
 }
 
@@ -228,6 +273,42 @@ mod tests {
         assert!(console.set_cvar("cg_hitMarker", "0"));
         assert_eq!(feedback.marker(1050, Some(&console)), None);
         assert_eq!(feedback.view_kick(1050), kick);
+    }
+
+    #[test]
+    fn a_hit_the_shield_took_shows_green_when_asked() {
+        assert!(shield_hit(Some(50), 40));
+        assert!(!shield_hit(Some(0), 0), "no armour left to lose");
+        assert!(!shield_hit(Some(40), 60), "picked up a shield");
+        assert!(!shield_hit(None, 10), "the first snapshot");
+        let directory = tempfile::tempdir().unwrap();
+        let mut console =
+            crate::console::ViewerConsole::new(directory.path().join("config.cfg")).unwrap();
+        assert!(console.set_cvar("cg_hitMarker", "1"));
+        assert_eq!(
+            console.bool_cvar(SHIELD_CVAR),
+            Some(false),
+            "off by default"
+        );
+        let feedback = Feedback {
+            active: Some(Event {
+                shield: true,
+                ..calculate(255, 255, 20, 100, [0.0; 3], 1000)
+            }),
+            ..Default::default()
+        };
+        let sample = feedback.marker(1050, Some(&console)).unwrap();
+        assert!(!sample.shield, "stock red while the option is off");
+        assert_eq!(sample.color(), [0.0; 4]);
+        assert!(console.set_cvar(SHIELD_CVAR, "1"));
+        let sample = feedback.marker(1050, Some(&console)).unwrap();
+        assert!(sample.shield);
+        assert_eq!(sample.color()[3], 1.0);
+        let red = Feedback {
+            active: Some(calculate(255, 255, 20, 100, [0.0; 3], 1000)),
+            ..Default::default()
+        };
+        assert!(!red.marker(1050, Some(&console)).unwrap().shield);
     }
 
     #[test]
