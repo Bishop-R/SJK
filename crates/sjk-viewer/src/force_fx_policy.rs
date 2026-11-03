@@ -4,7 +4,8 @@ use sjk_protocol::GameState;
 
 /// Archived local switch for animation-driven Rage/Heal/Quick Heal and Grip-victim FX.
 pub(crate) const ANIMATION_CVAR: &str = "cg_forceAnimFX";
-/// Archived Empower shape override: negative follows the advertised server mode.
+/// Archived Empower shape override: negative follows the advertised server mode,
+/// [`OFF_MODE`] hides the glow.
 pub(crate) const EMPOWER_CVAR: &str = "cg_empowerEffect";
 /// `JAPRO_PLUGIN_NEWFORCEEFFECT`, codemp/game/bg_public.h, EJK #130.
 const DISABLE_NEW_FORCE: u32 = 1 << 5;
@@ -35,8 +36,11 @@ const SCOPES: &[Scope] = &[
         points: 0x0c,
     }, // #132 cg_empowerHandBoneNames: both hands only.
 ];
-/// Highest reference mode offered by the shared settings catalogue.
-pub(crate) const MAX_SCOPE: i64 = SCOPES[SCOPES.len() - 1].mode as i64;
+/// SJK's local "off" choice (Dante's idea in #ideas): no Empower body blur at all.
+/// Not part of the #132 server contract, so an advertised 3 falls back to full body.
+const OFF_MODE: i64 = SCOPES[SCOPES.len() - 1].mode as i64 + 1;
+/// Highest mode offered by the shared settings catalogue.
+pub(crate) const MAX_SCOPE: i64 = OFF_MODE;
 
 /// Options sampled once at actor-frame submission, without allocation or locking.
 #[derive(Clone, Copy)]
@@ -74,14 +78,19 @@ impl Policy {
         } else {
             override_mode
         };
-        let scope = SCOPES
-            .iter()
-            .find(|scope| i64::from(scope.mode) == mode)
-            .unwrap_or(&SCOPES[0]);
+        let empower_points = if override_mode == OFF_MODE {
+            0
+        } else {
+            SCOPES
+                .iter()
+                .find(|scope| i64::from(scope.mode) == mode)
+                .unwrap_or(&SCOPES[0])
+                .points
+        };
         Self {
             animation: animation && enabled,
             combined: enabled,
-            empower_points: scope.points,
+            empower_points,
         }
     }
     /// Ordinary Push retains all eight points; only an Empower marker selects a subset.
@@ -155,6 +164,20 @@ mod tests {
             Policy::values(true, 1536, 2, 99).body_points(EMPOWERED),
             0xff
         );
+    }
+    #[test]
+    fn local_off_hides_only_the_empower_glow_and_is_not_a_server_mode() {
+        for advertised in [0, 1, 2] {
+            let off = Policy::values(true, 1536, advertised, OFF_MODE);
+            assert_eq!(off.body_points(EMPOWERED | (1 << 19)), 0);
+            assert_eq!(off.body_points(1 << 19), 0xff);
+            assert!(off.animation && off.combined);
+        }
+        assert_eq!(
+            Policy::values(true, 1536, OFF_MODE as i32, -1).body_points(EMPOWERED),
+            0xff
+        );
+        assert_eq!(MAX_SCOPE, 3);
     }
     #[test]
     fn server_contract_is_sampled_without_a_mod_name_or_player_override() {

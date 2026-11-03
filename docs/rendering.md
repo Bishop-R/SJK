@@ -1826,7 +1826,8 @@ separate `cg_spProtAbsColor` preference or ordinary Push/Grip-caster effects.
 
 Empower-marked body blur (`EF_EMPOWERED` with `EF_BODYPUSH`) follows the advertised
 `jp_empowerEffect` scope: 0 full body, 1 hands plus radius joints, 2 hands only,
-after #132. `cg_empowerEffect` defaults to -1 (server); 0/1/2 override it. Both
+after #132. `cg_empowerEffect` defaults to -1 (server); 0/1/2 override it, and the
+local 3 hides it (an advertised 3 is not in the contract and stays full body). Both
 settings interfaces expose the controls. Ordinary Push always uses the full
 cached joint set. The named contract/scope tables in
 [force_fx_policy.rs](../crates/sjk-viewer/src/force_fx_policy.rs) document the

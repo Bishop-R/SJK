@@ -3935,7 +3935,7 @@ FX (#130); that bit also selects the separate green/blue Protect/Absorb shells
 instead of cyan (#168). Mindtrick hides Force emissions/flamethrower audio,
 with the existing Sight exception (#93); jetpacks already follow this rule.
 Empower uses the advertised full-body/arms/hands set (#132), with the shared
-`cg_empowerEffect` override, while ordinary Push keeps every cached joint.
+`cg_empowerEffect` override (3 hides it), while ordinary Push keeps every cached joint.
 Both settings interfaces include the new controls. Scope contracts are named,
 documented tables, sampled without allocation and reused across actor submission.
 The original six animation regressions are retained and policy/visibility cases
