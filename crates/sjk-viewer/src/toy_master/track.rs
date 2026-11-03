@@ -4,7 +4,9 @@
 //! step to step after the pop, each turning the toy at its own speed and turning on or
 //! off the players' dance, the ring and the floating ([`Track`]). Changes are eased: a
 //! spin speeds up or slows over [`RAMP`], the dance and the ring come and go over
-//! [`FADE`], the toy rises and lands over [`RISE`] and [`LAND`].
+//! [`FADE`], the toy rises and lands over [`RISE`] and [`LAND`]. A show with a voice
+//! (`Show::voice`, since 03/11/2026) spins only while its sound sings, starting and
+//! stopping over [`VOICE_RAMP`].
 //!
 //! The turns are added up once per show, every [`SAMPLE`] milliseconds, and read back
 //! between two samples, so a frame costs a lookup.
@@ -16,6 +18,8 @@ use sjk_identity::toy_master::Show;
 const SAMPLE: u32 = 20;
 /// How long a change of spin takes, in milliseconds.
 const RAMP: f32 = 700.0;
+/// How long the toy takes to start or stop spinning as its sound starts or stops singing.
+const VOICE_RAMP: f32 = 90.0;
 /// How long the dance and the ring take to come or go, in milliseconds.
 const FADE: f32 = 500.0;
 /// How long the toy takes to rise as it floats, and to land when it stops.
@@ -111,7 +115,27 @@ impl Track {
         if t < step.at as f32 {
             return 0.0;
         }
-        from + (step.spin - from) * ease((t - step.at as f32) / RAMP)
+        let speed = from + (step.spin - from) * ease((t - step.at as f32) / RAMP);
+        speed * self.singing(t)
+    }
+
+    /// How far the toy's sound sings `t` ms after the lead, from 0 to 1, eased in and
+    /// out over [`VOICE_RAMP`]; always 1 for a show without a voice.
+    fn singing(&self, t: f32) -> f32 {
+        let voice = &self.show.voice;
+        if voice.is_empty() {
+            return 1.0;
+        }
+        let Some(&[from, to]) = voice.iter().rev().find(|span| span[0] as f32 <= t) else {
+            return 0.0;
+        };
+        let (from, to) = (from as f32, to as f32);
+        let up = ease((t.min(to) - from) / VOICE_RAMP);
+        if t <= to {
+            up
+        } else {
+            up * (1.0 - ease((t - to) / VOICE_RAMP))
+        }
     }
 
     /// How far on `flag` is `t` ms after the lead, from 0 to 1, coming and going over
@@ -372,6 +396,7 @@ pub(crate) mod tests {
             reach: 400.0,
             ring: "models/r.md3".to_owned(),
             ring_radius: 100.0,
+            voice: Vec::new(),
         }
     }
 
@@ -418,6 +443,30 @@ pub(crate) mod tests {
             assert!(turn - last < 3.0 * 0.36 * 37.0 + 0.5, "{ms}");
             last = turn;
         }
+    }
+
+    /// With a voice, the toy spins only while its sound sings: still between, easing in
+    /// and out quickly, and at its step's speed within.
+    #[test]
+    fn a_show_with_a_voice_spins_only_while_it_sings() {
+        let show = Show {
+            voice: vec![[10_000, 11_000], [11_300, 12_000]],
+            ..stepped()
+        };
+        let track = Track::new(&show);
+        let turn = |ms: f32| track.at(LEAD + ms).unwrap().turn;
+        let speed = |ms: f32| (turn(ms + 10.0) - turn(ms)) / 10.0;
+        assert!(speed(9_000.0).abs() < 1e-4);
+        assert!((speed(10_500.0) - 3.0 * 0.36).abs() < 0.01, "{}", speed(10_500.0));
+        assert!(speed(11_200.0).abs() < 1e-4);
+        assert!(speed(11_600.0) > 1.0);
+        assert!(speed(13_000.0).abs() < 1e-4);
+        // Starting and stopping are eased, not jumps.
+        assert!(speed(10_030.0) > 0.0 && speed(10_030.0) < 1.0);
+        assert!(speed(11_030.0) > 0.0 && speed(11_030.0) < 1.0);
+        // No voice: it spins all through its steps, as before.
+        let plain = Track::new(&stepped());
+        assert!(plain.at(LEAD + 9_000.0).unwrap().turn > 0.0);
     }
 
     /// A show without steps plays as before: gone, back, spinning for `spin`, dancing.

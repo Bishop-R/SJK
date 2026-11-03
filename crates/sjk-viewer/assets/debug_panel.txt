@@ -8225,6 +8225,15 @@ test: 108 s: drops fly and land in the same spots on both clients; Use takes one
 test: the other client sees it vanish; History says Taken from a Toy Master's toy.
 note: Needs the hub's toy-show-steps (PR #10) and the SJK Extras' unofficial_sjk_toys.pk3.
 
+[toy-master-voice]
+area: Gameplay
+title: Toy Master: spin only while the song sings
+change: A show with a voice (the hub's sung spans) spins the toy only within them.
+change: Between them it stands still; it starts and stops over 90 ms, not 0.7 s.
+test: play the show: the toy spins on the sung parts and stops in the silences.
+test: the dance, ring, float and drops still come at the same times.
+note: Needs the hub's cat-voice-spin branch deployed; older clients spin steadily.
+
 [chat-find-blades]
 area: Console & chat
 title: Grand finds in chat: crystal picture, coloured prize, blade

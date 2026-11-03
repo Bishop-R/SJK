@@ -87,6 +87,14 @@ steps plays a stepped show's spin for `spin` only.
   the show's seed and the slot.
 - `spit`: the toy throws out the show's drops, spread evenly over the step (below).
 
+A show may also have a voice (`Show::voice`, since 03/11/2026): the spans, from and to in
+milliseconds after its sound starts, when its sound sings. Then the toy spins only within
+them, at its step's speed, and stands still between, starting and stopping over 90 ms
+(`VOICE_RAMP`): the dancers and the ring, which turn with it, stop too. The other steps'
+flags (dance, ring, float, spit) keep their own times, so the drops are spread as before.
+A client older than the voice ignores it and spins all through its steps. The hub takes
+the spans from the toy's song with its voice separated out (Demucs).
+
 Changes are eased: a spin's speed over 0.7 s, the dance and the ring over 0.5 s, the
 toy's rise over 1.5 s and its landing over 0.9 s. The toy's sound plays for the whole
 show and stops at its end.

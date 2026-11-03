@@ -1283,6 +1283,7 @@ mod tests {
         reach: 0.0,
         ring: String::new(),
         ring_radius: 0.0,
+        voice: Vec::new(),
     };
 
     /// A model near a spinning toy turns and squishes with its feet on the floor; one far

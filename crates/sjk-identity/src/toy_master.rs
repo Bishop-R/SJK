@@ -48,6 +48,11 @@ pub struct Show {
     /// That model's own radius, in units.
     #[serde(default)]
     pub ring_radius: f32,
+    /// When its sound sings, from and to, in milliseconds after it starts, in order
+    /// (since 03/11/2026): with any, the toy spins only while its sound sings and stands
+    /// still between (its steps still say how fast).
+    #[serde(default)]
+    pub voice: Vec<[u32; 2]>,
 }
 
 /// One step of a show, from `at` (milliseconds after its sound starts) to the next: the
