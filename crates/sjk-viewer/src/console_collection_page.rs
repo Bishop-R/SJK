@@ -78,6 +78,8 @@ impl ViewerConsole {
         self.holocrons_panel.close();
         self.dead_key.settle();
         self.collection_panel.open(tab, owns_console, hub, back);
+        let store = super::collection_panel::loadouts::Store::load(self.config_directory());
+        self.collection_panel.set_loadouts(&store, Some(""));
     }
 
     fn close_collection_panel(&mut self) {
@@ -141,6 +143,7 @@ impl ViewerConsole {
             PanelAction::ToySight { cvar, seen } => {
                 self.set_cvar(cvar, if seen { "1" } else { "0" });
             }
+            PanelAction::Loadout(request) => self.loadout_request(&request),
             PanelAction::ToyOption { cvar, on } => {
                 self.set_cvar(cvar, if on { "1" } else { "0" });
             }
@@ -339,6 +342,37 @@ impl ViewerConsole {
     /// The Toys tab asked to turn the Banana peel on (`true`) or off, once.
     pub(crate) fn take_banana_request(&mut self) -> Option<bool> {
         self.pending_banana.take()
+    }
+
+    /// Carry out what the Collection's Loadouts card asked, and show the slots again with
+    /// what it did.
+    fn loadout_request(&mut self, request: &super::collection_panel::loadouts::Request) {
+        use super::collection_panel::loadouts::{Request, Store};
+        let directory = self.config_directory().to_path_buf();
+        let mut store = Store::load(&directory);
+        let (changed, set) = store.apply(request, |cvar| {
+            self.text_value(cvar).unwrap_or_default().to_owned()
+        });
+        if changed {
+            store.save(&directory);
+        }
+        for (cvar, value) in &set {
+            let _ = self.set_cvar(cvar, value);
+        }
+        let name = |slot: usize| {
+            store.slots[slot]
+                .as_ref()
+                .map_or_else(String::new, |loadout| loadout.name.clone())
+        };
+        let note = match request {
+            Request::Wear(slot) if set.is_empty() => format!("You already wear {}", name(*slot)),
+            Request::Wear(slot) => format!("Wearing {}", name(*slot)),
+            Request::Save(slot) => format!("Your look is saved as {}", name(*slot)),
+            Request::Rename(slot, _) if changed => format!("Renamed {}", name(*slot)),
+            Request::Rename(..) => String::new(),
+            Request::Clear(slot) => format!("Slot {} is empty", slot + 1),
+        };
+        self.collection_panel.set_loadouts(&store, Some(&note));
     }
 
     /// Give a pressed key to the open page; false when the page is closed.
@@ -699,6 +733,13 @@ impl ViewerConsole {
     ) {
         self.collection_panel.preview = unlocks;
         self.collection_panel.shot_seconds = Some(seconds);
+    }
+
+    /// Open the Collection's Loadouts card over its page with `store`'s slots, for a
+    /// world shot.
+    #[cfg(test)]
+    pub(crate) fn preview_loadouts(&mut self, store: &super::collection_panel::loadouts::Store) {
+        self.collection_panel.open_loadouts_for_shot(store);
     }
 
     /// Open the page on its own on `tab` with `unlocks` in place of the own profile's,

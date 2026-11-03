@@ -1764,6 +1764,27 @@ for the run.
   nameplates and sharing your health, shield and Force
   ([client.md](client.md#sharing-and-estimates)). A quiet line under it says what on or
   off means (or, with the identity off, that sharing needs it).
+- **Loadouts** (03/11/2026, Lex's idea,
+  [collection_loadouts.rs](../crates/sjk-viewer/src/collection_loadouts.rs)): on Shaders,
+  Tags and Nameplates an outlined "Loadouts (P)" button under the tally (x 1624 to 1824,
+  y 206) opens a pop-up card (`kit::card`, x 440 to 1480, y 170 to 910, over the scrim;
+  the page is left out under it): "Loadouts" in gold, "Kept on this PC", the headline
+  "Save your look, wear it again in one click" and what a loadout keeps, then five slots,
+  a row of 86 each: the number, the name in gold while chosen (or "Empty slot") and a line
+  of what it keeps (hilts, shaders, tag), and Wear (gold), Save here, Rename and Empty.
+  Save here over a kept loadout and Empty ask for a second press (the ember line under the
+  rows says so); the line otherwise says what the last press did ("Wearing Duels").
+  Rename turns the name into a field (Enter keeps it, Escape cancels, Ctrl+A, Ctrl+C,
+  Ctrl+V and a held Backspace as in every field, at most 24 characters). Keys: Up and
+  Down (or 1 to 5) choose, Enter wears (saves into an empty slot), S saves here, R or F2
+  renames, Delete empties, Escape closes; under the card the keys line says so. A
+  loadout keeps `saber1`, `saber2`, `cp_sbRGB1`, `cp_sbRGB2`, `color1`, `color2` (the hat
+  and cape ride on them), `cg_saberSkin`, `cg_saberSkin2`, `cg_saberSkinOptions`,
+  `cg_nameplateStyle`, `cg_tag` and `cg_tagFinish`; Wear sets back those that differ, a
+  shader no longer held showing stock until held, as `saberskin` sets one. The slots are
+  `loadouts.json` in the profile folder, never sent to the hub. Unit tests (file round
+  trip, wear sets only what differs, second presses, rename field, the card's fit) and
+  world shot `world_shot::collection::duel6_sjk_loadouts`.
 - **Holocrons** ([holocrons_panel.rs](../crates/sjk-viewer/src/holocrons_panel.rs),
   [holocrons_panel_view.rs](../crates/sjk-viewer/src/holocrons_panel_view.rs),
   [holocrons.md](holocrons.md#the-holocrons-tab), 10/10/2026, Sol's holocron drops): a

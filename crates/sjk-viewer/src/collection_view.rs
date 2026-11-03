@@ -346,6 +346,14 @@ impl Panel {
         if let Some(shards) = self.forge.data.shards.filter(|shards| *shards > 0) {
             labels[Tab::Forge.index()] = crate::cards::grouped(shards);
         }
+        // The Loadouts card covers the page: text draws over every shape, so the page is
+        // left out under it.
+        if self.loadouts.is_open() {
+            self.loadouts
+                .draw(&mut self.ui, &frame, viewport, &self.loadout_slots);
+            self.ui.finish(u16::MAX);
+            return;
+        }
         let asking = self.tab == Tab::Forge && self.forge.ask.is_some();
         let back = if self.hub {
             crate::profile_hub::back_words(self.back)
@@ -378,6 +386,24 @@ impl Panel {
                 self.forge(&frame, inputs, seconds, viewport);
             }
             _ => self.nameplates(&frame, inputs),
+        }
+        if self.offers_loadouts() {
+            // Under the tally, clear of each tab's lead line and card.
+            crate::menu::sjk::kit::button(
+                &mut self.ui,
+                &frame,
+                [
+                    RIGHT_X - 200.0,
+                    206.0,
+                    200.0,
+                    crate::menu::sjk::kit::CONTROL_HEIGHT,
+                ],
+                "Loadouts  (P)",
+                false,
+                true,
+                false,
+                super::loadouts::OPEN_TOKEN,
+            );
         }
         self.keys(&frame, inputs);
         self.hover_card(&frame, inputs);

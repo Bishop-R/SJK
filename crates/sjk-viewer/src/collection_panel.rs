@@ -49,6 +49,8 @@ pub(crate) mod history;
 mod history_view;
 #[path = "collection_hover.rs"]
 mod hover;
+#[path = "collection_loadouts.rs"]
+pub(crate) mod loadouts;
 #[path = "collection_marks_view.rs"]
 mod marks_view;
 #[path = "collection_medals.rs"]
@@ -448,6 +450,9 @@ pub(crate) enum PanelAction {
         cvar: &'static str,
         seen: bool,
     },
+    /// Carry out what the Loadouts card asked: wear, save, rename or empty a slot
+    /// ([`loadouts::Request`]).
+    Loadout(loadouts::Request),
     /// One of the chosen toy's own switches on its card (the Hax's trap) on (`true`) or
     /// off: set its `cvar`.
     ToyOption {
@@ -701,6 +706,10 @@ pub(crate) struct Panel {
     toys_unseen: u16,
     /// The toys' own switches that are on, as the last frame's inputs said.
     toy_options: u16,
+    /// The Loadouts card (Shaders, Tags and Nameplates open it) and the slots it shows,
+    /// as the console last read them ([`Self::set_loadouts`]).
+    loadouts: loadouts::Card,
+    loadout_slots: [Option<loadouts::Loadout>; loadouts::SLOTS],
     /// The tile chosen on Cards (in the list the filter shows), how many tiles the last
     /// frame's list held, and the first line of them shown (the grid scrolls a line at a
     /// time).
@@ -889,6 +898,8 @@ impl Panel {
             share_on: false,
             toys_unseen: 0,
             toy_options: 0,
+            loadouts: loadouts::Card::default(),
+            loadout_slots: Default::default(),
             card: 0,
             cards_shown: 0,
             card_first: 0,
@@ -972,12 +983,41 @@ impl Panel {
     /// classic menus' commands) or as the SJK UI's Collection screen returning to
     /// `back`; `owns_console` when the console was closed before it. The things chosen
     /// on each tab stay as they were.
+    /// The loadouts kept, for the Loadouts card; `note` says what the last request did.
+    pub(crate) fn set_loadouts(&mut self, store: &loadouts::Store, note: Option<&str>) {
+        self.loadout_slots = store.slots.clone();
+        if let Some(note) = note {
+            self.loadouts.told(note);
+        }
+    }
+
+    /// Open the Loadouts card with `store`'s slots, its second one chosen, for a shot.
+    #[cfg(test)]
+    pub(crate) fn open_loadouts_for_shot(&mut self, store: &loadouts::Store) {
+        self.loadouts.open();
+        self.set_loadouts(store, Some("Wearing Duels"));
+    }
+
+    /// Whether the tab on show offers the Loadouts card: those where a look is chosen.
+    fn offers_loadouts(&self) -> bool {
+        matches!(self.tab, Tab::Shaders | Tab::Tags | Tab::Nameplates)
+    }
+
+    /// What the Loadouts card answered, as the page's action.
+    fn loadout_reply(reply: loadouts::Reply) -> PanelAction {
+        match reply {
+            loadouts::Reply::Ask(request) => PanelAction::Loadout(request),
+            loadouts::Reply::None | loadouts::Reply::Closed => PanelAction::None,
+        }
+    }
+
     pub(crate) fn open(&mut self, tab: Tab, owns_console: bool, hub: bool, back: ReturnTarget) {
         if !self.open {
             // Shaders opens on what the player wears.
             self.shader = usize::MAX;
         }
         self.open = true;
+        self.loadouts.close();
         self.owns_console = owns_console;
         self.hub = hub;
         self.back = back;
@@ -1276,6 +1316,25 @@ impl Panel {
             return PanelAction::None;
         };
         self.hover.keyed();
+        if self.loadouts.is_open() {
+            let reply = self.loadouts.key(
+                key,
+                event.text.as_deref(),
+                shift,
+                control,
+                &self.loadout_slots,
+            );
+            return Self::loadout_reply(reply);
+        }
+        if key == KeyCode::KeyP
+            && !control
+            && self.offers_loadouts()
+            && !self.search_focus
+            && self.bind_wait.is_none()
+        {
+            self.loadouts.open();
+            return PanelAction::None;
+        }
         if self.tab == Tab::Forge {
             if !control
                 && !self.forge.search_focus
@@ -1845,6 +1904,21 @@ impl Panel {
             InputEvent::PointerLeave => self.pointer = None,
             InputEvent::Action(_) => {}
         }
+        // The Loadouts card takes the pointer while it shows; the page under it does not.
+        if self.loadouts.is_open() {
+            let Some(event) = self.ui.pointer(event) else {
+                return PanelAction::None;
+            };
+            let Some(token) = event.token else {
+                return PanelAction::None;
+            };
+            let reply = self.loadouts.token(
+                token,
+                event.kind == UiEventKind::Activate,
+                &self.loadout_slots,
+            );
+            return Self::loadout_reply(reply);
+        }
         // The lone saber turns with a drag that starts on it, wherever it goes after.
         if self.tab == Tab::Shaders {
             match event {
@@ -2172,6 +2246,10 @@ impl Panel {
             GRID_VIEW_TOKEN => self.set_grid(true),
             WEAR_TOKEN | TOY_SWITCH_TOKEN | SHARE_TOKEN => self.activate(illuminate),
             TOY_SIGHT_TOKEN => self.toy_sight(),
+            loadouts::OPEN_TOKEN => {
+                self.loadouts.open();
+                PanelAction::None
+            }
             token
                 if (TOY_OPTION_TOKEN..TOY_OPTION_TOKEN + TOY_OPTION_TOKENS as u16)
                     .contains(&token) =>

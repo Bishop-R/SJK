@@ -1007,7 +1007,8 @@ Slash built the first (#293, 30/10/2026), Sol the style masters (29/10/2026).
 Lex, a player, asked for Report a bug on the main menu, not only in a match: Sol built it
 as the SJK page's Report a bug (03/11/2026). Lex also asked for the Hax trap's switches to
 sit with the Hax in the Collection rather than in Settings: Sol moved them to its card
-(03/11/2026).
+(03/11/2026). Lex asked for cosmetic loadouts as well, a look saved under a name and worn
+again in one click: Sol built the Collection's Loadouts card (03/11/2026).
 
 g0dchris, a player, asked for the dynamic glow on everything but the sabers, whose glow
 hid the blades' details: Slash built it as No glow on sabers (#294, 30/10/2026).

@@ -24,6 +24,17 @@
 
 # ---- Console & chat ----
 
+[loadouts]
+area: Menus & settings
+title: Loadouts: save your look, wear it in one click (Collection)
+change: Shaders, Tags, Nameplates: "Loadouts (P)" opens a card of five slots kept on this PC.
+change: A slot keeps hilts, both shaders and parts, colours (hat, cape), plate style and tag.
+test: Collection > Shaders > Loadouts: Save here on slot 1, rename it, close.
+test: Change hilt, shader, colour and tag; Loadouts > Wear on slot 1: all come back.
+test: Save here over slot 1 asks a second press; Empty asks a second press.
+test: In a match, wear a loadout: others see the hilts and shader change.
+note: The slots are GameData/SJK/loadouts.json.
+
 [hud-switch-parts]
 area: HUD
 title: Choose what the HUD switch (cg_drawHud 0) hides

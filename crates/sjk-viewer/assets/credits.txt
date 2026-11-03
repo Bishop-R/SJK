@@ -541,6 +541,7 @@ did: The Empower glow hidden with a setting
 role: Ideas for SJK
 did: Report a bug from the main menu, not only in a match
 did: The Hax trap's switches on the Hax's card in the Collection
+did: Loadouts: a saved look worn again in one click
 
 == Testing
 

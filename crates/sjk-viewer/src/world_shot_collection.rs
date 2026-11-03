@@ -388,6 +388,63 @@ fn duel6_sjk_collection() {
 /// The rarity effects (`rarity_fx`) in motion: the Shaders grid with every tier owned
 /// at moments a third of a second apart over one sheen's period (the files
 /// `duel6-rarity-grid-<n>`), the list at two moments, and the Holocrons tab.
+/// The Loadouts card over the Collection (Lex's idea, 03/11/2026), two slots kept, at
+/// 1080 lines and 4:3; the Shaders tab's Loadouts button under the tally first.
+#[test]
+#[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
+fn duel6_sjk_loadouts() {
+    use crate::console::collection_panel::loadouts::{Request, Store};
+    on_big_stack(|| {
+        let cvars = [
+            ("ui_menuStyle", "sjk"),
+            (crate::settings::quick::HIDE_CVAR, "1"),
+            ("name", "^1Sol^7Vulpes"),
+            (crate::discord_presence::CVAR, "0"),
+        ];
+        let mut store = Store::default();
+        let look = |cvar: &str| match cvar {
+            "saber1" => "single_1".to_owned(),
+            "saber2" => "single_2".to_owned(),
+            "cg_saberSkin" => "saber_sun".to_owned(),
+            "cg_tag" => "gonk".to_owned(),
+            _ => String::new(),
+        };
+        store.apply(&Request::Save(0), look);
+        store.apply(&Request::Rename(0, "Duels".to_owned()), look);
+        store.apply(&Request::Save(2), |cvar| match cvar {
+            "saber1" => "dual_1".to_owned(),
+            _ => String::new(),
+        });
+        for size in [[1920, 1080], [1440, 1080]] {
+            let suffix = if size[0] == 1920 { "" } else { "-4x3" };
+            let Some((mut gpu, _profile)) = open(
+                "maps/mp/duel6.bsp",
+                size,
+                Some(menu::ClientMenu::new(true, String::new())),
+                &cvars,
+            ) else {
+                return;
+            };
+            gpu.looks.shot_owns_unlocks = true;
+            let _ = frame(&mut gpu, 10);
+            if let Some(console) = gpu.console.as_mut() {
+                console.preview_profile(preview());
+                console.preview_collection(Some(vec![sun()]), 0.8);
+                console.open_profile_hub_page(Tab::Shaders, ReturnTarget::MainMenu);
+            }
+            gpu.ui_epoch -= std::time::Duration::from_millis(3_000);
+            let name = format!("duel6-collection-loadouts-button{suffix}");
+            println!("{}", shoot(&mut gpu, 120, &name).display());
+            if let Some(console) = gpu.console.as_mut() {
+                console.preview_loadouts(&store);
+            }
+            let name = format!("duel6-collection-loadouts{suffix}");
+            println!("{}", shoot(&mut gpu, 8, &name).display());
+            assert!(!overflowed(&gpu), "{suffix}");
+        }
+    });
+}
+
 #[test]
 #[ignore = "renders with the GPU and the installed game data named by JKA_GAME_DATA"]
 fn duel6_sjk_rarity_effects() {
