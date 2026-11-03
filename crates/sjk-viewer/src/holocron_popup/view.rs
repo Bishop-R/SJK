@@ -513,6 +513,7 @@ mod tests {
             gift: gift && !tier.is_kyber(),
             earned: tier.is_kyber(),
             note: note.to_owned(),
+            played: false,
             traded: None,
         }
     }

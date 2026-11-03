@@ -288,6 +288,9 @@ mod holocron;
 #[path = "world_shot_cardboard_box.rs"]
 mod cardboard_box;
 
+#[path = "world_shot_fishing.rs"]
+mod fishing_shots;
+
 #[path = "world_shot_map_edits.rs"]
 mod map_edit_shots;
 

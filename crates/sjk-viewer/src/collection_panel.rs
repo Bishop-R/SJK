@@ -118,6 +118,8 @@ const MONITOR_TOKEN: u16 = 1_303;
 const BOX_HUNT_TOKEN: u16 = 1_304;
 /// The Banana peel's niche on Toys.
 const BANANA_TOKEN: u16 = 1_375;
+/// Fishing's niche on Toys.
+const FISHING_TOKEN: u16 = 1_378;
 /// The Toys tab's "?", the Toy Master's (`collection_toys::Panel::toy_master_badge`): its
 /// hover card tells of the toys hidden on maps and names those the player found.
 const TOY_MASTER_TOKEN: u16 = 1_376;
@@ -139,8 +141,9 @@ const BOTH_TOKEN: u16 = 1_306;
 /// How far (frame pixels) a press on the lone saber may move and still be a click.
 const CLICK_SLOP: f32 = 6.0;
 /// The toys the Toys tab shows: Illuminate, the cardboard box, Order 66, the Hax, the
-/// Ragdoll, the Drone, the Boombox, the Monitor, Box hunt, then the Banana peel.
-const TOY_COUNT: usize = 10;
+/// Ragdoll, the Drone, the Boombox, the Monitor, Box hunt, the Banana peel, then
+/// Fishing.
+const TOY_COUNT: usize = 11;
 /// Each toy's row, in the order of [`Panel::toy`].
 const TOY_TOKENS: [u16; TOY_COUNT] = [
     TOY_TOKEN,
@@ -153,13 +156,16 @@ const TOY_TOKENS: [u16; TOY_COUNT] = [
     MONITOR_TOKEN,
     BOX_HUNT_TOKEN,
     BANANA_TOKEN,
+    FISHING_TOKEN,
 ];
-/// Each toy row's own switch (25/10/2026): it turns that toy on or off in place.
+/// Each toy row's own switch (25/10/2026): it turns that toy on or off in place, a token
+/// a toy from here on, below [`FAVOURITE_TOKEN`].
 const TOY_SWITCH_BASE: u16 = 1_360;
+const _: () = assert!(TOY_SWITCH_BASE + TOY_COUNT as u16 <= FAVOURITE_TOKEN);
 /// The chosen toy's key, which a click or K waits for a key to bind, and Order 66's
 /// second (the key that executes the order).
-const BIND_TOKEN: u16 = 1_370;
-const BIND_SECOND_TOKEN: u16 = 1_371;
+const BIND_TOKEN: u16 = 1_377;
+const BIND_SECOND_TOKEN: u16 = 1_379;
 /// The chosen shader's star and padlock on the Shaders tab's card (29/10/2026, collection
 /// marks), and Mark all seen beside the New count.
 const FAVOURITE_TOKEN: u16 = 1_372;
@@ -395,6 +401,9 @@ pub(crate) enum PanelAction {
     /// Turn the Banana peel on (`true`) or off: the same as `toy_banana`, set rather than
     /// toggled.
     Banana(bool),
+    /// Get the fishing rod out (`true`) or put it away: the same as `toy_fishing`, set
+    /// rather than toggled.
+    Fishing(bool),
     /// Set `cg_tag` to this tag's id: the one `toy_tag` sticks.
     /// Pick a tag (or a card) for `toy_tag`, in a finish (`cg_tag`, `cg_tagFinish`).
     ChooseTag(String, &'static str),
@@ -560,6 +569,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) box_hunt: bool,
     /// The Banana peel toy is on now (kept as [`Self::illuminate`] is).
     pub(crate) banana: bool,
+    /// The fishing rod is out now (kept as [`Self::illuminate`] is).
+    pub(crate) fishing: bool,
     /// The `name` cvar, for the nameplate.
     pub(crate) name: &'a str,
     /// The stock blade's colour (`color1`), for its swatch.
@@ -668,6 +679,8 @@ pub(crate) struct Panel {
     box_hunt_on: bool,
     /// The Banana peel was on, as the last frame's inputs said.
     banana_on: bool,
+    /// The fishing rod was out, as the last frame's inputs said.
+    fishing_on: bool,
     /// See and share nameplates was on, as the last frame's inputs said.
     share_on: bool,
     /// The toys (bits by the Toys tab's order) whose other players' are hidden here, as
@@ -857,6 +870,7 @@ impl Panel {
             monitor_on: false,
             box_hunt_on: false,
             banana_on: false,
+            fishing_on: false,
             share_on: false,
             toys_unseen: 0,
             card: 0,
@@ -1100,6 +1114,7 @@ impl Panel {
             Tab::Toys if self.toy == 7 => PanelAction::Monitor(!self.monitor_on),
             Tab::Toys if self.toy == 8 => PanelAction::BoxHunt(!self.box_hunt_on),
             Tab::Toys if self.toy == 9 => PanelAction::Banana(!self.banana_on),
+            Tab::Toys if self.toy == 10 => PanelAction::Fishing(!self.fishing_on),
             Tab::Toys => PanelAction::Illuminate(!illuminate),
             Tab::Nameplates => PanelAction::SeeAndShare(!self.share_on),
             Tab::Tags => self.choose_tag(),
@@ -2139,7 +2154,7 @@ impl Panel {
             SEEN_ALL_TOKEN => self.see_all(),
             // A toy's row chooses it; its own switch runs it.
             TOY_TOKEN | BOX_TOKEN | ORDER_TOKEN | HAX_TOKEN | RAGDOLL_TOKEN | DRONE_TOKEN
-            | BOOMBOX_TOKEN | MONITOR_TOKEN | BOX_HUNT_TOKEN | BANANA_TOKEN => {
+            | BOOMBOX_TOKEN | MONITOR_TOKEN | BOX_HUNT_TOKEN | BANANA_TOKEN | FISHING_TOKEN => {
                 self.toy = TOY_TOKENS.iter().position(|&row| row == token).unwrap_or(0);
                 PanelAction::None
             }
@@ -2373,6 +2388,7 @@ mod tests {
             monitor: false,
             box_hunt: false,
             banana: false,
+            fishing: false,
             name: "^1Sol^7Vulpes",
             stock: sjk_ui::Color::new(0.16, 0.48, 1.0, 1.0),
             grid: false,

@@ -1049,12 +1049,20 @@ and in the hub (same ids):
 | Long Distance Call | `monitor_far` | a player struck with a monitor 1575 units (40 metres, as the world ping measures) or more from where it was thrown, measured where it met the body (`achievements::MONITOR_FAR`) | client |
 | Bounty Hunter, Big Game Hunter | `box_hunt_mark`, `box_hunt_marks_10` | 1, 10 box hunt marks killed (a free roll won or not) | hub |
 | Still Standing, Most Wanted | `box_hunt_survive`, `box_hunt_survive_5` | 1, 5 marks stayed to the end without a hunter's kill, still in the hunt | hub |
+| First Bite, Angler | `fish_first`, `fish_50` | 1, 50 fish landed with the Fishing toy ([client.md](client.md#fishing)) | client |
+| Every Fish in the Pond | `fish_kinds` | every kind of fish landed (12, `fishing::FISH_KINDS`) | client |
+| Echo Angler | `echo_angler` | 10 Echoes landed on the line | client |
+| Old Whiskers (hidden) | `old_whiskers` | Old Whiskers, the great catfish, landed | client |
+
 
 The fourteen after Decorated came on 26/10/2026 (Sol's list), with the categories
 Collection and Toys; the five style masters on 29/10/2026 (Dante's idea in #ideas,
 duels only at Slash's call); the toys' own from Sneaking Mission on, on 30/10/2026 (a
 player's ideas, reworked with Sol), when Toys became a category for each toy on the
-board's Fun page. Each needs the same id in the hub's catalogue. A hidden achievement (Touched by the Force) is a secret until it
+board's Fun page; the five Fishing ones on 29/10/2026 (Slash), in a Fishing category of
+their own on the Fun page, after Box hunt. Each needs the same id in the hub's catalogue,
+and the hub bounds how fast a fishing count may rise as it does the others (a bite at most
+every 20 seconds). A hidden achievement (Touched by the Force) is a secret until it
 is unlocked: the board, its hover card and the "Next up" list show "Secret" or "Secret
 achievement", a `?` in its medallion, no goal and no count; unlocked, it shows like any
 other (the unlock card names it). A retired achievement (Surveyor, since 26/10/2026)

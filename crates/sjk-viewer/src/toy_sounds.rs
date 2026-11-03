@@ -27,10 +27,11 @@ pub(crate) enum Toy {
     Master,
     PropGun,
     Tag,
+    Fishing,
 }
 
 impl Toy {
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::Box,
         Self::Order66,
         Self::Hax,
@@ -43,6 +44,7 @@ impl Toy {
         Self::Master,
         Self::PropGun,
         Self::Tag,
+        Self::Fishing,
     ];
 
     /// The switch that lets this toy be heard (on by default).
@@ -60,6 +62,7 @@ impl Toy {
             Self::Master => "s_toyMasterSound",
             Self::PropGun => "s_toyPropGunSound",
             Self::Tag => "s_toyTagSound",
+            Self::Fishing => "s_toyFishingSound",
         }
     }
 }

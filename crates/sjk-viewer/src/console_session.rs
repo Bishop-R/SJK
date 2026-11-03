@@ -642,6 +642,8 @@ impl ViewerConsole {
             pending_drone: None,
             boombox_on: false,
             pending_boombox: None,
+            fishing_on: false,
+            pending_fishing: None,
             monitor_on: false,
             pending_monitor: None,
             box_hunt_on: false,

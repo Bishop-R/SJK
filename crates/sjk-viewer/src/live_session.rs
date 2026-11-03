@@ -286,6 +286,9 @@ impl GpuState {
             self.cardboard_box
                 .set_flying(self.local_prediction.fake_noclip());
             self.cardboard_box.shape_command(&mut command);
+            // Moving, jumping or attacking puts the rod away; `+use` hooks a bite
+            // (`fishing`).
+            self.fishing.shape_command(&command);
             // A Hax hack starts and holds on `+use` (`hax`).
             self.hax.observe_use(&command);
             // `+use` at a mystery box opens it (`mystery_box`).

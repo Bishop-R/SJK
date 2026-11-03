@@ -103,6 +103,7 @@ pub(crate) fn parse(args: &[String], now: i64, first: u64) -> Result<Vec<Entry>,
             // A crystal is earned from an achievement.
             earned: tier.is_kyber(),
             note: String::new(),
+            played: false,
             traded: None,
         })
         .collect())

@@ -645,6 +645,12 @@ pub(super) fn register_daily_cvars(cvars: &mut CvarRegistry) -> Result<(), sjk_s
             "Play the sounds of the Toy Master's hidden toys (SJK)",
         ),
         CvarDefinition::new(
+            crate::toy_sounds::Toy::Fishing.cvar(),
+            true,
+            archive,
+            "Play the Fishing toy's sounds (SJK)",
+        ),
+        CvarDefinition::new(
             crate::held_view::LOOK_CVAR,
             crate::held_view::DEFAULT_LOOK,
             archive,
