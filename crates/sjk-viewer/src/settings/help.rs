@@ -580,6 +580,10 @@ const HELP: &[(&str, &str)] = &[
         "A font from this PC for the console, kept to its even grid. What it lacks comes from SJK's fonts.",
     ),
     (
+        crate::toy_sounds::Toy::Fishing.cvar(),
+        "Off: your casts, bites and catches are silent. The toy still works.",
+    ),
+    (
         crate::away_emote::SJK_CVAR,
         "A looping emote you play while away (alt-tabbed out or idle), silent. Any emote you play then goes quiet too, for everyone.",
     ),

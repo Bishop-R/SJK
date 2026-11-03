@@ -180,6 +180,7 @@ Nameplate styles, a day that follows your clock, toy achievements and many fixes
 - Mystery boxes: when the opener takes what came out, everyone else sees it go and the lid close at once, instead of it floating on for 10 seconds _(Sol)_
 - Tags: two new ones, Gonk (Uncommon) and Geyon (Rare), and the EZ tag has its real picture, all three drawn by Blep and picked from the Discord's #tag-proposals _(Sol, art by Blep)_
 - A prompt by the crosshair shows what Use does at a mystery box, with the key you bound to Use: Open mystery box and its price, Take it, or why you cannot yet (your turn in a few seconds, not enough credits), instead of a message in the middle of the screen _(Sol)_
+- Fishing toy: `toy_fishing` (the quick wheel's Toys page, Collection > Toys) gets a rod out. Stand still and press Use when the float dips to land fish and junk for your fish log; each of the 12 fish looks different, and your last catch waits in the bucket; where there is no water, a small pond appears. An Echo dropped to you while you fish comes up on the line. Five new achievements: First Bite, Angler, Every Fish in the Pond, Echo Angler and a hidden one _(Slash, PR #278, after Sanji's idea)_
 
 ## 2026.1030.2 (Alpha) | 30/10/2026
 

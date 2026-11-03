@@ -73,6 +73,14 @@ struct Queued {
     announced: bool,
 }
 
+impl Queued {
+    /// A holocron play dropped whose card is still to come: the Fishing toy's Echo.
+    /// Rehearsals, bought, gifted, traded holocrons and earned crystals never are.
+    fn echo(&self) -> bool {
+        !self.announced && !self.rehearsal && self.entry.played && !self.entry.tier.is_kyber()
+    }
+}
+
 /// The holocron on show and where its ceremony is.
 struct Showing {
     entry: Entry,
@@ -266,6 +274,20 @@ impl HolocronPopup {
     /// A holocron waits to be shown.
     pub(crate) fn pending(&self) -> bool {
         !self.queue.is_empty()
+    }
+
+    /// A holocron waits whose card has not been given yet (the Fishing toy hooks it
+    /// first, [`crate::fishing`]).
+    pub(crate) fn unannounced(&self) -> bool {
+        self.queue.iter().any(Queued::echo)
+    }
+
+    /// The tier slot of the first holocron whose card has not been given yet.
+    pub(crate) fn unannounced_tier(&self) -> Option<usize> {
+        self.queue
+            .iter()
+            .find(|waiting| Queued::echo(waiting))
+            .map(|waiting| waiting.entry.tier.slot)
     }
 
     /// Show the first holocron waiting; its ceremony begins once [`Self::update`] says
@@ -516,7 +538,12 @@ impl crate::GpuState {
                 self.holocron_popup.open_next(now);
                 self.unlock_toast
                     .withdraw(now, |unlock| matches!(unlock, Unlock::Holocron { .. }));
-            } else if notifications && !menu && self.live_session.is_some() {
+            } else if notifications
+                && !menu
+                && self.live_session.is_some()
+                && !self.fishing.holds_echo()
+            {
+                // While fishing, an Echo's card waits for its bite (`fishing`).
                 let toast = &mut self.unlock_toast;
                 self.holocron_popup.announce(|unlock| toast.push(unlock));
             }
@@ -706,8 +733,40 @@ mod tests {
             gift: false,
             earned: false,
             note: String::new(),
+            played: false,
             traded: None,
         }
+    }
+
+    /// The Fishing toy hooks only holocrons play dropped: not a rehearsal, a bought,
+    /// gifted or traded holocron, nor an earned crystal.
+    #[test]
+    fn only_play_drops_wait_as_echoes() {
+        let queued = |entry: Entry, rehearsal: bool| Queued {
+            entry,
+            rehearsal,
+            announced: false,
+        };
+        let played = Entry {
+            played: true,
+            ..entry(1, 1)
+        };
+        let mut popup = HolocronPopup::default();
+        popup.queue.extend([
+            queued(entry(2, 2), false),
+            queued(played.clone(), true),
+            queued(
+                Entry {
+                    gift: true,
+                    ..entry(3, 1)
+                },
+                false,
+            ),
+        ]);
+        assert!(!popup.unannounced() && popup.unannounced_tier().is_none());
+        popup.queue.push_back(queued(played, false));
+        assert!(popup.unannounced());
+        assert_eq!(popup.unannounced_tier(), Some(holocrons::TIERS[1].slot));
     }
 
     fn after(start: Instant, seconds: f32) -> Instant {

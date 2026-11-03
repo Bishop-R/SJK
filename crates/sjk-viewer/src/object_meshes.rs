@@ -74,6 +74,15 @@ pub(super) fn load<'a>(
         model: crate::cardboard_box::MODEL.to_owned(),
         variant: String::new(),
     });
+    appearances.extend(
+        crate::fishing::MODELS
+            .into_iter()
+            .chain(crate::fishing::FISH_MODELS.map(|fish| fish.model))
+            .map(|model| Appearance {
+                model: model.to_owned(),
+                variant: String::new(),
+            }),
+    );
     appearances.insert(Appearance {
         model: crate::drone::MODEL.to_owned(),
         variant: String::new(),

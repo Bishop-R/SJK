@@ -3,12 +3,13 @@
 //! Cardboard box), Order 66 (`docs/client.md`, Order 66), the Hax (`docs/client.md`,
 //! Hax), the Ragdoll (`docs/client.md`, Ragdoll), the Drone (`docs/client.md`, Drone),
 //! the Boombox (`docs/client.md`, Boombox), the Monitor (`docs/client.md`, Monitor), Box
-//! hunt (`docs/client.md`, Box hunt) and the Banana peel (`docs/client.md`, Banana peel),
+//! hunt (`docs/client.md`, Box hunt) the Banana peel (`docs/client.md`, Banana peel) and
+//! Fishing (`docs/client.md`, Fishing),
 //! a row to each on the left (Sol's pick of 25/10/2026, the Collection revamp's canvas):
 //! its picture, its name and a line of what it does, the key bound to it and its own
 //! switch, which runs it in place (`toy_illuminate`, `toy_box`, `toy_order66`, `toy_hax`,
 //! `toy_ragdoll`, `toy_drone`, `toy_boombox`, `toy_monitor`, `toy_boxhunt`,
-//! `toy_banana`). The chosen one is described on a dark card beside the
+//! `toy_banana`, `toy_fishing`). The chosen one is described on a dark card beside the
 //! model, where its key is bound without the console (a click or K, then the key). The
 //! holocron floats lit by the model while it is chosen.
 
@@ -19,15 +20,15 @@ use crate::menu_widgets::TextFamily;
 use sjk_ui::{Color, DrawCommand, FontWeight, TextAlign, TextureId};
 
 /// The rows: their left edge and width, where the column heads and the first row stand,
-/// a row's height and the room between rows, and its picture's side. Ten fit over the
+/// a row's height and the room between rows, and its picture's side. Eleven fit over the
 /// keys.
 const ROWS_X: f32 = LEFT_X - 12.0;
 const ROWS_WIDTH: f32 = 860.0;
 const HEADS_Y: f32 = 300.0;
 const ROWS_Y: f32 = 336.0;
-const ROW_HEIGHT: f32 = 64.0;
+const ROW_HEIGHT: f32 = 58.0;
 const ROW_GAP: f32 = 3.0;
-const ROW_ART: f32 = 54.0;
+const ROW_ART: f32 = 50.0;
 /// A row's key column: its width, and the room the switch keeps at the row's right.
 const KEY_WIDTH: f32 = 150.0;
 const SWITCH_ROOM: f32 = 130.0;
@@ -49,7 +50,7 @@ const SIGHT_ROW: f32 = 48.0;
 /// ([`Inputs::toy_keys`]): each toy's switch, Order 66's order after its own, the
 /// Monitor's throw (held, it charges) after its own, and the Banana peel's drop after its
 /// own.
-pub(crate) const COMMANDS: [&str; 13] = [
+pub(crate) const COMMANDS: [&str; 14] = [
     "toy_illuminate",
     "toy_box",
     "toy_order66",
@@ -63,6 +64,7 @@ pub(crate) const COMMANDS: [&str; 13] = [
     "toy_boxhunt",
     "toy_banana",
     "banana_drop",
+    crate::fishing::COMMAND,
 ];
 
 /// One toy as the tab shows it.
@@ -223,6 +225,20 @@ const TOYS: [Toy; TOY_COUNT] = [
         sight: Some((crate::banana::SHOW_CVAR, "See banana peels")),
         token: BANANA_TOKEN,
     },
+    Toy {
+        icon: "fishing",
+        name: "Fishing",
+        tag: "Cast a line, wait for the bite, reel it in.",
+        title: "Fishing",
+        what: "Stand still and cast: into the water ahead, or a pond where there is none. When the float dips, press Use in time to land a fish or some junk for your fish log. An Echo the hub drops you while you fish comes as a bite of its own. Other SJK players see your rod.",
+        more: Some(
+            "Moving or getting hurt puts the rod away. Your catches are in fishing_log.txt.",
+        ),
+        commands: &[(crate::fishing::COMMAND, "Your key")],
+        switch: "Rod out",
+        sight: None,
+        token: FISHING_TOKEN,
+    },
 ];
 
 /// The Toy Master's achievements the player holds: the toys they found.
@@ -318,6 +334,7 @@ fn states(inputs: &Inputs<'_>) -> [bool; TOY_COUNT] {
         inputs.monitor,
         inputs.box_hunt,
         inputs.banana,
+        inputs.fishing,
     ]
 }
 

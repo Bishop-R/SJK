@@ -1820,6 +1820,31 @@ and its hover cards (`duel6_sjk_more_achievements`). Not verified: anything in g
 counters against real servers (JA+ duel start health, a thermal batted back by a saber,
 throws at Saber Throw 1), the hub accepting the new ids.
 
+## Fishing toy
+
+29/10/2026, `feat/fishing` (PR #278), based on `main` `9f40fded` (Sanji's idea in #ideas):
+`toy_fishing` puts a rod in the right hand (the rifles' ready pose on the torso; in first
+person held in view), a bucket at the feet and a float on the water ahead, or on a small
+pond drawn where there is none, in the installed game's swamp textures
+([client.md](client.md#fishing)). A bite every 20 to 60 seconds, `+use` within about a
+second: nothing 15%, junk 30%, one of 12 fish 55% (each its own model and painted skin),
+counted in `fishing_log.txt`; the bucket holds the last fish caught (`last <id>` in the
+log). An Echo
+the hub drops while fishing waits for a golden bite of its own and comes up on the line;
+fishing brings no Echo the hub did not drop. Collection > Toys has its eleventh row,
+after the Banana peel's (rows 58 high so eleven fit), the quick wheel's catalogue its icon. Five achievements in a Fishing category of
+its own on the board's Fun page (after Box hunt, beside it on the fourth band; merged with
+main's one-category-per-toy board on 02/11/2026), client-counted on servers only
+(`fish_first`, `fish_50`, `fish_kinds`, `echo_angler`, `old_whiskers` hidden), appended at
+the end of `achievements::ALL` and `kyber::REWARDS`. The
+look has the toy `fishing` (main's u32 toy bits, after the Banana peel). No hub change: the hub needs the five ids in its
+catalogue before they unlock online; selling junk (capped credits) is proposed to Sol, not
+built. Verified: fmt, build, the fishing, achievements, kyber and collection tests,
+earlier release builds in game (Slash: the rod in third person, the pond, bites; not yet
+the first-person rod or the Fishing band on the Fun page), world shots of the pond on duel6
+(`rods_at_the_first_spawn`). Not verified: the five ids at the hub, other players seeing a
+rod, an Echo bite online, the rod on custom models.
+
 ## Boombox toy
 
 25/10/2026, `personal/boombox-toy`, based on `main` `44184714` (Sol's idea): `toy_boombox`

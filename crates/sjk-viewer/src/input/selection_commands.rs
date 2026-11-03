@@ -30,6 +30,10 @@ pub(super) fn register(shell: &mut sjk_shell::Shell) -> Result<(), sjk_shell::Co
             "Toy: hide in a cardboard box, or come out (+use on a boxed player lifts theirs)",
         ),
         (
+            crate::fishing::COMMAND,
+            "Toy: fish facing water, or put the rod away (+use when the float bobs under hooks the catch)",
+        ),
+        (
             crate::order66::COMMAND,
             "Toy: Order 66 on or off (every player who has it on dies when one of them executes it)",
         ),

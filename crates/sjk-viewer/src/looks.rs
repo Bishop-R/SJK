@@ -62,7 +62,7 @@ fn blade_skin(id: &str) -> Option<&'static str> {
 /// The toys a look can have out that this client draws, by id (`PROTOCOL.md`, "Looks"):
 /// a toy's bit in [`Worn::toys`] is its place here. A look naming another id (a newer
 /// client's toy) draws nothing more.
-pub(crate) const TOYS: [&str; 9] = [
+pub(crate) const TOYS: [&str; 10] = [
     crate::cardboard_box::TOY,
     crate::order66::TOY,
     crate::hax::TOY,
@@ -75,6 +75,8 @@ pub(crate) const TOYS: [&str; 9] = [
     crate::box_hunt::TOY,
     // The Banana peel's switch (since 30/10/2026: hubs before took 8 toy ids at most).
     crate::banana::TOY,
+    // The fishing rod out: others draw the rod, the bucket and the float.
+    crate::fishing::TOY,
 ];
 // A bit each in a `u32`: as many as a hub look holds (32 toy ids since 30/10/2026).
 const _: () = assert!(TOYS.len() <= u32::BITS as usize);
@@ -667,11 +669,11 @@ mod tests {
     }
 
     /// Every toy this client knows goes out in the look and comes back from it, all of
-    /// them at once too: nine since the Banana peel, more than the 8 hubs took before
-    /// 30/10/2026.
+    /// them at once too: ten since the Banana peel and Fishing, more than the 8 hubs took
+    /// before 30/10/2026.
     #[test]
     fn every_toy_goes_both_ways_all_at_once() {
-        assert!(TOYS.contains(&crate::banana::TOY));
+        assert!(TOYS.contains(&crate::banana::TOY) && TOYS.contains(&crate::fishing::TOY));
         let all = TOYS
             .iter()
             .fold(Worn::default(), |worn, toy| worn.with_toy(toy, true));
@@ -681,7 +683,12 @@ mod tests {
         assert!(TOYS.iter().all(|toy| back.has_toy(toy)));
         let peel_away = back.with_toy(crate::banana::TOY, false);
         assert!(!peel_away.has_toy(crate::banana::TOY) && peel_away.has_toy(crate::box_hunt::TOY));
-        assert_eq!(peel_away.to_look("").toys, TOYS[..TOYS.len() - 1]);
+        let rest: Vec<&str> = TOYS
+            .iter()
+            .copied()
+            .filter(|toy| *toy != crate::banana::TOY)
+            .collect();
+        assert_eq!(peel_away.to_look("").toys, rest);
     }
 
     /// Other players' boxes, boomboxes and holocrons hidden on this PC are not drawn on

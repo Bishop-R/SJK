@@ -55,6 +55,7 @@ mod duel_visibility;
 mod economy;
 mod editions;
 mod entity_view;
+mod fishing;
 mod kyber;
 mod loot_odds;
 mod propgun;
@@ -574,6 +575,10 @@ struct GpuState {
     illuminate_others: illuminate::Others,
     /// The cardboard box toy (`toy_box`): the player's own and the boxes of others.
     cardboard_box: cardboard_box::CardboardBox,
+    /// The Fishing toy (`toy_fishing`): the player's own rod and the rods of others.
+    fishing: fishing::Fishing,
+    /// The Fishing toy's sounds to play this frame.
+    fishing_cues: Vec<&'static str>,
     /// The Order 66 toy (`toy_order66`, `order66`): the order and the pieces flying.
     order66: order66::Order66,
     /// The Hax toy (`toy_hax`): a hack under way, the player steered or steering.
@@ -1587,6 +1592,8 @@ impl GpuState {
             illuminate: Default::default(),
             illuminate_others: Default::default(),
             cardboard_box: Default::default(),
+            fishing: Default::default(),
+            fishing_cues: Vec::with_capacity(4),
             order66: Default::default(),
             hax: Default::default(),
             drone: Default::default(),
@@ -2787,6 +2794,7 @@ impl GpuState {
         self.dynamic_lights.clear();
         self.submit_illuminate(presentation_time, visual_now);
         self.submit_cardboard_boxes(presentation_time, visual_now);
+        self.submit_fishing(presentation_time, visual_now);
         self.submit_order66(presentation_time, visual_now);
         self.submit_drones(presentation_time, visual_now);
         self.submit_monitors(presentation_time);

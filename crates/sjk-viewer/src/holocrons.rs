@@ -238,6 +238,9 @@ pub(crate) struct Entry {
     pub(crate) gift: bool,
     /// An achievement earned it (a kyber crystal, source `achievement`).
     pub(crate) earned: bool,
+    /// Play dropped it (source `play`) and it is still the finder's: the Fishing
+    /// toy's Echoes are these only, not bought, gifted, earned or traded ones.
+    pub(crate) played: bool,
     /// The team's note as plain text; only on a gift, often empty.
     pub(crate) note: String,
     /// It came in a trade: when (unix seconds), and from whom (colour codes kept), when
@@ -255,6 +258,7 @@ impl Entry {
             dropped: holocron.dropped,
             gift: holocron.source == "staff",
             earned: holocron.source == "achievement",
+            played: holocron.source == "play" && holocron.traded.is_none(),
             note: crate::medals::plain_note(&holocron.note),
             traded: holocron
                 .traded

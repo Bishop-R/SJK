@@ -19,6 +19,8 @@ pub(crate) enum State {
     Illuminate,
     /// The player is in the cardboard box (`toy_box` flips it).
     CardboardBox,
+    /// The fishing rod is out (`toy_fishing` flips it).
+    Fishing,
     /// The Order 66 toy is on (`toy_order66` flips it).
     Order66,
     /// The Hax toy is on (`toy_hax` flips it).
@@ -43,7 +45,7 @@ pub(crate) enum State {
 /// icons and cut by `scripts/wheel_icons.py` from two boards (the first sixteen
 /// from the first, the rest, named by the actions they are for, from the
 /// second); uploaded into the UI atlas at start (`ui_renderer::wheel_icon`).
-pub(crate) const ICONS: [(&str, &[u8]); 56] = [
+pub(crate) const ICONS: [(&str, &[u8]); 57] = [
     ("drizzle", include_bytes!("../../assets/wheel/drizzle.png")),
     ("rain", include_bytes!("../../assets/wheel/rain.png")),
     ("storm", include_bytes!("../../assets/wheel/storm.png")),
@@ -163,6 +165,11 @@ pub(crate) const ICONS: [(&str, &[u8]); 56] = [
     (
         "cardboard_box",
         include_bytes!("../../assets/cardboard_box/toy_box.png"),
+    ),
+    // Fishing's picture, the rod over a bucket (bundled with the client).
+    (
+        "fishing",
+        include_bytes!("../../assets/fishing/toy_fishing.png"),
     ),
     // Order 66's pictures, the badge and the blast (bundled with the client).
     (
@@ -609,6 +616,14 @@ pub(crate) const ACTIONS: &[Action] = &[
         Toys,
         State::CardboardBox,
         Some("cardboard_box"),
+    ),
+    action(
+        "fishing",
+        "Fishing",
+        crate::fishing::COMMAND,
+        Toys,
+        State::Fishing,
+        Some("fishing"),
     ),
     action(
         "order66",

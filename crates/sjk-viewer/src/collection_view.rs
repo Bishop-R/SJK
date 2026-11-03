@@ -175,6 +175,7 @@ pub(crate) fn row_labels(
         monitor: false,
         box_hunt: false,
         banana: false,
+        fishing: false,
         name: "",
         stock: color::HOLO,
         grid: false,
@@ -305,6 +306,7 @@ impl Panel {
         self.monitor_on = inputs.monitor;
         self.box_hunt_on = inputs.box_hunt;
         self.banana_on = inputs.banana;
+        self.fishing_on = inputs.fishing;
         self.share_on = inputs.share;
         self.toys_unseen = inputs.toys_unseen;
         let seconds = self.epoch.elapsed().as_secs_f32();

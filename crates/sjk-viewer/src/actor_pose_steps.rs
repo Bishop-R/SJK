@@ -123,6 +123,22 @@ pub(super) fn prepare(mesh: &mut ActorMesh, frame: &Frame<'_>) -> Result<(), Box
             }
         }
     }
+    // A fisher holds the rod before the chest, as a rifle's ready pose (`fishing`): only
+    // a standing torso, so a jump or a hit plays as sent (and puts the rod away).
+    if !mesh.corpse_pool
+        && mesh.animator.humanoid()
+        && mesh
+            .entity_id
+            .and_then(|id| usize::try_from(id.get().checked_sub(1)?).ok())
+            .is_some_and(crate::fishing::holding_rod)
+        && standing_clip(state.upper.clip)
+        && let Some((hold, name)) = crate::fishing::hold_pose()
+        && mesh.preview.config.get_exact(name).is_some()
+    {
+        state.upper.clip = hold;
+        state.upper.forced_frame = None;
+        state.upper.transition = None;
+    }
     if mesh.corpse_pool && !mesh.body_copied {
         state.lower.forced_frame =
             sjk_client::legacy_body_frame(&mesh.preview.config, state.lower.clip);

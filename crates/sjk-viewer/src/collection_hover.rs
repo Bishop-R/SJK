@@ -187,6 +187,21 @@ impl Panel {
                 ],
             });
         }
+        if token == FISHING_TOKEN {
+            return Some(Card {
+                title: "Fishing".to_owned(),
+                colour: color::GOLD_BRIGHT,
+                lines: vec![
+                    Line::how(
+                        "Every SJK player has it. Get the rod out here, from the quick \
+                         wheel's Toys page or with a key bound to toy_fishing, and stand \
+                         still: water ahead, or a pond where there is none.",
+                    ),
+                    Line::status(crate::editions::name(crate::editions::ALPHA)),
+                    Line::held("Yours"),
+                ],
+            });
+        }
         if token == MONITOR_TOKEN {
             return Some(Card {
                 title: "Monitor".to_owned(),
