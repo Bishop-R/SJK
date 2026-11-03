@@ -66,6 +66,30 @@ pub(crate) fn create(
     shaders: &ShaderCatalog,
     required_effect_shaders: &BTreeSet<String>,
 ) -> Result<ParticleAtlas, Box<dyn Error>> {
+    Ok(finish(
+        device,
+        queue,
+        layout,
+        prepare(vfs, shaders, required_effect_shaders)?,
+    ))
+}
+
+/// An effect atlas read, decoded and laid out, with its mip chain: everything but its
+/// upload, so a worker can build it ([`Pending`]).
+pub(crate) struct Prepared {
+    levels: Vec<image::RgbaImage>,
+    key: u64,
+    animations: HashMap<String, Vec<ParticleAtlasAnimation>>,
+    fallback: [f32; 4],
+    any_glow: bool,
+}
+
+/// Read, decode and lay out the requested shaders' tiles ([`create`] without the upload).
+pub(crate) fn prepare(
+    vfs: &VirtualFileSystem,
+    shaders: &ShaderCatalog,
+    required_effect_shaders: &BTreeSet<String>,
+) -> Result<Prepared, Box<dyn Error>> {
     const EFFECT_SHADERS: &[&str] = &[
         player_shadows::SHADER,
         "gfx/misc/spark",
@@ -291,13 +315,35 @@ pub(crate) fn create(
         &atlas.height().to_le_bytes(),
         atlas.as_raw(),
     ]);
+    let any_glow = animations
+        .values()
+        .flatten()
+        .any(|animation| animation.glow);
+    Ok(Prepared {
+        levels: premultiplied_levels(atlas, ATLAS_MIP_LEVELS),
+        key,
+        animations,
+        fallback,
+        any_glow,
+    })
+}
+
+/// Upload a [`Prepared`] atlas: its texture, sampler and bind group.
+pub(crate) fn finish(
+    device: &wgpu::Device,
+    queue: &crate::frame_queue::FrameQueue,
+    layout: &wgpu::BindGroupLayout,
+    prepared: Prepared,
+) -> ParticleAtlas {
+    let Prepared {
+        levels,
+        key,
+        animations,
+        fallback,
+        any_glow,
+    } = prepared;
     let texture = crate::shared_textures::share("effect atlas", key, || {
-        crate::gpu_texture::upload_levels(
-            device,
-            queue,
-            "SJK retail effect texture atlas",
-            &premultiplied_levels(atlas, ATLAS_MIP_LEVELS),
-        )
+        crate::gpu_texture::upload_levels(device, queue, "SJK retail effect texture atlas", &levels)
     });
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("SJK effect texture sampler"),
@@ -323,40 +369,91 @@ pub(crate) fn create(
             },
         ],
     });
-    let any_glow = animations
-        .values()
-        .flatten()
-        .any(|animation| animation.glow);
-    Ok(ParticleAtlas {
+    ParticleAtlas {
         bind_group,
         animations,
         fallback,
         any_glow,
         remaps: Default::default(),
-    })
+        pending: Default::default(),
+    }
+}
+
+/// The effect atlas being rebuilt on a worker for shaders a new effect needs. A
+/// server that registers effects mid-match (an admin's NPCs, a mod's effects) used to
+/// rebuild the whole atlas inside one frame: every effect picture read, decoded and
+/// resized again, 210 ms of `config-refresh` when JoF's NPCs spawned (Sol's log,
+/// 03/11/2026; 250 ms as a world-load phase). A shader no picture could be found for
+/// rebuilt it again at every new effect. Now the current atlas keeps drawing until the
+/// new one is in, and a new effect's sprites show once it is.
+#[derive(Default)]
+pub(crate) struct Pending {
+    task: Option<std::sync::mpsc::Receiver<Result<Prepared, String>>>,
+    /// Shaders a build was started for: not built for again in this world, loaded or not.
+    asked: BTreeSet<String>,
+    /// Effects were added since the last look at what they need.
+    dirty: bool,
 }
 
 impl GpuState {
-    /// Retain existing shader names when new graphs require additional tiles.
+    /// Rebuild the atlas on a worker when effects need shaders it lacks, retaining the
+    /// existing shader names ([`Pending`]); [`Self::poll_effect_atlas`] puts it in.
     pub(crate) fn refresh_effect_atlas(&mut self) -> Result<(), Box<dyn Error>> {
+        self.particle_atlas.pending.dirty = true;
+        self.poll_effect_atlas()
+    }
+
+    /// Once a frame: put a finished atlas in, then start the build new effects wait for.
+    pub(crate) fn poll_effect_atlas(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(task) = &self.particle_atlas.pending.task {
+            let prepared = match task.try_recv() {
+                Ok(prepared) => prepared,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(()),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    Err("effect atlas builder stopped".to_owned())
+                }
+            };
+            let mut pending = std::mem::take(&mut self.particle_atlas.pending);
+            pending.task = None;
+            let prepared = match prepared {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    self.particle_atlas.pending = pending;
+                    return Err(error.into());
+                }
+            };
+            let layout = layout(&self.device);
+            self.particle_atlas = finish(&self.device, &self.queue, &layout, prepared);
+            self.particle_atlas.pending = pending;
+        }
+        if !self.particle_atlas.pending.dirty {
+            return Ok(());
+        }
+        self.particle_atlas.pending.dirty = false;
         let mut required = BTreeSet::new();
         self.effects.append_shader_paths(&mut required);
+        let atlas = &self.particle_atlas;
         if required
             .iter()
-            .all(|name| self.particle_atlas.animations.contains_key(name))
+            .all(|name| atlas.animations.contains_key(name) || atlas.pending.asked.contains(name))
         {
             return Ok(());
         }
-        required.extend(self.particle_atlas.animations.keys().cloned());
-        let vfs = self.vfs.as_ref().ok_or("no VFS")?;
-        self.particle_atlas = create(
-            &self.device,
-            &self.queue,
-            &layout(&self.device),
-            vfs,
-            &self.shaders,
-            &required,
-        )?;
+        required.extend(atlas.animations.keys().cloned());
+        self.particle_atlas
+            .pending
+            .asked
+            .extend(required.iter().cloned());
+        let vfs = Arc::clone(self.vfs.as_ref().ok_or("no VFS")?);
+        let shaders = Arc::clone(&self.shaders);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("sjk-effect-atlas".into())
+            .spawn(move || {
+                let prepared = prepare(&vfs, &shaders, &required).map_err(|e| e.to_string());
+                let _ = sender.send(prepared);
+            })?;
+        self.particle_atlas.pending.task = Some(receiver);
         Ok(())
     }
 }

@@ -1,3 +1,29 @@
+## Joins, JA+ keys, ragdoll scale, skin hum, sound device (hub #236 #230 #222 #223 #233 #210)
+
+03/11/2026, `personal/gameplay-1103` from `main` `d1640233`. Read from the code and Sol's
+logs, nothing tried in a game. Joins (#236, Lex: up to a second's freeze as players
+connect) and NPC spawns (#230, Nib): players' models, NPCs and entities' models already
+loaded on workers; what was left in the frame was a worn hat or cape a player brought
+(6 to 10 ms each on Sol's RTX 5080 in his log, decoded and compiled in the frame) and
+an effect a server registers (an NPC's jetpack), which rebuilt the whole effect atlas
+inside the frame: `hitch: 213.6 ms ... config-refresh 210.3` as JoF's NPCs spawned (Sol's
+`previous-client.log`), again at every new effect while one shader had no picture.
+Both now load on workers ([rendering.md](rendering.md#where-to-work)); saber hilts
+nobody carried yet still load in the frame. No log of Lex's to confirm his freeze was
+these. JA+ (#222, Rollembones): a lost `getinfo` before a join connected as base JKA,
+without `cjp_client`, which a JA+ server reads at connect only; now asked three times,
+remembered per server, and a join that still missed the keys joins again with them
+([networking.md](networking.md)). Ragdoll (#223): `toy_ragdoll` reset the model scale
+([client.md](client.md#ragdoll)). Skin hum (#233, Blep): Only skin left a thrown saber's
+stock hum, and a pack update left the players' hums stale; the duals' leak Blep heard was
+not found in the code (the loops gate both sabers). Sound device (#210, Metan): the output
+follows Windows' default device ([client.md](client.md#configuration-and-content)). Kushina's
+bow-then-duel: server-side (a duel starts only on two `engage_duel`s; the bow touches no
+duel state in JoF EJK's game module nor JA+'s). Verified: unit tests (atlas and models
+compile paths, server profile memory, ragdoll scale, dual and thrown hums, the device
+handback), fmt, clippy, workspace tests. Not verified: in a game, on JoF, on a JA+
+server whose `getinfo` is lost, with headphones plugged in.
+
 ## Box hunt: own teleports only, caps from 09:00, `japlus.guntelewall`
 
 03/11/2026, `personal/box-hunt-1103` from `main` `d3881f31`, with hub branch

@@ -499,20 +499,24 @@ impl LegacyLoopAdapter {
         } else {
             [0.0; 3]
         };
-        self.push(
-            if state.entity_type() == ET_MISSILE {
-                LegacyLoopKind::Missile
-            } else {
-                LegacyLoopKind::Entity
-            },
-            sound,
-            Some(configured),
-            state.number(),
-            origin,
-            velocity,
-        );
-        // A thrown saber of a blade skin's wearer hums with the skin as well.
-        if let Some(hum) = self.thrown_saber_hum(state) {
+        // A thrown saber of a blade skin's wearer hums with the skin as well, or with
+        // the skin alone under `s_saberSkinSounds 2`, as the held sabers do.
+        let skin = self.thrown_saber_hum(state);
+        if !(self.skin_hum_only && skin.is_some()) {
+            self.push(
+                if state.entity_type() == ET_MISSILE {
+                    LegacyLoopKind::Missile
+                } else {
+                    LegacyLoopKind::Entity
+                },
+                sound,
+                Some(configured),
+                state.number(),
+                origin,
+                velocity,
+            );
+        }
+        if let Some(hum) = skin {
             self.push(
                 LegacyLoopKind::SaberHumSkin,
                 Some(hum),

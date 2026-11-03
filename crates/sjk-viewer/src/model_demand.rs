@@ -6,6 +6,11 @@
 //! to copy, and the falcon's all at once still held a frame 208 ms. The pipelines its
 //! materials need and the map lacks compile on another worker (`world_pipeline_jobs.rs`)
 //! before the model is drawn, as for players' models.
+//!
+//! Models wanted by name rather than by an entity go the same way
+//! ([`GpuState::want_model`]): the hats and capes players wear and the models an effect
+//! needs. Read inside the frame that asked, each held it 6 to 10 ms on Sol's RTX 5080
+//! and far longer on a weaker PC, for every new hat a joining player wore (#236).
 use super::*;
 use crate::world_materials::pipeline_jobs::Compiled;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -33,6 +38,8 @@ pub(super) struct Demand {
     )>,
     /// A model uploaded, drawn once its pipelines are compiled.
     compiling: Option<(StaticModelMesh, Receiver<Compiled>)>,
+    /// Models asked for by name ([`GpuState::want_model`]), loaded in turn.
+    queued: Vec<Appearance>,
 }
 
 fn rigid(appearance: &Appearance) -> bool {
@@ -41,6 +48,36 @@ fn rigid(appearance: &Appearance) -> bool {
 }
 
 impl GpuState {
+    /// Load the rigid model `model` off the render thread, as a world entity's model
+    /// is; it is drawable once it is in [`Self::object_meshes`]. A queued model coming in
+    /// has players' cosmetics read again, as one of them may wear it.
+    pub(crate) fn want_model(&mut self, model: &str) {
+        let appearance = Appearance {
+            model: model.to_owned(),
+            variant: String::new(),
+        };
+        let models = &mut self.config_string_refresh.models;
+        if !rigid(&appearance)
+            || models.attempted.contains(&appearance)
+            || models.queued.contains(&appearance)
+        {
+            return;
+        }
+        models.queued.push(appearance);
+    }
+
+    /// A model asked for by name went in (or failed): players' cosmetics read again.
+    fn queued_model_done(&mut self, appearance: &Appearance) {
+        let models = &mut self.config_string_refresh.models;
+        let before = models.queued.len();
+        models.queued.retain(|queued| queued != appearance);
+        if models.queued.len() != before {
+            for mesh in &mut self.actor_meshes {
+                mesh.cosmetics.invalidate();
+            }
+        }
+    }
+
     /// At most one CPU preparation and one GPU installation in flight per world.
     pub(crate) fn refresh_demand_models(&mut self) {
         if !self.config_string_refresh.models.initialized {
@@ -119,6 +156,15 @@ impl GpuState {
                     .find(|appearance| !attempted.contains(appearance))
             })
             .or_else(|| {
+                // Models asked for by name: worn cosmetics, effects' models.
+                let models = &self.config_string_refresh.models;
+                models
+                    .queued
+                    .iter()
+                    .find(|appearance| !models.attempted.contains(*appearance))
+                    .cloned()
+            })
+            .or_else(|| {
                 // The mystery boxes' models: the box, what rolls over it (`mystery_box`).
                 let attempted = &self.config_string_refresh.models.attempted;
                 self.mystery_boxes
@@ -142,6 +188,7 @@ impl GpuState {
             .iter()
             .any(|mesh| mesh.appearance == appearance)
         {
+            self.queued_model_done(&appearance);
             return;
         }
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
@@ -187,7 +234,9 @@ impl GpuState {
                 // The pipelines compile on the model's first draw instead.
                 Err(TryRecvError::Disconnected) => {}
             }
+            let appearance = mesh.appearance.clone();
             self.push_config_model(mesh);
+            self.queued_model_done(&appearance);
             return false;
         }
         if let Some((mesh, scene, mut textures)) = models.uploading.take() {
@@ -197,6 +246,7 @@ impl GpuState {
                 self.config_string_refresh.models.uploading = Some((mesh, scene, textures));
                 return true;
             }
+            let requested = mesh.appearance.clone();
             let appearance = mesh.appearance.model.clone();
             match self.upload_config_model(mesh, scene) {
                 Ok(Some((mesh, jobs))) if jobs.is_empty() => self.push_config_model(mesh),
@@ -219,6 +269,7 @@ impl GpuState {
                 Ok(None) => {}
                 Err(error) => log::progress(format_args!("model {appearance}: {error}")),
             }
+            self.queued_model_done(&requested);
             return false;
         }
         let Some((appearance, receiver)) = models.task.take() else {
@@ -239,6 +290,7 @@ impl GpuState {
             }
             Err(error) => {
                 log::progress(format_args!("model {}: {error}", appearance.model));
+                self.queued_model_done(&appearance);
                 false
             }
         }

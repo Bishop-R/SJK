@@ -24,6 +24,40 @@
 
 # ---- Console & chat ----
 
+[join-stutter-1103]
+area: Rendering & effects
+title: Joins and NPC spawns: hats, effect models and the effect atlas load in the background
+change: Worn hats/capes and effects' models load on a worker (they loaded inside the frame).
+change: New effects rebuild the effect atlas on a worker, and an unloadable one never again.
+test: On JoF, stay in game while players with hats join: no stutter, their hats appear.
+test: Spawn a few NPCs (boba_fett, rodian) on a local server: no hitch line in the log.
+test: Their effects (jetpack flames) show; a spark may stand in for a moment at first.
+note: Saber hilts nobody carried yet still load inside the frame (left for later).
+[japlus-join-keys]
+area: Gameplay
+title: JA+ katas and +button12 after a join whose getinfo was lost
+change: getinfo is asked 3 times; a server's mod is remembered from the last join.
+change: Joined without JA+ keys on a JA+ server: SJK joins again (3.5 s) with them.
+test: Hop between two JA+ servers several times: katas, diagonal kicks, +button12 work.
+test: Log shows "reconnecting with its keys" only when the first join missed them.
+[ragdoll-model-scale]
+area: Gameplay
+title: Ragdoll keeps a resized model's size
+change: toy_ragdoll drew a youngling or Jawa (iModelScale) at full size.
+test: As a small NPC/model (or JA+ size pickup), toy_ragdoll: the body stays small.
+[skin-hum-only]
+area: Audio
+title: Only skin hum: thrown sabers and duals
+change: s_saberSkinSounds 2 now silences a thrown saber's stock hum too.
+change: A blade pack update refreshes which hum each player plays.
+test: s_saberSkinSounds 2, dual sabers with a skin: only the skin's hum, lit and thrown.
+note: Blep's dual leak was not reproduced from code; tell Sol if duals still hum stock.
+[audio-follow-device]
+area: Audio
+title: Sound follows the Windows default device
+change: Every 1.5 s the default device is checked; on a change the mixer moves to it.
+test: Play with speakers, plug headphones in: sound moves within 2 s, music goes on.
+test: Unplug them: sound back on the speakers; log says "audio output moved".
 [box-hunt-1103]
 area: Gameplay
 title: Box hunt: only your own teleports cheat; caps from 09:00; japlus.guntelewall

@@ -16,7 +16,14 @@ one a frame (an HD pack's texture with its mips is near 90 MB to copy), then the
 model's geometry and materials, and new pipelines compile on a
 `sjk-model-pipelines` worker before the model is drawn: `falcon2.md3` with an HD
 pack, off screen on duel6 in a release build, held its worst frame 209 ms, now
-31 ms. Models remain resident until the world is replaced. NPC bodies and vehicles
+31 ms. Models remain resident until the world is replaced. Models wanted by name
+take the same queue (`GpuState::want_model`): the hats and capes players wear and the
+models an effect needs, which used to load inside the frame that asked (6 to 10 ms a hat
+on an RTX 5080, each new hat a joining player wore; #236). A new effect's shaders
+rebuild the effect atlas on a `sjk-effect-atlas` worker (`particle_atlas::Pending`); the
+frame only uploads the finished atlas. Built in the frame it held 210 ms as JoF's NPCs
+spawned, and a shader with no picture had it rebuilt at every new effect; a shader a
+build was started for is not built for again in that world. NPC bodies and vehicles
 (`$swoop`, `$tauntaun`, an admin's spawned NPC) load the same way through
 `npc_refresh::npc_loads`, one NPC at a time, the NPC unseen until its model is in.
 Vehicle projectile, effect and cosmetic models still load whole on the render

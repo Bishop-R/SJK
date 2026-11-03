@@ -5184,6 +5184,9 @@ every fall ends with the map or the server.
 - **The body:** a limp humanoid of 15 points (pelvis, chest, head, shoulders, elbows,
   hands, hips, knees, feet) held by sticks, the trunk braced as one block, knees bending
   forward and elbows back (Verlet integration, [body.rs](../crates/sjk-viewer/src/ragdoll/body.rs)).
+  A resized model (`iModelScale`: a youngling, a Jawa, the JA+ size pickup) is drawn
+  at its size, scaled about the pelvis (#223; it was drawn full size), though the body
+  it is simulated with keeps a full-size player's measures.
   It starts standing where the player stood, turned their way, with their speed, and
   pushed off balance (back, to a side, the knees buckling), so a running or jumping
   player tumbles on. It falls at `g_gravity`'s 800, slides and bounces a little on the
@@ -6004,7 +6007,8 @@ cut the stock one), or, with `s_saberSkinSounds 2` (Settings > Sound > Blade ski
 sounds: Only skin; 1, With normal, is the default), in their place, or, with
 `s_saberSkinSounds 0` (Off), not at all, every player heard with the stock sounds
 (the table of who wears which set is passed empty), so a skin's own sounds are heard clearly
-(Creyon's request, 18/10/2026; a thrown saber still hums its own over the skin's): its ignition for
+(Creyon's request, 18/10/2026; a thrown saber hums with the skin's alone too since
+03/11/2026, #233): its ignition for
 `EV_SABER_UNHOLSTER`, its ignition or switching off once when the player draws the
 saber from another weapon or puts a lit one away
 ([saber ignition sounds](#saber-ignition-and-retraction-sounds)), and for a general sound that is a stock `saberon*`/`saberoff*`
@@ -6456,6 +6460,17 @@ taking sound`. The game goes on silently; `snd_restart` opens the output again, 
 the device that is then the default. The decode worker keeps sounds in order and
 waits for room as before, but stops when the output is dropped, so `snd_restart` and
 quitting do not wait on it. See [audio_feed.rs](../crates/sjk-viewer/src/audio_feed.rs).
+
+The output follows the system's default device (#210, 03/11/2026): plugging headphones
+in left the game on the speakers until a restart, since Windows keeps the old device
+working. Every 1.5 s the output compares the default device's name with the one it
+plays on and, when it changed or the stream rendered nothing since the last look (once,
+not at every look), moves the mixer to the default as it is: the stream is dropped, the
+mixer comes back from the device's thread (a wrapper hands it back as it is dropped)
+and a new stream plays it, so sounds, loops and music go on and only the old device's
+buffer is lost. A device that does not open leaves the mixer waiting for the next look;
+with no device at all the current stream stays. Two identical devices swapped for each
+other are not told apart. See [audio_device.rs](../crates/sjk-viewer/src/audio_device.rs).
 
 The Video tab's Display mode row offers Windowed, Borderless fullscreen and,
 where the windowing system supports it, Exclusive fullscreen (Wayland does not,

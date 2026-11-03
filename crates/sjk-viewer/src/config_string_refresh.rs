@@ -108,6 +108,9 @@ impl GpuState {
         }
         self.refresh_muted_models(audio);
         self.poll_player_loads();
+        if let Err(error) = self.poll_effect_atlas() {
+            log::progress(format_args!("effect atlas: {error}"));
+        }
         let mut changes = ConfigStringDirty::default();
         if let Some(session) = &mut self.live_session {
             session.drain_config_string_changes(|index| changes.mark(index));
@@ -172,12 +175,7 @@ impl GpuState {
                         .map(str::to_owned)
                         .collect();
                     for model in models {
-                        if let Err(error) = self.load_config_model(&Appearance {
-                            model,
-                            variant: String::new(),
-                        }) {
-                            log::progress(format_args!("vehicle projectile model: {error}"));
-                        }
+                        self.want_model(&model);
                     }
                 }
                 Consumer::Player(client) => {
@@ -248,6 +246,8 @@ impl GpuState {
         }
     }
 
+    /// Load a rigid model inside this frame (tests; the game uses [`Self::want_model`]).
+    #[cfg(test)]
     pub(crate) fn load_config_model(
         &mut self,
         appearance: &Appearance,
@@ -343,13 +343,14 @@ impl GpuState {
             log::progress(format_args!("effect {name}: texture load failed: {error}"));
         }
         // Recursive EFX dependencies include rigid models and sound assets.
+        // Read off the render thread like a world entity's model (`model_demand.rs`).
         for model in effect_assets::required_models(&vfs, std::iter::once(name)) {
-            let appearance = Appearance {
-                model,
-                variant: String::new(),
-            };
-            if let Err(error) = self.load_config_model(&appearance) {
-                log::progress(format_args!("effect {name}: model load failed: {error}"));
+            if !self
+                .object_meshes
+                .iter()
+                .any(|mesh| mesh.appearance.variant.is_empty() && mesh.appearance.model == model)
+            {
+                self.want_model(&model);
             }
         }
         if let Some(audio) = audio {

@@ -14,6 +14,8 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+#[path = "audio_device.rs"]
+mod device;
 #[path = "audio_feed.rs"]
 mod feed;
 #[path = "audio_pending.rs"]
@@ -298,6 +300,8 @@ pub(super) struct AudioOutput {
     pub(super) sonar: crate::sound_sonar::Sonar,
     /// The world sounds sent lately and the room, for 3D sound (`audio_spatial.rs`).
     pub(super) spatial: crate::audio::spatial::Tracker,
+    /// The device the stream plays on and where its mixer comes back (`audio_device.rs`).
+    follow: Option<device::Follow>,
 }
 
 enum DecodeJob {
@@ -325,22 +329,96 @@ impl AudioOutput {
     /// Open the default output device; a failure is logged, not swallowed,
     /// so a silent game names its cause.
     pub(super) fn start(config: MixerConfig) -> Option<Self> {
-        let (stream, output) = match OutputStream::try_default() {
-            Ok(stream) => stream,
-            Err(error) => {
-                crate::log::progress(format_args!("audio output unavailable: {error}"));
-                return None;
-            }
+        let device = device::default_device();
+        let opened = device
+            .as_ref()
+            .and_then(|device| OutputStream::try_from_device(device).ok());
+        // rodio's own choice (the default, else the first device that opens) otherwise.
+        let (device, (stream, output)) = match opened {
+            Some(opened) => (device, opened),
+            None => match OutputStream::try_default() {
+                Ok(opened) => (None, opened),
+                Err(error) => {
+                    crate::log::progress(format_args!("audio output unavailable: {error}"));
+                    return None;
+                }
+            },
         };
-        let description = describe_default_device();
+        let description = device::describe(device.as_ref().or(device::default_device().as_ref()));
         crate::log::progress(format_args!("audio output: {description}"));
         let (mut audio, source) = Self::assemble(config, description)?;
-        if let Err(error) = output.play_raw(source) {
+        let home = device::Home::default();
+        if let Err(error) = output.play_raw(device::Handback::new(source, &home)) {
             crate::log::progress(format_args!("audio mixer could not start: {error}"));
             return None;
         }
         audio._stream = Some(stream);
+        audio.follow = Some(device::Follow::new(device.as_ref(), home));
         Some(audio)
+    }
+
+    /// Every [`device::CHECK`]: move the mixer to the system's default output device
+    /// when it changed (headphones plugged in) or the stream stopped rendering, as it
+    /// is, without the sound reset of `snd_restart` (#210). Cheap between checks.
+    pub(super) fn follow_default_device(&mut self, now: Instant) {
+        let Some(follow) = self.follow.as_mut() else {
+            return;
+        };
+        if !follow.due(now) {
+            return;
+        }
+        let stalled = follow.stalled(self.stats.rendered_blocks.load(Ordering::Relaxed));
+        // No device at all (the last one unplugged): keep what plays.
+        let Some(default) = device::default_device() else {
+            return;
+        };
+        // Devices compare by name (cpal's `Device` has no equality on every platform):
+        // two identical headsets swapped for each other are not told apart.
+        let name = device::name(&default);
+        let moved = name.is_some() && follow.name != name;
+        if !moved && !stalled {
+            return;
+        }
+        // Dropping the stream ends its thread, which gives the mixer back.
+        self._stream = None;
+        let Some(source) = device::take_back(&follow.home) else {
+            crate::log::progress(format_args!(
+                "audio output: the mixer did not come back from the old device; \
+                 snd_restart opens the output again"
+            ));
+            self.follow = None;
+            return;
+        };
+        let played = match OutputStream::try_from_device(&default) {
+            // A failed play drops the handback, which puts the mixer home again.
+            Ok((stream, output)) => output
+                .play_raw(device::Handback::new(source, &follow.home))
+                .map(|()| stream)
+                .map_err(|e| e.to_string()),
+            Err(error) => {
+                if let Ok(mut home) = follow.home.lock() {
+                    *home = Some(source);
+                }
+                Err(error.to_string())
+            }
+        };
+        match played {
+            Ok(stream) => {
+                self._stream = Some(stream);
+                self.description = device::describe(Some(&default));
+                crate::log::progress(format_args!(
+                    "audio output {}: {}",
+                    if moved { "moved" } else { "reopened" },
+                    self.description
+                ));
+                follow.name = name;
+            }
+            // The mixer waits at home: tried again at the next check.
+            Err(error) => crate::log::progress(format_args!(
+                "audio output: could not open {}: {error}",
+                device::describe(Some(&default))
+            )),
+        }
     }
 
     /// The queues, the decode worker and the source the device's callback pulls.
@@ -393,6 +471,7 @@ impl AudioOutput {
             spatial: crate::audio::spatial::Tracker::default(),
             cache: std::cell::RefCell::new(Vec::new()),
             lengths: std::cell::RefCell::new(Vec::new()),
+            follow: None,
         };
         Some((audio, source))
     }
@@ -400,6 +479,11 @@ impl AudioOutput {
     /// Reuse the normal queues/decoder/mixer without opening a device in focused tests.
     #[cfg(test)]
     pub(super) fn test_output() -> (Self, impl Iterator<Item = f32>) {
+        Self::test_source()
+    }
+
+    #[cfg(test)]
+    fn test_source() -> (Self, MixerSource) {
         Self::assemble(
             MixerConfig {
                 voices: VOICES,
@@ -654,24 +738,6 @@ fn free_released(released: &mut HeapCons<DecodedSound>, stats: &OutputStats) {
             .freed_bytes
             .fetch_add(sound.byte_len() as u64, Ordering::Relaxed);
         drop(sound);
-    }
-}
-
-/// Name and format of the device rodio just opened, for the startup log.
-fn describe_default_device() -> String {
-    use rodio::cpal::traits::{DeviceTrait, HostTrait};
-    let Some(device) = rodio::cpal::default_host().default_output_device() else {
-        return "no default output device".into();
-    };
-    let name = device.name().unwrap_or_else(|_| "unnamed device".into());
-    match device.default_output_config() {
-        Ok(config) => format!(
-            "device={name} {}Hz {}ch {:?}",
-            config.sample_rate().0,
-            config.channels(),
-            config.sample_format()
-        ),
-        Err(error) => format!("device={name} (format unknown: {error})"),
     }
 }
 

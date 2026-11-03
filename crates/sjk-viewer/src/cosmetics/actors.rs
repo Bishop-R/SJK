@@ -11,7 +11,6 @@ use crate::actor_instance::ActorInstance;
 use crate::actor_world_submission::monster_hold;
 use crate::bolt::BoltMatrix;
 use sjk_client::CosmeticSlot;
-use sjk_runtime::Appearance;
 
 /// `CS_PLAYERS` (`bg_public.h`).
 const CS_PLAYERS: usize = 1_131;
@@ -125,7 +124,8 @@ impl crate::GpuState {
         self.actor_meshes[index].cosmetics.pieces = pieces;
     }
 
-    /// The rigid model at `path`, loaded on first use.
+    /// The rigid model at `path`; on first use it is loaded off the render thread
+    /// ([`GpuState::want_model`]) and the piece shows once it is in.
     fn cosmetic_mesh(&mut self, path: &str) -> Option<usize> {
         let find = |meshes: &[crate::StaticModelMesh]| {
             meshes.iter().position(|mesh| {
@@ -135,15 +135,8 @@ impl crate::GpuState {
         if let Some(index) = find(&self.object_meshes) {
             return Some(index);
         }
-        let appearance = Appearance {
-            model: path.to_owned(),
-            variant: String::new(),
-        };
-        if let Err(error) = self.load_config_model(&appearance) {
-            crate::log::progress(format_args!("cosmetic {path}: load failed: {error}"));
-            return None;
-        }
-        find(&self.object_meshes)
+        self.want_model(path);
+        None
     }
 }
 

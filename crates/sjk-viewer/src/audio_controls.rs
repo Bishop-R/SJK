@@ -470,6 +470,7 @@ impl GameAudio {
     pub(crate) fn end_frame(&mut self) {
         ui_cues::play_pending(self);
         self.report_underruns();
+        self.output.follow_default_device(Instant::now());
     }
 
     pub(crate) fn report_underruns(&mut self) {
